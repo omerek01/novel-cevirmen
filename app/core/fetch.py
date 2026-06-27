@@ -4,6 +4,7 @@ from __future__ import annotations
 import os
 import re
 import threading
+import time
 from pathlib import Path
 from urllib.parse import urljoin, urlparse
 
@@ -59,18 +60,21 @@ SITES = {
         "content": "#chr-content",
         "title": ["a.chr-title", ".chr-title"],
         "next": ['a.js-chapter-nav[data-chapter-nav="next"]', "a#next_chap"],
+        "prev": ['a.js-chapter-nav[data-chapter-nav="prev"]', "a#prev_chap"],
         "slug_mode": "after_b",  # /b/<slug>/...
     },
     "novelfull": {
         "content": "#chapter-content",
         "title": ["a.chapter-title", ".chapter-title", ".chapter-text"],
         "next": ["a#next_chap", "a[rel=next]"],
+        "prev": ["a#prev_chap", "a[rel=prev]"],
         "slug_mode": "first",  # /<slug>/chapter-...
     },
     "freewebnovel": {
         "content": "#article",
         "title": ["span.chapter", ".chapter-title"],
         "next": ["a#next_url"],
+        "prev": ["a#prev_url"],
         "slug_mode": "after_novel",  # /novel/<slug>/chapter-...
     },
 }
@@ -84,6 +88,12 @@ GENERIC_SITE = {
         "a#next_chap",
         "a#next_url",
         "a[rel=next]",
+    ],
+    "prev": [
+        'a.js-chapter-nav[data-chapter-nav="prev"]',
+        "a#prev_chap",
+        "a#prev_url",
+        "a[rel=prev]",
     ],
     "slug_mode": "first",
 }
@@ -102,20 +112,46 @@ class FetchError(Exception):
     """Bölüm çekilemediğinde fırlatılır (Cloudflare, eksik içerik vb.)."""
 
 
-def fetch_chapter(url: str, headless: bool | None = None, timeout_ms: int = 60000) -> dict:
+class _Transient(Exception):
+    """İç sinyal: geçici çekme hatası (yavaş yükleme/network) → yeniden denenebilir."""
+
+
+def fetch_chapter(
+    url: str,
+    headless: bool | None = None,
+    timeout_ms: int = 60000,
+    retries: int = 2,
+) -> dict:
     """Bir novelbin bölüm sayfasını çeker.
 
     headless=None ise FETCH_HEADLESS ortam değişkenine bakar ("0" → görünür pencere,
     Cloudflare doğrulamasını bir kez elle çözmek için). Çözülen cookie kalıcı profile
     yazılır; sonraki çekimler headless olarak otomatik geçer.
 
-    Döner: {"title": str, "text": str, "next_url": str | None, ...}
+    Geçici hatalar (yavaş yükleme, network) üstel geri-çekilmeyle `retries` kez
+    yeniden denenir. Kalıcı hatalar (Cloudflare challenge, origin 52x) denenmez.
+
+    Döner: {"title": str, "text": str, "next_url": str | None, "prev_url": ..., ...}
     """
     if headless is None:
         headless = os.getenv("FETCH_HEADLESS", "1") != "0"
+    delay = 2.0
+    last_exc: Exception | None = None
     # Tek kilit: aynı kalıcı profili eşzamanlı açan çekimleri sıraya sokar.
     with _FETCH_LOCK:
-        return _fetch_locked(url, headless, timeout_ms)
+        for attempt in range(retries + 1):
+            try:
+                return _fetch_locked(url, headless, timeout_ms)
+            except _Transient as exc:
+                last_exc = exc
+                if attempt < retries:
+                    time.sleep(delay)
+                    delay *= 2
+                    continue
+                raise FetchError(
+                    str(exc) or "Bölüm geçici olarak çekilemedi; biraz sonra deneyin."
+                ) from exc
+    raise FetchError("Bölüm çekilemedi.") from last_exc  # teorik olarak ulaşılmaz
 
 
 def _fetch_locked(url: str, headless: bool, timeout_ms: int) -> dict:
@@ -134,7 +170,10 @@ def _fetch_locked(url: str, headless: bool, timeout_ms: int) -> dict:
         context.add_init_script(STEALTH_JS)  # tüm sayfalara, goto'dan önce
         page = context.pages[0] if context.pages else context.new_page()
         try:
-            resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            try:
+                resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+            except PlaywrightTimeout as exc:
+                raise _Transient("Sayfa yüklenmedi (zaman aşımı).") from exc
             status = resp.status if resp else 0
             if status in CF_ORIGIN_ERRORS:
                 raise FetchError(
@@ -150,9 +189,10 @@ def _fetch_locked(url: str, headless: bool, timeout_ms: int) -> dict:
                         "sunucuyu FETCH_HEADLESS=0 ile başlatıp açılan pencerede "
                         "doğrulamayı tamamlayın; sonraki çekimler otomatik geçer."
                     ) from exc
-                raise FetchError(
+                # İçerik gelmedi: yavaş yükleme olabilir → geçici say, yeniden dene.
+                raise _Transient(
                     f"İçerik bulunamadı ({site['content']} sayfada yok). Site yapısı "
-                    "değişmiş veya URL yanlış olabilir."
+                    "değişmiş, URL yanlış olabilir ya da sayfa geç yüklendi."
                 ) from exc
             html = page.content()
         finally:
@@ -204,7 +244,8 @@ def _parse(html: str, base_url: str, site: dict) -> dict:
     return {
         "title": title,
         "text": text,
-        "next_url": _next_chapter_url(soup, base_url, site["next"]),
+        "next_url": _nav_chapter_url(soup, base_url, site["next"]),
+        "prev_url": _nav_chapter_url(soup, base_url, site.get("prev", [])),
         "book_slug": slug,
         "book_title": book_title,
         "chapter_no": _chapter_no(base_url),
@@ -238,16 +279,20 @@ def _chapter_no(url: str) -> int | None:
     return int(match.group(1)) if match else None
 
 
-def _next_chapter_url(soup: BeautifulSoup, base_url: str, selectors: list[str]) -> str | None:
-    """İlk eşleşen "sonraki bölüm" selektörünü kullanır (data-chapter-url yedeğiyle)."""
-    next_el = None
+def _nav_chapter_url(soup: BeautifulSoup, base_url: str, selectors: list[str]) -> str | None:
+    """İlk eşleşen gezinme ("sonraki"/"önceki") selektörünü kullanır.
+
+    next ve prev için tek saf fonksiyon (DRY). data-chapter-url yedeği; `#`, boş ve
+    javascript: href'leri elenir → o yönde geçerli link yoksa None.
+    """
+    nav_el = None
     for sel in selectors:
-        next_el = soup.select_one(sel)
-        if next_el is not None:
+        nav_el = soup.select_one(sel)
+        if nav_el is not None:
             break
-    if next_el is None:
+    if nav_el is None:
         return None
-    href = next_el.get("href") or next_el.get("data-chapter-url")
+    href = nav_el.get("href") or nav_el.get("data-chapter-url")
     if not href or href.strip() in {"#", ""} or "javascript" in href:
         return None
     return urljoin(base_url, href)

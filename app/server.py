@@ -20,9 +20,9 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import cache, epub_export, glossary, library  # noqa: E402
-from core.fetch import FetchError, fetch_chapter  # noqa: E402
-from core.translate import TranslateError, translate_chapter  # noqa: E402
+from core import cache, epub_export, glossary, jobs, library, pipeline  # noqa: E402
+from core.fetch import FetchError  # noqa: E402
+from core.translate import TranslateError  # noqa: E402
 
 load_dotenv(APP_DIR.parent / ".env")  # tek kaynak: novel-cevirmen/.env
 API_KEY = os.getenv("GEMINI_API_KEY")
@@ -42,60 +42,14 @@ def get_chapter(
 
     (Sync def: Playwright thread havuzunda çalışır.)
     """
-    if not refresh:
-        cached = cache.get_chapter(url)
-        if cached is not None:
-            canon = library.resolve_slug(cached["book_slug"])
-            if canon != cached["book_slug"]:
-                cached["book_slug"] = canon
-                merged = library.get_book(canon)
-                if merged and merged.get("title"):
-                    cached["book_title"] = merged["title"]
-            glossary.merge_names(cached["book_slug"], cached.get("detected_names"))
-            library.upsert_book(
-                cached["book_slug"], cached["book_title"], url,
-                cached["title"], cached["chapter_no"],
-            )
-            return cached
-
-    if not API_KEY:
-        raise HTTPException(status_code=500, detail="GEMINI_API_KEY ayarlı değil.")
     try:
-        chapter = fetch_chapter(url)
+        return pipeline.get_or_translate(url, API_KEY, refresh)
     except FetchError as exc:
         raise HTTPException(status_code=502, detail=f"Çekme hatası: {exc}")
-
-    # Birleştirilmiş kitap: slug'ı kanonikleştir, böylece bölüm/sözlük tek kitapta toplanır.
-    book_slug = library.resolve_slug(chapter["book_slug"])
-    book_title = chapter["book_title"]
-    if book_slug != chapter["book_slug"]:
-        merged = library.get_book(book_slug)
-        if merged and merged.get("title"):
-            book_title = merged["title"]
-
-    book_glossary = glossary.get_glossary(book_slug)
-    try:
-        result = translate_chapter(chapter["text"], api_key=API_KEY, glossary=book_glossary)
     except TranslateError as exc:
+        if not API_KEY:
+            raise HTTPException(status_code=500, detail="GEMINI_API_KEY ayarlı değil.")
         raise HTTPException(status_code=503, detail=str(exc))
-
-    payload = {
-        "title": chapter["title"],
-        "translation": result["translation"],
-        "detected_names": result["detected_names"],
-        "chunk_count": result["chunk_count"],
-        "next_url": chapter["next_url"],
-        "book_slug": book_slug,
-        "book_title": book_title,
-        "chapter_no": chapter["chapter_no"],
-        "cached": False,
-    }
-    cache.save_chapter(url, payload)
-    glossary.merge_names(book_slug, result["detected_names"])
-    library.upsert_book(
-        book_slug, book_title, url, chapter["title"], chapter["chapter_no"],
-    )
-    return payload
 
 
 @app.get("/api/books")
@@ -119,11 +73,51 @@ class MergeRequest(BaseModel):
     target: str
 
 
+class PositionRequest(BaseModel):
+    url: str
+    ratio: float
+
+
+class BulkRequest(BaseModel):
+    start_url: str
+    count: int = 10
+
+
 @app.post("/api/book/{slug}/merge-into")
 def merge_book(slug: str, req: MergeRequest) -> dict:
     """`slug` kitabını `target` kitabıyla birleştir (aynı kitap, farklı slug)."""
     canonical = library.merge_books(slug, req.target)
     return {"ok": True, "canonical": canonical}
+
+
+@app.post("/api/book/{slug}/position")
+def set_position(slug: str, req: PositionRequest) -> dict:
+    """Bölüm-içi okuma oranını (0..1) kaydet (cihazlar arası paylaşılır)."""
+    library.set_position(slug, req.url, req.ratio)
+    return {"ok": True}
+
+
+@app.post("/api/book/{slug}/bulk")
+def start_bulk(slug: str, req: BulkRequest) -> dict:
+    """Arka plan toplu çeviri başlat (sekme kapansa da sürer). İş kimliği döner."""
+    count = max(1, min(500, req.count))
+    job_id = jobs.start_bulk(slug, req.start_url, count, API_KEY)
+    return {"job_id": job_id}
+
+
+@app.get("/api/bulk/{job_id}")
+def bulk_status(job_id: str) -> dict:
+    """Toplu çeviri işinin durumu (polling)."""
+    status = jobs.get_status(job_id)
+    if status is None:
+        raise HTTPException(status_code=404, detail="İş bulunamadı.")
+    return status
+
+
+@app.post("/api/bulk/{job_id}/stop")
+def bulk_stop(job_id: str) -> dict:
+    """Çalışan toplu çeviri işini durdur."""
+    return {"ok": jobs.stop(job_id)}
 
 
 @app.get("/api/book/{slug}/glossary")

@@ -50,6 +50,9 @@
       <button id="offlineBtn" class="ghost-line-btn">ÇEVRİMDIŞI İNDİR (TELEFONA) →</button>
       <button id="mergeBtn" class="ghost-line-btn">BAŞKA KİTAPLA BİRLEŞTİR →</button>
       <h2 class="section-label small">BÖLÜMLER</h2>
+      <input id="chapterSearch" class="chapter-search" type="search" inputmode="search"
+             autocomplete="off" placeholder="Bölüm ara (başlık veya numara)…"
+             aria-label="Bölüm ara" />
       <div id="chapterList" class="chapter-list"></div>
     </div>
   </section>
@@ -87,13 +90,30 @@
         <div id="readerBook" class="reader-book"></div>
         <div id="readerChapter" class="reader-chapter"></div>
       </div>
+      <button id="findBtn" class="ghost-btn" aria-label="Bölümde ara">🔍</button>
       <button id="settingsBtn" class="ghost-btn" aria-label="Okuma ayarları">⚙</button>
+      <div id="readProgress" class="read-progress" role="progressbar"
+           aria-label="Okuma ilerlemesi" aria-valuemin="0" aria-valuemax="100"
+           aria-valuenow="0"><span></span></div>
     </header>
+
+    <div id="findBar" class="find-bar" hidden>
+      <input id="findInput" type="search" inputmode="search" autocomplete="off"
+             placeholder="Bölümde ara…" aria-label="Bölümde ara" />
+      <span id="findCount" class="find-count" aria-live="polite"></span>
+      <button id="findPrev" class="pill" aria-label="Önceki eşleşme">↑</button>
+      <button id="findNext" class="pill" aria-label="Sonraki eşleşme">↓</button>
+      <button id="findClose" class="pill" aria-label="Aramayı kapat">×</button>
+    </div>
 
     <div id="settingsPanel" class="settings-panel" hidden>
       <div class="setting-row">
         <span>Tema</span>
-        <button id="themeToggle" class="pill">Açık</button>
+        <div class="segmented" role="group" aria-label="Tema">
+          <button class="seg" data-theme-opt="light">Açık</button>
+          <button class="seg" data-theme-opt="sepia">Sepya</button>
+          <button class="seg" data-theme-opt="dark">Koyu</button>
+        </div>
       </div>
       <div class="setting-row">
         <span>Punto</span>
@@ -108,6 +128,22 @@
         <button id="fontFamily" class="pill">Serif</button>
       </div>
       <div class="setting-row">
+        <span>Satır aralığı</span>
+        <div class="segmented" role="group" aria-label="Satır aralığı">
+          <button class="seg" data-lh="sik">Sık</button>
+          <button class="seg" data-lh="normal">Normal</button>
+          <button class="seg" data-lh="seyrek">Seyrek</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span>Kenar boşluğu</span>
+        <div class="segmented" role="group" aria-label="Kenar boşluğu">
+          <button class="seg" data-mg="dar">Dar</button>
+          <button class="seg" data-mg="normal">Normal</button>
+          <button class="seg" data-mg="genis">Geniş</button>
+        </div>
+      </div>
+      <div class="setting-row">
         <span>Bu bölüm</span>
         <button id="retranslate" class="pill">Yeniden çevir</button>
       </div>
@@ -116,7 +152,10 @@
     <p id="status" class="status" hidden></p>
     <main id="readerBody" class="reader-body" hidden></main>
     <footer id="readerFooter" class="reader-footer" hidden>
-      <button id="nextBtn" class="next-btn">SONRAKI BÖLÜM →</button>
+      <div class="footer-nav">
+        <button id="prevBtn" class="prev-btn" hidden>← ÖNCEKİ</button>
+        <button id="nextBtn" class="next-btn">SONRAKI BÖLÜM →</button>
+      </div>
     </footer>
   </section>
 

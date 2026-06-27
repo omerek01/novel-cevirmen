@@ -8,14 +8,14 @@ from __future__ import annotations
 import json
 import sqlite3
 import time
-from pathlib import Path
 
-DB_PATH = Path(__file__).resolve().parent.parent.parent / "cache" / "chapters.db"
+from . import db
 
 
 def _connect() -> sqlite3.Connection:
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(DB_PATH, timeout=10)
+    path = db.db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path, timeout=10)
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS chapters (
@@ -28,10 +28,13 @@ def _connect() -> sqlite3.Connection:
             next_url TEXT,
             detected_names TEXT,
             chunk_count INTEGER,
-            created_at REAL
+            created_at REAL,
+            prev_url TEXT
         )
         """
     )
+    # Eski (prev_url'süz) DB'ler için idempotent migration.
+    db.ensure_column(conn, "chapters", "prev_url", "prev_url TEXT")
     return conn
 
 
@@ -41,7 +44,7 @@ def get_chapter(url: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT book_slug, book_title, title, chapter_no, translation, "
-            "next_url, detected_names, chunk_count FROM chapters WHERE url = ?",
+            "next_url, detected_names, chunk_count, prev_url FROM chapters WHERE url = ?",
             (url,),
         ).fetchone()
     finally:
@@ -57,6 +60,7 @@ def get_chapter(url: str) -> dict | None:
         "next_url": row[5],
         "detected_names": json.loads(row[6] or "[]"),
         "chunk_count": row[7],
+        "prev_url": row[8],
         "cached": True,
     }
 
@@ -83,8 +87,9 @@ def save_chapter(url: str, data: dict) -> None:
             """
             INSERT OR REPLACE INTO chapters
                 (url, book_slug, book_title, title, chapter_no,
-                 translation, next_url, detected_names, chunk_count, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 translation, next_url, detected_names, chunk_count, created_at,
+                 prev_url)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 url,
@@ -97,6 +102,7 @@ def save_chapter(url: str, data: dict) -> None:
                 json.dumps(data.get("detected_names") or [], ensure_ascii=False),
                 data.get("chunk_count"),
                 time.time(),
+                data.get("prev_url"),
             ),
         )
         conn.commit()
