@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="tr" data-theme="light">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#16130f" />
+  <title>NOVELLINK</title>
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="NOVELLINK" />
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <!-- KÜTÜPHANE -->
+  <section id="libraryView" class="view">
+    <header class="lib-header">
+      <div class="wordmark">NOVEL<span class="wm-accent">LINK</span></div>
+      <button id="libThemeToggle" class="ghost-btn" aria-label="Tema değiştir">☾</button>
+    </header>
+    <h2 class="section-label">KÜTÜP&shy;HANE</h2>
+    <div class="lib-actions">
+      <button id="offlineAllBtn" class="ghost-line-btn">⤓ HEPSİNİ ÇEVRİMDIŞI İNDİR</button>
+    </div>
+    <p id="emptyState" class="empty" hidden>
+      Kütüphanen boş.<br />Aşağıdaki <b>+ KİTAP EKLE</b> ile ilk serini ekle.
+    </p>
+    <div class="shelf-wrap">
+      <div id="shelf" class="shelf"></div>
+      <div class="shelf-board"></div>
+    </div>
+  </section>
+
+  <!-- KİTAP (BÖLÜM LİSTESİ) -->
+  <section id="bookView" class="view" hidden>
+    <header class="reader-bar">
+      <button id="bookBackBtn" class="ghost-btn" aria-label="Kütüphaneye dön">←</button>
+      <div class="reader-titles">
+        <div id="bookTitle" class="book-view-title"></div>
+      </div>
+      <span class="ghost-btn bar-spacer" aria-hidden="true">←</span>
+    </header>
+    <div class="book-body">
+      <button id="resumeBtn" class="next-btn" hidden>KALDIĞIN YERDEN DEVAM ET</button>
+      <button id="openGlossaryBtn" class="ghost-line-btn">SÖZLÜK / TERİMLER →</button>
+      <button id="bulkBtn" class="ghost-line-btn">TOPLU ÇEVİR (İLERİ HAZIRLA) →</button>
+      <button id="epubBtn" class="ghost-line-btn">ePub İNDİR →</button>
+      <button id="offlineBtn" class="ghost-line-btn">ÇEVRİMDIŞI İNDİR (TELEFONA) →</button>
+      <button id="mergeBtn" class="ghost-line-btn">BAŞKA KİTAPLA BİRLEŞTİR →</button>
+      <h2 class="section-label small">BÖLÜMLER</h2>
+      <div id="chapterList" class="chapter-list"></div>
+    </div>
+  </section>
+
+  <!-- SÖZLÜK -->
+  <section id="glossaryView" class="view" hidden>
+    <header class="reader-bar">
+      <button id="glossaryBackBtn" class="ghost-btn" aria-label="Kitaba dön">←</button>
+      <div class="reader-titles">
+        <div id="glossaryTitle" class="book-view-title">SÖZLÜK</div>
+      </div>
+      <span class="ghost-btn bar-spacer" aria-hidden="true">←</span>
+    </header>
+    <div class="book-body">
+      <p class="gloss-hint">
+        Bu terimler her yeni çevrilen bölümde aynı kalır. Karakter isimleri otomatik
+        eklenir; kendi terimini de ekle (örn. "Aspect" → karşılığı boş bırak = İngilizce
+        kalsın). Değişiklik yeni bölümlerde geçerli; eski bölüm için okuyucuda
+        "Yeniden çevir".
+      </p>
+      <div class="gloss-add">
+        <input id="glossSource" type="text" placeholder="Kaynak (örn. Aspect)" />
+        <input id="glossTarget" type="text" placeholder="Karşılık (boş = aynı kalsın)" />
+        <button id="glossAddBtn" class="pill">Ekle</button>
+      </div>
+      <div id="glossList" class="gloss-list"></div>
+    </div>
+  </section>
+
+  <!-- OKUYUCU -->
+  <section id="readerView" class="view" hidden>
+    <header class="reader-bar">
+      <button id="backBtn" class="ghost-btn" aria-label="Kütüphaneye dön">←</button>
+      <div class="reader-titles">
+        <div id="readerBook" class="reader-book"></div>
+        <div id="readerChapter" class="reader-chapter"></div>
+      </div>
+      <button id="settingsBtn" class="ghost-btn" aria-label="Okuma ayarları">⚙</button>
+    </header>
+
+    <div id="settingsPanel" class="settings-panel" hidden>
+      <div class="setting-row">
+        <span>Tema</span>
+        <button id="themeToggle" class="pill">Açık</button>
+      </div>
+      <div class="setting-row">
+        <span>Punto</span>
+        <div class="stepper">
+          <button id="fontMinus" class="pill" aria-label="Yazıyı küçült">A−</button>
+          <span id="fontValue" class="stepper-val">19</span>
+          <button id="fontPlus" class="pill" aria-label="Yazıyı büyüt">A+</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span>Yazı tipi</span>
+        <button id="fontFamily" class="pill">Serif</button>
+      </div>
+      <div class="setting-row">
+        <span>Bu bölüm</span>
+        <button id="retranslate" class="pill">Yeniden çevir</button>
+      </div>
+    </div>
+
+    <p id="status" class="status" hidden></p>
+    <main id="readerBody" class="reader-body" hidden></main>
+    <footer id="readerFooter" class="reader-footer" hidden>
+      <button id="nextBtn" class="next-btn">SONRAKI BÖLÜM →</button>
+    </footer>
+  </section>
+
+  <!-- KİTAP EKLE -->
+  <div id="addModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">KİTAP EKLE</h3>
+      <p class="modal-hint">novelbin'den seriye ait herhangi bir bölüm linkini yapıştır.</p>
+      <input id="addUrlInput" type="url" inputmode="url" autocomplete="off"
+             placeholder="https://novelbin.com/b/.../chapter-1" />
+      <div class="modal-actions">
+        <button id="addCancel" class="pill">Vazgeç</button>
+        <button id="addConfirm" class="next-btn">Ekle ve Oku</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOPLU ÇEVİR -->
+  <div id="bulkModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">TOPLU ÇEVİR</h3>
+      <p class="modal-hint">
+        Şu anki bölümden ileriye doğru kaç bölüm önceden çevrilsin? Çevrilmiş
+        bölümler atlanır (kota harcanmaz). İşlem sırasında bu sekme açık kalmalı.
+      </p>
+      <input id="bulkCount" type="number" min="1" max="200" value="10" inputmode="numeric" />
+      <div class="modal-actions">
+        <button id="bulkCancel" class="pill">Vazgeç</button>
+        <button id="bulkStart" class="next-btn">Başlat</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOPLU ÇEVİR İLERLEME -->
+  <div id="bulkProgress" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">ÇEVRİLİYOR…</h3>
+      <p id="bulkProgressText" class="modal-hint">Hazırlanıyor…</p>
+      <div class="modal-actions">
+        <button id="bulkStop" class="pill">Durdur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- KİTAP BİRLEŞTİR -->
+  <div id="mergeModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">KİTAPLARI BİRLEŞTİR</h3>
+      <p class="modal-hint">
+        Bu kitabı, aynı seri olan başka bir kitapla birleştir. Bölümleri ve sözlüğü
+        seçtiğin kitaba taşınır; bu kitap listeden kalkar. Bundan sonra bu kaynaktan
+        gelen yeni bölümler de o kitaba eklenir.
+      </p>
+      <div id="mergeList" class="merge-list"></div>
+      <div class="modal-actions">
+        <button id="mergeCancel" class="pill">Vazgeç</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ÇEVRİMDIŞI İNDİR İLERLEME -->
+  <div id="offlineProgress" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">TELEFONA İNDİRİLİYOR…</h3>
+      <p id="offlineProgressText" class="modal-hint">Hazırlanıyor…</p>
+      <div class="modal-actions">
+        <button id="offlineStop" class="pill">Durdur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ePub İNDİR -->
+  <div id="epubModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">ePub İNDİR</h3>
+      <p class="modal-hint">
+        Çevrilmiş bölümlerden e-kitap oluştur. Sadece çevrilmiş bölümler eklenir.
+      </p>
+      <div class="epub-fields">
+        <label class="epub-label">Başlangıç bölüm
+          <input id="epubStart" type="number" min="1" value="1" inputmode="numeric" />
+        </label>
+        <label class="epub-label">Kaç bölüm
+          <input id="epubCount" type="number" min="1" max="2000" value="50" inputmode="numeric" />
+        </label>
+      </div>
+      <div class="modal-actions">
+        <button id="epubCancel" class="pill">Vazgeç</button>
+        <button id="epubDownload" class="next-btn">İndir</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

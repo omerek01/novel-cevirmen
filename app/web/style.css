@@ -1,0 +1,510 @@
+:root {
+  --bg: #f5f2ea;
+  --surface: #ffffff;
+  --ink: #16130f;
+  --ink-soft: #6a6258;
+  --line: #16130f;
+  --accent: #e5482d;
+  --shelf: #3a2c22;
+  --reading: 19px;
+  --reading-font: Georgia, "Times New Roman", serif;
+  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --max: 44rem;
+}
+
+[data-theme="dark"] {
+  --bg: #121110;
+  --surface: #1c1a18;
+  --ink: #f1ece3;
+  --ink-soft: #9a9183;
+  --line: #f1ece3;
+  --accent: #ff5a3c;
+  --shelf: #0a0908;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  -webkit-text-size-adjust: 100%;
+}
+
+.view { min-height: 100vh; }
+[hidden] { display: none !important; }
+
+/* ---------- Editorial başlık öğeleri ---------- */
+.wordmark {
+  font-weight: 900;
+  font-size: clamp(1.4rem, 1rem + 3.2vw, 2.1rem);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.wm-accent { color: var(--accent); }
+
+.section-label {
+  margin: 0.1em 0 0.5em;
+  padding: 0 1rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: -0.01em;
+  font-size: clamp(2.6rem, 1rem + 11vw, 5.5rem);
+  line-height: 0.92;
+  hyphens: manual;
+}
+
+.ghost-btn {
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+  font-size: 1.5rem;
+  line-height: 1;
+  padding: 0.3rem 0.5rem;
+  cursor: pointer;
+  border-radius: 0.5rem;
+}
+.ghost-btn:active { background: color-mix(in oklab, var(--ink) 12%, transparent); }
+
+/* ---------- Kütüphane ---------- */
+.lib-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 1rem 1rem 0.8rem;
+  padding-top: max(1rem, env(safe-area-inset-top));
+  border-bottom: 3px solid var(--line);
+}
+
+.empty {
+  padding: 1.5rem 1.2rem;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  line-height: 1.6;
+}
+
+.shelf-wrap { padding: 0.5rem 1rem 3rem; }
+.shelf {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  overflow-x: auto;
+  padding: 1.5rem 0.2rem 0;
+  scrollbar-width: thin;
+}
+.shelf-board {
+  height: 16px;
+  background: var(--shelf);
+  border-radius: 2px;
+  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+}
+
+.spine {
+  flex: 0 0 auto;
+  width: 78px;
+  height: 248px;
+  background: var(--spine, #555);
+  color: #fff;
+  border: 0;
+  border-left: 4px solid rgba(0, 0, 0, 0.28);
+  border-radius: 3px 7px 7px 3px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 6px;
+  cursor: pointer;
+  box-shadow: 2px 5px 12px rgba(0, 0, 0, 0.35);
+  transition: transform 120ms ease;
+}
+.spine:active { transform: translateY(2px); }
+
+.spine-title {
+  writing-mode: vertical-rl;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.95rem;
+  max-height: 196px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+}
+.spine-tag {
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  opacity: 0.92;
+}
+
+.spine-add {
+  background: transparent;
+  color: var(--accent);
+  border: 2px dashed var(--accent);
+  box-shadow: none;
+}
+.spine-plus { font-size: 2.2rem; font-weight: 800; line-height: 1; }
+.spine-addlabel {
+  writing-mode: vertical-rl;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.68rem;
+}
+
+/* ---------- Okuyucu ---------- */
+.reader-bar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  padding-top: max(0.5rem, env(safe-area-inset-top));
+  background: var(--bg);
+  border-bottom: 3px solid var(--line);
+}
+.reader-titles { flex: 1; min-width: 0; text-align: center; }
+.reader-book {
+  font-size: 0.7rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--accent);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.reader-chapter {
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.settings-panel {
+  border-bottom: 3px solid var(--line);
+  background: var(--surface);
+  padding: 0.4rem 1rem 0.8rem;
+  max-width: var(--max);
+  margin: 0 auto;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.55rem 0;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 0.85rem;
+}
+.setting-row + .setting-row { border-top: 1px solid color-mix(in oklab, var(--ink) 12%, transparent); }
+
+.pill {
+  border: 2px solid var(--line);
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.85rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  cursor: pointer;
+}
+.pill:active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+.stepper { display: flex; align-items: center; gap: 0.6rem; }
+.stepper-val { min-width: 2ch; text-align: center; font-weight: 800; }
+
+.reader-body {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 1.4rem 1.3rem 7rem;
+  font-family: var(--reading-font);
+  font-size: var(--reading);
+  line-height: 1.75;
+}
+.reader-body p { margin: 0 0 1.1em; text-align: justify; hyphens: auto; }
+
+.status {
+  max-width: var(--max);
+  margin: 3rem auto;
+  padding: 0 1.3rem;
+  text-align: center;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+.reader-footer {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 0.7rem 1rem;
+  padding-bottom: max(0.7rem, env(safe-area-inset-bottom));
+  background: linear-gradient(transparent, var(--bg) 30%);
+}
+.next-btn {
+  display: block;
+  width: 100%;
+  max-width: var(--max);
+  margin: 0 auto;
+  border: 0;
+  background: var(--accent);
+  color: #fff;
+  font-family: var(--sans);
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 1.05rem;
+  padding: 0.95rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.next-btn:active { filter: brightness(0.92); }
+.next-btn:disabled { background: var(--ink-soft); cursor: default; }
+
+/* ---------- Kitap ekle modalı ---------- */
+.modal {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1.2rem;
+  background: color-mix(in oklab, #000 55%, transparent);
+}
+.modal-card {
+  width: 100%;
+  max-width: 26rem;
+  background: var(--surface);
+  border: 3px solid var(--line);
+  border-radius: 6px;
+  padding: 1.3rem;
+}
+.modal-title {
+  margin: 0 0 0.3rem;
+  font-weight: 900;
+  letter-spacing: 0.03em;
+  font-size: 1.4rem;
+}
+.modal-hint { margin: 0 0 0.9rem; color: var(--ink-soft); font-size: 0.92rem; }
+#addUrlInput,
+#bulkCount {
+  width: 100%;
+  padding: 0.8rem 0.9rem;
+  font-size: 1rem;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+}
+#addUrlInput:focus,
+#bulkCount:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.modal-actions {
+  display: flex;
+  gap: 0.6rem;
+  justify-content: flex-end;
+  align-items: center;
+  margin-top: 1rem;
+}
+.modal-actions .next-btn { width: auto; }
+
+/* ---------- Kitap (bölüm listesi) ---------- */
+.bar-spacer { visibility: hidden; }
+.book-view-title {
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  font-size: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.book-body {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding: 1.2rem 1.1rem 4rem;
+}
+.book-body .next-btn { margin-bottom: 1.4rem; }
+.section-label.small {
+  font-size: clamp(1.5rem, 1rem + 4vw, 2.6rem);
+  padding: 0;
+  margin: 0 0 0.6rem;
+}
+.chapter-list { border-top: 3px solid var(--line); }
+.chapter-row {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 14%, transparent);
+  padding: 0.85rem 0.4rem;
+  cursor: pointer;
+  color: var(--ink);
+  font-family: var(--sans);
+}
+.chapter-row:active { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.chapter-row.current {
+  border-left: 4px solid var(--accent);
+  padding-left: 0.7rem;
+  background: color-mix(in oklab, var(--accent) 10%, transparent);
+}
+.chapter-no {
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.chapter-name { font-size: 0.98rem; font-weight: 600; }
+.loading-row {
+  padding: 1.5rem 0.4rem;
+  color: var(--ink-soft);
+  font-style: italic;
+}
+
+/* ---------- Sözlük ---------- */
+.ghost-line-btn {
+  width: 100%;
+  margin-bottom: 1.6rem;
+  border: 2px solid var(--line);
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-size: 0.82rem;
+  padding: 0.7rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ghost-line-btn:active { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+
+/* Kütüphane aksiyonları + birleştirme listesi */
+.lib-actions { padding: 0 1rem; }
+.lib-actions .ghost-line-btn { margin-bottom: 0.8rem; }
+.merge-list { margin: 0.2rem 0 0.6rem; max-height: 50vh; overflow-y: auto; }
+.merge-row {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 14%, transparent);
+  padding: 0.85rem 0.4rem;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 0.95rem;
+  color: var(--ink);
+  cursor: pointer;
+}
+.merge-row:active { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+
+.gloss-hint {
+  color: var(--ink-soft);
+  font-size: 0.88rem;
+  line-height: 1.55;
+  margin: 0 0 1.1rem;
+}
+.gloss-add {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+  margin-bottom: 1.2rem;
+}
+.gloss-add #glossSource { grid-column: 1 / -1; }
+.gloss-add input {
+  padding: 0.6rem 0.7rem;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+  min-width: 0;
+}
+.gloss-add input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+
+.gloss-list { border-top: 3px solid var(--line); }
+.gloss-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.55rem 0.2rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 14%, transparent);
+}
+.gloss-source {
+  font-weight: 700;
+  flex: 0 0 auto;
+  max-width: 42%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.gloss-arrow { color: var(--ink-soft); flex: 0 0 auto; }
+.gloss-target {
+  flex: 1;
+  min-width: 0;
+  padding: 0.45rem 0.6rem;
+  font-size: 0.95rem;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid color-mix(in oklab, var(--ink) 20%, transparent);
+  border-radius: 5px;
+}
+.gloss-target:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+.gloss-del {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-size: 1.4rem;
+  line-height: 1;
+  padding: 0.2rem 0.45rem;
+  cursor: pointer;
+  border-radius: 4px;
+}
+.gloss-del:active { color: var(--accent); }
+
+/* ---------- ePub alanları ---------- */
+.epub-fields {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+.epub-label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ink-soft);
+}
+.epub-label input {
+  padding: 0.6rem;
+  font-size: 1rem;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+  min-width: 0;
+}
+.epub-label input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }

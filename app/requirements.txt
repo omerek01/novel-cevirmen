@@ -1,0 +1,7 @@
+fastapi
+uvicorn[standard]
+playwright
+google-genai
+beautifulsoup4
+python-dotenv
+ebooklib
