@@ -29,12 +29,15 @@ def _connect() -> sqlite3.Connection:
             detected_names TEXT,
             chunk_count INTEGER,
             created_at REAL,
-            prev_url TEXT
+            prev_url TEXT,
+            source_text TEXT
         )
         """
     )
-    # Eski (prev_url'süz) DB'ler için idempotent migration.
+    # Eski DB'ler için idempotent migration'lar.
     db.ensure_column(conn, "chapters", "prev_url", "prev_url TEXT")
+    # source_text: çeviriyle paragraf-hizalı İngilizce kaynak (iki-dilli okuma).
+    db.ensure_column(conn, "chapters", "source_text", "source_text TEXT")
     return conn
 
 
@@ -44,7 +47,8 @@ def get_chapter(url: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT book_slug, book_title, title, chapter_no, translation, "
-            "next_url, detected_names, chunk_count, prev_url FROM chapters WHERE url = ?",
+            "next_url, detected_names, chunk_count, prev_url, source_text "
+            "FROM chapters WHERE url = ?",
             (url,),
         ).fetchone()
     finally:
@@ -61,6 +65,7 @@ def get_chapter(url: str) -> dict | None:
         "detected_names": json.loads(row[6] or "[]"),
         "chunk_count": row[7],
         "prev_url": row[8],
+        "source": row[9],
         "cached": True,
     }
 
@@ -88,8 +93,8 @@ def save_chapter(url: str, data: dict) -> None:
             INSERT OR REPLACE INTO chapters
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
-                 prev_url)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 prev_url, source_text)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 url,
@@ -103,6 +108,7 @@ def save_chapter(url: str, data: dict) -> None:
                 data.get("chunk_count"),
                 time.time(),
                 data.get("prev_url"),
+                data.get("source"),
             ),
         )
         conn.commit()

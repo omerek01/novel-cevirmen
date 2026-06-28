@@ -31,6 +31,8 @@ let currentBookSlug = null;
 let currentBook = null; // {current_url, current_ratio, ...} — resume için
 let currentChapters = []; // açık kitabın tam bölüm listesi (prev türetme + arama)
 let currentParas = []; // açık bölümün paragrafları (bölümde arama)
+let currentSource = []; // açık bölümün hizalı İngilizce paragrafları (çift-tık)
+let sourceLoading = false; // eski bölüm kaynağı yüklenirken çift-istek engeli
 let offlineStop = false;
 let isRestoring = false; // programatik scroll sırasında kaydı baskıla
 let chapterLoaded = false; // bölüm BAŞARIYLA render edildi mi (konum kaydı için)
@@ -523,6 +525,10 @@ function renderChapter(data, ratio) {
     .split(/\n\n+/)
     .map((p) => p.trim())
     .filter(Boolean);
+  // Hizalı İngilizce kaynak (çift-tık için). Yoksa boş → çift-tıkta sunucudan istenir.
+  currentSource = data.source
+    ? data.source.split(/\n\n+/).map((p) => p.trim())
+    : [];
   renderReaderBody("");
   el("readerBody").hidden = false;
 
@@ -544,11 +550,78 @@ function renderReaderBody(query) {
   const body = el("readerBody");
   body.replaceChildren();
   const q = (query || "").trim();
-  for (const para of currentParas) {
+  currentParas.forEach((para, i) => {
     const p = document.createElement("p");
+    p.dataset.idx = i; // çift-tıkta hangi paragraf → İngilizce eşlemesi
     if (q) appendHighlighted(p, para, q);
     else p.textContent = para;
     body.appendChild(p);
+  });
+}
+
+/* ---------- çift-tık/çift-dokunma: paragrafın İngilizce orijinali ----------
+   Tek tık okuyucuda bir şey yapmaz; 350ms içinde aynı paragrafa ikinci tık =
+   çift-tık (masaüstü + mobil tek mantık). Açıksa kapatır (toggle). */
+let lastTapIdx = -1;
+let lastTapAt = 0;
+
+function onParaTap(e) {
+  const p = e.target.closest("#readerBody p[data-idx]");
+  if (!p) return;
+  const idx = Number(p.dataset.idx);
+  const now = Date.now();
+  if (idx === lastTapIdx && now - lastTapAt < 350) {
+    lastTapIdx = -1;
+    lastTapAt = 0;
+    toggleSource(p, idx);
+  } else {
+    lastTapIdx = idx;
+    lastTapAt = now;
+  }
+}
+
+function toggleSource(p, idx) {
+  const sib = p.nextElementSibling;
+  if (sib && sib.classList.contains("source-line")) {
+    sib.remove(); // ikinci çift-tık → kapat
+    return;
+  }
+  if (currentSource[idx]) {
+    insertSourceLine(p, currentSource[idx], "");
+  } else {
+    loadSourceForChapter(p, idx); // eski bölüm: kaynak yok → bir kez yükselt
+  }
+}
+
+function insertSourceLine(p, text, extraClass) {
+  const div = document.createElement("div");
+  div.className = "source-line" + (extraClass ? " " + extraClass : "");
+  div.textContent = text;
+  p.after(div);
+  return div;
+}
+
+async function loadSourceForChapter(p, idx) {
+  if (!currentUrl || sourceLoading) return;
+  sourceLoading = true;
+  const note = insertSourceLine(p, "İngilizce getiriliyor…", "source-loading");
+  try {
+    const res = await fetch(
+      `/api/chapter?url=${encodeURIComponent(currentUrl)}&source=1`
+    );
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    currentSource = data.source
+      ? data.source.split(/\n\n+/).map((s) => s.trim())
+      : [];
+    note.remove();
+    if (currentSource[idx]) insertSourceLine(p, currentSource[idx], "");
+    else insertSourceLine(p, "Bu bölüm için İngilizce kaynak yok.", "source-empty");
+  } catch {
+    note.textContent = "İngilizce getirilemedi.";
+    note.classList.add("source-empty");
+  } finally {
+    sourceLoading = false;
   }
 }
 
@@ -694,6 +767,7 @@ el("nextBtn").addEventListener("click", () => {
 el("prevBtn").addEventListener("click", () => {
   if (currentPrev) navigate({ view: "reader", url: currentPrev });
 });
+el("readerBody").addEventListener("click", onParaTap); // çift-tık → İngilizce orijinal
 el("findBtn").addEventListener("click", () => {
   if (el("findBar").hidden) openFind();
   else closeFind();

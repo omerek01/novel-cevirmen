@@ -64,3 +64,26 @@ def test_save_get_roundtrips_prev_url():
 def test_fresh_db_has_prev_url():
     cache.save_chapter("u9", {"book_slug": "s", "title": "B", "prev_url": "u8"})
     assert cache.get_chapter("u9")["prev_url"] == "u8"
+
+
+def test_migration_adds_source_text_and_old_row_none():
+    _make_old_schema_db()  # source_text'siz eski şema
+    cache._connect().close()  # migration source_text ekler
+    conn = sqlite3.connect(db.db_path())
+    cols = {r[1] for r in conn.execute("PRAGMA table_info(chapters)")}
+    conn.close()
+    assert "source_text" in cols
+    assert cache.get_chapter("uOld")["source"] is None  # eski satırda kaynak yok
+
+
+def test_save_get_roundtrips_source():
+    cache.save_chapter(
+        "u1",
+        {
+            "book_slug": "s", "title": "B1", "translation": "çeviri\n\niki",
+            "source": "english\n\ntwo", "prev_url": "u0",
+        },
+    )
+    row = cache.get_chapter("u1")
+    assert row["source"] == "english\n\ntwo"
+    assert row["translation"] == "çeviri\n\niki"

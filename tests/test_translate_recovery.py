@@ -98,3 +98,36 @@ def test_all_blocked_raises_content_filter_error():
     client = _FakeClient({"m1": "", "m2": "   "})  # ikisi de boş/whitespace
     with pytest.raises(translate.TranslateError, match="içerik filtresi"):
         translate._generate_with_fallback(client, ("m1", "m2"), "user")
+
+
+# ---------- işaretçi (marker) hizalama ----------
+def test_split_by_markers_full_alignment():
+    tr = "[[1]] Bir.\n\n[[2]] İki.\n\n[[3]] Üç."
+    assert translate._split_by_markers(tr, 3) == ["Bir.", "İki.", "Üç."]
+
+
+def test_split_by_markers_tolerates_spaces_and_preamble():
+    tr = "gereksiz önek [[ 1 ]] Bir. [[2]] İki."
+    assert translate._split_by_markers(tr, 2) == ["Bir.", "İki."]
+
+
+def test_split_by_markers_missing_returns_none():
+    # 3 paragraf bekleniyor ama yalnızca 1 ve 2 var → hizalama başarısız
+    assert translate._split_by_markers("[[1]] Bir. [[2]] İki.", 3) is None
+
+
+def test_split_by_markers_duplicate_concatenates():
+    # model bir paragrafı ikiye bölmüş, ikisi de [[2]] → birleştir
+    out = translate._split_by_markers("[[1]] Bir. [[2]] İki. [[2]] devam.", 2)
+    assert out[0] == "Bir."
+    assert "İki." in out[1] and "devam." in out[1]
+
+
+def test_split_by_markers_empty_segment_returns_none():
+    assert translate._split_by_markers("[[1]] Bir. [[2]]", 2) is None
+
+
+def test_strip_markers():
+    out = translate._strip_markers("[[1]] Bir. [[2]] İki.")
+    assert "[[" not in out
+    assert "Bir." in out and "İki." in out

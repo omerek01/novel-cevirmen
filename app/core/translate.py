@@ -52,10 +52,18 @@ SYSTEM_INSTRUCTION = (
     "- SÖZLÜK bir eşlemedir (kaynak -> karşılık): metinde KAYNAK terimi gördüğünde "
     "onu çevirme, tam olarak KARŞILIK ile yaz.\n"
     "- ÖNCEKİ ÇEVİRİ verilirse onu TEKRAR çevirme; yalnızca devamlılık için kullan.\n"
-    '- Yanıtı SADECE şu JSON ile ver: {"translation": "...", "detected_names": ["..."]}\n'
+    "- METİN paragrafları [[n]] ile numaralıdır. Çeviride HER paragrafın başına AYNI "
+    "[[n]] işaretini koy; hiçbir işareti ATLAMA, BİRLEŞTİRME veya sırasını DEĞİŞTİRME. "
+    "Bir İngilizce paragraf bir Türkçe paragrafa karşılık gelir.\n"
+    '- Yanıtı SADECE şu JSON ile ver: {"translation": "[[1]] ...\\n\\n[[2]] ...", '
+    '"detected_names": ["..."]}\n'
     "- detected_names: SADECE metinde geçen KARAKTER (kişi) isimleri. "
     "Yer, beceri, eşya, sistem veya dünya terimlerini DAHİL ETME."
 )
+
+# Paragraf hizalama işaretçisi: [[1]], [[ 2 ]] gibi. Çeviride korunur → her Türkçe
+# paragrafı kaynak İngilizce paragrafıyla eşler (sayı tutmasa bile hizalama bozulmaz).
+MARKER_RE = re.compile(r"\[\[\s*(\d+)\s*\]\]")
 
 
 class TranslateError(Exception):
@@ -74,29 +82,77 @@ def translate_chapter(
 ) -> dict:
     """Tüm bölümü parçalayıp çevirir; bağlamı taşır, yeni isimleri biriktirir.
 
-    Döner: {"translation": str, "detected_names": list[str], "chunk_count": int}
+    İşaretçi (``[[n]]``) ile paragraf-hizalı üretir: dönen ``translation`` ve ``source``
+    AYNI ``\\n\\n`` paragraf sayısına sahiptir (i. Türkçe paragraf <-> i. İngilizce
+    paragraf). Bir parçada hizalama tutmazsa o parça tek blok olur ve ``source`` None
+    döner (çeviri yine de tam; iki-dilli o bölümde devre dışı).
+
+    Döner: {"translation": str, "source": str|None, "detected_names": list[str],
+            "chunk_count": int}
     """
     glossary = dict(glossary or {})
     client = genai.Client(api_key=api_key)
     chunks = _split_paragraphs(text)
 
-    out_parts: list[str] = []
+    tr_paras: list[str] = []
+    en_paras: list[str] = []
     new_names: set[str] = set()
     prev_tail = ""
+    aligned = True
 
     for chunk in chunks:
-        result = _translate_chunk(client, models, chunk, glossary, prev_tail)
-        out_parts.append(result["translation"])
+        chunk_en = [p.strip() for p in chunk.split("\n\n") if p.strip()]
+        result = _translate_chunk(client, models, chunk_en, glossary, prev_tail)
         for name in result["detected_names"]:
             if name and name not in glossary:
                 new_names.add(name)
-        prev_tail = _last_sentences(result["translation"], 2)
+        chunk_tr = _split_by_markers(result["translation"], len(chunk_en))
+        if chunk_tr is not None:
+            tr_paras.extend(chunk_tr)
+            en_paras.extend(chunk_en)
+            prev_tail = _last_sentences("\n\n".join(chunk_tr[-2:]), 2)
+        else:
+            # Hizalama tutmadı: işaretleri temizleyip tek blok ekle, kaynağı bırak.
+            clean = _strip_markers(result["translation"])
+            tr_paras.append(clean)
+            en_paras.append(chunk)
+            aligned = False
+            prev_tail = _last_sentences(clean, 2)
 
     return {
-        "translation": "\n\n".join(out_parts),
+        "translation": "\n\n".join(tr_paras),
+        "source": "\n\n".join(en_paras) if aligned else None,
         "detected_names": sorted(new_names),
         "chunk_count": len(chunks),
     }
+
+
+def _split_by_markers(translation: str, n: int) -> list[str] | None:
+    """``[[k]]`` işaretli çeviriyi paragraf listesine böler (1..n tam ve sıralıysa).
+
+    Her segment, ``[[k]]`` ile bir sonraki işarete kadarki metin. 1..n işaretlerinin
+    hepsi yoksa, bir paragraf boş kalırsa → None (çağıran hizalamasız akışa düşer).
+    """
+    if not translation:
+        return None
+    matches = list(MARKER_RE.finditer(translation))
+    if not matches:
+        return None
+    parts: dict[int, str] = {}
+    for i, m in enumerate(matches):
+        k = int(m.group(1))
+        start = m.end()
+        end = matches[i + 1].start() if i + 1 < len(matches) else len(translation)
+        seg = translation[start:end].strip()
+        parts[k] = (parts[k] + "\n\n" + seg).strip() if k in parts else seg
+    if set(parts) != set(range(1, n + 1)):
+        return None
+    out = [parts[k] for k in range(1, n + 1)]
+    return None if any(not s for s in out) else out
+
+
+def _strip_markers(text: str) -> str:
+    return MARKER_RE.sub("", text or "").strip()
 
 
 def _split_paragraphs(text: str, max_words: int = MAX_WORDS_PER_CHUNK) -> list[str]:
@@ -128,16 +184,17 @@ def _last_sentences(text: str, count: int = 2) -> str:
 def _translate_chunk(
     client: genai.Client,
     models: tuple[str, ...],
-    chunk: str,
+    en_paras: list[str],
     glossary: dict[str, str],
     prev_tail: str,
 ) -> dict:
     glossary_str = json.dumps(glossary, ensure_ascii=False) if glossary else "(boş)"
+    numbered = "\n\n".join(f"[[{i + 1}]] {p}" for i, p in enumerate(en_paras))
     user = (
         f"SÖZLÜK (kaynak -> karşılık; kaynağı görünce karşılığını yaz): {glossary_str}\n\n"
         f"ÖNCEKİ ÇEVİRİNİN SONU (sadece bağlam, tekrar çevirme): "
         f"{prev_tail or '(yok)'}\n\n"
-        f"ÇEVRİLECEK METİN:\n{chunk}"
+        f"ÇEVRİLECEK METİN (her paragraf [[n]] ile numaralı; işaretleri koru):\n{numbered}"
     )
     response = _generate_with_fallback(client, models, user)
     return _parse_response(response.text)

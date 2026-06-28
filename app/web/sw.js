@@ -1,4 +1,4 @@
-const CACHE = "novellink-v16";
+const CACHE = "novellink-v17";
 const SHELL = [
   "/",
   "/index.html",

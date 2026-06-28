@@ -27,16 +27,26 @@ def _finalize_cached(cached: dict, url: str) -> dict:
     return cached
 
 
-def get_or_translate(url: str, api_key: str | None, refresh: bool = False) -> dict:
+def get_or_translate(
+    url: str,
+    api_key: str | None,
+    refresh: bool = False,
+    want_source: bool = False,
+) -> dict:
     """Bölümü önbellekten döndür ya da çek+çevir+önbelleğe yaz.
 
     refresh=True önbelleği yok sayar. Önbellek isabetinde API anahtarı gerekmez.
-    FetchError / TranslateError fırlatabilir.
+    want_source=True ve önbellekteki bölümde hizalı İngilizce kaynak yoksa (eski
+    bölüm) ve anahtar varsa, bölüm bir kez yeniden çevrilip kaynak eklenir (iki-dilli
+    okuma için). FetchError / TranslateError fırlatabilir.
     """
     if not refresh:
         cached = cache.get_chapter(url)
         if cached is not None:
-            return _finalize_cached(cached, url)
+            # Eski bölümü iki-dilli için yükselt: yalnız kaynak istendiğinde, yoksa ve
+            # anahtar varsa yeniden çevir; aksi halde önbelleği aynen döndür (hızlı).
+            if not (want_source and not cached.get("source") and api_key):
+                return _finalize_cached(cached, url)
 
     if not api_key:
         raise TranslateError("GEMINI_API_KEY ayarlı değil.")
@@ -57,6 +67,7 @@ def get_or_translate(url: str, api_key: str | None, refresh: bool = False) -> di
     payload = {
         "title": chapter["title"],
         "translation": result["translation"],
+        "source": result.get("source"),
         "detected_names": result["detected_names"],
         "chunk_count": result["chunk_count"],
         "next_url": chapter["next_url"],

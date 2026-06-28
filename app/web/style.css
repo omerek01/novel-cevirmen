@@ -253,7 +253,25 @@ html, body {
   padding: 0 1px;
 }
 .reader-body mark.find-active { outline: 2px solid var(--ink); }
-.reader-body p { margin: 0 0 1.1em; text-align: justify; hyphens: auto; }
+/* touch-action: çift-dokunmada mobil zoom'u kapatır → çift-dokunma İngilizceyi açar. */
+.reader-body p { margin: 0 0 1.1em; text-align: justify; hyphens: auto; touch-action: manipulation; }
+
+/* Paragrafa çift tıklayınca altında açılan İngilizce orijinal (iki-dilli okuma). */
+.reader-body .source-line {
+  margin: -0.4em 0 1.3em;
+  padding: 0.55em 0.85em;
+  border-left: 3px solid var(--accent);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-size: 0.9em;
+  font-style: italic;
+  line-height: 1.55;
+  text-align: left;
+  hyphens: none;
+  border-radius: 0 4px 4px 0;
+}
+.reader-body .source-loading,
+.reader-body .source-empty { opacity: 0.75; }
 
 .status {
   max-width: var(--max);
