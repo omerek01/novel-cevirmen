@@ -124,6 +124,10 @@ class FetchError(Exception):
     """Bölüm çekilemediğinde fırlatılır (Cloudflare, eksik içerik vb.)."""
 
 
+class CloudflareChallenge(FetchError):
+    """Cloudflare doğrulaması geçilemediğinde fırlatılır."""
+
+
 class _Transient(Exception):
     """İç sinyal: geçici çekme hatası (yavaş yükleme/network) → yeniden denenebilir."""
 
@@ -274,7 +278,7 @@ def _extract_html(
         page.wait_for_selector(site["content"], timeout=timeout_ms)
     except PlaywrightTimeout as exc:
         if _looks_like_challenge(page):
-            raise FetchError("Cloudflare doğrulaması geçilemedi. " + solve_hint) from exc
+            raise CloudflareChallenge("Cloudflare doğrulaması geçilemedi. " + solve_hint) from exc
         # İçerik gelmedi: yavaş yükleme olabilir → geçici say, yeniden dene.
         raise _Transient(
             f"İçerik bulunamadı ({site['content']} sayfada yok). Site yapısı "

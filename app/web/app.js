@@ -38,6 +38,8 @@ let isRestoring = false; // programatik scroll sırasında kaydı baskıla
 let chapterLoaded = false; // bölüm BAŞARIYLA render edildi mi (konum kaydı için)
 let scrollSaveTimer = null;
 let bulkPollTimer = null;
+let isNavigating = false;
+let failedAttempts = 0;
 
 /* ---------- depolama ---------- */
 async function fetchBooks() {
@@ -202,7 +204,10 @@ function applyNavState(state) {
       openGlossary(state.slug);
       break;
     case "reader":
-      loadChapter(state.url, state.ratio != null ? { restoreRatio: state.ratio } : {});
+      loadChapter(state.url, {
+        restoreRatio: state.ratio,
+        triggerId: state.triggerId
+      });
       break;
     default:
       renderLibrary();
@@ -463,47 +468,147 @@ function setStatus(message) {
   s.textContent = message;
 }
 
-function renderError(message, url, refresh) {
+function renderError(err, url, refresh) {
   isRestoring = false;
-  const s = el("status");
-  s.replaceChildren();
-  s.hidden = false;
-  const msg = document.createElement("div");
-  msg.textContent = "Hata: " + message;
-  const retry = document.createElement("button");
-  retry.className = "pill";
-  retry.textContent = "Tekrar dene";
-  retry.style.marginTop = "1rem";
-  retry.addEventListener("click", () => loadChapter(url, { refresh }));
-  s.append(msg, retry);
+  
+  const msgText = err.message || String(err);
+  const errorClass = err.errorClass || null;
+
+  const errorCard = el("readerError");
+  errorCard.replaceChildren();
+  errorCard.hidden = false;
+
+  const title = document.createElement("div");
+  title.className = "error-title";
+  title.textContent = "Bir Hata Oluştu";
+  errorCard.appendChild(title);
+
+  const desc = document.createElement("p");
+  desc.setAttribute("aria-live", "polite");
+  errorCard.appendChild(desc);
+
+  const actions = document.createElement("div");
+  actions.className = "error-actions";
+  errorCard.appendChild(actions);
+
+  const retryBtn = document.createElement("button");
+  retryBtn.className = "primary-btn";
+  retryBtn.textContent = "Tekrar Dene";
+  retryBtn.addEventListener("click", () => {
+    errorCard.hidden = true;
+    loadChapter(url, { refresh });
+  });
+
+  const backToLibBtn = document.createElement("button");
+  backToLibBtn.className = "secondary-btn";
+  backToLibBtn.textContent = "Kitaplığa Dön";
+  backToLibBtn.addEventListener("click", () => {
+    errorCard.hidden = true;
+    navigate({ view: "library" });
+  });
+
+  if (errorClass === "CloudflareChallenge") {
+    title.textContent = "Doğrulama Gerekli";
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      desc.textContent = "Bu bölüm Cloudflare koruması altında ve telefondan doğrudan açılamıyor. Lütfen önce bilgisayardan (doğrulama gerektiren pencereden) doğrulamayı en az bir kere geçin; ardından telefonda okumaya devam edebilirsiniz.";
+      
+      backToLibBtn.className = "primary-btn";
+      retryBtn.className = "secondary-btn";
+      actions.append(backToLibBtn, retryBtn);
+      backToLibBtn.focus();
+    } else {
+      desc.textContent = "Cloudflare doğrulaması geçilemedi. Çözmek için sunucuyu kapatıp FETCH_HEADLESS=0 ile başlatarak açılan pencerede doğrulamayı tamamlayın (ya da start_chrome_cdp.py kullanıyorsanız Chrome penceresinde çözün).";
+      
+      retryBtn.className = "secondary-btn";
+      actions.append(retryBtn, backToLibBtn);
+      retryBtn.focus();
+    }
+  } else if (errorClass === "OriginError") {
+    title.textContent = "Kaynak Site Hatası";
+    desc.textContent = "Romanın yayınlandığı kaynak site şu anda yanıt vermiyor (HTTP 52x). Bu durum sitenin kendi sunucu problemidir. Bir süre bekledikten sonra tekrar deneyebilirsiniz.";
+    
+    actions.append(retryBtn, backToLibBtn);
+    retryBtn.focus();
+  } else {
+    failedAttempts++;
+    if (failedAttempts >= 2) {
+      desc.textContent = `Hata (${failedAttempts}. deneme): ${msgText}. Hata devam ediyor. Lütfen internet bağlantınızı veya kaynak sitenin açık olup olmadığını kontrol edin.`;
+    } else {
+      desc.textContent = `Hata: ${msgText}`;
+    }
+    
+    actions.append(retryBtn, backToLibBtn);
+    retryBtn.focus();
+  }
 }
 
 async function loadChapter(url, opts = {}) {
   if (!url) return;
-  const { refresh = false, restoreRatio = null } = opts;
+  const { refresh = false, restoreRatio = null, triggerId = null } = opts;
   currentUrl = url;
-  chapterLoaded = false; // başarı (renderChapter) gelene dek konum kaydını engelle
-  isRestoring = true; // yükleme/işleme penceresinde kaydı baskıla
-  showView("reader");
+  chapterLoaded = false;
+  isRestoring = true;
+  isNavigating = true;
+
+  el("readerError").hidden = true;
+  
+  const isReaderHidden = views.reader.hidden;
+  if (isReaderHidden) {
+    showView("reader");
+    el("readerBody").hidden = true;
+    el("readerFooter").hidden = true;
+  }
   closeFind();
   el("settingsPanel").hidden = true;
-  el("readerBody").hidden = true;
-  el("readerFooter").hidden = true;
-  setStatus(refresh ? "Yeniden çevriliyor…" : "Yükleniyor…");
+
+  let activeBtn = null;
+  let originalHtml = "";
+  if (triggerId) {
+    activeBtn = el(triggerId);
+  } else if (isReaderHidden) {
+    setStatus(refresh ? "Yeniden çevriliyor…" : "Yükleniyor…");
+  }
+
+  const prevBtn = el("prevBtn");
+  const nextBtn = el("nextBtn");
+  const retranslateBtn = el("retranslate");
+  
+  prevBtn.disabled = true;
+  nextBtn.disabled = true;
+  retranslateBtn.disabled = true;
+
+  if (activeBtn) {
+    originalHtml = activeBtn.innerHTML;
+    activeBtn.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Yükleniyor…`;
+  }
 
   try {
-    const query =
-      `/api/chapter?url=${encodeURIComponent(url)}` + (refresh ? "&refresh=1" : "");
+    const query = `/api/chapter?url=${encodeURIComponent(url)}` + (refresh ? "&refresh=1" : "");
     const res = await fetch(query);
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail || `Sunucu hatası (${res.status})`);
+      throw {
+        message: err.detail?.message || err.detail || `Sunucu hatası (${res.status})`,
+        errorClass: err.detail?.error_class || null
+      };
     }
     const data = await res.json();
     const ratio = restoreRatio != null ? restoreRatio : getScrollLocal(url);
+    
+    if (activeBtn) activeBtn.innerHTML = originalHtml;
+    isNavigating = false;
+    
     renderChapter(data, ratio);
   } catch (err) {
-    renderError(err.message, url, refresh);
+    if (activeBtn) activeBtn.innerHTML = originalHtml;
+    isNavigating = false;
+    
+    prevBtn.disabled = !currentPrev;
+    nextBtn.disabled = !currentNext;
+    retranslateBtn.disabled = false;
+    
+    renderError(err, url, refresh);
   }
 }
 
@@ -517,15 +622,66 @@ function computePrev(data) {
 
 function renderChapter(data, ratio) {
   setStatus(null);
-  chapterLoaded = true; // başarı: artık bu bölümün konumu kaydedilebilir
+  failedAttempts = 0; // Başarılı yüklemede hata sayacını sıfırla
+  el("readerError").hidden = true; // Varsa hata kartını gizle
+  chapterLoaded = true;
+
   el("readerBook").textContent = data.book_title || "";
   el("readerChapter").textContent = data.title || "Bölüm";
+
+  // Boş/kısa çeviri durumu kontrolü (Design 2.2)
+  if (!data.translation || data.translation.trim().length < 50) {
+    const body = el("readerBody");
+    body.replaceChildren();
+
+    const card = document.createElement("div");
+    card.className = "reader-error-card";
+    card.style.position = "static";
+    card.style.margin = "2rem auto";
+
+    const title = document.createElement("div");
+    title.className = "error-title";
+    title.textContent = "Bölüm Boş";
+
+    const desc = document.createElement("p");
+    desc.textContent = "Bu bölümün çeviri metni boş veya çok kısa geldi. Çeviri işlemi başarısız olmuş olabilir.";
+
+    const actions = document.createElement("div");
+    actions.className = "error-actions";
+
+    const retransBtn = document.createElement("button");
+    retransBtn.className = "primary-btn";
+    retransBtn.textContent = "Yeniden Çevir";
+    retransBtn.addEventListener("click", () => {
+      loadChapter(currentUrl, { refresh: true });
+    });
+
+    actions.appendChild(retransBtn);
+    card.append(title, desc, actions);
+    body.appendChild(card);
+    el("readerBody").hidden = false;
+
+    currentNext = data.next_url || null;
+    currentBookSlug = data.book_slug || currentBookSlug;
+    currentPrev = computePrev(data);
+
+    const next = el("nextBtn");
+    next.disabled = !currentNext;
+    next.textContent = currentNext ? "SONRAKI BÖLÜM →" : "SON BÖLÜM";
+    const prev = el("prevBtn");
+    prev.hidden = !currentPrev;
+    prev.disabled = !currentPrev;
+    el("readerFooter").hidden = false;
+
+    window.scrollTo(0, 0);
+    return;
+  }
 
   currentParas = (data.translation || "")
     .split(/\n\n+/)
     .map((p) => p.trim())
     .filter(Boolean);
-  // Hizalı İngilizce kaynak (çift-tık için). Yoksa boş → çift-tıkta sunucudan istenir.
+  
   currentSource = data.source
     ? data.source.split(/\n\n+/).map((p) => p.trim())
     : [];
@@ -541,6 +697,7 @@ function renderChapter(data, ratio) {
   next.textContent = currentNext ? "SONRAKI BÖLÜM →" : "SON BÖLÜM";
   const prev = el("prevBtn");
   prev.hidden = !currentPrev;
+  prev.disabled = !currentPrev;
   el("readerFooter").hidden = false;
 
   restoreScroll(ratio || 0);
@@ -757,15 +914,18 @@ el("fontFamily").addEventListener("click", () => {
   updateSettingsUI();
 });
 el("retranslate").addEventListener("click", () => {
-  if (currentUrl) loadChapter(currentUrl, { refresh: true });
+  if (isNavigating) return;
+  if (currentUrl) loadChapter(currentUrl, { refresh: true, triggerId: "retranslate" });
 });
 
 /* ---------- olaylar: okuyucu nav + bölümde arama ---------- */
 el("nextBtn").addEventListener("click", () => {
-  if (currentNext) navigate({ view: "reader", url: currentNext });
+  if (isNavigating) return;
+  if (currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" });
 });
 el("prevBtn").addEventListener("click", () => {
-  if (currentPrev) navigate({ view: "reader", url: currentPrev });
+  if (isNavigating) return;
+  if (currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" });
 });
 el("readerBody").addEventListener("click", onParaTap); // çift-tık → İngilizce orijinal
 el("findBtn").addEventListener("click", () => {
@@ -814,9 +974,10 @@ el("readerBody").addEventListener(
     const dx = e.changedTouches[0].clientX - touchX;
     const dy = e.changedTouches[0].clientY - touchY;
     touchX = touchY = null;
+    if (isNavigating) return;
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx < 0 && currentNext) navigate({ view: "reader", url: currentNext });
-    else if (dx > 0 && currentPrev) navigate({ view: "reader", url: currentPrev });
+    if (dx < 0 && currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" });
+    else if (dx > 0 && currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" });
   },
   { passive: true }
 );

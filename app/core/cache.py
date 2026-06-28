@@ -13,9 +13,7 @@ from . import db
 
 
 def _connect() -> sqlite3.Connection:
-    path = db.db_path()
-    path.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(path, timeout=10)
+    conn = db.connect()
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS chapters (

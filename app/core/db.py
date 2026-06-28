@@ -20,6 +20,16 @@ def db_path() -> Path:
     return Path(override) if override else _DEFAULT_DB
 
 
+def connect() -> sqlite3.Connection:
+    """Veritabanına bağlanır ve WAL modu ile busy_timeout pragmalarını kurar."""
+    path = db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(str(path))
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=10000")
+    return conn
+
+
 def ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) -> None:
     """`table.column` yoksa ekler (idempotent).
 

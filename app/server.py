@@ -21,7 +21,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from core import cache, epub_export, glossary, jobs, library, pipeline  # noqa: E402
-from core.fetch import FetchError  # noqa: E402
+from core.fetch import FetchError, CloudflareChallenge  # noqa: E402
 from core.translate import TranslateError  # noqa: E402
 
 load_dotenv(APP_DIR.parent / ".env")  # tek kaynak: novel-cevirmen/.env
@@ -46,12 +46,36 @@ def get_chapter(
     """
     try:
         return pipeline.get_or_translate(url, API_KEY, refresh, want_source=source)
+    except CloudflareChallenge as exc:
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": str(exc),
+                "error_class": "CloudflareChallenge"
+            }
+        )
     except FetchError as exc:
-        raise HTTPException(status_code=502, detail=f"Çekme hatası: {exc}")
+        from core.fetch import CF_ORIGIN_ERRORS
+        error_class = "FetchError"
+        if any(f"HTTP {err}" in str(exc) for err in CF_ORIGIN_ERRORS):
+            error_class = "OriginError"
+        raise HTTPException(
+            status_code=502,
+            detail={
+                "message": str(exc),
+                "error_class": error_class
+            }
+        )
     except TranslateError as exc:
         if not API_KEY:
             raise HTTPException(status_code=500, detail="GEMINI_API_KEY ayarlı değil.")
-        raise HTTPException(status_code=503, detail=str(exc))
+        raise HTTPException(
+            status_code=503,
+            detail={
+                "message": str(exc),
+                "error_class": "TranslateError"
+            }
+        )
 
 
 @app.get("/api/books")
