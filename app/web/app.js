@@ -33,6 +33,7 @@ let currentChapters = []; // açık kitabın tam bölüm listesi (prev türetme 
 let currentParas = []; // açık bölümün paragrafları (bölümde arama)
 let offlineStop = false;
 let isRestoring = false; // programatik scroll sırasında kaydı baskıla
+let chapterLoaded = false; // bölüm BAŞARIYLA render edildi mi (konum kaydı için)
 let scrollSaveTimer = null;
 let bulkPollTimer = null;
 
@@ -90,7 +91,10 @@ function currentRatio() {
   return Math.min(1, Math.max(0, window.scrollY / max));
 }
 function persistScroll() {
-  if (!currentUrl || views.reader.hidden) return;
+  // Yalnızca başarıyla render edilmiş bölümün konumunu kaydet. Aksi halde çekme/çeviri
+  // başarısız bir bölüm (henüz cache'te yok) "kaldığın yer" olarak yazılır ve sonraki
+  // açılışta "devam et" onu yeniden çekmeye çalışır → gereksiz "Yükleniyor" ekranı.
+  if (!currentUrl || !chapterLoaded || views.reader.hidden) return;
   const ratio = currentRatio();
   saveScrollLocal(currentUrl, ratio);
   if (currentBookSlug) {
@@ -182,6 +186,38 @@ function showView(name) {
   for (const [key, node] of Object.entries(views)) node.hidden = key !== name;
 }
 
+/* ---------- tarayıcı/telefon geri tuşu = uygulama-içi geri ----------
+   Her görünüm geçişi history'ye bir kayıt olarak işlenir (navigate). Geri tuşunda
+   (popstate) o kayda karşılık gelen görünüm yeniden çizilir — böylece geri tuşu
+   uygulamayı kapatmak yerine bir önceki ekrana döner. Kök (kütüphane) görünümünde
+   geri tuşu uygulamadan çıkar (beklenen davranış). */
+function applyNavState(state) {
+  switch (state && state.view) {
+    case "book":
+      openBook(state.slug);
+      break;
+    case "glossary":
+      openGlossary(state.slug);
+      break;
+    case "reader":
+      loadChapter(state.url, state.ratio != null ? { restoreRatio: state.ratio } : {});
+      break;
+    default:
+      renderLibrary();
+      showView("library");
+  }
+}
+
+// İleri navigasyon: geçmişe yeni kayıt ekle ve görünümü çiz.
+function navigate(state) {
+  history.pushState(state, "");
+  applyNavState(state);
+}
+
+window.addEventListener("popstate", (e) => {
+  applyNavState(e.state || { view: "library" });
+});
+
 function escapeHtml(s) {
   const d = document.createElement("div");
   d.textContent = s;
@@ -212,7 +248,7 @@ async function renderLibrary() {
     spine.innerHTML =
       `<span class="spine-title">${escapeHtml(book.title)}</span>` +
       `<span class="spine-tag">${tag}</span>`;
-    spine.addEventListener("click", () => openBook(book.slug));
+    spine.addEventListener("click", () => navigate({ view: "book", slug: book.slug }));
     shelf.appendChild(spine);
   }
 
@@ -235,7 +271,11 @@ async function openBook(slug) {
   if (currentBook && currentBook.current_url) {
     resume.hidden = false;
     resume.onclick = () =>
-      loadChapter(currentBook.current_url, { restoreRatio: currentBook.current_ratio || 0 });
+      navigate({
+        view: "reader",
+        url: currentBook.current_url,
+        ratio: currentBook.current_ratio || 0,
+      });
   } else {
     resume.hidden = true;
   }
@@ -303,7 +343,7 @@ function renderChapterList(chapters, book, query) {
     name.className = "chapter-name";
     name.textContent = ch.title || "";
     row.append(no, name);
-    row.addEventListener("click", () => loadChapter(ch.url));
+    row.addEventListener("click", () => navigate({ view: "reader", url: ch.url }));
     list.appendChild(row);
   }
 }
@@ -440,6 +480,7 @@ async function loadChapter(url, opts = {}) {
   if (!url) return;
   const { refresh = false, restoreRatio = null } = opts;
   currentUrl = url;
+  chapterLoaded = false; // başarı (renderChapter) gelene dek konum kaydını engelle
   isRestoring = true; // yükleme/işleme penceresinde kaydı baskıla
   showView("reader");
   closeFind();
@@ -474,6 +515,7 @@ function computePrev(data) {
 
 function renderChapter(data, ratio) {
   setStatus(null);
+  chapterLoaded = true; // başarı: artık bu bölümün konumu kaydedilebilir
   el("readerBook").textContent = data.book_title || "";
   el("readerChapter").textContent = data.title || "Bölüm";
 
@@ -575,25 +617,18 @@ function cycleFind(dir) {
 /* ---------- olaylar: navigasyon ---------- */
 el("libThemeToggle").addEventListener("click", cycleTheme);
 el("backBtn").addEventListener("click", () => {
-  if (currentBookSlug) openBook(currentBookSlug);
-  else {
-    renderLibrary();
-    showView("library");
-  }
+  if (currentBookSlug) navigate({ view: "book", slug: currentBookSlug });
+  else navigate({ view: "library" });
 });
 el("bookBackBtn").addEventListener("click", () => {
-  renderLibrary();
-  showView("library");
+  navigate({ view: "library" });
 });
 el("openGlossaryBtn").addEventListener("click", () => {
-  if (currentBookSlug) openGlossary(currentBookSlug);
+  if (currentBookSlug) navigate({ view: "glossary", slug: currentBookSlug });
 });
 el("glossaryBackBtn").addEventListener("click", () => {
-  if (currentBookSlug) openBook(currentBookSlug);
-  else {
-    renderLibrary();
-    showView("library");
-  }
+  if (currentBookSlug) navigate({ view: "book", slug: currentBookSlug });
+  else navigate({ view: "library" });
 });
 el("glossAddBtn").addEventListener("click", async () => {
   const source = el("glossSource").value.trim();
@@ -654,10 +689,10 @@ el("retranslate").addEventListener("click", () => {
 
 /* ---------- olaylar: okuyucu nav + bölümde arama ---------- */
 el("nextBtn").addEventListener("click", () => {
-  if (currentNext) loadChapter(currentNext);
+  if (currentNext) navigate({ view: "reader", url: currentNext });
 });
 el("prevBtn").addEventListener("click", () => {
-  if (currentPrev) loadChapter(currentPrev);
+  if (currentPrev) navigate({ view: "reader", url: currentPrev });
 });
 el("findBtn").addEventListener("click", () => {
   if (el("findBar").hidden) openFind();
@@ -706,8 +741,8 @@ el("readerBody").addEventListener(
     const dy = e.changedTouches[0].clientY - touchY;
     touchX = touchY = null;
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx < 0 && currentNext) loadChapter(currentNext);
-    else if (dx > 0 && currentPrev) loadChapter(currentPrev);
+    if (dx < 0 && currentNext) navigate({ view: "reader", url: currentNext });
+    else if (dx > 0 && currentPrev) navigate({ view: "reader", url: currentPrev });
   },
   { passive: true }
 );
@@ -902,6 +937,8 @@ async function confirmMerge(target) {
     const data = await res.json();
     el("mergeModal").hidden = true;
     currentBookSlug = data.canonical || target.slug;
+    // Mevcut book kaydını kanonik slug'la güncelle (birleşmeyle eski slug kaybolabilir).
+    history.replaceState({ view: "book", slug: currentBookSlug }, "");
     openBook(currentBookSlug);
   } catch {
     el("mergeModal").hidden = true;
@@ -936,7 +973,7 @@ el("addConfirm").addEventListener("click", () => {
   const url = el("addUrlInput").value.trim();
   if (url) {
     closeAddModal();
-    loadChapter(url);
+    navigate({ view: "reader", url });
   }
 });
 el("addUrlInput").addEventListener("keydown", (e) => {
@@ -949,6 +986,7 @@ el("addModal").addEventListener("click", (e) => {
 /* ---------- başlangıç ---------- */
 applySettings();
 updateSettingsUI();
+history.replaceState({ view: "library" }, ""); // kök kayıt: buradan geri = uygulamadan çık
 renderLibrary();
 showView("library");
 
