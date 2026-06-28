@@ -77,6 +77,18 @@ SITES = {
         "prev": ["a#prev_url"],
         "slug_mode": "after_novel",  # /novel/<slug>/chapter-...
     },
+    # webnovel.com (resmi Qidian platformu). Sonraki/önceki bağlantı anchor DEĞİL;
+    # sayfaya gömülü nextChapterId/preChapterId'den üretilir (_parse özel dalı).
+    # NOT: "webnovel" anahtarı "freewebnovel" host'unu da kapsar → bu kayıt MUTLAKA
+    # freewebnovel'den SONRA gelmeli (_site_for ilk eşleşeni döndürür).
+    "webnovel": {
+        "content": ".cha-words",
+        "title": [".cha-tit h1", ".cha-tit"],
+        "next": [],  # kullanılmaz; nav gömülü id'lerden
+        "prev": [],
+        "slug_mode": "after_book",  # /[dil/]book/<bookid>/<chapterid>
+        "nav_mode": "webnovel_ids",
+    },
 }
 
 # Bilinmeyen site → birleşik selektörlerle en iyi çaba.
@@ -128,6 +140,12 @@ def fetch_chapter(
     Cloudflare doğrulamasını bir kez elle çözmek için). Çözülen cookie kalıcı profile
     yazılır; sonraki çekimler headless olarak otomatik geçer.
 
+    FETCH_CDP_URL ayarlıysa (örn. http://127.0.0.1:9222), önce kullanıcının elle
+    başlattığı gerçek Chrome'a CDP ile bağlanılır (otomasyon bayrağı yok → CF insan
+    kabul eder, sert challenge'ları geçer). Chrome açık değilse otomatik olarak normal
+    akışa düşülür; yani env ayarlı olsa bile normal/telefon kullanımı bozulmaz.
+    Başlatma: `python scripts/start_chrome_cdp.py` (bkz. script başlığı).
+
     Geçici hatalar (yavaş yükleme, network) üstel geri-çekilmeyle `retries` kez
     yeniden denenir. Kalıcı hatalar (Cloudflare challenge, origin 52x) denenmez.
 
@@ -154,9 +172,37 @@ def fetch_chapter(
     raise FetchError("Bölüm çekilemedi.") from last_exc  # teorik olarak ulaşılmaz
 
 
+# Cloudflare çözüm ipuçları (challenge mesajına eklenir). Akışa göre farklı.
+_LAUNCH_SOLVE_HINT = (
+    "Tek seferlik çözüm için sunucuyu FETCH_HEADLESS=0 ile başlatıp açılan pencerede "
+    "doğrulamayı tamamlayın; sonraki çekimler otomatik geçer."
+)
+_CDP_SOLVE_HINT = (
+    "Açık olan gerçek Chrome penceresinde siteye girip 'Verify you are human' "
+    "kutusunu çözün (pencereyi açık bırakın); sonraki çekimler otomatik geçer."
+)
+
+
 def _fetch_locked(url: str, headless: bool, timeout_ms: int) -> dict:
     site = _site_for(url)
     host = urlparse(url).hostname or "kaynak site"
+    # FETCH_CDP_URL ayarlıysa önce kullanıcının elle başlattığı gerçek Chrome'a (CDP)
+    # bağlanmayı dene — otomasyon bayrakları olmadığı için Cloudflare onu insan kabul
+    # eder. Bağlanamazsa (Chrome açık değil) None döner → normal paket-Chromium akışına
+    # düşülür. Böylece env ayarlı olsa bile telefon/normal kullanım hiçbir zaman bozulmaz.
+    cdp_url = os.getenv("FETCH_CDP_URL", "").strip()
+    html = None
+    if cdp_url:
+        html = _fetch_via_cdp(cdp_url, url, site, host, timeout_ms)
+    if html is None:
+        html = _fetch_via_launch(url, headless, site, host, timeout_ms)
+    return _parse(html, url, site)
+
+
+def _fetch_via_launch(
+    url: str, headless: bool, site: dict, host: str, timeout_ms: int
+) -> str:
+    """Paket Chromium'u kalıcı profille başlatıp sayfayı çeker (varsayılan/sabah akışı)."""
     PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
         context = p.chromium.launch_persistent_context(
@@ -170,34 +216,71 @@ def _fetch_locked(url: str, headless: bool, timeout_ms: int) -> dict:
         context.add_init_script(STEALTH_JS)  # tüm sayfalara, goto'dan önce
         page = context.pages[0] if context.pages else context.new_page()
         try:
-            try:
-                resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
-            except PlaywrightTimeout as exc:
-                raise _Transient("Sayfa yüklenmedi (zaman aşımı).") from exc
-            status = resp.status if resp else 0
-            if status in CF_ORIGIN_ERRORS:
-                raise FetchError(
-                    f"Kaynak site ({host}) şu an yanıt vermiyor (HTTP {status}). "
-                    "Bu sitenin sunucu sorunu; başka bir kaynaktan deneyin veya bekleyin."
-                )
-            try:
-                page.wait_for_selector(site["content"], timeout=timeout_ms)
-            except PlaywrightTimeout as exc:
-                if _looks_like_challenge(page):
-                    raise FetchError(
-                        "Cloudflare doğrulaması geçilemedi. Tek seferlik çözüm için "
-                        "sunucuyu FETCH_HEADLESS=0 ile başlatıp açılan pencerede "
-                        "doğrulamayı tamamlayın; sonraki çekimler otomatik geçer."
-                    ) from exc
-                # İçerik gelmedi: yavaş yükleme olabilir → geçici say, yeniden dene.
-                raise _Transient(
-                    f"İçerik bulunamadı ({site['content']} sayfada yok). Site yapısı "
-                    "değişmiş, URL yanlış olabilir ya da sayfa geç yüklendi."
-                ) from exc
-            html = page.content()
+            return _extract_html(page, url, site, host, timeout_ms, _LAUNCH_SOLVE_HINT)
         finally:
             context.close()
-    return _parse(html, url, site)
+
+
+def _fetch_via_cdp(
+    cdp_url: str, url: str, site: dict, host: str, timeout_ms: int
+) -> str | None:
+    """Açık gerçek Chrome'a (CDP) bağlanıp çeker; Chrome erişilemezse None döner.
+
+    Kullanıcının elle başlattığı gerçek Chrome (Playwright otomasyon bayrakları YOK)
+    Cloudflare tarafından insan kabul edilir → sert challenge'da bile kullanıcı bir kez
+    çözünce o profile cookie yazılır, sonraki çekimler otomatik geçer. Bağlantı
+    kurulamazsa (debug-portu kapalı) None → çağıran normal akışa düşer. Bağlanıp da
+    içerik gelmezse (challenge/yavaş) hata fırlatır — gerçek Chrome'un verdiği sonuç
+    nihaidir, daha zayıf paket-Chromium'a düşmenin anlamı yok.
+    """
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp(cdp_url, timeout=4000)
+        except Exception:
+            return None  # gerçek Chrome (debug-portu) açık değil → normal akışa düş
+        page = None
+        try:
+            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = ctx.new_page()  # kullanıcının sekmelerine dokunmadan yeni sekme
+            return _extract_html(page, url, site, host, timeout_ms, _CDP_SOLVE_HINT)
+        finally:
+            if page is not None:
+                try:
+                    page.close()  # yalnız açtığımız sekmeyi kapat
+                except Exception:
+                    pass
+            # Kullanıcının Chrome'unu KAPATMA — sadece CDP bağlantısını bırak.
+
+
+def _extract_html(
+    page, url: str, site: dict, host: str, timeout_ms: int, solve_hint: str
+) -> str:
+    """Sayfaya gidip içerik selektörünü bekler ve HTML'i döndürür (akıştan bağımsız).
+
+    Hata semantiği: 52x origin → FetchError; challenge → FetchError(solve_hint);
+    içerik gelmedi/yavaş → _Transient (yeniden denenebilir).
+    """
+    try:
+        resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+    except PlaywrightTimeout as exc:
+        raise _Transient("Sayfa yüklenmedi (zaman aşımı).") from exc
+    status = resp.status if resp else 0
+    if status in CF_ORIGIN_ERRORS:
+        raise FetchError(
+            f"Kaynak site ({host}) şu an yanıt vermiyor (HTTP {status}). "
+            "Bu sitenin sunucu sorunu; başka bir kaynaktan deneyin veya bekleyin."
+        )
+    try:
+        page.wait_for_selector(site["content"], timeout=timeout_ms)
+    except PlaywrightTimeout as exc:
+        if _looks_like_challenge(page):
+            raise FetchError("Cloudflare doğrulaması geçilemedi. " + solve_hint) from exc
+        # İçerik gelmedi: yavaş yükleme olabilir → geçici say, yeniden dene.
+        raise _Transient(
+            f"İçerik bulunamadı ({site['content']} sayfada yok). Site yapısı "
+            "değişmiş, URL yanlış olabilir ya da sayfa geç yüklendi."
+        ) from exc
+    return page.content()
 
 
 def _looks_like_challenge(page) -> bool:
@@ -220,6 +303,13 @@ def _looks_like_challenge(page) -> bool:
 
 def _parse(html: str, base_url: str, site: dict) -> dict:
     soup = BeautifulSoup(html, "html.parser")
+    webnovel = site.get("nav_mode") == "webnovel_ids"
+    # webnovel: kilitli (ücretli/giriş gerektiren) bölümde metin sayfaya hiç gelmez.
+    if webnovel and _webnovel_locked(soup):
+        raise FetchError(
+            "Bu bölüm webnovel.com'da kilitli (ücretli/giriş gerektiriyor); "
+            "yalnızca ücretsiz bölümler okunabilir."
+        )
     content_el = soup.select_one(site["content"])
     if content_el is None:
         raise FetchError(f"Bölüm içeriği ({site['content']}) sayfada bulunamadı.")
@@ -240,16 +330,64 @@ def _parse(html: str, base_url: str, site: dict) -> dict:
     if not title:
         title = soup.title.get_text(strip=True) if soup.title else "Bölüm"
 
-    slug, book_title = _book_info(base_url, site["slug_mode"])
+    if webnovel:
+        slug, _ = _book_info(base_url, "after_book")
+        book_title = _webnovel_book_title(soup) or slug
+        next_url = _webnovel_nav_url(html, base_url, "nextChapterId")
+        prev_url = _webnovel_nav_url(html, base_url, "preChapterId")
+        chapter_no = _chapter_no_from_title(title)
+    else:
+        slug, book_title = _book_info(base_url, site["slug_mode"])
+        next_url = _nav_chapter_url(soup, base_url, site["next"])
+        prev_url = _nav_chapter_url(soup, base_url, site.get("prev", []))
+        chapter_no = _chapter_no(base_url)
     return {
         "title": title,
         "text": text,
-        "next_url": _nav_chapter_url(soup, base_url, site["next"]),
-        "prev_url": _nav_chapter_url(soup, base_url, site.get("prev", [])),
+        "next_url": next_url,
+        "prev_url": prev_url,
         "book_slug": slug,
         "book_title": book_title,
-        "chapter_no": _chapter_no(base_url),
+        "chapter_no": chapter_no,
     }
+
+
+def _webnovel_locked(soup: BeautifulSoup) -> bool:
+    """webnovel bölümü kilitli mi (data-islock="1")."""
+    el = soup.select_one("[data-islock]")
+    return el is not None and (el.get("data-islock") or "") == "1"
+
+
+def _webnovel_book_title(soup: BeautifulSoup) -> str | None:
+    """Sayfa <title>'ından kitap adını ayıkla ("Bölüm - Kitap - WebNovel")."""
+    if not soup.title:
+        return None
+    segs = [s.strip() for s in soup.title.get_text(strip=True).split(" - ") if s.strip()]
+    if len(segs) >= 3 and segs[-1].lower() == "webnovel":
+        return segs[-2]
+    return None
+
+
+def _webnovel_nav_url(html: str, base_url: str, key: str) -> str | None:
+    """Gömülü nextChapterId/preChapterId'den bölüm URL'i üretir (anchor yok).
+
+    base_url .../book/<bookid>/<chapterid> biçiminde; son segmenti (chapterid) yeni
+    id ile değiştirir → dil ön eki (/tr) ve bookid korunur. -1/0/boş → None.
+    """
+    m = re.search(re.escape(key) + r'["\']?\s*[:=]\s*["\']?(-?\d+)', html)
+    if not m:
+        return None
+    cid = m.group(1)
+    if cid in ("", "0", "-1"):
+        return None
+    parent = base_url.split("?")[0].split("#")[0].rstrip("/").rsplit("/", 1)[0]
+    return f"{parent}/{cid}"
+
+
+def _chapter_no_from_title(title: str) -> int | None:
+    """"Bölüm 12: ..." / "Chapter 12" başlığından bölüm numarasını çıkarır."""
+    m = re.search(r"(?:b[öo]l[üu]m|chapter)\s*(\d+)", title or "", re.IGNORECASE)
+    return int(m.group(1)) if m else None
 
 
 def _book_info(url: str, slug_mode: str = "first") -> tuple[str, str]:
@@ -265,6 +403,10 @@ def _book_info(url: str, slug_mode: str = "first") -> tuple[str, str]:
             slug = parts[idx + 1]
     elif slug_mode == "after_novel" and "novel" in parts:
         idx = parts.index("novel")
+        if idx + 1 < len(parts):
+            slug = parts[idx + 1]
+    elif slug_mode == "after_book" and "book" in parts:
+        idx = parts.index("book")
         if idx + 1 < len(parts):
             slug = parts[idx + 1]
     elif parts:

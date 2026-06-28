@@ -13,5 +13,9 @@ echo.
 echo     Bu pencereyi acik birakin. Kapatmak icin kapatin.
 echo   ============================================
 echo.
+echo   freewebnovel icin gercek Chrome (CDP) baslatiliyor...
+echo   (Acilan Chrome penceresini KAPATMA. CF cikarsa bir kez coz.)
+".venv\Scripts\python.exe" "scripts\start_chrome_cdp.py"
+echo.
 ".venv\Scripts\python.exe" "app\server.py"
 pause

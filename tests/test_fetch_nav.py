@@ -62,9 +62,99 @@ def test_parse_missing_content_raises():
         fetch._parse("<p>boş</p>", BASE, fetch.SITES["novelbin"])
 
 
+def test_fetch_locked_uses_launch_when_no_cdp_env(monkeypatch):
+    """FETCH_CDP_URL yokken: sadece normal (launch) akış — CDP'ye hiç dokunma."""
+    monkeypatch.delenv("FETCH_CDP_URL", raising=False)
+    monkeypatch.setattr(fetch, "_fetch_via_launch", lambda *a, **k: "<html>LAUNCH</html>")
+
+    def _boom(*a, **k):
+        raise AssertionError("env yokken CDP çağrılmamalı")
+
+    monkeypatch.setattr(fetch, "_fetch_via_cdp", _boom)
+    monkeypatch.setattr(fetch, "_parse", lambda html, url, site: {"html": html})
+    out = fetch._fetch_locked("https://novelbin.com/b/x/chapter-1", True, 1000)
+    assert out["html"] == "<html>LAUNCH</html>"
+
+
+def test_fetch_locked_prefers_cdp_when_env_set(monkeypatch):
+    """FETCH_CDP_URL varsa ve bağlanırsa: gerçek Chrome (CDP) sonucu kullanılır."""
+    monkeypatch.setenv("FETCH_CDP_URL", "http://127.0.0.1:9222")
+    monkeypatch.setattr(fetch, "_fetch_via_cdp", lambda *a, **k: "<html>CDP</html>")
+    monkeypatch.setattr(fetch, "_fetch_via_launch", lambda *a, **k: "<html>LAUNCH</html>")
+    monkeypatch.setattr(fetch, "_parse", lambda html, url, site: {"html": html})
+    out = fetch._fetch_locked("https://freewebnovel.com/novel/x/chapter-1", True, 1000)
+    assert out["html"] == "<html>CDP</html>"
+
+
+def test_fetch_locked_falls_back_when_cdp_unavailable(monkeypatch):
+    """Env ayarlı ama gerçek Chrome açık değilse (None): normal akışa düş — bozulma yok."""
+    monkeypatch.setenv("FETCH_CDP_URL", "http://127.0.0.1:9222")
+    monkeypatch.setattr(fetch, "_fetch_via_cdp", lambda *a, **k: None)
+    monkeypatch.setattr(fetch, "_fetch_via_launch", lambda *a, **k: "<html>LAUNCH</html>")
+    monkeypatch.setattr(fetch, "_parse", lambda html, url, site: {"html": html})
+    out = fetch._fetch_locked("https://freewebnovel.com/novel/x/chapter-1", True, 1000)
+    assert out["html"] == "<html>LAUNCH</html>"
+
+
+def test_cdp_connect_failure_returns_none():
+    """Kapalı bir porta CDP bağlantısı None döner (gerçek, hızlı: bağlantı reddedilir)."""
+    site = fetch._site_for("https://freewebnovel.com/novel/x/chapter-1")
+    out = fetch._fetch_via_cdp(
+        "http://127.0.0.1:1", "https://freewebnovel.com/novel/x/chapter-1",
+        site, "freewebnovel.com", 1000,
+    )
+    assert out is None
+
+
 def test_chapter_no_and_book_info():
     assert fetch._chapter_no("https://novelbin.com/b/solo-leveling/chapter-42") == 42
     assert fetch._chapter_no("https://x/foo") is None
     slug, title = fetch._book_info("https://novelbin.com/b/solo-leveling/chapter-1", "after_b")
     assert slug == "solo-leveling"
     assert title == "Solo Leveling"
+
+
+# ---------- webnovel.com (gömülü id navigasyonu) ----------
+WN_BASE = "https://m.webnovel.com/tr/book/235/63431738856096320"
+
+
+def test_site_for_webnovel_vs_freewebnovel():
+    # "webnovel" alt-dizgesi "freewebnovel" host'unu da kapsar → çakışma korunmalı.
+    assert fetch._site_for("https://www.webnovel.com/tr/book/1/2")["nav_mode"] == "webnovel_ids"
+    assert fetch._site_for("https://freewebnovel.com/novel/x/chapter-1")["content"] == "#article"
+
+
+def test_webnovel_nav_url_from_embedded_ids():
+    html = 'var x = {"nextChapterId":"999","preChapterId":"-1"};'
+    nxt = fetch._webnovel_nav_url(html, WN_BASE, "nextChapterId")
+    assert nxt == "https://m.webnovel.com/tr/book/235/999"  # son segment (chapterid) değişir
+    assert fetch._webnovel_nav_url(html, WN_BASE, "preChapterId") is None  # -1 → None
+
+
+def test_webnovel_parse_full():
+    html = (
+        "<head><title>Surviving (1) - Outside Of Time - WebNovel</title></head>"
+        '<div class="cha-tit"><h1>Bölüm 1: Surviving (1)</h1></div>'
+        '<div class="chapter_content" data-islock="0">'
+        '<div class="cha-words"><p>Birinci.</p><p>İkinci.</p></div></div>'
+        '<script>g={"nextChapterId":"777","preChapterId":"-1"}</script>'
+    )
+    out = fetch._parse(html, WN_BASE, fetch.SITES["webnovel"])
+    assert out["title"] == "Bölüm 1: Surviving (1)"
+    assert out["book_title"] == "Outside Of Time"
+    assert out["book_slug"] == "235"
+    assert out["chapter_no"] == 1
+    assert out["next_url"].endswith("/777")
+    assert out["prev_url"] is None
+    assert "Birinci." in out["text"] and "İkinci." in out["text"]
+
+
+def test_webnovel_locked_raises():
+    import pytest
+
+    html = (
+        '<div class="cha-tit"><h1>Bölüm 5</h1></div>'
+        '<div class="chapter_content" data-islock="1"></div>'
+    )
+    with pytest.raises(fetch.FetchError, match="kilitli"):
+        fetch._parse(html, WN_BASE, fetch.SITES["webnovel"])
