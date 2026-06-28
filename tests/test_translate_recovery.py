@@ -57,3 +57,44 @@ def test_split_paragraphs_single_when_small():
 def test_last_sentences():
     out = translate._last_sentences("Bir. İki. Üç.", 2)
     assert out == "İki. Üç."
+
+
+# ---------- engellenmiş (boş) yanıt → sıradaki modele düşme ----------
+class _FakeResp:
+    def __init__(self, text):
+        self._t = text
+
+    @property
+    def text(self):
+        return self._t
+
+
+class _FakeModels:
+    def __init__(self, by_model):
+        self.by_model = by_model
+        self.calls = []
+
+    def generate_content(self, model, contents, config):
+        self.calls.append(model)
+        return _FakeResp(self.by_model[model])
+
+
+class _FakeClient:
+    def __init__(self, by_model):
+        self.models = _FakeModels(by_model)
+
+
+def test_fallback_on_blocked_empty_response():
+    # m1 boş/engellenmiş döner (PROHIBITED_CONTENT gibi) → m2'ye düşülür.
+    client = _FakeClient({"m1": "", "m2": '{"translation":"Çeviri","detected_names":[]}'})
+    resp = translate._generate_with_fallback(client, ("m1", "m2"), "user")
+    assert "Çeviri" in resp.text
+    assert client.models.calls == ["m1", "m2"]  # m1 denendi, m2'ye geçildi
+
+
+def test_all_blocked_raises_content_filter_error():
+    import pytest
+
+    client = _FakeClient({"m1": "", "m2": "   "})  # ikisi de boş/whitespace
+    with pytest.raises(translate.TranslateError, match="içerik filtresi"):
+        translate._generate_with_fallback(client, ("m1", "m2"), "user")

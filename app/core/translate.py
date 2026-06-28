@@ -26,6 +26,20 @@ RETRY_CODES = {500, 503}  # geçici sunucu hatası: aynı modelde tekrar dene
 FALLBACK_CODES = {404, 429}  # model yok / kota doldu: bekleme, sıradaki modele geç
 MAX_RETRIES = 3
 
+# İçerik güvenlik filtreleri (kategori başına) — gevşetilebilir kategorileri kapat.
+# Web romanlarda şiddet/karanlık tema sık; varsayılan filtreler yanlış-pozitif engeller.
+# NOT: PROHIBITED_CONTENT bununla AŞILAMAZ (ayrı, kapatılamayan filtre) → o durumda
+# yanıt boş gelir ve sıradaki modele düşülür (bir model engellerken başkası çevirebilir).
+SAFETY_SETTINGS = [
+    {"category": c, "threshold": "BLOCK_NONE"}
+    for c in (
+        "HARM_CATEGORY_HARASSMENT",
+        "HARM_CATEGORY_HATE_SPEECH",
+        "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+        "HARM_CATEGORY_DANGEROUS_CONTENT",
+    )
+]
+
 SYSTEM_INSTRUCTION = (
     "Sen profesyonel bir İngilizce'den Türkçe'ye web roman çevirmenisin.\n"
     "Kurallar:\n"
@@ -130,31 +144,39 @@ def _translate_chunk(
 
 
 def _generate_with_fallback(client: genai.Client, models: tuple[str, ...], user: str):
-    """Model yedek zincirini sırayla dener; hepsi meşgulse TranslateError fırlatır."""
+    """Model yedek zincirini sırayla dener; hepsi başarısızsa TranslateError fırlatır."""
     last_exc: Exception | None = None
+    blocked = False
     for model in models:
         try:
             return _generate_once_with_retry(client, model, user)
         except _Retryable as exc:
             last_exc = exc
+            blocked = blocked or getattr(exc, "blocked", False)
             continue
+    if blocked:
+        raise TranslateError(
+            "Bu bölümün içeriği hiçbir model tarafından çevrilemedi (içerik filtresi); "
+            "metin engellenmiş olabilir."
+        ) from last_exc
     raise TranslateError(
         "Tüm modeller şu anda meşgul (geçici). Biraz sonra tekrar deneyin."
     ) from last_exc
 
 
 def _generate_once_with_retry(client: genai.Client, model: str, user: str):
-    """Tek modelde üstel geri-çekilmeyle dener; geçici hata tükenince _Retryable."""
+    """Tek modelde üstel geri-çekilmeyle dener; geçici hata/engel tükenince _Retryable."""
     delay = 2.0
     for attempt in range(MAX_RETRIES):
         try:
-            return client.models.generate_content(
+            response = client.models.generate_content(
                 model=model,
                 contents=user,
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_INSTRUCTION,
                     response_mime_type="application/json",
                     temperature=0.3,
+                    safety_settings=SAFETY_SETTINGS,
                 ),
             )
         except genai_errors.APIError as exc:
@@ -168,6 +190,18 @@ def _generate_once_with_retry(client: genai.Client, model: str, user: str):
                     continue
                 raise _Retryable() from exc
             raise TranslateError(f"Çeviri hatası: {exc}") from exc
+        # Yanıt geldi ama boş/engellenmiş olabilir (finish_reason PROHIBITED_CONTENT/
+        # SAFETY/RECITATION → HTTP 200, metin yok). Bu deterministiktir; aynı modelde
+        # tekrar denemek beyhude → sıradaki modele düş (başka model çevirebilir).
+        try:
+            txt = response.text or ""
+        except Exception:  # bazı engellenmiş yanıtlarda .text istisna fırlatır
+            txt = ""
+        if txt.strip():
+            return response
+        exc = _Retryable()
+        exc.blocked = True
+        raise exc
 
 
 def _parse_response(raw: str | None) -> dict:
