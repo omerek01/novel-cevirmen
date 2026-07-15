@@ -340,6 +340,8 @@ function renderChapterList(chapters, book, query) {
     return;
   }
   for (const ch of chapters) {
+    const item = document.createElement("div");
+    item.className = "chapter-item";
     const row = document.createElement("button");
     row.className = "chapter-row";
     if (book && ch.url === book.current_url) row.classList.add("current");
@@ -351,8 +353,57 @@ function renderChapterList(chapters, book, query) {
     name.textContent = ch.title || "";
     row.append(no, name);
     row.addEventListener("click", () => navigate({ view: "reader", url: ch.url }));
-    list.appendChild(row);
+    const del = document.createElement("button");
+    del.className = "chapter-del";
+    del.setAttribute("aria-label", "Bölümü sil");
+    del.textContent = "✕";
+    del.addEventListener("click", () => deleteChapter(ch));
+    item.append(row, del);
+    list.appendChild(item);
   }
+}
+
+/* ---------- bölüm silme ---------- */
+// SW, /api/chapter yanıtlarını kalıcı önbelleğe alır (çevrimdışı okuma). Sunucudan
+// silinen bölümün SW kopyası da kalksın ki listede/okuyucuda hayalet kalmasın.
+async function purgeChapterFromSwCache(url) {
+  if (!("caches" in window)) return;
+  try {
+    for (const key of await caches.keys()) {
+      const c = await caches.open(key);
+      for (const req of await c.keys()) {
+        const u = new URL(req.url);
+        if (u.pathname === "/api/chapter" && u.searchParams.get("url") === url) {
+          await c.delete(req);
+        }
+      }
+    }
+  } catch {} // best-effort temizlik: SW önbelleği yoksa/erişilemezse sessiz geç
+}
+
+async function deleteChapter(ch) {
+  const label = ch.chapter_no ? `Bölüm ${ch.chapter_no}` : ch.title || "Bu bölüm";
+  const ok = window.confirm(
+    `${label} silinsin mi?\nÇevirisi önbellekten kalkar; tekrar açarsan yeniden çevrilir.`
+  );
+  if (!ok) return;
+  try {
+    const res = await fetch(`/api/chapter?url=${encodeURIComponent(ch.url)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  } catch {
+    window.alert("Bölüm silinemedi. Bağlantını kontrol edip tekrar dene.");
+    return;
+  }
+  await purgeChapterFromSwCache(ch.url);
+  currentChapters = currentChapters.filter((c) => c.url !== ch.url);
+  // Silinen bölüm "kaldığın yer" ise sunucu işareti temizledi; devam düğmesini gizle.
+  if (currentBook && currentBook.current_url === ch.url) {
+    currentBook.current_url = null;
+    el("resumeBtn").hidden = true;
+  }
+  applyChapterFilter();
 }
 
 /* ---------- sözlük ---------- */
@@ -598,7 +649,10 @@ async function loadChapter(url, opts = {}) {
     
     if (activeBtn) activeBtn.innerHTML = originalHtml;
     isNavigating = false;
-    
+    // Başarıda da geri aç: yalnızca hata dalında açılırsa düğme ilk başarılı
+    // yüklemeden sonra kalıcı devre dışı kalır ve "yeniden çevir" hiç çalışmaz.
+    retranslateBtn.disabled = false;
+
     renderChapter(data, ratio);
   } catch (err) {
     if (activeBtn) activeBtn.innerHTML = originalHtml;
@@ -1227,4 +1281,16 @@ showView("library");
 
 if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});
+  // Kalıcı depolama: tarayıcı yer darlığında çevrimdışı bölüm önbelleğini silmesin.
+  navigator.storage?.persist?.().catch(() => {});
+  // Yeni SW sürümü devraldığında sayfayı bir kez tazele: aksi halde açık sayfa
+  // eski kabuk JS/CSS'iyle çalışmayı sürdürür (örn. yeni eklenen düğmeler görünmez).
+  // hadController: ilk kurulumda (sayfa zaten ağdan geldi) gereksiz reload atlanır.
+  const hadController = !!navigator.serviceWorker.controller;
+  let reloaded = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (!hadController || reloaded) return;
+    reloaded = true;
+    location.reload();
+  });
 }

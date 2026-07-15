@@ -82,6 +82,17 @@ def list_chapters(book_slug: str) -> list[dict]:
     return [{"url": r[0], "title": r[1], "chapter_no": r[2]} for r in rows]
 
 
+def delete_chapter(url: str) -> bool:
+    """Bölümü önbellekten sil (listeden kalkar). Kayıt silindiyse True döner."""
+    conn = _connect()
+    try:
+        cur = conn.execute("DELETE FROM chapters WHERE url = ?", (url,))
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def save_chapter(url: str, data: dict) -> None:
     """Çevrilen bölümü önbelleğe yaz (varsa üzerine)."""
     conn = _connect()

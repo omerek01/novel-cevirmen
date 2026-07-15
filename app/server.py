@@ -84,6 +84,20 @@ def get_chapter(
         )
 
 
+@app.delete("/api/chapter")
+def delete_chapter(url: str = Query(..., description="Silinecek bölümün URL'i")) -> dict:
+    """Çevrilmiş bölümü önbellekten sil (örn. farklı siteden gelen kopya).
+
+    Bölüm kitabın 'kaldığın yer' işaretiyse o da temizlenir. Tekrar açılırsa
+    bölüm yeniden çekilip çevrilir.
+    """
+    existing = cache.get_chapter(url)
+    deleted = cache.delete_chapter(url)
+    if deleted and existing and existing.get("book_slug"):
+        library.clear_position_if(existing["book_slug"], url)
+    return {"ok": deleted}
+
+
 @app.get("/api/books")
 def list_books() -> dict:
     """Paylaşılan kütüphane: tüm cihazlarda görünen kitaplar + son okuma konumu."""

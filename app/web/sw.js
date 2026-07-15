@@ -1,4 +1,8 @@
-const CACHE = "novellink-v17";
+// SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
+// DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
+// çevrimdışı indirilen bölümleri asla silmez.
+const SHELL_CACHE = "novellink-shell-v25";
+const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
   "/index.html",
@@ -6,26 +10,55 @@ const SHELL = [
   "/app.js",
   "/manifest.webmanifest",
   "/icon.svg",
+  "/icon-192.png",
+  "/icon-512.png",
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL)));
+  event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)));
   self.skipWaiting();
 });
 
+// Eski birleşik önbelleklerden (novellink-v*) /api girişlerini DATA_CACHE'e taşı,
+// sonra sil — bu güncelleme indirilen bölümleri yok etmesin.
+async function migrateOldCaches() {
+  const keys = await caches.keys();
+  const data = await caches.open(DATA_CACHE);
+  for (const key of keys) {
+    if (key === SHELL_CACHE || key === DATA_CACHE) continue;
+    const old = await caches.open(key);
+    for (const req of await old.keys()) {
+      if (!new URL(req.url).pathname.startsWith("/api/")) continue;
+      if (await data.match(req)) continue; // yenisi varsa üzerine yazma
+      const res = await old.match(req);
+      if (res) await data.put(req, res);
+    }
+    await caches.delete(key);
+  }
+}
+
 self.addEventListener("activate", (event) => {
-  event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)))
-    )
-  );
+  event.waitUntil(migrateOldCaches());
   self.clients.claim();
 });
 
+// Tailscale kapalıyken ts.net adresine giden istekler hata vermek yerine dakikalarca
+// askıda kalır (kara delik) → önbelleğe düşüş hiç tetiklenmez. Zaman aşımı bunu keser.
+async function fetchWithTimeout(request, ms) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    return await fetch(request, { signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // Çevrilmiş bölüm kalıcıdır → önce önbellek (çevrimdışı okunur), yoksa ağdan al + sakla.
 // refresh=1 ise ağa git ve aynı bölümün önbelleğini güncelle.
+// Zaman aşımı YOK: ilk çeviri / yeniden çeviri sunucuda 30-60 sn sürebilir.
 async function chapterFirst(request, cacheKey, forceNetwork) {
-  const cache = await caches.open(CACHE);
+  const cache = await caches.open(DATA_CACHE);
   if (!forceNetwork) {
     const hit = await cache.match(cacheKey);
     if (hit) return hit;
@@ -41,11 +74,12 @@ async function chapterFirst(request, cacheKey, forceNetwork) {
   }
 }
 
-// Liste/sözlük (GET): çevrimiçiyken taze, çevrimdışıyken son kayıt.
+// Liste/sözlük (GET): çevrimiçiyken taze, sunucuya ulaşılamıyorsa (hata VEYA 4 sn
+// yanıtsızlık) son kayıt.
 async function networkFirst(request) {
-  const cache = await caches.open(CACHE);
+  const cache = await caches.open(DATA_CACHE);
   try {
-    const res = await fetch(request);
+    const res = await fetchWithTimeout(request, 4000);
     if (res.ok) cache.put(request, res.clone());
     return res;
   } catch (err) {

@@ -169,6 +169,27 @@ def set_position(slug: str, current_url: str, ratio: float) -> None:
         conn.close()
 
 
+def clear_position_if(slug: str, url: str) -> None:
+    """Kitabın 'kaldığın yer' işareti silinen bölümü gösteriyorsa temizle.
+
+    Aksi halde 'devam et' düğmesi artık var olmayan bölüme götürür ve bölüm
+    yeniden çekilip çevrilir (silme amacının tersi).
+    """
+    if not slug or not url:
+        return
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE books SET current_url = NULL, current_title = NULL, "
+            "chapter_no = NULL, current_ratio = 0, updated_at = ? "
+            "WHERE slug = ? AND current_url = ?",
+            (time.time(), slug, url),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def list_books() -> list[dict]:
     conn = _connect()
     try:

@@ -381,6 +381,28 @@ html, body {
   margin: 0 0 0.6rem;
 }
 .chapter-list { border-top: 3px solid var(--line); }
+.chapter-item {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 14%, transparent);
+}
+.chapter-item .chapter-row {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+  border-bottom: none;
+}
+.chapter-del {
+  flex: none;
+  width: 2.75rem;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  color: var(--ink-soft);
+  font-size: 1.05rem;
+  font-family: var(--sans);
+}
+.chapter-del:active { color: var(--accent); background: color-mix(in oklab, var(--accent) 10%, transparent); }
 .chapter-row {
   display: flex;
   flex-direction: column;
