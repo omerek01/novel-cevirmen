@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <clipPath id="alt-kesisim"><rect x="196" y="260" width="120" height="110"/></clipPath>
+    <!-- Yama, kırmızı halkanın gövdesiyle maskelenir: kesik kenar izi kalmaz -->
+    <mask id="kenet">
+      <rect width="512" height="512" fill="black"/>
+      <g clip-path="url(#alt-kesisim)">
+        <rect x="216" y="196" width="200" height="120" rx="60" fill="none" stroke="white" stroke-width="38"/>
+      </g>
+    </mask>
+  </defs>
+  <rect width="512" height="512" rx="64" fill="#16130f"/>
+  <!-- zincir: krem + kırmızı kenetli halkalar -->
+  <g fill="none" stroke-width="38">
+    <rect x="96" y="196" width="200" height="120" rx="60" stroke="#f1ece3"/>
+    <rect x="216" y="196" width="200" height="120" rx="60" stroke="#e5482d"/>
+    <!-- alt kesişimde krem halka üstte: kenetlenme -->
+    <rect x="96" y="196" width="200" height="120" rx="60" stroke="#f1ece3" mask="url(#kenet)"/>
+  </g>
+</svg>

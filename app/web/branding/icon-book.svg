@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="64" fill="#16130f"/>
+  <!-- kapak -->
+  <path fill="#e5482d" d="M256 200 C226 172 168 164 116 172 L116 392 C168 384 226 392 256 418 C286 392 344 384 396 392 L396 172 C344 164 286 172 256 200 Z"/>
+  <!-- sayfalar -->
+  <path fill="#f1ece3" d="M256 196 C230 172 180 164 136 172 L136 364 C180 356 230 364 256 388 Z"/>
+  <path fill="#f1ece3" d="M256 196 C282 172 332 164 376 172 L376 364 C332 356 282 364 256 388 Z"/>
+  <!-- sol sayfa satırları -->
+  <g stroke="#c9c0b2" stroke-width="9" stroke-linecap="round">
+    <path d="M162 222 L232 213"/>
+    <path d="M162 254 L232 245"/>
+    <path d="M162 286 L232 277"/>
+  </g>
+  <!-- kurdele -->
+  <path fill="#e5482d" d="M316 168 L316 264 L331 246 L346 264 L346 169 Z"/>
+  <!-- sırt -->
+  <path stroke="#16130f" stroke-width="7" d="M256 198 L256 386"/>
+</svg>

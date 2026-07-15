@@ -12,7 +12,13 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP_DIR))  # 'core' paketini CWD'den bağımsız import et
 
+import mimetypes  # noqa: E402
 import os  # noqa: E402
+
+# Windows'ta mimetypes kayıt defterinden okur; .webmanifest tanımsız, .svg yanlış
+# kayıtlı olabilir. Yanlış Content-Type → Chrome PWA ikonunu/manifesti reddeder.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+mimetypes.add_type("image/svg+xml", ".svg")
 
 from dotenv import load_dotenv  # noqa: E402
 from fastapi import FastAPI, HTTPException, Query, Response  # noqa: E402

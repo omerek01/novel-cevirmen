@@ -1,6 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" rx="64" fill="#16130f"/>
-  <text x="50%" y="56%" font-size="320" font-weight="900" text-anchor="middle"
-        dominant-baseline="middle" fill="#e5482d"
-        font-family="system-ui, Arial, sans-serif">N</text>
+  <!-- NL monogram — Georgia Bold; PNG'lerle ayni metrikler (make_icons_nl.py) -->
+  <g font-family="Georgia, 'Times New Roman', serif" font-size="224" font-weight="bold" text-anchor="middle">
+    <text x="173" y="333" fill="#f1ece3">N</text>
+    <text x="356" y="333" fill="#e5482d">L</text>
+  </g>
 </svg>

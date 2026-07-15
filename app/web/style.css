@@ -53,8 +53,7 @@ html, body {
 .wordmark {
   font-weight: 900;
   font-size: clamp(1.4rem, 1rem + 3.2vw, 2.1rem);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
 }
 .wm-accent { color: var(--accent); }
 
