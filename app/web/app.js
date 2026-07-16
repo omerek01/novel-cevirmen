@@ -2,6 +2,7 @@
 
 const LS_SETTINGS = "novellink:settings";
 const LS_SCROLL = "novellink:scroll";
+const LS_LASTREAD = "novellink:lastread";
 const SCROLL_MAX = 500; // localStorage'da tutulan en fazla bölüm konumu (budama)
 const DEFAULT_SETTINGS = {
   theme: "light",
@@ -89,6 +90,44 @@ function saveScrollLocal(url, ratio) {
 function getScrollLocal(url) {
   return loadScrollMap()[url] || 0;
 }
+
+/* ---------- son okunan bölüm (kitap başına; çevrimdışı resume için) ----------
+   Sunucu "kaldığın yer" işaretini (books.current_url) yalnız çevrimiçiyken günceller.
+   Çevrimdışı okurken bölüm SW önbelleğinden gelir, istek sunucuya ulaşmaz → işaret
+   ilerlemez. Bu yerel kayıt her bölüm render'ında ilerler; resume iki kaynaktan en
+   TAZE olanı seçer, böylece çevrimdışı okunan son bölümden devam edilir. */
+function loadLastReadMap() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_LASTREAD)) || {};
+  } catch {
+    return {};
+  }
+}
+function saveLastRead(slug, url) {
+  if (!slug || !url) return;
+  const map = loadLastReadMap();
+  map[slug] = { url, ts: Date.now() };
+  try {
+    localStorage.setItem(LS_LASTREAD, JSON.stringify(map));
+  } catch {}
+}
+function getLastRead(slug) {
+  return loadLastReadMap()[slug] || null;
+}
+// Resume hedefi: sunucu konumu (çok-cihaz paylaşımı) ile yerel son-okuma (çevrimdışı)
+// arasından en TAZE olanı. Yerel ts sunucunun updated_at'inden yeniyse (çevrimdışı
+// okuma) yerel kazanır; değilse sunucu (başka cihazda daha yeni okunmuş olabilir).
+function resolveResume(book, slug) {
+  let url = (book && book.current_url) || null;
+  let ratio = (book && book.current_ratio) || 0;
+  const local = getLastRead(slug);
+  const serverTsMs = ((book && book.updated_at) || 0) * 1000;
+  if (local && local.url && local.ts >= serverTsMs) {
+    url = local.url;
+    ratio = getScrollLocal(url);
+  }
+  return { url, ratio };
+}
 function currentRatio() {
   const max = document.documentElement.scrollHeight - window.innerHeight;
   if (max <= 0) return 0;
@@ -101,6 +140,7 @@ function persistScroll() {
   if (!currentUrl || !chapterLoaded || views.reader.hidden) return;
   const ratio = currentRatio();
   saveScrollLocal(currentUrl, ratio);
+  saveLastRead(currentBookSlug, currentUrl); // yerel son-okuma işaretini de tazele
   if (currentBookSlug) {
     fetch(`/api/book/${encodeURIComponent(currentBookSlug)}/position`, {
       method: "POST",
@@ -275,14 +315,13 @@ async function openBook(slug) {
   el("bookTitle").textContent = currentBook ? currentBook.title : slug;
 
   const resume = el("resumeBtn");
-  if (currentBook && currentBook.current_url) {
+  const target = resolveResume(currentBook, slug);
+  if (target.url) {
+    // Liste vurgusu ("current") ve resume aynı bölümü göstersin (çevrimdışı okunan da).
+    if (currentBook) currentBook.current_url = target.url;
     resume.hidden = false;
     resume.onclick = () =>
-      navigate({
-        view: "reader",
-        url: currentBook.current_url,
-        ratio: currentBook.current_ratio || 0,
-      });
+      navigate({ view: "reader", url: target.url, ratio: target.ratio });
   } else {
     resume.hidden = true;
   }
@@ -754,6 +793,9 @@ function renderChapter(data, ratio) {
   prev.disabled = !currentPrev;
   el("readerFooter").hidden = false;
 
+  // Başarıyla render edilen bölümü kitabın yerel "son okunan" işareti yap (çevrimdışı
+  // resume bunu kullanır). Boş/hatalı bölüm dalı bu satıra ulaşmaz → oraya resume olmaz.
+  saveLastRead(currentBookSlug, currentUrl);
   restoreScroll(ratio || 0);
 }
 

@@ -194,8 +194,8 @@ def list_books() -> list[dict]:
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT slug, title, current_url, current_title, chapter_no, current_ratio "
-            "FROM books ORDER BY updated_at DESC"
+            "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
+            "updated_at FROM books ORDER BY updated_at DESC"
         ).fetchall()
     finally:
         conn.close()
@@ -207,6 +207,9 @@ def list_books() -> list[dict]:
             "current_title": r[3],
             "chapter_no": r[4],
             "current_ratio": r[5] or 0.0,
+            # updated_at: sunucu konumunun son yazılma zamanı (saniye). Frontend bunu
+            # yerel "son okunan" işaretinin zaman damgasıyla kıyaslar (çevrimdışı resume).
+            "updated_at": r[6] or 0.0,
         }
         for r in rows
     ]
@@ -216,8 +219,8 @@ def get_book(slug: str) -> dict | None:
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT slug, title, current_url, current_title, chapter_no, current_ratio "
-            "FROM books WHERE slug = ?",
+            "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
+            "updated_at FROM books WHERE slug = ?",
             (slug,),
         ).fetchone()
     finally:
@@ -231,6 +234,7 @@ def get_book(slug: str) -> dict | None:
         "current_title": row[3],
         "chapter_no": row[4],
         "current_ratio": row[5] or 0.0,
+        "updated_at": row[6] or 0.0,
     }
 
 
