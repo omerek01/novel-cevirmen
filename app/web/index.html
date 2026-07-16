@@ -38,7 +38,7 @@
     <header class="reader-bar">
       <button id="bookBackBtn" class="ghost-btn" aria-label="Kütüphaneye dön">←</button>
       <div class="reader-titles">
-        <div id="bookTitle" class="book-view-title"></div>
+        <div id="bookTitle" class="book-view-title" lang="en"></div>
       </div>
       <span class="ghost-btn bar-spacer" aria-hidden="true">←</span>
     </header>
@@ -87,8 +87,8 @@
     <header class="reader-bar">
       <button id="backBtn" class="ghost-btn" aria-label="Kütüphaneye dön">←</button>
       <div class="reader-titles">
-        <div id="readerBook" class="reader-book"></div>
-        <div id="readerChapter" class="reader-chapter"></div>
+        <div id="readerBook" class="reader-book" lang="en"></div>
+        <div id="readerChapter" class="reader-chapter" lang="en"></div>
       </div>
       <button id="findBtn" class="ghost-btn" aria-label="Bölümde ara">🔍</button>
       <button id="settingsBtn" class="ghost-btn" aria-label="Okuma ayarları">⚙</button>
@@ -147,6 +147,10 @@
         <span>Bu bölüm</span>
         <button id="retranslate" class="pill">Yeniden çevir</button>
       </div>
+      <div class="setting-row">
+        <span>Cloudflare oturumu</span>
+        <button id="clearanceRefresh" class="pill">Yenile</button>
+      </div>
     </div>
 
     <p id="status" class="status" hidden></p>
@@ -180,7 +184,8 @@
       <h3 class="modal-title">TOPLU ÇEVİR</h3>
       <p class="modal-hint">
         Şu anki bölümden ileriye doğru kaç bölüm önceden çevrilsin? Çevrilmiş
-        bölümler atlanır (kota harcanmaz). İşlem sırasında bu sekme açık kalmalı.
+        bölümler atlanır (kota harcanmaz). Sekmeyi kapatsan veya sunucuyu yeniden
+        başlatsan da iş kaldığı yerden sürer.
       </p>
       <input id="bulkCount" type="number" min="1" max="200" value="10" inputmode="numeric" />
       <div class="modal-actions">

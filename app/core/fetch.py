@@ -176,6 +176,23 @@ def fetch_chapter(
     raise FetchError("Bölüm çekilemedi.") from last_exc  # teorik olarak ulaşılmaz
 
 
+def refresh_clearance(timeout_ms: int = 30000) -> dict:
+    """Kalıcı profil/CDP oturumunu yeniden açıp Cloudflare cookie'sini tazeler.
+
+    Hedef, isteğe bağlı `FETCH_CLEARANCE_URL`; aksi halde novelbin ana sayfasıdır.
+    Bölüm çekmez ve ayrıştırmaz, yalnızca hafif bir sayfa ziyareti yapar.
+    """
+    url = os.getenv("FETCH_CLEARANCE_URL", "https://novelbin.com/").strip()
+    headless = os.getenv("FETCH_HEADLESS", "1") != "0"
+    host = urlparse(url).hostname or "kaynak site"
+    with _FETCH_LOCK:
+        cdp_url = os.getenv("FETCH_CDP_URL", "").strip()
+        if cdp_url and _refresh_clearance_via_cdp(cdp_url, url, host, timeout_ms):
+            return {"ok": True, "mode": "cdp"}
+        _refresh_clearance_via_launch(url, headless, host, timeout_ms)
+    return {"ok": True, "mode": "launch"}
+
+
 # Cloudflare çözüm ipuçları (challenge mesajına eklenir). Akışa göre farklı.
 _LAUNCH_SOLVE_HINT = (
     "Tek seferlik çözüm için sunucuyu FETCH_HEADLESS=0 ile başlatıp açılan pencerede "
@@ -225,6 +242,28 @@ def _fetch_via_launch(
             context.close()
 
 
+def _refresh_clearance_via_launch(
+    url: str, headless: bool, host: str, timeout_ms: int
+) -> None:
+    """Paket Chromium kalıcı profilini açıp hafif sayfa ziyareti yapar."""
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    with sync_playwright() as p:
+        context = p.chromium.launch_persistent_context(
+            user_data_dir=str(PROFILE_DIR),
+            headless=headless,
+            user_agent=USER_AGENT,
+            locale="en-US",
+            viewport={"width": 1280, "height": 800},
+            args=LAUNCH_ARGS,
+        )
+        context.add_init_script(STEALTH_JS)
+        page = context.pages[0] if context.pages else context.new_page()
+        try:
+            _visit_clearance_page(page, url, host, timeout_ms, _LAUNCH_SOLVE_HINT)
+        finally:
+            context.close()
+
+
 def _fetch_via_cdp(
     cdp_url: str, url: str, site: dict, host: str, timeout_ms: int
 ) -> str | None:
@@ -254,6 +293,47 @@ def _fetch_via_cdp(
                 except Exception:
                     pass
             # Kullanıcının Chrome'unu KAPATMA — sadece CDP bağlantısını bırak.
+
+
+def _refresh_clearance_via_cdp(
+    cdp_url: str, url: str, host: str, timeout_ms: int
+) -> bool:
+    """Gerçek Chrome CDP oturumuyla hafif sayfa ziyareti; yoksa False."""
+    with sync_playwright() as p:
+        try:
+            browser = p.chromium.connect_over_cdp(cdp_url, timeout=4000)
+        except Exception:
+            return False
+        page = None
+        try:
+            ctx = browser.contexts[0] if browser.contexts else browser.new_context()
+            page = ctx.new_page()
+            _visit_clearance_page(page, url, host, timeout_ms, _CDP_SOLVE_HINT)
+            return True
+        finally:
+            if page is not None:
+                try:
+                    page.close()
+                except Exception:
+                    pass
+
+
+def _visit_clearance_page(
+    page, url: str, host: str, timeout_ms: int, solve_hint: str
+) -> None:
+    """İçerik ayrıştırmadan sayfayı ziyaret eder; challenge bitişini bekler."""
+    try:
+        resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
+    except PlaywrightTimeout as exc:
+        raise FetchError("Cloudflare oturumu yenilenirken sayfa zaman aşımına uğradı.") from exc
+    status = resp.status if resp else 0
+    if status in CF_ORIGIN_ERRORS:
+        raise FetchError(f"Kaynak site ({host}) şu an yanıt vermiyor (HTTP {status}).")
+    deadline = time.monotonic() + timeout_ms / 1000
+    while _looks_like_challenge(page) and time.monotonic() < deadline:
+        page.wait_for_timeout(500)
+    if _looks_like_challenge(page):
+        raise CloudflareChallenge("Cloudflare doğrulaması geçilemedi. " + solve_hint)
 
 
 def _extract_html(
@@ -344,7 +424,11 @@ def _parse(html: str, base_url: str, site: dict) -> dict:
         slug, book_title = _book_info(base_url, site["slug_mode"])
         next_url = _nav_chapter_url(soup, base_url, site["next"])
         prev_url = _nav_chapter_url(soup, base_url, site.get("prev", []))
-        chapter_no = _chapter_no(base_url)
+        # URL ile sayfa başlığı çelişebiliyor (örn. novelfull slug'ı 1768,
+        # gerçek başlık 1788). Sayfanın kendi bölüm başlığı daha güvenilirdir.
+        chapter_no = _chapter_no_from_title(title)
+        if chapter_no is None:
+            chapter_no = _chapter_no(base_url)
     return {
         "title": title,
         "text": text,

@@ -27,7 +27,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from core import cache, epub_export, glossary, jobs, library, pipeline  # noqa: E402
-from core.fetch import FetchError, CloudflareChallenge  # noqa: E402
+from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
 from core.translate import TranslateError  # noqa: E402
 
 load_dotenv(APP_DIR.parent / ".env")  # tek kaynak: novel-cevirmen/.env
@@ -37,6 +37,12 @@ app = FastAPI(title="novel-cevirmen")
 
 # Eski (sadece-önbellek) kurulumlardaki kitapları paylaşılan kütüphaneye taşı.
 library.backfill_from_cache()
+
+
+@app.on_event("startup")
+def resume_bulk_jobs() -> None:
+    """Sunucu açılırken yarım kalan toplu işleri checkpoint'lerinden sürdür."""
+    jobs.resume_running(API_KEY)
 
 
 @app.get("/api/chapter")
@@ -164,6 +170,21 @@ def bulk_status(job_id: str) -> dict:
 def bulk_stop(job_id: str) -> dict:
     """Çalışan toplu çeviri işini durdur."""
     return {"ok": jobs.stop(job_id)}
+
+
+@app.get("/api/book/{slug}/job")
+def book_job(slug: str) -> dict:
+    """Kitabın çalışan veya en son tamamlanan toplu işini keşfet."""
+    return {"job": jobs.get_book_job(slug)}
+
+
+@app.post("/api/clearance/refresh")
+def clearance_refresh() -> dict:
+    """Cloudflare tarayıcı oturumunu sunucuyu yeniden başlatmadan tazele."""
+    try:
+        return refresh_clearance()
+    except FetchError as exc:
+        raise HTTPException(status_code=502, detail=str(exc))
 
 
 @app.get("/api/book/{slug}/glossary")

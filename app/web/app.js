@@ -41,6 +41,7 @@ let isRestoring = false; // programatik scroll sırasında kaydı baskıla
 let chapterLoaded = false; // bölüm BAŞARIYLA render edildi mi (konum kaydı için)
 let scrollSaveTimer = null;
 let bulkPollTimer = null;
+let libraryJobPollTimer = null;
 let isNavigating = false;
 let failedAttempts = 0;
 
@@ -288,10 +289,12 @@ function spineColor(slug) {
 
 /* ---------- kütüphane ---------- */
 async function renderLibrary() {
+  clearTimeout(libraryJobPollTimer);
   const books = await fetchBooks();
   const shelf = el("shelf");
   shelf.replaceChildren();
   el("emptyState").hidden = books.length > 0;
+  const jobChecks = [];
 
   for (const book of books) {
     const spine = document.createElement("button");
@@ -302,10 +305,21 @@ async function renderLibrary() {
     const chNo = resolveResume(book, book.slug).chapterNo;
     const tag = chNo ? "BÖL. " + chNo : "OKU";
     spine.innerHTML =
-      `<span class="spine-title">${escapeHtml(book.title)}</span>` +
+      `<span class="spine-title" lang="en">${escapeHtml(book.title)}</span>` +
+      '<span class="spine-job" hidden></span>' +
       `<span class="spine-tag">${tag}</span>`;
     spine.addEventListener("click", () => navigate({ view: "book", slug: book.slug }));
     shelf.appendChild(spine);
+    const badge = spine.querySelector(".spine-job");
+    jobChecks.push(
+      fetchBookJob(book.slug).then((job) => {
+        if (!job || !isRecentJob(job)) return false;
+        badge.hidden = false;
+        badge.textContent = jobBadgeText(job);
+        badge.dataset.state = job.state;
+        return job.state === "running";
+      })
+    );
   }
 
   const add = document.createElement("button");
@@ -314,6 +328,32 @@ async function renderLibrary() {
     '<span class="spine-plus">+</span><span class="spine-addlabel">KİTAP EKLE</span>';
   add.addEventListener("click", openAddModal);
   shelf.appendChild(add);
+
+  const active = (await Promise.all(jobChecks)).some(Boolean);
+  if (active && !views.library.hidden) {
+    libraryJobPollTimer = setTimeout(renderLibrary, 2500);
+  }
+}
+
+async function fetchBookJob(slug) {
+  try {
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/job`);
+    if (!res.ok) return null;
+    return (await res.json()).job || null;
+  } catch {
+    return null;
+  }
+}
+
+function isRecentJob(job) {
+  return job.state === "running" || Date.now() / 1000 - (job.updated_at || 0) < 86400;
+}
+
+function jobBadgeText(job) {
+  if (job.state === "running") return `${job.done}/${job.total} · DEVAM ET`;
+  if (job.state === "done") return "✓ BİTTİ";
+  if (job.state === "error") return "! HATA";
+  return "DURDURULDU";
 }
 
 /* ---------- kitap (bölüm listesi) ---------- */
@@ -344,6 +384,7 @@ async function openBook(slug) {
   list.appendChild(loading);
   showView("book");
   window.scrollTo(0, 0);
+  discoverBulkJob(slug);
 
   try {
     const res = await fetch(`/api/book/${encodeURIComponent(slug)}/chapters`);
@@ -398,6 +439,7 @@ function renderChapterList(chapters, book, query) {
     no.textContent = ch.chapter_no ? "BÖLÜM " + ch.chapter_no : "BÖLÜM";
     const name = document.createElement("span");
     name.className = "chapter-name";
+    name.lang = "en";
     name.textContent = ch.title || "";
     row.append(no, name);
     row.addEventListener("click", () => navigate({ view: "reader", url: ch.url }));
@@ -1131,6 +1173,18 @@ async function startBulk(count) {
   pollBulk(jobId);
 }
 
+async function discoverBulkJob(slug) {
+  const job = await fetchBookJob(slug);
+  if (!job || job.state !== "running" || slug !== currentBookSlug || views.book.hidden) return;
+  el("bulkProgressText").textContent = job.message || "Hazırlanıyor…";
+  el("bulkStop").disabled = false;
+  el("bulkProgress").hidden = false;
+  el("bulkStop").onclick = () => {
+    fetch(`/api/bulk/${job.id}/stop`, { method: "POST" }).catch(() => {});
+  };
+  pollBulk(job.id);
+}
+
 function pollBulk(jobId) {
   clearTimeout(bulkPollTimer);
   const tick = async () => {
@@ -1155,6 +1209,24 @@ function pollBulk(jobId) {
   };
   tick();
 }
+
+el("clearanceRefresh")?.addEventListener("click", async () => {
+  const btn = el("clearanceRefresh");
+  const old = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Yenileniyor…";
+  try {
+    const res = await fetch("/api/clearance/refresh", { method: "POST" });
+    if (!res.ok) throw new Error();
+    btn.textContent = "Yenilendi ✓";
+  } catch {
+    btn.textContent = "Yenilenemedi";
+  }
+  setTimeout(() => {
+    btn.textContent = old;
+    btn.disabled = false;
+  }, 2500);
+});
 
 /* ---------- çevrimdışı indir ---------- */
 el("offlineBtn")?.addEventListener("click", () => {

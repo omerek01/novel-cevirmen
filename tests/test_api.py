@@ -40,3 +40,18 @@ def test_bulk_status_not_found():
 def test_bulk_stop_unknown_returns_false():
     res = _client().post("/api/bulk/yokboyle/stop")
     assert res.status_code == 200 and res.json()["ok"] is False
+
+
+def test_book_job_empty():
+    res = _client().get("/api/book/yok/job")
+    assert res.status_code == 200
+    assert res.json() == {"job": None}
+
+
+def test_clearance_refresh_is_mocked_offline(monkeypatch):
+    import server
+
+    monkeypatch.setattr(server, "refresh_clearance", lambda: {"ok": True, "mode": "test"})
+    res = _client().post("/api/clearance/refresh")
+    assert res.status_code == 200
+    assert res.json() == {"ok": True, "mode": "test"}

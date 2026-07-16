@@ -96,6 +96,29 @@ def test_fetch_locked_falls_back_when_cdp_unavailable(monkeypatch):
     assert out["html"] == "<html>LAUNCH</html>"
 
 
+def test_refresh_clearance_prefers_cdp_without_real_browser(monkeypatch):
+    monkeypatch.setenv("FETCH_CDP_URL", "http://127.0.0.1:9222")
+    monkeypatch.setattr(fetch, "_refresh_clearance_via_cdp", lambda *a: True)
+
+    def _boom(*args):
+        raise AssertionError("CDP başarılıyken launch çağrılmamalı")
+
+    monkeypatch.setattr(fetch, "_refresh_clearance_via_launch", _boom)
+    assert fetch.refresh_clearance() == {"ok": True, "mode": "cdp"}
+
+
+def test_refresh_clearance_falls_back_to_launch_offline(monkeypatch):
+    monkeypatch.setenv("FETCH_CDP_URL", "http://127.0.0.1:9222")
+    monkeypatch.setattr(fetch, "_refresh_clearance_via_cdp", lambda *a: False)
+    calls = []
+    monkeypatch.setattr(
+        fetch, "_refresh_clearance_via_launch", lambda *args: calls.append(args)
+    )
+
+    assert fetch.refresh_clearance() == {"ok": True, "mode": "launch"}
+    assert len(calls) == 1
+
+
 def test_cdp_connect_failure_returns_none():
     """Kapalı bir porta CDP bağlantısı None döner (gerçek, hızlı: bağlantı reddedilir)."""
     site = fetch._site_for("https://freewebnovel.com/novel/x/chapter-1")
@@ -112,6 +135,26 @@ def test_chapter_no_and_book_info():
     slug, title = fetch._book_info("https://novelbin.com/b/solo-leveling/chapter-1", "after_b")
     assert slug == "solo-leveling"
     assert title == "Solo Leveling"
+
+
+def test_parse_prefers_chapter_number_in_page_title():
+    url = "https://novelfull.com/example-novel/chapter-1768.html"
+    html = (
+        '<a class="chapter-title">Chapter 1788: The Return</a>'
+        '<div id="chapter-content"><p>Metin.</p></div>'
+    )
+    out = fetch._parse(html, url, fetch.SITES["novelfull"])
+    assert out["chapter_no"] == 1788
+
+
+def test_parse_falls_back_to_chapter_number_in_url():
+    url = "https://novelfull.com/example-novel/chapter-1768.html"
+    html = (
+        '<a class="chapter-title">The Return</a>'
+        '<div id="chapter-content"><p>Metin.</p></div>'
+    )
+    out = fetch._parse(html, url, fetch.SITES["novelfull"])
+    assert out["chapter_no"] == 1768
 
 
 # ---------- webnovel.com (gömülü id navigasyonu) ----------
