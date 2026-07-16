@@ -1,33 +1,34 @@
 # TODOS
 
-> Güncelleme (2026-07-16): Önceki listedeki tüm ertelenmiş maddeler
-> `faz-sonraki-plan` dalında tamamlandı (aşağıda kanıtla). Gerçek kalan/sıradaki
-> iş en altta.
+> Güncelleme (2026-07-16): Kalan iş büyük ölçüde codex ile uygulandı, incelenip
+> düzeltildi ve commit'lendi (`30d0a99`, `da0afd0`). Kalan tek küçük madde en altta.
 
-## Tamamlandı — faz-sonraki-plan
+## Tamamlandı — faz-sonraki-plan (okuma deneyimi + dayanıklılık)
 
-- [x] Swipe ile bölüm geçişi (mobil sağa/sola) — `app/web/app.js` (touchstart, ~satır 1065).
-- [x] Bölüm-içi tam-metin arama — `app/web/app.js` (`openFind`/`runFind`/`findMatches`).
-- [x] Kenar boşluğu (margin) ayarı — `style.css` `--reading-margin` + ayar paneli `data-mg`.
-- [x] Sepya tema + Açık/Sepya/Koyu segmented control — `style.css` `[data-theme="sepia"]`, `setTheme`.
-- [x] Okuyucuda graceful hata durumu (kırılınca mevcut bölüm korunur + hata kartı) — `app.js` `renderError`, tipli hatalar.
-- [x] Çekme yeniden-deneme (üstel geri-çekilme) + CDP gerçek-Chrome yolu — `app/core/fetch.py`.
-- [x] Sunucu-taraflı arka plan toplu çeviri (sekme kapansa da sürer) — `app/core/jobs.py`.
-- [x] `db_path()` test-enjekte edilebilir (`NOVEL_DB_PATH`) — `app/core/db.py`.
-- [x] merge_books + translate JSON-kurtarma testleri — `tests/test_merge_books.py`, `tests/test_translate_recovery.py`.
+- [x] Swipe ile bölüm geçişi — `app/web/app.js`.
+- [x] Bölüm-içi tam-metin arama — `app/web/app.js` (`openFind`/`runFind`).
+- [x] Kenar boşluğu (margin) ayarı — `style.css` `--reading-margin` + `data-mg`.
+- [x] Sepya tema + Açık/Sepya/Koyu segmented control — `style.css` `[data-theme="sepia"]`.
+- [x] Okuyucuda graceful hata durumu — `app.js` `renderError`, tipli hatalar.
+- [x] Çekme yeniden-deneme + CDP gerçek-Chrome yolu — `app/core/fetch.py`.
+- [x] Sunucu-taraflı arka plan toplu çeviri — `app/core/jobs.py`.
+- [x] `db_path()` test-enjekte edilebilir — `app/core/db.py`.
+- [x] Çevrimdışı "kaldığın yer" (resume + kütüphane etiketi) — `app.js` `resolveResume`.
+
+## Tamamlandı — codex ile uygulandı, incelenip düzeltildi
+
+- [x] Test kapsamı: `epub_export`, `jobs`, `pipeline` için pytest (çevrimdışı, mock'lu) — 74/74 yeşil.
+- [x] QA: İngilizce başlıklarda noktalı-İ giderildi (`lang="en"`); bölüm no güvenilir sayfa başlığını URL'ye tercih eder.
+- [x] Bulk job KALICILIĞI: SQLite `jobs` tablosu + her bölümde `next_url` checkpoint + restart'ta auto-resume (single-flight) + `GET /api/book/{slug}/job` keşif.
+- [x] Kütüphane sırtında job durum rozeti (N/total · devam et, bitti, hata) + çalışan işe yeniden bağlanma.
+- [x] Restart'sız `POST /api/clearance/refresh` (Cloudflare oturumu tazele) + ayar düğmesi.
+- [x] ePub numarasız-bölümlü kitapları da paketler (regresyon düzeltmesi).
+
+> İnceleme sonrası düzeltilen üç sorun: (1) mevcut DB'deki eski uyumsuz `jobs`
+> tablosu startup'ı çökertiyordu → migration; (2) `_set`/`stop` persist yarışı →
+> kilit içine alındı; (3) ePub numarasız-kitap regresyonu.
 
 ## Kalan / sıradaki
 
-### Test kapsamı — dedicated testi olmayan backend modülleri
-- [ ] `app/core/epub_export.py` — ePub üretimi (cache'ten bölüm seçimi, boş aralık → ("", b""), dosya adı aralığı).
-- [ ] `app/core/jobs.py` — toplu iş yaşam döngüsü (pipeline mock'lanarak: done/stopped/error, next_url zinciri, `_prune`).
-- [ ] `app/core/pipeline.py` — `get_or_translate` (cache-hit API'siz, refresh, want_source yükseltme; fetch/translate mock).
-
-### QA'de bulunan kozmetik (2026-07-15 raporu; kod hatası değil, tercih meselesi)
-- [ ] İngilizce başlıklarda Türkçe büyük-harf noktalı-İ ("REİNCARNATİON") — spine `text-transform:uppercase`.
-- [ ] Reincarnation bölüm no 1788↔1768 gösterim tutarsızlığı (novelfull URL-slug vs sayfa başlığı).
-
-### Dayanıklılık — bilinçli düşürülen kapsam (bkz. PLAN-dayaniklilik.md "Düşürülen")
-- [ ] Bulk job kalıcılığı (SQLite `jobs` tablosu, checkpoint, açılışta auto-resume, keşif endpoint'i).
-- [ ] Job `paused` durumu + restart'sız `POST /api/clearance/refresh`.
-- [ ] Kütüphane kartında job durum rozeti + "Devam et" + tamamlanma bildirimi.
+- [ ] İnteraktif "duraklat" (paused) durumu: iş restart'sız duraklatılıp sürdürülebilsin.
+      (Şu an: `stop` kalıcı biter; yarım iş yalnız sunucu restart'ında otomatik sürer.)
