@@ -28,6 +28,8 @@ let settings = loadSettings();
 let currentNext = null;
 let currentPrev = null;
 let currentUrl = null;
+let currentChapterNo = null; // açık bölümün numarası (yerel "son okunan" kaydı + kütüphane etiketi)
+let currentChapterTitle = null;
 let currentBookSlug = null;
 let currentBook = null; // {current_url, current_ratio, ...} — resume için
 let currentChapters = []; // açık kitabın tam bölüm listesi (prev türetme + arama)
@@ -106,7 +108,9 @@ function loadLastReadMap() {
 function saveLastRead(slug, url) {
   if (!slug || !url) return;
   const map = loadLastReadMap();
-  map[slug] = { url, ts: Date.now() };
+  // chapter_no/title: kütüphane sırtı "BÖL. N" etiketini çevrimdışı okumaya göre
+  // gösterebilmek için (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
+  map[slug] = { url, ts: Date.now(), chapter_no: currentChapterNo, title: currentChapterTitle };
   try {
     localStorage.setItem(LS_LASTREAD, JSON.stringify(map));
   } catch {}
@@ -120,13 +124,15 @@ function getLastRead(slug) {
 function resolveResume(book, slug) {
   let url = (book && book.current_url) || null;
   let ratio = (book && book.current_ratio) || 0;
+  let chapterNo = (book && book.chapter_no) || null;
   const local = getLastRead(slug);
   const serverTsMs = ((book && book.updated_at) || 0) * 1000;
   if (local && local.url && local.ts >= serverTsMs) {
     url = local.url;
     ratio = getScrollLocal(url);
+    if (local.chapter_no != null) chapterNo = local.chapter_no; // eski kayıtta yoksa sunucu değeri kalır
   }
-  return { url, ratio };
+  return { url, ratio, chapterNo };
 }
 function currentRatio() {
   const max = document.documentElement.scrollHeight - window.innerHeight;
@@ -291,7 +297,10 @@ async function renderLibrary() {
     const spine = document.createElement("button");
     spine.className = "spine";
     spine.style.setProperty("--spine", spineColor(book.slug));
-    const tag = book.chapter_no ? "BÖL. " + book.chapter_no : "OKU";
+    // Etiket, resume ile AYNI merge'i kullanır → çevrimdışı okunan son bölüm de görünür
+    // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
+    const chNo = resolveResume(book, book.slug).chapterNo;
+    const tag = chNo ? "BÖL. " + chNo : "OKU";
     spine.innerHTML =
       `<span class="spine-title">${escapeHtml(book.title)}</span>` +
       `<span class="spine-tag">${tag}</span>`;
@@ -718,6 +727,8 @@ function renderChapter(data, ratio) {
   failedAttempts = 0; // Başarılı yüklemede hata sayacını sıfırla
   el("readerError").hidden = true; // Varsa hata kartını gizle
   chapterLoaded = true;
+  currentChapterNo = data.chapter_no != null ? data.chapter_no : null;
+  currentChapterTitle = data.title || "";
 
   el("readerBook").textContent = data.book_title || "";
   el("readerChapter").textContent = data.title || "Bölüm";
