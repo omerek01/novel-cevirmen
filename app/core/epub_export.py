@@ -17,10 +17,12 @@ def build_epub(slug: str, start: int = 1, count: int = 1000) -> tuple[str, bytes
     Döner: (dosya_adi, epub_baytlari). Uygun bölüm yoksa ("", b"").
     """
     all_chapters = cache.list_chapters(slug)  # bölüm no'ya göre sıralı
-    selected = [
-        c for c in all_chapters if c["chapter_no"] is not None and c["chapter_no"] >= start
-    ]
-    if not selected:  # numara filtresi tutmazsa baştan al
+    numbered = [c for c in all_chapters if c["chapter_no"] is not None]
+    selected = [c for c in numbered if c["chapter_no"] >= start]
+    # Hiçbir bölümde numara yoksa (bazı siteler chapter_no üretmez) aralık filtresi
+    # anlamsızdır → hepsini al. Numaralı bölüm VARSA start'a saygı gösterilir
+    # (aralık dışı istek boş döner). Böylece numarasız kitaplar da ePub'a paketlenir.
+    if not numbered:
         selected = all_chapters
     selected = selected[:count]
     if not selected:
