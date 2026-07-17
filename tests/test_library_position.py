@@ -71,3 +71,20 @@ def test_list_books_includes_ratio():
 def test_set_position_unknown_book_noop():
     library.set_position("yok", "u1", 0.5)  # patlamamalı
     assert library.get_book("yok") is None
+
+
+def test_upsert_without_position_keeps_existing_row():
+    """update_position=False (toplu iş): mevcut kitabın konumuna dokunmaz."""
+    library.upsert_book("s", "K", "u1", "B1", 1)
+    library.set_position("s", "u1", 0.4)
+    library.upsert_book("s", "K", "u9", "B9", 9, update_position=False)
+    book = library.get_book("s")
+    assert book["current_url"] == "u1"
+    assert book["chapter_no"] == 1
+    assert abs(book["current_ratio"] - 0.4) < 1e-9
+
+
+def test_upsert_without_position_still_inserts_missing_book():
+    """update_position=False yeni kitabı yine de kütüphaneye ekler (görünürlük)."""
+    library.upsert_book("yeni", "K", "u1", "B1", 1, update_position=False)
+    assert library.get_book("yeni")["current_url"] == "u1"

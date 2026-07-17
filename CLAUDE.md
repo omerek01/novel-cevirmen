@@ -73,8 +73,10 @@ geçer); Chrome kapalıysa sessizce (2) paket Chromium'u kalıcı profil + `STEA
 ile başlatan akışa düşer. Yani CDP opsiyonel, ayarlı olsa da telefon/normal kullanım
 bozulmaz. Site-özel ayrıştırma kuralları `SITES` sözlüğünde (yeni site = yeni kayıt),
 bilinmeyen host için `GENERIC_SITE`. Çözülen CF cookie'si `cache/.pw-profile`'da
-kalıcı. **Tüm çekimler tek `_FETCH_LOCK` ile serileşir** — tek kalıcı profil eşzamanlı
-açılamaz (bu aynı zamanda toplu işleri doğal olarak sıralar). Tipli hatalar:
+kalıcı. **Tüm çekimler tek `_FETCH_GATE` (iki-öncelikli kapı) ile serileşir** — tek kalıcı profil eşzamanlı
+açılamaz. Kapıda bekleyen okuyucu isteği (`priority="interactive"`, varsayılan) toplu
+çeviri çekiminden (`priority="bulk"`, jobs → pipeline `background=True`) her zaman önce
+geçer; geri-çekilme uykuları kapı DIŞINDA tutulur. Tipli hatalar:
 `CloudflareChallenge`, origin 52x (`CF_ORIGIN_ERRORS`, beklemez), geçici → `_Transient`
 (üstel geri-çekilmeyle yeniden dener).
 

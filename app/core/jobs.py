@@ -235,7 +235,16 @@ def _start_thread(job_id: str, api_key: str | None) -> bool:
 
 
 def start_bulk(slug: str, start_url: str, count: int, api_key: str | None) -> str:
-    """Arka plan toplu çeviri başlat; işi SQLite'a yazıp kimliğini döndür."""
+    """Arka plan toplu çeviri başlat; işi SQLite'a yazıp kimliğini döndür.
+
+    Aynı kitap için zaten koşan bir iş varsa yenisi açılmaz: mevcut işin kimliği
+    döner (worker ölmüşse checkpoint'ten yeniden başlatılır). Sınırsız paralel
+    bulk worker hem Gemini kotasını yer hem okuyucuyu çekim kapısında bekletir.
+    """
+    existing = get_book_job(slug)
+    if existing and existing["state"] == "running":
+        _start_thread(existing["id"], api_key)  # canlıysa no-op, değilse sürdür
+        return existing["id"]
     job_id = uuid.uuid4().hex
     job = {
         "id": job_id,
@@ -311,7 +320,9 @@ def _run(job_id: str, api_key: str | None) -> None:
             updated_at=time.time(),
         )
         try:
-            data = pipeline.get_or_translate(url, api_key)
+            # background=True: çekim düşük öncelikli (okuyucu kapıda öne geçer)
+            # ve kitabın "kaldığın yer" konumu ilerletilmez.
+            data = pipeline.get_or_translate(url, api_key, background=True)
         except (FetchError, TranslateError) as exc:
             _set(
                 job_id, state="error", message=f"Durdu: {exc}", done=done,

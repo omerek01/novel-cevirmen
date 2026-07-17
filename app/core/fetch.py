@@ -27,7 +27,39 @@ USER_AGENT = (
 PROFILE_DIR = Path(__file__).resolve().parent.parent.parent / "cache" / ".pw-profile"
 
 # Aynı profili iki çekimin eşzamanlı açıp kilitlemesini önler (Chromium SingletonLock).
-_FETCH_LOCK = threading.Lock()
+# Düz threading.Lock yerine iki-öncelikli kapı: okuyucunun /api/chapter isteği
+# ("interactive") toplu çeviri işinin ("bulk") önüne geçer. threading.Lock adalet
+# garantisi vermez — kapı boşaldığında bir bulk worker, zaten bekleyen okuyucunun
+# önüne dalabilirdi (barging). Bekleyen okuyucu varken bulk kapıyı hiç alamaz;
+# böylece toplu çeviri sürerken okumaya devam edilebilir.
+class _PriorityGate:
+    def __init__(self) -> None:
+        self._cond = threading.Condition()
+        self._busy = False
+        self._interactive_waiting = 0
+
+    def acquire(self, priority: str) -> None:
+        interactive = priority != "bulk"
+        with self._cond:
+            if interactive:
+                self._interactive_waiting += 1
+            try:
+                while self._busy or (
+                    not interactive and self._interactive_waiting > 0
+                ):
+                    self._cond.wait()
+                self._busy = True
+            finally:
+                if interactive:
+                    self._interactive_waiting -= 1
+
+    def release(self) -> None:
+        with self._cond:
+            self._busy = False
+            self._cond.notify_all()
+
+
+_FETCH_GATE = _PriorityGate()
 
 # Headless Chromium'un Cloudflare'e ele veren izlerini gizler (goto'dan önce enjekte).
 STEALTH_JS = """
@@ -137,6 +169,7 @@ def fetch_chapter(
     headless: bool | None = None,
     timeout_ms: int = 60000,
     retries: int = 2,
+    priority: str = "interactive",
 ) -> dict:
     """Bir novelbin bölüm sayfasını çeker.
 
@@ -153,26 +186,32 @@ def fetch_chapter(
     Geçici hatalar (yavaş yükleme, network) üstel geri-çekilmeyle `retries` kez
     yeniden denenir. Kalıcı hatalar (Cloudflare challenge, origin 52x) denenmez.
 
+    priority="bulk" toplu çeviri işinden gelen çekimleri işaretler: bekleyen bir
+    okuyucu (interactive) varken kapıyı alamazlar (bkz. _PriorityGate).
+
     Döner: {"title": str, "text": str, "next_url": str | None, "prev_url": ..., ...}
     """
     if headless is None:
         headless = os.getenv("FETCH_HEADLESS", "1") != "0"
     delay = 2.0
     last_exc: Exception | None = None
-    # Tek kilit: aynı kalıcı profili eşzamanlı açan çekimleri sıraya sokar.
-    with _FETCH_LOCK:
-        for attempt in range(retries + 1):
-            try:
-                return _fetch_locked(url, headless, timeout_ms)
-            except _Transient as exc:
-                last_exc = exc
-                if attempt < retries:
-                    time.sleep(delay)
-                    delay *= 2
-                    continue
-                raise FetchError(
-                    str(exc) or "Bölüm geçici olarak çekilemedi; biraz sonra deneyin."
-                ) from exc
+    # Kapı her denemede ayrı alınır; geri-çekilme uykusu kapı DIŞINDA geçer,
+    # böylece yeniden deneme beklerken okuyucu (veya başka iş) çekim yapabilir.
+    for attempt in range(retries + 1):
+        _FETCH_GATE.acquire(priority)
+        try:
+            return _fetch_locked(url, headless, timeout_ms)
+        except _Transient as exc:
+            last_exc = exc
+        finally:
+            _FETCH_GATE.release()
+        if attempt < retries:
+            time.sleep(delay)
+            delay *= 2
+            continue
+        raise FetchError(
+            str(last_exc) or "Bölüm geçici olarak çekilemedi; biraz sonra deneyin."
+        ) from last_exc
     raise FetchError("Bölüm çekilemedi.") from last_exc  # teorik olarak ulaşılmaz
 
 
@@ -185,11 +224,14 @@ def refresh_clearance(timeout_ms: int = 30000) -> dict:
     url = os.getenv("FETCH_CLEARANCE_URL", "https://novelbin.com/").strip()
     headless = os.getenv("FETCH_HEADLESS", "1") != "0"
     host = urlparse(url).hostname or "kaynak site"
-    with _FETCH_LOCK:
+    _FETCH_GATE.acquire("interactive")  # kullanıcı tetikler → okuyucu önceliği
+    try:
         cdp_url = os.getenv("FETCH_CDP_URL", "").strip()
         if cdp_url and _refresh_clearance_via_cdp(cdp_url, url, host, timeout_ms):
             return {"ok": True, "mode": "cdp"}
         _refresh_clearance_via_launch(url, headless, host, timeout_ms)
+    finally:
+        _FETCH_GATE.release()
     return {"ok": True, "mode": "launch"}
 
 

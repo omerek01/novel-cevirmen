@@ -113,12 +113,17 @@ def upsert_book(
     current_url: str,
     current_title: str | None,
     chapter_no: int | None,
+    update_position: bool = True,
 ) -> None:
     """Bir bölüm okununca kitabı + son okuma konumunu güncelle (paylaşılır).
 
     current_ratio yalnızca (url, ratio) çifti tutarlı kalsın diye yönetilir: yeni
     bir bölüme geçilince (url değişince) oran 0'a sıfırlanır; aynı bölüm tekrar
     açılınca (resume) korunur, böylece bölüm-içi konum geri yüklenebilir.
+
+    update_position=False (toplu çeviri işi): kitap zaten kütüphanedeyse hiçbir
+    şeye dokunma — arka planda hazırlanan bölüm "kaldığın yer"i İLERLETMEZ.
+    Kitap henüz yoksa normal eklenir (kütüphanede görünsün).
     """
     if not slug:
         return
@@ -127,6 +132,8 @@ def upsert_book(
         prev = conn.execute(
             "SELECT current_url, current_ratio FROM books WHERE slug = ?", (slug,)
         ).fetchone()
+        if not update_position and prev is not None:
+            return
         # url değiştiyse (veya yeni kitap) oranı sıfırla; aynıysa mevcut oranı koru.
         ratio = 0.0
         if prev and prev[0] == current_url and prev[1] is not None:

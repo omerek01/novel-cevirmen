@@ -11,7 +11,7 @@ from .fetch import fetch_chapter
 from .translate import TranslateError, translate_chapter
 
 
-def _finalize_cached(cached: dict, url: str) -> dict:
+def _finalize_cached(cached: dict, url: str, background: bool = False) -> dict:
     """Önbellekten gelen bölümü kanonik slug'a hizala, kütüphane/sözlüğü güncelle."""
     canon = library.resolve_slug(cached["book_slug"])
     if canon != cached["book_slug"]:
@@ -23,6 +23,7 @@ def _finalize_cached(cached: dict, url: str) -> dict:
     library.upsert_book(
         cached["book_slug"], cached["book_title"], url,
         cached["title"], cached["chapter_no"],
+        update_position=not background,
     )
     return cached
 
@@ -32,6 +33,7 @@ def get_or_translate(
     api_key: str | None,
     refresh: bool = False,
     want_source: bool = False,
+    background: bool = False,
 ) -> dict:
     """Bölümü önbellekten döndür ya da çek+çevir+önbelleğe yaz.
 
@@ -39,6 +41,10 @@ def get_or_translate(
     want_source=True ve önbellekteki bölümde hizalı İngilizce kaynak yoksa (eski
     bölüm) ve anahtar varsa, bölüm bir kez yeniden çevrilip kaynak eklenir (iki-dilli
     okuma için). FetchError / TranslateError fırlatabilir.
+
+    background=True toplu çeviri işinden gelen çağrıları işaretler: çekim düşük
+    öncelikle yapılır (okuyucu isteği kapıda öne geçer) ve kitabın "kaldığın yer"
+    konumu İLERLETİLMEZ — arka planda hazırlanan bölüm okunmuş sayılmaz.
     """
     if not refresh:
         cached = cache.get_chapter(url)
@@ -46,12 +52,13 @@ def get_or_translate(
             # Eski bölümü iki-dilli için yükselt: yalnız kaynak istendiğinde, yoksa ve
             # anahtar varsa yeniden çevir; aksi halde önbelleği aynen döndür (hızlı).
             if not (want_source and not cached.get("source") and api_key):
-                return _finalize_cached(cached, url)
+                return _finalize_cached(cached, url, background=background)
 
     if not api_key:
         raise TranslateError("GEMINI_API_KEY ayarlı değil.")
 
-    chapter = fetch_chapter(url)  # FetchError sızabilir
+    # FetchError sızabilir. Toplu iş düşük öncelikli: okuyucu kapıda öne geçer.
+    chapter = fetch_chapter(url, priority="bulk" if background else "interactive")
 
     # Birleştirilmiş kitap: slug'ı kanonikleştir, böylece bölüm/sözlük tek kitapta toplanır.
     book_slug = library.resolve_slug(chapter["book_slug"])
@@ -81,5 +88,6 @@ def get_or_translate(
     glossary.merge_names(book_slug, result["detected_names"])
     library.upsert_book(
         book_slug, book_title, url, chapter["title"], chapter["chapter_no"],
+        update_position=not background,
     )
     return payload

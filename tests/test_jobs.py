@@ -41,7 +41,7 @@ def clean_job_memory():
 def test_start_bulk_follows_chain_until_done(monkeypatch):
     calls = []
 
-    def fake(url, api_key):
+    def fake(url, api_key, **kwargs):
         calls.append(url)
         no = int(url[-1])
         return {
@@ -62,7 +62,7 @@ def test_start_bulk_follows_chain_until_done(monkeypatch):
 
 
 def test_start_bulk_records_error(monkeypatch):
-    def fake(url, api_key):
+    def fake(url, api_key, **kwargs):
         raise RuntimeError("bozuk bölüm")
 
     monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
@@ -77,7 +77,7 @@ def test_stop_marks_running_job_stopped(monkeypatch):
     entered = threading.Event()
     release = threading.Event()
 
-    def fake(url, api_key):
+    def fake(url, api_key, **kwargs):
         entered.set()
         release.wait(1)
         return {"title": "Bölüm", "next_url": "u2", "cached": False}
@@ -89,6 +89,45 @@ def test_stop_marks_running_job_stopped(monkeypatch):
     assert jobs.get_status(job_id)["state"] == "stopped"
     release.set()
     assert _wait(job_id, {"stopped"})["state"] == "stopped"
+
+
+def test_start_bulk_dedups_running_job_for_same_book(monkeypatch):
+    """Aynı kitap için koşan iş varken ikinci start_bulk yeni iş AÇMAZ."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    def fake(url, api_key, **kwargs):
+        entered.set()
+        release.wait(1)
+        return {"title": "Bölüm", "next_url": None, "cached": False}
+
+    monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
+    first = jobs.start_bulk("kitap", "u1", 2, None)
+    assert entered.wait(1)
+
+    second = jobs.start_bulk("kitap", "u9", 5, None)
+    assert second == first  # mevcut işin kimliği döner, ikinci worker yok
+
+    other = jobs.start_bulk("baska-kitap", "u1", 1, None)
+    assert other != first  # farklı kitap kendi işini alır
+
+    release.set()
+    assert _wait(first, {"done"})["state"] == "done"
+
+
+def test_run_calls_pipeline_with_background_flag(monkeypatch):
+    """Toplu iş pipeline'ı background=True ile çağırır (okuyucu önceliği + konum)."""
+    seen = {}
+
+    def fake(url, api_key, **kwargs):
+        seen.update(kwargs)
+        return {"title": "B1", "next_url": None, "cached": False}
+
+    monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
+    job_id = jobs.start_bulk("kitap", "u1", 1, None)
+    _wait(job_id, {"done"})
+
+    assert seen.get("background") is True
 
 
 def test_prune_caps_finished_jobs():
@@ -111,7 +150,7 @@ def test_status_roundtrip_reads_persisted_row(monkeypatch):
     monkeypatch.setattr(
         jobs.pipeline,
         "get_or_translate",
-        lambda url, api_key: {"title": "B1", "next_url": None, "cached": False},
+        lambda url, api_key, **kw: {"title": "B1", "next_url": None, "cached": False},
     )
     job_id = jobs.start_bulk("kitap", "u1", 1, None)
     original = _wait(job_id, {"done"})
@@ -143,7 +182,7 @@ def test_resume_running_uses_checkpoint_and_single_flight(monkeypatch):
     release = threading.Event()
     calls = []
 
-    def fake(url, api_key):
+    def fake(url, api_key, **kwargs):
         calls.append(url)
         if url == "u2":
             entered.set()
