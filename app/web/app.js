@@ -318,6 +318,7 @@ async function renderLibrary() {
         // işin ilerlemesi ve dikkat isteyen durumlar (hata/durduruldu) görünür.
         if (job.state === "done") return false;
         badge.hidden = false;
+        spine.classList.add("has-job"); // başlık rozet bölgesinin üstünde bitsin
         badge.textContent = jobBadgeText(job);
         badge.dataset.state = job.state;
         return job.state === "running";
@@ -1137,10 +1138,17 @@ el("readerBody").addEventListener(
 // Kullanıcının "Arka Plana Al" dediği iş: ilerleme ekranı bir daha kendiliğinden
 // açılmaz (discoverBulkJob buna bakar). TOPLU ÇEVİR düğmesi yeniden açabilir.
 let bulkDismissedJobId = null;
+// Ekranın ŞU AN hangi işi gösterdiği. Uçuştaki eski bir anket yanıtı (iş A),
+// araya yeni iş (B) girdiyse B'nin ilerlemesini ezmesin diye her await sonrası
+// bu belirteçle doğrulanır.
+let bulkActiveJobId = null;
+let bulkDoneTimer = null;
 
 function hideBulkToBackground(jobId) {
   bulkDismissedJobId = jobId;
+  bulkActiveJobId = null;
   clearTimeout(bulkPollTimer);
+  clearTimeout(bulkDoneTimer);
   el("bulkProgress").hidden = true;
 }
 
@@ -1203,27 +1211,40 @@ async function discoverBulkJob(slug) {
 
 function pollBulk(jobId) {
   clearTimeout(bulkPollTimer);
+  clearTimeout(bulkDoneTimer);
+  bulkActiveJobId = jobId;
+  // Ekran kapandıysa VEYA ekran artık başka bir işi gösteriyorsa bu anket ölür.
+  // Görünürlük tek başına yetmez: A işinin uçuştaki yanıtı, araya giren B işinin
+  // açık ekranını "görünür" bulup B'nin ilerlemesini ezebilirdi.
+  const stale = () => el("bulkProgress").hidden || bulkActiveJobId !== jobId;
   const tick = async () => {
-    // Ekran arka plana atıldıysa (veya kapandıysa) anketi sürdürme — uçuştaki
-    // tick kendini yeniden zamanlayıp gizli ekranı sonsuza dek yoklamasın.
-    if (el("bulkProgress").hidden) return;
+    if (stale()) return;
     let s;
     try {
       const r = await fetch(`/api/bulk/${jobId}`);
       s = await r.json();
     } catch {
+      if (stale()) return;
       bulkPollTimer = setTimeout(tick, 2000);
       return;
     }
-    if (el("bulkProgress").hidden) return;
+    if (stale()) return;
     el("bulkProgressText").textContent = s.message || "…";
     if (s.state === "running") {
       bulkPollTimer = setTimeout(tick, 1500);
     } else {
       el("bulkStop").disabled = true;
-      setTimeout(() => {
+      // Bitiş geri çağrısı sahipli: 2.5 sn içinde kullanıcı ekranı kapatır,
+      // başka iş açar veya başka görünüme geçerse ekranla oynamaz, gezinmeyi
+      // gasp etmez (openBook yalnız hâlâ o kitabın sayfası açıksa çalışır).
+      const jobSlug = currentBookSlug;
+      bulkDoneTimer = setTimeout(() => {
+        if (stale()) return;
         el("bulkProgress").hidden = true;
-        if (currentBookSlug) openBook(currentBookSlug);
+        bulkActiveJobId = null;
+        if (jobSlug && jobSlug === currentBookSlug && !views.book.hidden) {
+          openBook(jobSlug);
+        }
       }, 2500);
     }
   };
