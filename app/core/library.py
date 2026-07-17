@@ -129,11 +129,24 @@ def upsert_book(
         return
     conn = _connect()
     try:
+        if not update_position:
+            # Atomik: kitap yoksa ekle, varsa HİÇBİR şeye dokunma. SELECT-sonra-yaz
+            # yapılsaydı, arada okuyucunun yazdığı gerçek konum INSERT OR REPLACE
+            # ile ezilebilirdi (TOCTOU).
+            conn.execute(
+                """
+                INSERT OR IGNORE INTO books
+                    (slug, title, current_url, current_title, chapter_no,
+                     updated_at, current_ratio)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
+                """,
+                (slug, title, current_url, current_title, chapter_no, time.time()),
+            )
+            conn.commit()
+            return
         prev = conn.execute(
             "SELECT current_url, current_ratio FROM books WHERE slug = ?", (slug,)
         ).fetchone()
-        if not update_position and prev is not None:
-            return
         # url değiştiyse (veya yeni kitap) oranı sıfırla; aynıysa mevcut oranı koru.
         ratio = 0.0
         if prev and prev[0] == current_url and prev[1] is not None:

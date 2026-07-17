@@ -241,29 +241,32 @@ def start_bulk(slug: str, start_url: str, count: int, api_key: str | None) -> st
     döner (worker ölmüşse checkpoint'ten yeniden başlatılır). Sınırsız paralel
     bulk worker hem Gemini kotasını yer hem okuyucuyu çekim kapısında bekletir.
     """
-    existing = get_book_job(slug)
-    if existing and existing["state"] == "running":
-        _start_thread(existing["id"], api_key)  # canlıysa no-op, değilse sürdür
-        return existing["id"]
-    job_id = uuid.uuid4().hex
-    job = {
-        "id": job_id,
-        "slug": slug,
-        "start_url": start_url,
-        "count": count,
-        "done": 0,
-        "translated": 0,
-        "state": "running",
-        "message": "Hazırlanıyor…",
-        "next_url": start_url,
-        "stop": False,
-        "updated_at": time.time(),
-    }
+    # Kontrol+oluşturma tek _LOCK altında (RLock, iç çağrılar yeniden alabilir):
+    # iki eşzamanlı istek (çift dokunuş / iki cihaz) ikisi de "koşan iş yok" görüp
+    # aynı kitaba iki worker açmasın. FastAPI istekleri paralel thread'lerde koşar.
     with _LOCK:
+        existing = get_book_job(slug)
+        if existing and existing["state"] == "running":
+            _start_thread(existing["id"], api_key)  # canlıysa no-op, değilse sürdür
+            return existing["id"]
+        job_id = uuid.uuid4().hex
+        job = {
+            "id": job_id,
+            "slug": slug,
+            "start_url": start_url,
+            "count": count,
+            "done": 0,
+            "translated": 0,
+            "state": "running",
+            "message": "Hazırlanıyor…",
+            "next_url": start_url,
+            "stop": False,
+            "updated_at": time.time(),
+        }
         _JOBS[job_id] = job
-    _persist(job)
-    _prune()
-    _start_thread(job_id, api_key)
+        _persist(job)
+        _prune()
+        _start_thread(job_id, api_key)
     return job_id
 
 

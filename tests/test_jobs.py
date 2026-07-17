@@ -115,6 +115,38 @@ def test_start_bulk_dedups_running_job_for_same_book(monkeypatch):
     assert _wait(first, {"done"})["state"] == "done"
 
 
+def test_start_bulk_concurrent_calls_single_job(monkeypatch):
+    """Eşzamanlı iki start_bulk (çift dokunuş) tek iş açar — dedup atomiktir."""
+    entered = threading.Event()
+    release = threading.Event()
+
+    def fake(url, api_key, **kwargs):
+        entered.set()
+        release.wait(1)
+        return {"title": "Bölüm", "next_url": None, "cached": False}
+
+    monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
+
+    ids = []
+    ids_lock = threading.Lock()
+
+    def racer():
+        job_id = jobs.start_bulk("kitap", "u1", 2, None)
+        with ids_lock:
+            ids.append(job_id)
+
+    threads = [threading.Thread(target=racer, daemon=True) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(2)
+
+    assert len(ids) == 4
+    assert len(set(ids)) == 1  # hepsi aynı işi görür, ikinci worker yok
+    release.set()
+    _wait(ids[0], {"done"})
+
+
 def test_run_calls_pipeline_with_background_flag(monkeypatch):
     """Toplu iş pipeline'ı background=True ile çağırır (okuyucu önceliği + konum)."""
     seen = {}
