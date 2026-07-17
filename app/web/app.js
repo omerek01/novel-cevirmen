@@ -314,6 +314,9 @@ async function renderLibrary() {
     jobChecks.push(
       fetchBookJob(book.slug).then((job) => {
         if (!job || !isRecentJob(job)) return false;
+        // Biten iş rafta rozet bırakmaz (bölümler zaten hazır); yalnız süren
+        // işin ilerlemesi ve dikkat isteyen durumlar (hata/durduruldu) görünür.
+        if (job.state === "done") return false;
         badge.hidden = false;
         badge.textContent = jobBadgeText(job);
         badge.dataset.state = job.state;
@@ -351,7 +354,6 @@ function isRecentJob(job) {
 
 function jobBadgeText(job) {
   if (job.state === "running") return `${job.done}/${job.total} · DEVAM ET`;
-  if (job.state === "done") return "✓ BİTTİ";
   if (job.state === "error") return "! HATA";
   return "DURDURULDU";
 }
@@ -1132,6 +1134,16 @@ el("readerBody").addEventListener(
 );
 
 /* ---------- toplu çeviri (sunucu-taraflı arka plan iş) ---------- */
+// Kullanıcının "Arka Plana Al" dediği iş: ilerleme ekranı bir daha kendiliğinden
+// açılmaz (discoverBulkJob buna bakar). TOPLU ÇEVİR düğmesi yeniden açabilir.
+let bulkDismissedJobId = null;
+
+function hideBulkToBackground(jobId) {
+  bulkDismissedJobId = jobId;
+  clearTimeout(bulkPollTimer);
+  el("bulkProgress").hidden = true;
+}
+
 el("bulkBtn").addEventListener("click", () => {
   el("bulkCount").value = "10";
   el("bulkModal").hidden = false;
@@ -1167,27 +1179,34 @@ async function startBulk(count) {
     el("bulkProgressText").textContent = "Başlatılamadı: " + e.message;
     return;
   }
+  bulkDismissedJobId = null; // kullanıcı ekranı bilerek açtı
   el("bulkStop").onclick = () => {
     fetch(`/api/bulk/${jobId}/stop`, { method: "POST" }).catch(() => {});
   };
+  el("bulkHide").onclick = () => hideBulkToBackground(jobId);
   pollBulk(jobId);
 }
 
 async function discoverBulkJob(slug) {
   const job = await fetchBookJob(slug);
   if (!job || job.state !== "running" || slug !== currentBookSlug || views.book.hidden) return;
+  if (job.id === bulkDismissedJobId) return; // arka plana atıldı, kendiliğinden açılma
   el("bulkProgressText").textContent = job.message || "Hazırlanıyor…";
   el("bulkStop").disabled = false;
   el("bulkProgress").hidden = false;
   el("bulkStop").onclick = () => {
     fetch(`/api/bulk/${job.id}/stop`, { method: "POST" }).catch(() => {});
   };
+  el("bulkHide").onclick = () => hideBulkToBackground(job.id);
   pollBulk(job.id);
 }
 
 function pollBulk(jobId) {
   clearTimeout(bulkPollTimer);
   const tick = async () => {
+    // Ekran arka plana atıldıysa (veya kapandıysa) anketi sürdürme — uçuştaki
+    // tick kendini yeniden zamanlayıp gizli ekranı sonsuza dek yoklamasın.
+    if (el("bulkProgress").hidden) return;
     let s;
     try {
       const r = await fetch(`/api/bulk/${jobId}`);
@@ -1196,6 +1215,7 @@ function pollBulk(jobId) {
       bulkPollTimer = setTimeout(tick, 2000);
       return;
     }
+    if (el("bulkProgress").hidden) return;
     el("bulkProgressText").textContent = s.message || "…";
     if (s.state === "running") {
       bulkPollTimer = setTimeout(tick, 1500);
