@@ -43,5 +43,8 @@ def ensure_column(conn: sqlite3.Connection, table: str, column: str, decl: str) 
     if column not in cols:
         try:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {decl}")
-        except sqlite3.OperationalError:
-            pass
+        except sqlite3.OperationalError as exc:
+            # E-25: yalnız yarış kaynaklı "duplicate column" yutulur; kilit /
+            # bozuk bildirim / eksik tablo hataları sessizce kaybolmasın.
+            if "duplicate column" not in str(exc).lower():
+                raise

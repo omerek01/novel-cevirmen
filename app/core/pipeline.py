@@ -6,9 +6,30 @@ aynı mantığı kullanır (DRY). FetchError/TranslateError yukarı sızar; ça�
 """
 from __future__ import annotations
 
-from . import cache, glossary, library
+import threading
+
+from . import budget, cache, glossary, library
+from . import fetch as _fetch_mod
 from .fetch import fetch_chapter
 from .translate import TranslateError, translate_chapter
+
+# ---- URL-başına tek-uçuş (single-flight) — prefetch'in ön koşulu ----
+# Aynı URL için ikinci çağrı ilkinin sonucunu bekler; aynı bölüm asla iki kez
+# Gemini'ye gitmez. Paylaşılan kısım YALNIZ fetch+translate+cache.save (E-2);
+# glossary/upsert yan etkileri her çağıranın kendi bayrağıyla ayrıca koşar.
+
+
+class _Flight:
+    def __init__(self, background: bool) -> None:
+        self.event = threading.Event()
+        self.result: dict | None = None
+        self.exc: BaseException | None = None
+        # E-1: uçuş kapıda beklerken interaktif katılımcı gelirse boost edilir.
+        self.ticket = _fetch_mod._FETCH_GATE.ticket("bulk" if background else "interactive")
+
+
+_FLIGHTS: dict[str, _Flight] = {}
+_FLIGHTS_LOCK = threading.Lock()
 
 
 def _finalize_cached(cached: dict, url: str, background: bool = False) -> dict:
@@ -57,8 +78,55 @@ def get_or_translate(
     if not api_key:
         raise TranslateError("GEMINI_API_KEY ayarlı değil.")
 
+    payload = _fetch_translate_save(url, api_key, background)
+
+    # E-2: yan etkiler çağıranın KENDİ bayrağıyla — prefetch uçuşuna katılan
+    # okuyucunun "kaldığın yer"i ilerler, salt-prefetch ilerletmez.
+    glossary.merge_names(payload["book_slug"], payload["detected_names"])
+    library.upsert_book(
+        payload["book_slug"], payload["book_title"], url,
+        payload["title"], payload["chapter_no"],
+        update_position=not background,
+    )
+    return payload
+
+
+def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
+    """Tek-uçuş korumalı paylaşılan iş: çek + çevir + önbelleğe yaz."""
+    with _FLIGHTS_LOCK:
+        flight = _FLIGHTS.get(url)
+        joined = flight is not None
+        if not joined:
+            flight = _Flight(background)
+            _FLIGHTS[url] = flight
+    if joined:
+        if not background:
+            flight.ticket.boost()  # E-1: okuyucu katıldı → kapı önceliği yükselir
+        flight.event.wait()
+        if flight.exc is not None:
+            raise flight.exc
+        return dict(flight.result)
+    try:
+        flight.result = _do_fetch_translate_save(url, api_key, background, flight.ticket)
+        return dict(flight.result)
+    except BaseException as exc:
+        # E-14: uçuş ölürse girdi silinir + hata bekleyenlere yayılır; sonraki
+        # çağrı yeniden dener (aksi halde URL restart'a kadar kilitli kalırdı).
+        flight.exc = exc
+        raise
+    finally:
+        with _FLIGHTS_LOCK:
+            _FLIGHTS.pop(url, None)
+        flight.event.set()
+
+
+def _do_fetch_translate_save(
+    url: str, api_key: str, background: bool, ticket
+) -> dict:
     # FetchError sızabilir. Toplu iş düşük öncelikli: okuyucu kapıda öne geçer.
-    chapter = fetch_chapter(url, priority="bulk" if background else "interactive")
+    chapter = fetch_chapter(
+        url, priority="bulk" if background else "interactive", ticket=ticket
+    )
 
     # Birleştirilmiş kitap: slug'ı kanonikleştir, böylece bölüm/sözlük tek kitapta toplanır.
     book_slug = library.resolve_slug(chapter["book_slug"])
@@ -69,7 +137,13 @@ def get_or_translate(
             book_title = merged["title"]
 
     book_glossary = glossary.get_glossary(book_slug)
-    result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
+    if background:
+        # Karar #13 / E-12: aynı anda en fazla 1 arka plan çevirisi — kapı yalnız
+        # çekimi serileştiriyordu; çeviri aşaması da Gemini kotasını korur.
+        with budget.BG_TRANSLATE_SEM:
+            result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
+    else:
+        result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
 
     payload = {
         "title": chapter["title"],
@@ -85,9 +159,18 @@ def get_or_translate(
         "cached": False,
     }
     cache.save_chapter(url, payload)
-    glossary.merge_names(book_slug, result["detected_names"])
-    library.upsert_book(
-        book_slug, book_title, url, chapter["title"], chapter["chapter_no"],
-        update_position=not background,
-    )
     return payload
+
+
+def refresh_metadata(url: str) -> dict:
+    """Yalnız gezinme bilgisini tazele (E-3) — check-updates bunu kullanır.
+
+    Bölümü bulk öncelikle yeniden çeker ve cache satırının YALNIZ
+    next_url/prev_url alanlarını günceller; translation/source'a DOKUNMAZ,
+    Gemini'ye gitmez (refresh=True tam çeviri yakar + ¶-yamalarını ezerdi).
+    Döner: {"next_url": ..., "prev_url": ...}.
+    """
+    chapter = fetch_chapter(url, priority="bulk")
+    nav = {"next_url": chapter.get("next_url"), "prev_url": chapter.get("prev_url")}
+    cache.update_nav(url, nav["next_url"], nav["prev_url"])
+    return nav

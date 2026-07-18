@@ -93,6 +93,23 @@ def delete_chapter(url: str) -> bool:
         conn.close()
 
 
+def update_nav(url: str, next_url: str | None, prev_url: str | None) -> bool:
+    """Cache satırının YALNIZ gezinme alanlarını güncelle (E-3, refresh_metadata).
+
+    translation/source'a dokunmaz — gece kontrolü çeviri yakmadan ve ¶-yamalarını
+    ezmeden yeni bölüm bağlantısını işleyebilsin. Satır yoksa False."""
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "UPDATE chapters SET next_url = ?, prev_url = ? WHERE url = ?",
+            (next_url, prev_url, url),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def save_chapter(url: str, data: dict) -> None:
     """Çevrilen bölümü önbelleğe yaz (varsa üzerine)."""
     conn = _connect()
