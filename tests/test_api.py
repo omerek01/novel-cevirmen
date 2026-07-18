@@ -55,3 +55,77 @@ def test_clearance_refresh_is_mocked_offline(monkeypatch):
     res = _client().post("/api/clearance/refresh")
     assert res.status_code == 200
     assert res.json() == {"ok": True, "mode": "test"}
+
+
+def test_delete_chapter_clears_reading_position():
+    """DELETE /api/chapter: bölüm silinir; 'kaldığın yer' o bölümse temizlenir."""
+    from core import cache, library
+
+    cache.save_chapter("uSil", {
+        "book_slug": "s", "book_title": "K", "title": "B2", "chapter_no": 2,
+        "translation": "x", "next_url": None, "prev_url": None,
+        "detected_names": [], "chunk_count": 1,
+    })
+    library.upsert_book("s", "K", "uSil", "B2", 2)
+    client = _client()
+
+    res = client.delete("/api/chapter", params={"url": "uSil"})
+    assert res.status_code == 200 and res.json()["ok"] is True
+    assert cache.get_chapter("uSil") is None
+    book = library.get_book("s")
+    assert book["current_url"] is None  # devam-et işareti silinen bölümü göstermez
+    assert book["chapter_no"] is None
+
+    # Olmayan bölüm: sessiz, ok=False (hata değil).
+    res = client.delete("/api/chapter", params={"url": "yok"})
+    assert res.status_code == 200 and res.json()["ok"] is False
+
+
+def test_chapter_endpoint_maps_typed_errors_to_error_class(monkeypatch):
+    """Frontend hata kartı error_class'a dallanır: 502/503 + doğru sınıf adı."""
+    import server
+    from core.fetch import CloudflareChallenge, FetchError
+    from core.translate import TranslateError
+
+    client = _client()
+
+    def _raise(exc):
+        def fake(url, api_key, refresh=False, want_source=False, **kw):
+            raise exc
+        return fake
+
+    monkeypatch.setattr(server, "API_KEY", "anahtar")
+
+    monkeypatch.setattr(
+        server.pipeline, "get_or_translate", _raise(CloudflareChallenge("cf"))
+    )
+    res = client.get("/api/chapter", params={"url": "u1"})
+    assert res.status_code == 502
+    assert res.json()["detail"]["error_class"] == "CloudflareChallenge"
+
+    monkeypatch.setattr(
+        server.pipeline, "get_or_translate",
+        _raise(FetchError("Kaynak site yanıt vermiyor (HTTP 522).")),
+    )
+    res = client.get("/api/chapter", params={"url": "u1"})
+    assert res.status_code == 502
+    assert res.json()["detail"]["error_class"] == "OriginError"
+
+    monkeypatch.setattr(
+        server.pipeline, "get_or_translate", _raise(FetchError("içerik yok"))
+    )
+    res = client.get("/api/chapter", params={"url": "u1"})
+    assert res.status_code == 502
+    assert res.json()["detail"]["error_class"] == "FetchError"
+
+    monkeypatch.setattr(
+        server.pipeline, "get_or_translate", _raise(TranslateError("model hata"))
+    )
+    res = client.get("/api/chapter", params={"url": "u1"})
+    assert res.status_code == 503
+    assert res.json()["detail"]["error_class"] == "TranslateError"
+
+    # Anahtar yoksa TranslateError 500'e düşer (kurulum hatası, geçici değil).
+    monkeypatch.setattr(server, "API_KEY", None)
+    res = client.get("/api/chapter", params={"url": "u1"})
+    assert res.status_code == 500
