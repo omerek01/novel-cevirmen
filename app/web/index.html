@@ -21,15 +21,40 @@
       <button id="libThemeToggle" class="ghost-btn" aria-label="Tema değiştir">☾</button>
     </header>
     <h2 class="section-label">KÜTÜP&shy;HANE</h2>
-    <div class="lib-actions">
-      <button id="offlineAllBtn" class="ghost-line-btn">⤓ HEPSİNİ ÇEVRİMDIŞI İNDİR</button>
+
+    <!-- Devam fişi: raftan çekilmiş ayraç — kimlik → fiş → raf (T2, D-B11v2).
+         İçerik JS'te kurulur; hep SON OKUNAN kitabı hedefler (D-B10/12v2). -->
+    <button id="resumeFiche" class="resume-fiche" hidden></button>
+
+    <div id="shelfFilters" class="shelf-filters" role="group"
+         aria-label="Duruma göre filtrele" hidden>
+      <button class="chip" data-filter="all" aria-pressed="true">TÜMÜ</button>
+      <button class="chip" data-filter="okunuyor" aria-pressed="false">OKUNUYOR</button>
+      <button class="chip" data-filter="beklemede" aria-pressed="false">BEKLEMEDE</button>
+      <button class="chip" data-filter="bitti" aria-pressed="false">BİTTİ</button>
     </div>
+
+    <p id="libLoading" class="empty">Yükleniyor…</p>
     <p id="emptyState" class="empty" hidden>
       Kütüphanen boş.<br />Aşağıdaki <b>+ KİTAP EKLE</b> ile ilk serini ekle.
+    </p>
+    <!-- Sunucuya ulaşılamadı ≠ boş kütüphane (D-PWA-Durum). -->
+    <div id="libError" class="lib-error" hidden>
+      <p>Sunucuya ulaşılamadı. Kütüphane listesi alınamadı.</p>
+      <button id="libRetry" class="ghost-line-btn">TEKRAR DENE</button>
+    </div>
+    <p id="filterEmpty" class="empty" hidden>
+      Bu durumda kitap yok.
+      <button id="filterClear" class="ghost-line-btn">FİLTREYİ TEMİZLE</button>
     </p>
     <div class="shelf-wrap">
       <div id="shelf" class="shelf"></div>
       <div class="shelf-board"></div>
+    </div>
+    <!-- D-B3/D-B11v2: istatistik fişte değil, rafın altında sessiz tek satır. -->
+    <p id="libStats" class="lib-stats" hidden></p>
+    <div class="lib-actions">
+      <button id="offlineAllBtn" class="ghost-line-btn">⤓ HEPSİNİ ÇEVRİMDIŞI İNDİR</button>
     </div>
   </section>
 
@@ -44,6 +69,15 @@
     </header>
     <div class="book-body">
       <button id="resumeBtn" class="next-btn" hidden>KALDIĞIN YERDEN DEVAM ET</button>
+      <!-- D-B12: durum düzenleme yalnız burada; rafta sadece filtre çipleri. -->
+      <div class="book-status-row">
+        <span class="book-status-label">DURUM</span>
+        <div id="bookStatusSeg" class="segmented" role="group" aria-label="Kitap durumu">
+          <button class="seg" data-status-opt="okunuyor">Okunuyor</button>
+          <button class="seg" data-status-opt="beklemede">Beklemede</button>
+          <button class="seg" data-status-opt="bitti">Bitti</button>
+        </div>
+      </div>
       <button id="openGlossaryBtn" class="ghost-line-btn">SÖZLÜK / TERİMLER →</button>
       <button id="bulkBtn" class="ghost-line-btn">TOPLU ÇEVİR (İLERİ HAZIRLA) →</button>
       <button id="epubBtn" class="ghost-line-btn">ePub İNDİR →</button>

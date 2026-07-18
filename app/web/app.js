@@ -46,14 +46,24 @@ let isNavigating = false;
 let failedAttempts = 0;
 
 /* ---------- depolama ---------- */
+// null = sunucuya ulaşılamadı (D-PWA-Durum: "boş kütüphane" olarak RENDER EDİLMEZ).
+// [] = sunucu cevap verdi ve kütüphane gerçekten boş.
 async function fetchBooks() {
   try {
     const res = await fetch("/api/books");
+    if (!res.ok) return null;
     const data = await res.json();
     return data.books || [];
   } catch {
-    return [];
+    return null;
   }
+}
+
+// İstemcinin YEREL günü (YYYY-MM-DD) — "bugün" sayacı gece yarısı UTC'ye kaymaz.
+function localDay() {
+  const d = new Date();
+  const p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
 }
 function loadSettings() {
   try {
@@ -287,19 +297,148 @@ function spineColor(slug) {
   return `hsl(${hue} ${sat}% ${light}%)`;
 }
 
+// D-A11y: sırt zemininin göreli parlaklığına göre siyah/beyaz metin seç.
+// spineColor ile AYNI hash'ten HSL bileşenlerini türetir, RGB'ye çevirip
+// WCAG luminance hesaplar (sarı/açık yeşil sırtlarda beyaz yazı okunmuyordu).
+function spineInk(slug) {
+  let h = 0;
+  for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const hue = h % 360;
+  const s = (48 + (Math.floor(h / 360) % 22)) / 100;
+  const l = (38 + (Math.floor(h / 7920) % 12)) / 100;
+  const a = s * Math.min(l, 1 - l);
+  const chan = (n) => {
+    const k = (n + hue / 30) % 12;
+    const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
+    return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+  };
+  const luma = 0.2126 * chan(0) + 0.7152 * chan(8) + 0.0722 * chan(4);
+  // Beyazla kontrast >= siyahla kontrast ise beyaz (1.05/(L+0.05) vs (L+0.05)/0.05'in
+  // eşitlik noktası L≈0.179).
+  return luma > 0.179 ? "#16130f" : "#fff";
+}
+
 /* ---------- kütüphane ---------- */
+// Raf durum filtresi (D-B2v2: yaşam durumu sırtta görünmez, yalnız filtre).
+const LS_FILTER = "novellink:shelfFilter";
+let shelfFilter = localStorage.getItem(LS_FILTER) || "all";
+
+function setShelfFilter(value) {
+  shelfFilter = value;
+  try {
+    localStorage.setItem(LS_FILTER, value);
+  } catch {}
+  document.querySelectorAll("#shelfFilters .chip").forEach((c) => {
+    c.setAttribute("aria-pressed", String(c.dataset.filter === value));
+  });
+  renderLibrary();
+}
+
+// Devam fişi hedefi: en TAZE okunan kitap (sunucu updated_at ile yerel son-okuma
+// ts'inin büyüğü kitap başına alınır; kitaplar arasında en yenisi kazanır).
+function pickResumeBook(books) {
+  let best = null;
+  let bestTs = -1;
+  for (const book of books) {
+    const target = resolveResume(book, book.slug);
+    if (!target.url) continue;
+    const local = getLastRead(book.slug);
+    const ts = Math.max((book.updated_at || 0) * 1000, (local && local.ts) || 0);
+    if (ts > bestTs) {
+      bestTs = ts;
+      best = { book, target };
+    }
+  }
+  return best;
+}
+
+// D-B11v2: fiş = raftan çekilmiş ayraç. spineColor zemini, sırt tipografisi,
+// bölüm no + başlık + ince ilerleme çizgisi. Gölge/gradyan/ikon yok.
+function renderResumeFiche(books) {
+  const fiche = el("resumeFiche");
+  const pick = pickResumeBook(books);
+  if (!pick) {
+    fiche.hidden = true;
+    return;
+  }
+  const { book, target } = pick;
+  const local = getLastRead(book.slug);
+  const chTitle =
+    (local && local.ts >= (book.updated_at || 0) * 1000 && local.title) ||
+    book.current_title || "";
+  const pct = Math.round(Math.min(1, Math.max(0, target.ratio || 0)) * 100);
+  fiche.style.setProperty("--spine", spineColor(book.slug));
+  fiche.style.setProperty("--spine-ink", spineInk(book.slug));
+  fiche.innerHTML =
+    '<span class="fiche-label">DEVAM ET</span>' +
+    `<span class="fiche-title" lang="en">${escapeHtml(book.title)}</span>` +
+    `<span class="fiche-chapter">${
+      target.chapterNo ? "BÖL. " + target.chapterNo : "SON BÖLÜM"
+    }${chTitle ? ' <span class="fiche-chname" lang="en">· ' + escapeHtml(chTitle) + "</span>" : ""}</span>` +
+    `<span class="fiche-progress" aria-hidden="true"><span style="width:${pct}%"></span></span>`;
+  fiche.onclick = () =>
+    navigate({ view: "reader", url: target.url, ratio: target.ratio });
+  fiche.hidden = false;
+}
+
+// Raf altı sessiz istatistik satırı (D-B3: gün-1 "Bugün 0" gizlenir;
+// çevrimdışı/hata → satır tamamen gizli, okuma akışına etkisi yok).
+async function renderLibStats() {
+  const line = el("libStats");
+  try {
+    const res = await fetch(`/api/stats?day=${localDay()}`);
+    if (!res.ok) throw new Error();
+    const s = await res.json();
+    if (!s.total) {
+      line.hidden = true;
+      return;
+    }
+    line.textContent = s.today
+      ? `BUGÜN ${s.today} BÖLÜM · TOPLAM ${s.total}`
+      : `TOPLAM ${s.total} BÖLÜM`;
+    line.hidden = false;
+  } catch {
+    line.hidden = true;
+  }
+}
+
 async function renderLibrary() {
   clearTimeout(libraryJobPollTimer);
   const books = await fetchBooks();
   const shelf = el("shelf");
+  el("libLoading").hidden = true;
+
+  // D-PWA-Durum: sunucuya ulaşılamadı ≠ boş kütüphane. Raf daha önce çizildiyse
+  // eldekini koru (anket yenilemesi rafı silmesin); hiç çizilmediyse hata yüzeyi.
+  if (books === null) {
+    if (!shelf.querySelector(".spine")) {
+      el("libError").hidden = false;
+      el("emptyState").hidden = true;
+      el("filterEmpty").hidden = true;
+      el("shelfFilters").hidden = true;
+      el("resumeFiche").hidden = true;
+    }
+    return;
+  }
+  el("libError").hidden = true;
+
   shelf.replaceChildren();
   el("emptyState").hidden = books.length > 0;
-  const jobChecks = [];
+  el("shelfFilters").hidden = books.length === 0;
+  renderResumeFiche(books);
+  renderLibStats();
 
-  for (const book of books) {
+  const visible = books.filter(
+    (b) => shelfFilter === "all" || (b.status || "okunuyor") === shelfFilter
+  );
+  el("filterEmpty").hidden = !(books.length > 0 && visible.length === 0);
+
+  const jobChecks = [];
+  for (const book of visible) {
     const spine = document.createElement("button");
     spine.className = "spine";
     spine.style.setProperty("--spine", spineColor(book.slug));
+    spine.style.setProperty("--spine-ink", spineInk(book.slug));
     // Etiket, resume ile AYNI merge'i kullanır → çevrimdışı okunan son bölüm de görünür
     // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
     const chNo = resolveResume(book, book.slug).chapterNo;
@@ -363,8 +502,9 @@ function jobBadgeText(job) {
 async function openBook(slug) {
   currentBookSlug = slug;
   const books = await fetchBooks();
-  currentBook = books.find((b) => b.slug === slug) || null;
+  currentBook = (books || []).find((b) => b.slug === slug) || null;
   el("bookTitle").textContent = currentBook ? currentBook.title : slug;
+  markSegment("status", (currentBook && currentBook.status) || "okunuyor", "data-status-opt");
 
   const resume = el("resumeBtn");
   const target = resolveResume(currentBook, slug);
@@ -852,6 +992,14 @@ function renderChapter(data, ratio) {
   // Başarıyla render edilen bölümü kitabın yerel "son okunan" işareti yap (çevrimdışı
   // resume bunu kullanır). Boş/hatalı bölüm dalı bu satıra ulaşmaz → oraya resume olmaz.
   saveLastRead(currentBookSlug, currentUrl);
+  // Okuma günlüğü: yalnız GERÇEK render (karar #8 — SW cache-first GET'i sunucuya
+  // ulaşmadığından istemci olayı şart; prefetch bu yola hiç girmez). Best-effort:
+  // çevrimdışıysa kayıt düşer, istatistik 1 eksik kalır — okuma bozulmaz.
+  fetch("/api/reading-log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ day: localDay(), slug: currentBookSlug, url: currentUrl }),
+  }).catch(() => {});
   restoreScroll(ratio || 0);
 }
 
@@ -995,6 +1143,42 @@ function cycleFind(dir) {
   updateFindUI();
   focusMatch();
 }
+
+/* ---------- olaylar: kütüphane yüzeyleri ---------- */
+document.querySelectorAll("#shelfFilters .chip").forEach((c) =>
+  c.addEventListener("click", () => setShelfFilter(c.dataset.filter))
+);
+el("filterClear").addEventListener("click", () => setShelfFilter("all"));
+el("libRetry").addEventListener("click", () => {
+  el("libError").hidden = true;
+  el("libLoading").hidden = false;
+  renderLibrary();
+});
+// D-B12: durum düzenleme kitap görünümünde. İyimser güncelle; sunucu reddederse
+// eski değere dön (kalıcı yanlış aria-pressed bırakma).
+document.querySelectorAll("[data-status-opt]").forEach((b) =>
+  b.addEventListener("click", async () => {
+    if (!currentBookSlug) return;
+    const status = b.getAttribute("data-status-opt");
+    const prev = (currentBook && currentBook.status) || "okunuyor";
+    if (status === prev) return;
+    markSegment("status", status, "data-status-opt");
+    try {
+      const res = await fetch(
+        `/api/book/${encodeURIComponent(currentBookSlug)}/status`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        }
+      );
+      if (!res.ok) throw new Error();
+      if (currentBook) currentBook.status = status;
+    } catch {
+      markSegment("status", prev, "data-status-opt");
+    }
+  })
+);
 
 /* ---------- olaylar: navigasyon ---------- */
 el("libThemeToggle").addEventListener("click", cycleTheme);
@@ -1441,6 +1625,10 @@ el("addModal").addEventListener("click", (e) => {
 /* ---------- başlangıç ---------- */
 applySettings();
 updateSettingsUI();
+// Kalıcı raf filtresini çiplere yansıt (setShelfFilter çağrılmaz — çift render olmasın).
+document.querySelectorAll("#shelfFilters .chip").forEach((c) => {
+  c.setAttribute("aria-pressed", String(c.dataset.filter === shelfFilter));
+});
 history.replaceState({ view: "library" }, ""); // kök kayıt: buradan geri = uygulamadan çık
 renderLibrary();
 showView("library");
