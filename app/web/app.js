@@ -1068,6 +1068,47 @@ document.querySelectorAll("[data-mg]").forEach((b) =>
 );
 el("settingsBtn").addEventListener("click", () => {
   el("settingsPanel").hidden = !el("settingsPanel").hidden;
+  if (!el("settingsPanel").hidden) showShellVersion();
+});
+
+/* ---------- kabuk sürümü + sıfırlama (bayat kabuk kaçış kapısı) ---------- */
+// Panel her açılışta GERÇEK önbellek durumunu okur (JS'teki bir sabit değil):
+// telefonun fiilen hangi kabuğu servis ettiği görülür → "güncellendi mi?"
+// sorusu tahmin olmaktan çıkar.
+async function showShellVersion() {
+  const out = el("shellVersion");
+  if (!out) return;
+  if (!("caches" in window)) {
+    out.textContent = "(önbellek yok — hep ağdan)";
+    return;
+  }
+  try {
+    const keys = await caches.keys();
+    const shell = keys.find((k) => k.startsWith("novellink-shell-"));
+    out.textContent = shell ? shell.replace("novellink-shell-", "") : "(kurulmadı)";
+  } catch {
+    out.textContent = "";
+  }
+}
+
+el("shellReset")?.addEventListener("click", async () => {
+  const btn = el("shellReset");
+  btn.disabled = true;
+  btn.textContent = "Sıfırlanıyor…";
+  try {
+    if ("serviceWorker" in navigator) {
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map((r) => r.unregister()));
+    }
+    if ("caches" in window) {
+      const keys = await caches.keys();
+      // İndirilen bölümler (novellink-data) KORUNUR; yalnız kabuk önbellekleri silinir.
+      await Promise.all(
+        keys.filter((k) => k !== "novellink-data").map((k) => caches.delete(k))
+      );
+    }
+  } catch {}
+  location.reload();
 });
 el("fontMinus").addEventListener("click", () => {
   settings.fontPx = Math.max(14, settings.fontPx - 1);

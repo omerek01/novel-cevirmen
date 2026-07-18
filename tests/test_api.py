@@ -129,3 +129,15 @@ def test_chapter_endpoint_maps_typed_errors_to_error_class(monkeypatch):
     monkeypatch.setattr(server, "API_KEY", None)
     res = client.get("/api/chapter", params={"url": "u1"})
     assert res.status_code == 500
+
+
+def test_static_shell_served_with_no_cache():
+    """Kabuk bayatlaması koruması: statik dosyalar (sw.js dahil) no-cache ile
+    servis edilir → tarayıcı her seferinde ETag'le doğrular; /api'ye dokunulmaz."""
+    client = _client()
+    for path in ("/", "/sw.js", "/app.js"):
+        res = client.get(path)
+        assert res.status_code == 200
+        assert res.headers.get("cache-control") == "no-cache"
+    res = client.get("/api/books")
+    assert res.headers.get("cache-control") != "no-cache"

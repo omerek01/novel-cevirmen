@@ -221,6 +221,18 @@ def book_epub(
     )
 
 
+# Kabuk bayatlaması koruması: statik dosyalar Cache-Control olmadan servis
+# edilince tarayıcı sezgisel önbelliyor; telefon eski app.js/sw.js'i günlerce
+# tutabiliyor. no-cache = her istekte ETag ile doğrula (LAN'da ucuz 304),
+# sw.js dahil — SW güncellemesi de böylece asla bayat kopyaya takılmaz.
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    response = await call_next(request)
+    if not request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-cache")
+    return response
+
+
 # PWA statik dosyaları kökten servis et (API rotalarından SONRA mount edilir).
 app.mount("/", StaticFiles(directory=str(APP_DIR / "web"), html=True), name="web")
 
