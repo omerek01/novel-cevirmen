@@ -288,34 +288,28 @@ function escapeHtml(s) {
   return d.innerHTML;
 }
 
-function spineColor(slug) {
-  let h = 0;
-  for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const hue = h % 360;
-  const sat = 48 + (Math.floor(h / 360) % 22);
-  const light = 38 + (Math.floor(h / 7920) % 12);
-  return `hsl(${hue} ${sat}% ${light}%)`;
-}
-
-// D-A11y: sırt zemininin göreli parlaklığına göre siyah/beyaz metin seç.
-// spineColor ile AYNI hash'ten HSL bileşenlerini türetir, RGB'ye çevirip
-// WCAG luminance hesaplar (sarı/açık yeşil sırtlarda beyaz yazı okunmuyordu).
-function spineInk(slug) {
-  let h = 0;
-  for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-  const hue = h % 360;
-  const s = (48 + (Math.floor(h / 360) % 22)) / 100;
-  const l = (38 + (Math.floor(h / 7920) % 12)) / 100;
+// WCAG göreli parlaklık (0..1) — HSL bileşenlerinden (s ve l 0..1).
+function hslLuma(hue, s, l) {
   const a = s * Math.min(l, 1 - l);
   const chan = (n) => {
     const k = (n + hue / 30) % 12;
     const c = l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1));
     return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
   };
-  const luma = 0.2126 * chan(0) + 0.7152 * chan(8) + 0.0722 * chan(4);
-  // Beyazla kontrast >= siyahla kontrast ise beyaz (1.05/(L+0.05) vs (L+0.05)/0.05'in
-  // eşitlik noktası L≈0.179).
-  return luma > 0.179 ? "#16130f" : "#fff";
+  return 0.2126 * chan(0) + 0.7152 * chan(8) + 0.0722 * chan(4);
+}
+
+function spineColor(slug) {
+  let h = 0;
+  for (const ch of slug) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  const hue = h % 360;
+  const sat = 48 + (Math.floor(h / 360) % 22);
+  let light = 38 + (Math.floor(h / 7920) % 12);
+  // QA bulgusu: parlak zeminlerde siyah yazıya geçmek rafı karma (bazısı beyaz
+  // bazısı siyah) gösteriyordu. Onun yerine zemin, BEYAZ yazı AA kontrastına
+  // (>=4.5:1, luma<=0.179) ulaşana dek koyulaştırılır — yazı HER sırtta beyaz.
+  while (light > 24 && hslLuma(hue, sat / 100, light / 100) > 0.179) light -= 3;
+  return `hsl(${hue} ${sat}% ${light}%)`;
 }
 
 /* ---------- kütüphane ---------- */
@@ -368,7 +362,6 @@ function renderResumeFiche(books) {
     book.current_title || "";
   const pct = Math.round(Math.min(1, Math.max(0, target.ratio || 0)) * 100);
   fiche.style.setProperty("--spine", spineColor(book.slug));
-  fiche.style.setProperty("--spine-ink", spineInk(book.slug));
   fiche.innerHTML =
     '<span class="fiche-label">DEVAM ET</span>' +
     `<span class="fiche-title" lang="en">${escapeHtml(book.title)}</span>` +
@@ -439,7 +432,6 @@ async function renderLibrary() {
     spine.className = "spine";
     spine.dataset.slug = book.slug; // rozet anketi sırtı yerinde bulabilsin
     spine.style.setProperty("--spine", spineColor(book.slug));
-    spine.style.setProperty("--spine-ink", spineInk(book.slug));
     // Etiket, resume ile AYNI merge'i kullanır → çevrimdışı okunan son bölüm de görünür
     // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
     const chNo = resolveResume(book, book.slug).chapterNo;

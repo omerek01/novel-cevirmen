@@ -131,7 +131,7 @@ html, body {
   width: 78px;
   height: 248px;
   background: var(--spine, #555);
-  color: var(--spine-ink, #fff); /* D-A11y: JS zemin parlaklığına göre seçer */
+  color: #fff; /* hep beyaz — zemin, AA kontrasta ulaşacak kadar koyulaştırılır (spineColor) */
   border: 0;
   border-left: 4px solid rgba(0, 0, 0, 0.28);
   border-radius: 3px 7px 7px 3px;
@@ -244,7 +244,7 @@ html, body {
   padding: 0.7rem 0.9rem 0.6rem;
   text-align: left;
   background: var(--spine, #555);
-  color: var(--spine-ink, #fff);
+  color: #fff; /* sırtlarla aynı kural: zemin koyu, yazı beyaz */
   border: 0;
   border-left: 6px solid rgba(0, 0, 0, 0.28); /* sırt kenarı yankısı */
   border-radius: 3px 7px 7px 3px;
@@ -286,12 +286,12 @@ html, body {
 .fiche-progress {
   display: block;
   height: 2px;
-  background: color-mix(in srgb, var(--spine-ink, #fff) 25%, transparent);
+  background: rgba(255, 255, 255, 0.25);
 }
 .fiche-progress > span {
   display: block;
   height: 100%;
-  background: var(--spine-ink, #fff);
+  background: #fff;
 }
 
 /* ---------- Raf durum filtresi (D-B2v2: yaşam durumu yalnız burada) ---------- */
