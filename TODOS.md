@@ -50,3 +50,5 @@ Fazdan bilinçli ERTELENENLER (inceleme kararlarıyla):
 - [ ] Yerleşik TTS (UC2 ön-deneyi ePub+harici okuyucuyu yeterli bulursa burada kalır)
 - [ ] Manga tam entegrasyonu / "çevrilmiş görsel klasörü içe aktar" (tracer go derse)
 - [ ] LAN erişim koruması (token) — dosya yükleme yüzeyi büyüdü, öncelik arttı
+
+- [ ] QA bulgusu (2026-07-19, telefon): geri jesti tutarsiz — bazen bir geri, bazen anasayfa, bazen uygulamadan cikis. navigate()/popstate/history katmani incelenecek (app.js applyNavState + history.replaceState cagrilari; olasi suclu: replaceState'in push yerine kullanildigi/atlandigi gecisler).
