@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v34"; // v33 = faz-sonraki-plan QA düzeltmeleri
+const SHELL_CACHE = "novellink-shell-v35"; // v34 = faz-sonraki-plan (dilim 2 hep üstünde kalır)
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -15,7 +15,14 @@ const SHELL = [
 ];
 
 self.addEventListener("install", (event) => {
-  event.waitUntil(caches.open(SHELL_CACHE).then((c) => c.addAll(SHELL)));
+  // cache: "reload" → kabuk HTTP önbelleğini ATLAYARAK ağdan indirilir. Aksi
+  // halde addAll bayat app.js/style.css'i "yeni sürüm" diye paketleyebiliyordu
+  // (QA bulgusu: kabuk güncellenmiyor / eskiye dönüyor).
+  event.waitUntil(
+    caches
+      .open(SHELL_CACHE)
+      .then((c) => c.addAll(SHELL.map((u) => new Request(u, { cache: "reload" }))))
+  );
   self.skipWaiting();
 });
 

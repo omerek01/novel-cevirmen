@@ -175,3 +175,15 @@ def test_books_default_status_okunuyor():
     library.upsert_book("s", "K", "u1", "B1", 1)
     books = _client().get("/api/books").json()["books"]
     assert books[0]["status"] == "okunuyor"
+
+
+def test_static_shell_served_with_no_cache():
+    """Kabuk bayatlaması koruması: statik dosyalar (sw.js dahil) no-cache ile
+    servis edilir → tarayıcı her seferinde ETag'le doğrular; /api'ye dokunulmaz."""
+    client = _client()
+    for path in ("/", "/sw.js", "/app.js"):
+        res = client.get(path)
+        assert res.status_code == 200
+        assert res.headers.get("cache-control") == "no-cache"
+    res = client.get("/api/books")
+    assert res.headers.get("cache-control") != "no-cache"
