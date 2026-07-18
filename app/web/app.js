@@ -467,11 +467,12 @@ async function renderLibrary() {
 }
 
 // Rozeti sırta uygula; iş sürüyorsa true döner (anketin devam sinyali).
-// Biten iş rafta rozet bırakmaz (bölümler zaten hazır); yalnız süren işin
-// ilerlemesi ve dikkat isteyen durumlar (hata/durduruldu) görünür.
+// Yalnız süren işin ilerlemesi ve dikkat isteyen hata görünür. Biten iş rozet
+// bırakmaz (bölümler zaten hazır); DURDURULAN da bırakmaz — kullanıcının kendi
+// kararıdır, dikkat istemez (QA bulgusu: DURDURULDU rafta asılı kalıyordu).
 function applyJobBadge(spine, job) {
   const badge = spine.querySelector(".spine-job");
-  if (!job || !isRecentJob(job) || job.state === "done") {
+  if (!job || !isRecentJob(job) || (job.state !== "running" && job.state !== "error")) {
     badge.hidden = true;
     spine.classList.remove("has-job");
     return false;
@@ -516,8 +517,7 @@ function isRecentJob(job) {
 
 function jobBadgeText(job) {
   if (job.state === "running") return `${job.done}/${job.total} · DEVAM ET`;
-  if (job.state === "error") return "! HATA";
-  return "DURDURULDU";
+  return "! HATA"; // applyJobBadge yalnız running/error gösterir
 }
 
 /* ---------- kitap (bölüm listesi) ---------- */
@@ -1421,8 +1421,27 @@ el("bulkStart").addEventListener("click", () => {
 });
 
 async function startBulk(count) {
-  const book = currentBook || (await fetchBooks()).find((b) => b.slug === currentBookSlug);
-  const url = book ? book.current_url : null;
+  // QA bulgusu: iş KALDIĞIN yerden değil, kitabın EN SON ÇEVRİLMİŞ bölümünden
+  // ileriye başlamalı (okuma konumu geride olabilir; çevrili aralığı yeniden
+  // gezmek kafa karıştırıyordu). Son çevrili bölüm start alınır — önbellekte
+  // olduğu için iş onu API harcamadan atlar ve sonrasına geçer. Hiç çevrili
+  // bölüm yoksa okuma konumuna düşülür (yeni kitap).
+  let url = null;
+  const chapters =
+    currentChapters && currentChapters.length
+      ? currentChapters
+      : await chaptersOf(currentBookSlug);
+  if (chapters.length) {
+    const last = chapters.reduce((a, b) =>
+      (b.chapter_no || 0) > (a.chapter_no || 0) ? b : a
+    );
+    url = last.url;
+  } else {
+    const book =
+      currentBook ||
+      ((await fetchBooks()) || []).find((b) => b.slug === currentBookSlug);
+    url = book ? book.current_url : null;
+  }
   if (!url) return;
 
   el("bulkProgressText").textContent = "Başlatılıyor…";
