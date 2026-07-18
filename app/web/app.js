@@ -299,6 +299,7 @@ async function renderLibrary() {
   for (const book of books) {
     const spine = document.createElement("button");
     spine.className = "spine";
+    spine.dataset.slug = book.slug; // rozet anketi sırtı yerinde bulabilsin
     spine.style.setProperty("--spine", spineColor(book.slug));
     // Etiket, resume ile AYNI merge'i kullanır → çevrimdışı okunan son bölüm de görünür
     // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
@@ -310,20 +311,7 @@ async function renderLibrary() {
       `<span class="spine-tag">${tag}</span>`;
     spine.addEventListener("click", () => navigate({ view: "book", slug: book.slug }));
     shelf.appendChild(spine);
-    const badge = spine.querySelector(".spine-job");
-    jobChecks.push(
-      fetchBookJob(book.slug).then((job) => {
-        if (!job || !isRecentJob(job)) return false;
-        // Biten iş rafta rozet bırakmaz (bölümler zaten hazır); yalnız süren
-        // işin ilerlemesi ve dikkat isteyen durumlar (hata/durduruldu) görünür.
-        if (job.state === "done") return false;
-        badge.hidden = false;
-        spine.classList.add("has-job"); // başlık rozet bölgesinin üstünde bitsin
-        badge.textContent = jobBadgeText(job);
-        badge.dataset.state = job.state;
-        return job.state === "running";
-      })
-    );
+    jobChecks.push(fetchBookJob(book.slug).then((job) => applyJobBadge(spine, job)));
   }
 
   const add = document.createElement("button");
@@ -335,7 +323,41 @@ async function renderLibrary() {
 
   const active = (await Promise.all(jobChecks)).some(Boolean);
   if (active && !views.library.hidden) {
-    libraryJobPollTimer = setTimeout(renderLibrary, 2500);
+    libraryJobPollTimer = setTimeout(refreshShelfBadges, 2500);
+  }
+}
+
+// Rozeti sırta uygula; iş sürüyorsa true döner (anketin devam sinyali).
+// Biten iş rafta rozet bırakmaz (bölümler zaten hazır); yalnız süren işin
+// ilerlemesi ve dikkat isteyen durumlar (hata/durduruldu) görünür.
+function applyJobBadge(spine, job) {
+  const badge = spine.querySelector(".spine-job");
+  if (!job || !isRecentJob(job) || job.state === "done") {
+    badge.hidden = true;
+    spine.classList.remove("has-job");
+    return false;
+  }
+  badge.hidden = false;
+  spine.classList.add("has-job"); // başlık rozet bölgesinin üstünde bitsin
+  badge.textContent = jobBadgeText(job);
+  badge.dataset.state = job.state;
+  return job.state === "running";
+}
+
+// Rozet anketi rafı YENİDEN KURMAZ: renderLibrary her 2.5 sn'de raf DOM'unu
+// baştan çizince rozetler asenkron geldiği anda bir kaybolup bir beliriyordu
+// (QA bulgusu: çeviri sürerken raf titriyor). Sadece rozetler yerinde güncellenir.
+async function refreshShelfBadges() {
+  clearTimeout(libraryJobPollTimer);
+  if (views.library.hidden) return;
+  const spines = [...document.querySelectorAll("#shelf .spine[data-slug]")];
+  const anyRunning = (
+    await Promise.all(
+      spines.map(async (s) => applyJobBadge(s, await fetchBookJob(s.dataset.slug)))
+    )
+  ).some(Boolean);
+  if (anyRunning && !views.library.hidden) {
+    libraryJobPollTimer = setTimeout(refreshShelfBadges, 2500);
   }
 }
 
@@ -1152,7 +1174,15 @@ function hideBulkToBackground(jobId) {
   el("bulkProgress").hidden = true;
 }
 
-el("bulkBtn").addEventListener("click", () => {
+el("bulkBtn").addEventListener("click", async () => {
+  // QA bulgusu: arka plana alınmış iş varken bu düğme başlatma modalını açıyordu.
+  // Çalışan iş varsa doğrudan ilerleme/durdurma ekranı açılır (geri çağırma yolu).
+  const job = currentBookSlug ? await fetchBookJob(currentBookSlug) : null;
+  if (job && job.state === "running") {
+    bulkDismissedJobId = null; // kullanıcı ekranı bilerek geri açtı
+    openBulkProgress(job);
+    return;
+  }
   el("bulkCount").value = "10";
   el("bulkModal").hidden = false;
 });
@@ -1195,10 +1225,8 @@ async function startBulk(count) {
   pollBulk(jobId);
 }
 
-async function discoverBulkJob(slug) {
-  const job = await fetchBookJob(slug);
-  if (!job || job.state !== "running" || slug !== currentBookSlug || views.book.hidden) return;
-  if (job.id === bulkDismissedJobId) return; // arka plana atıldı, kendiliğinden açılma
+// Var olan işin ilerleme/durdurma ekranını aç ve anketini başlat.
+function openBulkProgress(job) {
   el("bulkProgressText").textContent = job.message || "Hazırlanıyor…";
   el("bulkStop").disabled = false;
   el("bulkProgress").hidden = false;
@@ -1207,6 +1235,13 @@ async function discoverBulkJob(slug) {
   };
   el("bulkHide").onclick = () => hideBulkToBackground(job.id);
   pollBulk(job.id);
+}
+
+async function discoverBulkJob(slug) {
+  const job = await fetchBookJob(slug);
+  if (!job || job.state !== "running" || slug !== currentBookSlug || views.book.hidden) return;
+  if (job.id === bulkDismissedJobId) return; // arka plana atıldı, kendiliğinden açılma
+  openBulkProgress(job);
 }
 
 function pollBulk(jobId) {
