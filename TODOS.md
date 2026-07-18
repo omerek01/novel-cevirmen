@@ -32,3 +32,21 @@
 
 - [ ] İnteraktif "duraklat" (paused) durumu: iş restart'sız duraklatılıp sürdürülebilsin.
       (Şu an: `stop` kalıcı biter; yarım iş yalnız sunucu restart'ında otomatik sürer.)
+
+## Kaynak Çeşitliliği Fazı — onaylı plan (2026-07-18, /autoplan)
+
+> Plan: `~/.gstack/projects/novel-cevirmen/OMEREK-faz-sonraki-plan-design-20260718-000427.md`
+> Test planı: aynı dizinde `...-test-plan-20260718.md`. Sevk sırası planın
+> "Faz 4 Final Kapı" bölümünde; 22 görev `tasks-*-review-*.jsonl` dosyalarında.
+
+Fazdan bilinçli ERTELENENLER (inceleme kararlarıyla):
+- [ ] Okuma geçmişi listesi UI (reading_log'un doğal ekranı)
+- [ ] Ayarlarda "sistem" bloğu (son kontrol, bekleyen işler, cache boyutu)
+- [ ] library/glossary bağlantılarını `db.connect()`'e taşı (WAL/busy_timeout tutarlılığı)
+- [ ] Tam kaynak/revizyon veri modeli (¶-yaması vs refresh çakışması kalıcı çözümü)
+- [ ] Bölüm-bazlı has_new takibi (discovered_at/read_at)
+- [ ] Kapak görseli çekme (og:image)
+- [ ] Tek "İçe Aktar" kapısı UI (otomatik tür algılama — Yaklaşım C)
+- [ ] Yerleşik TTS (UC2 ön-deneyi ePub+harici okuyucuyu yeterli bulursa burada kalır)
+- [ ] Manga tam entegrasyonu / "çevrilmiş görsel klasörü içe aktar" (tracer go derse)
+- [ ] LAN erişim koruması (token) — dosya yükleme yüzeyi büyüdü, öncelik arttı
