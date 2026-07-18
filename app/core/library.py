@@ -38,7 +38,13 @@ def _connect() -> sqlite3.Connection:
     # Eski (current_ratio'suz) DB'ler için idempotent migration. Bölüm-içi okuma
     # oranı (0..1) burada tutulur → cihazlar arası "kaldığın yer" paylaşılır.
     db.ensure_column(conn, "books", "current_ratio", "current_ratio REAL")
+    # Kitap yaşam durumu: okunuyor/beklemede/bitti (NULL = okunuyor). Rafta
+    # filtre + kitap görünümünde düzenleme; sırtta gösterilmez (D-B2v2).
+    db.ensure_column(conn, "books", "status", "status TEXT")
     return conn
+
+
+BOOK_STATUSES = ("okunuyor", "beklemede", "bitti")
 
 
 def resolve_slug(slug: str) -> str:
@@ -151,12 +157,23 @@ def upsert_book(
         ratio = 0.0
         if prev and prev[0] == current_url and prev[1] is not None:
             ratio = prev[1]
+        # ON CONFLICT (INSERT OR REPLACE DEĞİL): REPLACE satırı siler ve yeniden
+        # yazar — burada ADI GEÇMEYEN sütunlar (status, ileride has_new/
+        # auto_translate/...) sessizce NULL'a sıfırlanırdı (E-16). Adlandırılmış
+        # güncelleme yalnız konum alanlarına dokunur.
         conn.execute(
             """
-            INSERT OR REPLACE INTO books
+            INSERT INTO books
                 (slug, title, current_url, current_title, chapter_no, updated_at,
                  current_ratio)
             VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(slug) DO UPDATE SET
+                title = excluded.title,
+                current_url = excluded.current_url,
+                current_title = excluded.current_title,
+                chapter_no = excluded.chapter_no,
+                updated_at = excluded.updated_at,
+                current_ratio = excluded.current_ratio
             """,
             (slug, title, current_url, current_title, chapter_no, time.time(), ratio),
         )
@@ -210,12 +227,29 @@ def clear_position_if(slug: str, url: str) -> None:
         conn.close()
 
 
+def set_status(slug: str, status: str) -> bool:
+    """Kitabın yaşam durumunu değiştir (okunuyor/beklemede/bitti).
+
+    Geçersiz durum veya bilinmeyen kitap → False (yazılmaz)."""
+    if not slug or status not in BOOK_STATUSES:
+        return False
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "UPDATE books SET status = ? WHERE slug = ?", (status, slug)
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def list_books() -> list[dict]:
     conn = _connect()
     try:
         rows = conn.execute(
             "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
-            "updated_at FROM books ORDER BY updated_at DESC"
+            "updated_at, status FROM books ORDER BY updated_at DESC"
         ).fetchall()
     finally:
         conn.close()
@@ -230,6 +264,7 @@ def list_books() -> list[dict]:
             # updated_at: sunucu konumunun son yazılma zamanı (saniye). Frontend bunu
             # yerel "son okunan" işaretinin zaman damgasıyla kıyaslar (çevrimdışı resume).
             "updated_at": r[6] or 0.0,
+            "status": r[7] or "okunuyor",  # NULL = okunuyor (eski satırlar)
         }
         for r in rows
     ]
@@ -240,7 +275,7 @@ def get_book(slug: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
-            "updated_at FROM books WHERE slug = ?",
+            "updated_at, status FROM books WHERE slug = ?",
             (slug,),
         ).fetchone()
     finally:
@@ -255,6 +290,7 @@ def get_book(slug: str) -> dict | None:
         "chapter_no": row[4],
         "current_ratio": row[5] or 0.0,
         "updated_at": row[6] or 0.0,
+        "status": row[7] or "okunuyor",
     }
 
 

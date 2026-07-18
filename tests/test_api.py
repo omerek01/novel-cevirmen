@@ -129,3 +129,49 @@ def test_chapter_endpoint_maps_typed_errors_to_error_class(monkeypatch):
     monkeypatch.setattr(server, "API_KEY", None)
     res = client.get("/api/chapter", params={"url": "u1"})
     assert res.status_code == 500
+
+
+def test_reading_log_endpoint_dedups_per_day():
+    """POST /api/reading-log: günde bölüm başına bir kayıt; istatistik yansır."""
+    client = _client()
+    body = {"day": "2026-07-18", "slug": "s", "url": "u1"}
+    res = client.post("/api/reading-log", json=body)
+    assert res.status_code == 200 and res.json()["ok"] is True
+    res = client.post("/api/reading-log", json=body)
+    assert res.status_code == 200 and res.json()["ok"] is False  # tekrar → no-op
+
+    res = client.get("/api/stats", params={"day": "2026-07-18"})
+    assert res.status_code == 200
+    assert res.json() == {"today": 1, "total": 1}
+    # Başka gün: bugün 0, toplam kalır (raf altı satır "TOPLAM 1" der).
+    res = client.get("/api/stats", params={"day": "2026-07-19"})
+    assert res.json() == {"today": 0, "total": 1}
+
+
+def test_book_status_endpoint():
+    """POST /api/book/{slug}/status: durum yazılır; books yanıtında görünür."""
+    from core import library
+
+    library.upsert_book("s", "K", "u1", "B1", 1)
+    client = _client()
+
+    res = client.post("/api/book/s/status", json={"status": "bitti"})
+    assert res.status_code == 200 and res.json() == {"ok": True, "status": "bitti"}
+    books = client.get("/api/books").json()["books"]
+    assert books[0]["status"] == "bitti"
+
+    # Geçersiz durum → 400 (frontend iyimser güncellemeyi geri alır).
+    res = client.post("/api/book/s/status", json={"status": "rafta"})
+    assert res.status_code == 400
+    # Bilinmeyen kitap → 404.
+    res = client.post("/api/book/yok/status", json={"status": "bitti"})
+    assert res.status_code == 404
+
+
+def test_books_default_status_okunuyor():
+    """Eski satırlar (status NULL) yanıtla 'okunuyor' olarak döner."""
+    from core import library
+
+    library.upsert_book("s", "K", "u1", "B1", 1)
+    books = _client().get("/api/books").json()["books"]
+    assert books[0]["status"] == "okunuyor"

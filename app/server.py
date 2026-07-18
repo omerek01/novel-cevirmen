@@ -26,7 +26,7 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import cache, epub_export, glossary, jobs, library, pipeline  # noqa: E402
+from core import cache, epub_export, glossary, jobs, library, pipeline, reading_log  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
 from core.translate import TranslateError  # noqa: E402
 
@@ -135,11 +135,48 @@ class BulkRequest(BaseModel):
     count: int = 10
 
 
+class ReadingLogRequest(BaseModel):
+    day: str  # istemcinin YEREL günü (YYYY-MM-DD) — "bugün" UTC'ye kaymasın
+    slug: str
+    url: str
+
+
+class StatusRequest(BaseModel):
+    status: str  # okunuyor | beklemede | bitti
+
+
 @app.post("/api/book/{slug}/merge-into")
 def merge_book(slug: str, req: MergeRequest) -> dict:
     """`slug` kitabını `target` kitabıyla birleştir (aynı kitap, farklı slug)."""
     canonical = library.merge_books(slug, req.target)
     return {"ok": True, "canonical": canonical}
+
+
+@app.post("/api/reading-log")
+def post_reading_log(req: ReadingLogRequest) -> dict:
+    """Okuyucuda başarıyla render edilen bölümü günlüğe yaz (best-effort).
+
+    İstemci olayıdır: SW cache-first GET'i sunucuya ulaştırmadığı için sunucu-yanı
+    loglama mümkün değil. Günde bölüm başına bir satır (UNIQUE ile tekil)."""
+    logged = reading_log.log_read(req.day, library.resolve_slug(req.slug), req.url)
+    return {"ok": logged}
+
+
+@app.get("/api/stats")
+def get_stats(day: str = Query(..., description="İstemcinin yerel günü (YYYY-MM-DD)")) -> dict:
+    """Okuma istatistiği: bugün / toplam benzersiz bölüm (raf altı satır)."""
+    return reading_log.stats(day)
+
+
+@app.post("/api/book/{slug}/status")
+def set_book_status(slug: str, req: StatusRequest) -> dict:
+    """Kitabın yaşam durumu (okunuyor/beklemede/bitti) — raf filtresi bunu okur."""
+    if req.status not in library.BOOK_STATUSES:
+        raise HTTPException(status_code=400, detail="Geçersiz durum.")
+    ok = library.set_status(library.resolve_slug(slug), req.status)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
+    return {"ok": True, "status": req.status}
 
 
 @app.post("/api/book/{slug}/position")
