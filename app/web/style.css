@@ -126,7 +126,10 @@ html, body {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: space-between;
+  /* Alta demirli: başlık + BÖL. etiketi dipte oturur, boşluk ÜSTTE kalır
+     (gerçek kitap sırtı gibi; QA bulgusu — yazı alttan başlasın). */
+  justify-content: flex-end;
+  gap: 10px;
   padding: 14px 6px;
   cursor: pointer;
   box-shadow: 2px 5px 12px rgba(0, 0, 0, 0.35);
@@ -156,6 +159,17 @@ html, body {
   /* nowrap YOK: uzun başlık ikinci (gerekirse üçüncü) dikey sıraya sarar. */
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
+/* Yerli alttan-yukarı yazım destekleyen tarayıcılarda (Chrome 130+/Firefox)
+   döndürme hilesine gerek yok: sideways-lr ilk harfi ALTTAN başlatır, sıralar
+   soldan sağa ilerler — transform kaynaklı hizalama sürprizleri biter. */
+@supports (writing-mode: sideways-lr) {
+  .spine-title,
+  .spine-addlabel {
+    writing-mode: sideways-lr;
+    transform: none;
+    text-orientation: initial;
+  }
+}
 /* Rozet görünürken başlığı rozet bölgesinin üstünde bitir (çakışma olmasın).
    Sınıfı JS ekler (rozeti gösteren kod) — :has() seçicisine bağlı kalmadan
    her tarayıcıda çalışır. */
@@ -174,7 +188,7 @@ html, body {
      (Rozet üçüncü flex öğesi olunca sırt yazısının yerleşimi bozuluyordu.) */
   position: absolute;
   left: 50%;
-  bottom: 54px; /* alttaki BÖL. etiketi iki satıra sarsa bile üstünde kalır */
+  top: 14px; /* başlık artık alta demirli — boş kalan ÜST bölgeye taşındı */
   transform: translateX(-50%);
   pointer-events: none;
   max-width: 68px;
