@@ -32,26 +32,65 @@ PROFILE_DIR = Path(__file__).resolve().parent.parent.parent / "cache" / ".pw-pro
 # garantisi vermez — kapı boşaldığında bir bulk worker, zaten bekleyen okuyucunun
 # önüne dalabilirdi (barging). Bekleyen okuyucu varken bulk kapıyı hiç alamaz;
 # böylece toplu çeviri sürerken okumaya devam edilebilir.
+class GateTicket:
+    """Kapı beklerken önceliği yükseltilebilir bilet (E-1, tek-uçuş boost'u).
+
+    Arka plan uçuşu kapıda beklerken interaktif bir okuyucu uçuşa katılırsa
+    `boost()` çağrılır: bekleyen acquire interactive önceliğine yükselir
+    (aksi halde okuyucu bulk önceliğiyle bekler, kapının varlık sebebi delinir).
+    Boost yalnız kapı beklemesini kapsar; süren çeviri kesilmez (E-24 sınırı).
+    """
+
+    def __init__(self, gate: "_PriorityGate", priority: str) -> None:
+        self._gate = gate
+        self.interactive = priority != "bulk"
+        self._in_acquire = False
+
+    def boost(self) -> None:
+        with self._gate._cond:
+            if self.interactive:
+                return
+            self.interactive = True
+            if self._in_acquire:  # şu an kapıda bekliyor → sayaç + uyandır
+                self._gate._interactive_waiting += 1
+                self._gate._cond.notify_all()
+
+
 class _PriorityGate:
     def __init__(self) -> None:
         self._cond = threading.Condition()
         self._busy = False
         self._interactive_waiting = 0
 
-    def acquire(self, priority: str) -> None:
+    def ticket(self, priority: str) -> GateTicket:
+        return GateTicket(self, priority)
+
+    def acquire(self, priority: str, ticket: GateTicket | None = None) -> None:
         interactive = priority != "bulk"
+        if ticket is not None:
+            interactive = interactive or ticket.interactive
+            ticket._in_acquire = True
         with self._cond:
-            if interactive:
+            counted = interactive  # girişte saydıysak çıkışta düşeceğiz
+            if counted:
                 self._interactive_waiting += 1
             try:
-                while self._busy or (
-                    not interactive and self._interactive_waiting > 0
-                ):
+                # Boost mid-bekleme (E-1): predikat her uyanışta bileti yeniden okur.
+                while True:
+                    eff = interactive or (ticket is not None and ticket.interactive)
+                    if not self._busy and (eff or self._interactive_waiting == 0):
+                        break
                     self._cond.wait()
                 self._busy = True
             finally:
-                if interactive:
+                # boost() bekleme sırasında +1 eklediyse (bilet bulk girip
+                # interactive'e yükseldi) o sayacı da düş — sızıntı olmasın.
+                if ticket is not None and ticket.interactive and not counted:
                     self._interactive_waiting -= 1
+                if counted:
+                    self._interactive_waiting -= 1
+                if ticket is not None:
+                    ticket._in_acquire = False
 
     def release(self) -> None:
         with self._cond:
@@ -170,6 +209,7 @@ def fetch_chapter(
     timeout_ms: int = 60000,
     retries: int = 2,
     priority: str = "interactive",
+    ticket: GateTicket | None = None,
 ) -> dict:
     """Bir novelbin bölüm sayfasını çeker.
 
@@ -191,6 +231,11 @@ def fetch_chapter(
 
     Döner: {"title": str, "text": str, "next_url": str | None, "prev_url": ..., ...}
     """
+    # E-24: yalnız bilinen öncelikler. Aksi halde "bulk olmayan her şey
+    # interactive" sayılır ve örn. "check-updates" yanlışlıkla okuyucu
+    # önceliği kazanırdı.
+    if priority not in ("interactive", "bulk"):
+        raise ValueError(f"Bilinmeyen fetch önceliği: {priority!r}")
     if headless is None:
         headless = os.getenv("FETCH_HEADLESS", "1") != "0"
     delay = 2.0
@@ -198,7 +243,7 @@ def fetch_chapter(
     # Kapı her denemede ayrı alınır; geri-çekilme uykusu kapı DIŞINDA geçer,
     # böylece yeniden deneme beklerken okuyucu (veya başka iş) çekim yapabilir.
     for attempt in range(retries + 1):
-        _FETCH_GATE.acquire(priority)
+        _FETCH_GATE.acquire(priority, ticket)
         try:
             return _fetch_locked(url, headless, timeout_ms)
         except _Transient as exc:
