@@ -6,6 +6,7 @@ checkpoint'ten otomatik devam eder.
 """
 from __future__ import annotations
 
+import json
 import sqlite3
 import threading
 import time
@@ -42,12 +43,24 @@ def _connect() -> sqlite3.Connection:
             state TEXT,
             message TEXT,
             next_url TEXT,
-            updated_at REAL
+            updated_at REAL,
+            type TEXT DEFAULT 'bulk',
+            params TEXT
         )
         """
     )
+    # Eski kurulumlar için idempotent migration (E-4): iş tipi + tip-özgü meta.
+    db.ensure_column(conn, "jobs", "type", "type TEXT DEFAULT 'bulk'")
+    db.ensure_column(conn, "jobs", "params", "params TEXT")
     conn.commit()
     return conn
+
+
+# SELECT sütun listesi — _from_row ile birebir aynı sırada (E-4 disiplini).
+_COLS = (
+    "id, slug, start_url, count, done, translated, state, message, "
+    "next_url, updated_at, type, params"
+)
 
 
 def _public(job: dict) -> dict:
@@ -58,6 +71,13 @@ def _public(job: dict) -> dict:
 
 
 def _from_row(row) -> dict:
+    """Satır → iş sözlüğü. Bozuk params JSON'u ValueError fırlatır (E-4:
+    resume_running o satırı atlar; startup çökmez)."""
+    raw_params = row[11]
+    try:
+        params = json.loads(raw_params) if raw_params else None
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"Bozuk iş params JSON'u: {exc}")
     return {
         "id": row[0],
         "slug": row[1],
@@ -69,6 +89,8 @@ def _from_row(row) -> dict:
         "message": row[7],
         "next_url": row[8],
         "updated_at": row[9],
+        "type": row[10] or "bulk",  # eski satırlar (NULL) bulk'tır
+        "params": params,
         "stop": False,
     }
 
@@ -76,17 +98,29 @@ def _from_row(row) -> dict:
 def _persist(job: dict) -> None:
     conn = _connect()
     try:
+        # E-16: INSERT OR REPLACE değil — REPLACE, ileride eklenecek adlandırıl-
+        # mamış sütunları her yazımda sessizce sıfırlar. ON CONFLICT yalnız
+        # burada sahiplenilen sütunları günceller.
         conn.execute(
             """
-            INSERT OR REPLACE INTO jobs
+            INSERT INTO jobs
                 (id, slug, start_url, count, done, translated, state, message,
-                 next_url, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 next_url, updated_at, type, params)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                slug = excluded.slug, start_url = excluded.start_url,
+                count = excluded.count, done = excluded.done,
+                translated = excluded.translated, state = excluded.state,
+                message = excluded.message, next_url = excluded.next_url,
+                updated_at = excluded.updated_at, type = excluded.type,
+                params = excluded.params
             """,
             (
                 job["id"], job["slug"], job["start_url"], job["count"],
                 job["done"], job["translated"], job["state"], job["message"],
-                job.get("next_url"), job["updated_at"],
+                job.get("next_url"), job["updated_at"], job.get("type", "bulk"),
+                json.dumps(job["params"], ensure_ascii=False)
+                if job.get("params") is not None else None,
             ),
         )
         conn.commit()
@@ -98,9 +132,7 @@ def _load(job_id: str) -> dict | None:
     conn = _connect()
     try:
         row = conn.execute(
-            "SELECT id, slug, start_url, count, done, translated, state, message, "
-            "next_url, updated_at FROM jobs WHERE id = ?",
-            (job_id,),
+            f"SELECT {_COLS} FROM jobs WHERE id = ?", (job_id,)
         ).fetchone()
     finally:
         conn.close()
@@ -140,16 +172,25 @@ def get_status(job_id: str) -> dict | None:
     return _public(dict(job))
 
 
-def get_book_job(slug: str) -> dict | None:
-    """Kitabın çalışan, yoksa en son güncellenen toplu işini döndürür."""
+def get_book_job(slug: str, job_type: str | None = None) -> dict | None:
+    """Kitabın dikkat gerektiren işini döndürür (rozet bu sırayla seçer).
+
+    E-5: dikkat önceliği tip-farkında uygulanır — çalışan iş > hata > gerisi
+    (updated_at DESC). Böylece gece check-updates işinin 'done' kaydı, yarım
+    bulk HATASININ rozetini sökmez. job_type verilirse yalnız o tip (E-22
+    dedup anahtarı (slug, type) bunu kullanır)."""
     conn = _connect()
     try:
+        where = "slug = ?"
+        args: list = [slug]
+        if job_type is not None:
+            where += " AND COALESCE(type, 'bulk') = ?"
+            args.append(job_type)
         row = conn.execute(
-            "SELECT id, slug, start_url, count, done, translated, state, message, "
-            "next_url, updated_at FROM jobs WHERE slug = ? "
-            "ORDER BY CASE WHEN state = 'running' THEN 0 ELSE 1 END, updated_at DESC "
-            "LIMIT 1",
-            (slug,),
+            f"SELECT {_COLS} FROM jobs WHERE {where} "
+            "ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, "
+            "updated_at DESC LIMIT 1",
+            args,
         ).fetchone()
     finally:
         conn.close()
@@ -245,7 +286,9 @@ def start_bulk(slug: str, start_url: str, count: int, api_key: str | None) -> st
     # iki eşzamanlı istek (çift dokunuş / iki cihaz) ikisi de "koşan iş yok" görüp
     # aynı kitaba iki worker açmasın. FastAPI istekleri paralel thread'lerde koşar.
     with _LOCK:
-        existing = get_book_job(slug)
+        # E-22: tekilleştirme anahtarı (slug, type) — başka tipte bir iş
+        # (örn. check-updates) bulk dedup'unu tetiklemez.
+        existing = get_book_job(slug, job_type="bulk")
         if existing and existing["state"] == "running":
             _start_thread(existing["id"], api_key)  # canlıysa no-op, değilse sürdür
             return existing["id"]
@@ -260,6 +303,8 @@ def start_bulk(slug: str, start_url: str, count: int, api_key: str | None) -> st
             "state": "running",
             "message": "Hazırlanıyor…",
             "next_url": start_url,
+            "type": "bulk",
+            "params": None,
             "stop": False,
             "updated_at": time.time(),
         }
@@ -275,14 +320,16 @@ def resume_running(api_key: str | None) -> list[str]:
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT id, slug, start_url, count, done, translated, state, message, "
-            "next_url, updated_at FROM jobs WHERE state = 'running' ORDER BY updated_at"
+            f"SELECT {_COLS} FROM jobs WHERE state = 'running' ORDER BY updated_at"
         ).fetchall()
     finally:
         conn.close()
     started = []
     for row in rows:
-        job = _from_row(row)
+        try:
+            job = _from_row(row)
+        except ValueError:
+            continue  # E-4: bozuk params JSON'lu satır atlanır, startup sürer
         with _LOCK:
             existing = _JOBS.get(job["id"])
             if existing is None or not existing.get("stop"):
@@ -293,6 +340,22 @@ def resume_running(api_key: str | None) -> list[str]:
 
 
 def _run(job_id: str, api_key: str | None) -> None:
+    """İş türüne göre yönlendirir (Yaklaşım B temeli). Bilinmeyen tip → error."""
+    job = get_status(job_id)
+    if job is None:
+        return
+    runner = _RUNNERS.get(job.get("type", "bulk"))
+    if runner is None:
+        _set(
+            job_id, state="error",
+            message=f"Bilinmeyen iş tipi: {job.get('type')!r}",
+            updated_at=time.time(),
+        )
+        return
+    runner(job_id, api_key)
+
+
+def _run_bulk(job_id: str, api_key: str | None) -> None:
     job = get_status(job_id)
     if job is None:
         return
@@ -373,3 +436,8 @@ def _run(job_id: str, api_key: str | None) -> None:
         message=f"Bitti — {translated} yeni bölüm çevrildi.",
         updated_at=time.time(),
     )
+
+
+# Tip -> koşucu kayıt tablosu. Yeni iş tipleri (epub-import, check-updates, ...)
+# buraya eklenir; checkpoint/rozet/arka-plana-al davranışını miras alır.
+_RUNNERS = {"bulk": _run_bulk}
