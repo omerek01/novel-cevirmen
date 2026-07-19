@@ -2,7 +2,7 @@
 
 > Bu dosya projenin **tek durum panosu**. Her dilim bitip main'e girince buradan
 > güncellenir. "Nerede kaldık?" sorusunun cevabı hep burada.
-> Son güncelleme: 2026-07-19 · Ana dal (`main`) sürümü: SW kabuk **v49** · Testler: **151 geçiyor**
+> Son güncelleme: 2026-07-19 · Dal `dilim-8-manga`: SW kabuk **v55** · Testler: **162 geçiyor**
 
 ## Proje ne
 Kişisel web roman + kitap çeviri okuyucusu. İngilizce içeriği (web siteleri, yapıştırılan
@@ -23,7 +23,8 @@ okuyabilmek + okuma deneyimini (yaşayan raf, sonsuz okuma) güçlendirmek.
 | 5 | ~~Yeni bölüm kontrolü (check-updates)~~ | ❌ **İPTAL** | Kullanıcı kararı (2026-07-19). Bir kez kodlanıp geri alınmıştı; değeri belirsiz bulundu, tümden düşürüldü. |
 | 6 | Sonsuz okuma v2 + prefetch | ✅ main'de | Bölüm akışı (`article` başına), otomatik ekleme, konum {url, oran}, sonrakini ısıtma. Fix'ler: konum-track, geri'de scrollRestoration |
 | 7 | EPUB/PDF görsel çeviri | ✅ main'de | PDF = çevrilmiş **sayfa görselleri** (resim/düzen korunur), EPUB = yerinde HTML çeviri; okudukça çevirir. Fix'ler: metin binmesi (dikey akış), kısa sayfa kaydırma |
-| 8 | **Manga çevirisi (yerel motor)** | 🔨 **KODLANDI** (dal `dilim-8-manga`) | Yerel manga-image-translator: inpaint ile temiz silme + düzgün dizgi, KOTASIZ. Telefon QA bekliyor. |
+| 8 | **Manga çevirisi (yerel motor)** | 🔨 **KODLANDI** (dal `dilim-8-manga`) | Yerel manga-image-translator: inpaint ile temiz silme + düzgün dizgi, KOTASIZ; tüm-bölüm batch + şerit dilimleme (akan çeviri); **sonsuz devam** (bölüm sonunda site'den sonrakini çeker). Telefon QA bekliyor. |
+| 9 | **Anasayfa tür-rafları + UI cilası** | 🔨 **KODLANDI** (dal `dilim-8-manga`) | Noveller/Mangalar/Kitaplar ayrı raflarda; emoji→SVG ikon, focus-visible, hover, reduced-motion. Sıcak-editoryal kimlik korundu. |
 
 **Ayrıca:** Çeviri modeli yalnız `gemini-3.1-flash-lite` (2.5 yedekleri kaldırıldı, kullanıcı kararı).
 
@@ -63,6 +64,20 @@ Türkçe balona düzgün dizildi ("TEMEL KILIÇ USTALIĞI TEORİSİ Mİ?") — s
 - **Sınırlar/sonraya:** CPU-only makine (GPU yok — en büyük kaldıraç kapalı); ilk sayfa model yükleme
   nedeniyle ~25-35s bekler (sonrası akar); SFX çevrilmez (doğru); motor kurulu değilse Gemini-vision
   yedeğine düşer. Daha da hızlı için "server modu" (modeller kalıcı yüklü) ileride.
+
+## Manga SONSUZ DEVAM (dal `dilim-8-manga`)
+Novel sonsuz okumanın manga karşılığı: bölümün son sayfasına gelince site'deki **sonraki bölüm**
+otomatik çekilir, dilimlenir, zincire eklenir, akarak çevrilir — kesintisiz. `manga_fetch` sayfaların
+yanında sonraki-bölüm URL'ini de çıkarır (prev/next nav'dan "next"; gerçek asurascans'ta ch1→ch2
+doğrulandı); `books.manga_source_url/manga_next_url` saklar; `POST /api/manga/continue` çeker+ekler;
+okuyucu zincir sonunda otomatik çağırır. Batch **artımlı** (cache'li sayfayı atlar → yalnız yeni bölüm çevrilir).
+
+## Anasayfa tür-rafları + UI cilası (dal `dilim-8-manga`)
+Kitaplar türe göre **ayrı raflarda**: Noveller / Mangalar / Kitaplar (PDF-EPUB). Tür slug/şemadan
+türetilir (`bookKind`, backend'e sütun yok); boş tür rafı çizilmez; tek tür varsa başlık gizli.
+UI cilası (ui-ux-pro-max + frontend-design skill kuralları, mevcut sade-editoryal dilde): emoji→SVG
+ikon, `:focus-visible` halka, masaüstü hover (sırt raftan kalkar), `prefers-reduced-motion`, scroll-snap.
+Sıcak-kitaplık kimliği (sırt metaforu, 3 tema, kalın tipografi) korundu. `.claude/` skill'leri gitignore.
 
 ## Bilinçle ertelenenler (ihtiyaç olunca)
 - Okuma geçmişi listesi ekranı · Ayarlar'da "sistem" bloğu (son kontrol, bekleyen iş, cache boyutu)
