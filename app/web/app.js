@@ -25,20 +25,25 @@ const views = {
 };
 
 let settings = loadSettings();
-let currentNext = null;
-let currentPrev = null;
 let currentUrl = null;
 let currentChapterNo = null; // açık bölümün numarası (yerel "son okunan" kaydı + kütüphane etiketi)
 let currentChapterTitle = null;
 let currentBookSlug = null;
 let currentBook = null; // {current_url, current_ratio, ...} — resume için
 let currentChapters = []; // açık kitabın tam bölüm listesi (prev türetme + arama)
-let currentParas = []; // açık bölümün paragrafları (bölümde arama)
-let currentSource = []; // açık bölümün hizalı İngilizce paragrafları (çift-tık)
+// --- Sonsuz okuma v2 (D-B9v2): tek-bölüm singleton yerine bölüm AKIŞI ---
+// Her bölüm kendi <article data-url> öğesinde; aktif bölüm = reader-bar çizgisini
+// geçen SON bölüm (en-çok-görünür değil → titreme önlenir). Konum {url, bölüm-içi
+// oran}; aktif değişince history.replaceState (push YOK) → geri jesti okuyucudan çıkar.
+let stream = []; // [{url,no,title,paras,source,nextUrl,prevUrl,bookSlug,bookTitle,el,loaded,empty}]
+let activeUrl = null; // reader-bar alt çizgisini geçen son bölümün url'i
+let streamBusy = false; // append/prepend uçuşta — çift tetiği engelle
+let bottomObserver = null; // akış sonu gözlemcisi (sonrakini otomatik ekle)
+const loggedReads = new Set(); // bu oturumda reading-log'a yazılmış url'ler
+const prefetched = new Set(); // ısıtma (prefetch) tetiklenmiş next url'leri
 let sourceLoading = false; // eski bölüm kaynağı yüklenirken çift-istek engeli
 let offlineStop = false;
 let isRestoring = false; // programatik scroll sırasında kaydı baskıla
-let chapterLoaded = false; // bölüm BAŞARIYLA render edildi mi (konum kaydı için)
 let scrollSaveTimer = null;
 let bulkPollTimer = null;
 let libraryJobPollTimer = null;
@@ -145,24 +150,92 @@ function resolveResume(book, slug) {
   }
   return { url, ratio, chapterNo };
 }
-function currentRatio() {
-  const max = document.documentElement.scrollHeight - window.innerHeight;
-  if (max <= 0) return 0;
-  return Math.min(1, Math.max(0, window.scrollY / max));
+/* ---------- sonsuz okuma: aktif bölüm + konum ---------- */
+function activeEntry() {
+  return stream.find((c) => c.url === activeUrl) || null;
 }
+function entryFor(url) {
+  return stream.find((c) => c.url === url) || null;
+}
+function readerBar() {
+  return document.querySelector("#readerView .reader-bar");
+}
+function readerBarBottom() {
+  const b = readerBar();
+  return b ? b.getBoundingClientRect().bottom : 0;
+}
+
+// Konum = AKTİF bölüm içindeki oran (bölüm-yerel). reader-bar alt çizgisinin, aktif
+// bölümün üstünden ne kadar aşağıda olduğu / bölüm yüksekliği. İlerleme çubuğu da bunu
+// gösterir (her bölümde 0→1) — sonsuz akışta "bu bölümde ne kadar ilerledim".
+function currentRatio() {
+  const e = activeEntry();
+  if (!e || !e.el) return 0;
+  const r = e.el.getBoundingClientRect();
+  if (r.height <= 0) return 0;
+  return Math.min(1, Math.max(0, (readerBarBottom() - r.top) / r.height));
+}
+
+// Aktif bölümü yeniden hesapla: reader-bar çizgisini GEÇEN son bölüm. En-çok-görünür
+// yerine "çizgiyi geçen son" seçilir → iki bölüm ekranı paylaşırken titremez (D-B9v2).
+function updateActiveChapter() {
+  if (views.reader.hidden || !stream.length) return;
+  const line = readerBarBottom() + 1;
+  let active = stream[0];
+  for (const e of stream) {
+    if (e.el && e.el.getBoundingClientRect().top <= line) active = e;
+    else break;
+  }
+  if (active && active.url !== activeUrl) setActiveChapter(active);
+}
+
+// Aktif bölüm değişince: reader-bar başlığı, "eski" yardımcı global'ler, konum kaydı
+// (replaceState — geçmişe YENİ kayıt eklemez) ve son-okuma/okuma-günlüğü güncellenir.
+function setActiveChapter(e) {
+  activeUrl = e.url;
+  currentUrl = e.url;
+  currentBookSlug = e.bookSlug || currentBookSlug;
+  currentChapterNo = e.no;
+  currentChapterTitle = e.title;
+  el("readerBook").textContent = e.bookTitle || "";
+  el("readerChapter").textContent = e.title || "Bölüm";
+  const st = history.state;
+  if (st && st.view === "reader") {
+    history.replaceState({ view: "reader", url: e.url, ratio: currentRatio() }, "");
+  }
+  saveLastRead(currentBookSlug, e.url);
+  logReadOnce(e);
+}
+
+// Okuma günlüğü: bölüm gerçekten aktif olunca, oturum başına bir kez (karar #8 —
+// SW cache-first GET sunucuya ulaşmaz; istemci olayı şart; prefetch bu yola girmez).
+function logReadOnce(e) {
+  if (!e || !e.loaded || !e.bookSlug || loggedReads.has(e.url)) return;
+  loggedReads.add(e.url);
+  fetch("/api/reading-log", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ day: localDay(), slug: e.bookSlug, url: e.url }),
+  }).catch(() => {});
+}
+
 function persistScroll() {
-  // Yalnızca başarıyla render edilmiş bölümün konumunu kaydet. Aksi halde çekme/çeviri
-  // başarısız bir bölüm (henüz cache'te yok) "kaldığın yer" olarak yazılır ve sonraki
-  // açılışta "devam et" onu yeniden çekmeye çalışır → gereksiz "Yükleniyor" ekranı.
-  if (!currentUrl || !chapterLoaded || views.reader.hidden) return;
+  // Yalnızca başarıyla render edilmiş aktif bölümün konumunu kaydet — aksi halde
+  // yarım/hatalı bir bölüm "kaldığın yer" olarak yazılır, sonraki açılış onu yeniden
+  // çekmeye çalışır (gereksiz "Yükleniyor").
+  if (views.reader.hidden) return;
+  const e = activeEntry();
+  if (!e || !e.loaded) return;
   const ratio = currentRatio();
-  saveScrollLocal(currentUrl, ratio);
-  saveLastRead(currentBookSlug, currentUrl); // yerel son-okuma işaretini de tazele
+  saveScrollLocal(e.url, ratio);
+  saveLastRead(currentBookSlug, e.url);
+  const st = history.state;
+  if (st && st.view === "reader") history.replaceState({ view: "reader", url: e.url, ratio }, "");
   if (currentBookSlug) {
     fetch(`/api/book/${encodeURIComponent(currentBookSlug)}/position`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: currentUrl, ratio }),
+      body: JSON.stringify({ url: e.url, ratio }),
     }).catch(() => {});
   }
 }
@@ -174,6 +247,7 @@ function updateProgress() {
   bar.setAttribute("aria-valuenow", Math.round(ratio * 100));
 }
 function onReaderScroll() {
+  updateActiveChapter();
   updateProgress();
   if (isRestoring) return;
   if (scrollSaveTimer) return;
@@ -182,17 +256,17 @@ function onReaderScroll() {
     persistScroll();
   }, 250);
 }
-function restoreScroll(ratio) {
-  if (!ratio || ratio <= 0) {
-    isRestoring = false;
-    window.scrollTo(0, 0);
-    updateProgress();
-    return;
-  }
+
+// Belirli bir bölümün, bölüm-içi orana denk gelen mutlak konumuna kaydır.
+function scrollToChapterRatio(e, ratio) {
   isRestoring = true;
   requestAnimationFrame(() => {
-    const max = document.documentElement.scrollHeight - window.innerHeight;
-    window.scrollTo(0, Math.round(max * ratio));
+    const rect = e.el.getBoundingClientRect();
+    const absTop = rect.top + window.scrollY;
+    const barH = readerBar() ? readerBar().getBoundingClientRect().height : 0;
+    const target = absTop + (ratio > 0 ? ratio * rect.height : 0) - barH;
+    window.scrollTo(0, Math.max(0, Math.round(target)));
+    updateActiveChapter();
     updateProgress();
     requestAnimationFrame(() => {
       isRestoring = false;
@@ -261,10 +335,7 @@ function applyNavState(state) {
       openGlossary(state.slug);
       break;
     case "reader":
-      loadChapter(state.url, {
-        restoreRatio: state.ratio,
-        triggerId: state.triggerId
-      });
+      loadChapter(state.url, { restoreRatio: state.ratio });
       break;
     default:
       renderLibrary();
@@ -952,122 +1023,270 @@ function renderError(err, url, refresh) {
   }
 }
 
+// GİRİŞ NOKTASI: yeni bir akış başlat (kütüphane/kitap/devam/geçmiş → tek bölümden).
+// Akış sıfırlanır, ilk bölüm çekilip render edilir, alt gözlemci (sonrakini otomatik
+// ekle) ve üst "önceki" kartı kurulur, kaldığın orana kaydırılır ve next ısıtılır.
 async function loadChapter(url, opts = {}) {
   if (!url) return;
-  const { refresh = false, restoreRatio = null, triggerId = null } = opts;
-  currentUrl = url;
-  chapterLoaded = false;
-  isRestoring = true;
+  const { refresh = false, restoreRatio = null } = opts;
   isNavigating = true;
-
+  isRestoring = true;
   el("readerError").hidden = true;
-  
-  const isReaderHidden = views.reader.hidden;
-  if (isReaderHidden) {
-    showView("reader");
-    el("readerBody").hidden = true;
-    el("readerFooter").hidden = true;
-  }
+
+  const wasHidden = views.reader.hidden;
+  if (wasHidden) showView("reader");
   closeFind();
   el("settingsPanel").hidden = true;
-
-  let activeBtn = null;
-  let originalHtml = "";
-  if (triggerId) {
-    activeBtn = el(triggerId);
-  } else if (isReaderHidden) {
-    setStatus(refresh ? "Yeniden çevriliyor…" : "Yükleniyor…");
-  }
-
-  const prevBtn = el("prevBtn");
-  const nextBtn = el("nextBtn");
-  const retranslateBtn = el("retranslate");
-  
-  prevBtn.disabled = true;
-  nextBtn.disabled = true;
-  retranslateBtn.disabled = true;
-
-  if (activeBtn) {
-    originalHtml = activeBtn.innerHTML;
-    activeBtn.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Yükleniyor…`;
-  }
+  resetStream();
+  setStatus(refresh ? "Yeniden çevriliyor…" : "Yükleniyor…");
 
   try {
-    const query = `/api/chapter?url=${encodeURIComponent(url)}` + (refresh ? "&refresh=1" : "");
-    const res = await fetch(query);
-    if (!res.ok) {
-      const err = await res.json().catch(() => ({}));
-      throw {
-        message: err.detail?.message || err.detail || `Sunucu hatası (${res.status})`,
-        errorClass: err.detail?.error_class || null
-      };
-    }
-    const data = await res.json();
+    const data = await fetchChapterData(url, refresh);
+    setStatus(null);
+    failedAttempts = 0;
+    isNavigating = false;
+    const entry = buildChapterEntry(url, data);
+    stream.push(entry);
+    const body = el("readerBody");
+    body.replaceChildren(entry.el);
+    body.hidden = false;
+    ensureTopCard();
+    ensureBottomSentinel();
+    setActiveChapter(entry);
     const ratio = restoreRatio != null ? restoreRatio : getScrollLocal(url);
-    
-    if (activeBtn) activeBtn.innerHTML = originalHtml;
-    isNavigating = false;
-    // Başarıda da geri aç: yalnızca hata dalında açılırsa düğme ilk başarılı
-    // yüklemeden sonra kalıcı devre dışı kalır ve "yeniden çevir" hiç çalışmaz.
-    retranslateBtn.disabled = false;
-
-    renderChapter(data, ratio);
+    scrollToChapterRatio(entry, ratio || 0);
+    prefetchNext(entry);
   } catch (err) {
-    if (activeBtn) activeBtn.innerHTML = originalHtml;
     isNavigating = false;
-    
-    prevBtn.disabled = !currentPrev;
-    nextBtn.disabled = !currentNext;
-    retranslateBtn.disabled = false;
-    
+    isRestoring = false;
     renderError(err, url, refresh);
   }
 }
 
-function computePrev(data) {
-  if (currentChapters && currentChapters.length) {
-    const idx = currentChapters.findIndex((c) => c.url === currentUrl);
-    if (idx > 0) return currentChapters[idx - 1].url;
+// /api/chapter → veri ya da tipli hata (error_class ile). loadChapter/append/prepend
+// ve yeniden-çevir aynı çekim yolunu paylaşır (DRY).
+function fetchChapterData(url, refresh) {
+  const query = `/api/chapter?url=${encodeURIComponent(url)}` + (refresh ? "&refresh=1" : "");
+  return fetch(query).then(async (res) => {
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw {
+        message: e.detail?.message || e.detail || `Sunucu hatası (${res.status})`,
+        errorClass: e.detail?.error_class || null,
+      };
+    }
+    return res.json();
+  });
+}
+
+function resetStream() {
+  stream = [];
+  activeUrl = null;
+  streamBusy = false;
+  loggedReads.clear();
+  if (bottomObserver) {
+    bottomObserver.disconnect();
+    bottomObserver = null;
   }
-  return data.prev_url || null; // listede yok / başı → sayfadan çekilen yedek
+  el("readerBody").replaceChildren();
 }
 
 function isSyntheticSlug(slug) {
   return !!slug && (slug.startsWith("paste-") || slug.startsWith("pdf-") || slug.startsWith("manga-"));
 }
 
-// Alt çubuk gezinme düğmelerini kur. "Sonraki" bilinmiyorsa ve bölüm bir web (http)
-// adresiyse "SONRAKINI WEB'DEN GETİR" moduna geçer: yapıştırılan/eski bölümden sonra
-// siteden devam edebilmek için sayfanın nav'ı web'den keşfedilir (refresh-nav, E-3).
-function applyReaderNav(data) {
-  currentNext = data.next_url || null;
-  currentBookSlug = data.book_slug || currentBookSlug;
-  currentPrev = computePrev(data);
-  const next = el("nextBtn");
-  if (currentNext) {
-    next.disabled = false;
-    next.dataset.mode = "next";
-    next.textContent = "SONRAKI BÖLÜM →";
-  } else if (/^https?:\/\//.test(currentUrl || "")) {
-    next.disabled = false;
-    next.dataset.mode = "discover";
-    next.textContent = "SONRAKINI WEB'DEN GETİR";
-  } else {
-    next.disabled = true;
-    next.dataset.mode = "end";
-    next.textContent = "SON BÖLÜM";
+// Bölüm listesinden (openBook doldurur) bir önceki bölümün url'i — server prev_url
+// yoksa yedek (birleştirilmiş kitaplarda sayfa nav'ı eksik olabilir).
+function chapterListPrev(url) {
+  if (currentChapters && currentChapters.length) {
+    const idx = currentChapters.findIndex((c) => c.url === url);
+    if (idx > 0) return currentChapters[idx - 1].url;
   }
-  const prev = el("prevBtn");
-  prev.hidden = !currentPrev;
-  prev.disabled = !currentPrev;
-  el("readerFooter").hidden = false;
+  return null;
 }
 
-// "Sonrakini web'den getir": mevcut bölümün sayfasını çekip next'ini öğrenir
-// (çeviri yakmaz), bulursa oraya geçer. Site engelliyse kullanıcıyı bilgilendirir.
-async function discoverNextFromWeb() {
-  const btn = el("nextBtn");
-  const url = currentUrl;
+// Bir bölüm için akış girdisi + <article data-url> öğesini kur. Ayraç "— Bölüm N —"
+// (ritüel dikiş); boş/kısa çeviri → bölüm-yerel "Bölüm Boş" kartı. Render etmez,
+// sadece kurar (çağıran DOM'a ekler).
+function buildChapterEntry(url, data) {
+  const paras = (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  const source = data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
+  const entry = {
+    url,
+    no: data.chapter_no != null ? data.chapter_no : null,
+    title: data.title || "",
+    paras,
+    source,
+    nextUrl: data.next_url || null,
+    prevUrl: data.prev_url || chapterListPrev(url),
+    bookSlug: data.book_slug || null,
+    bookTitle: data.book_title || "",
+    el: null,
+    loaded: false,
+    empty: false,
+  };
+  const art = document.createElement("article");
+  art.className = "chapter";
+  art.dataset.url = url;
+  if (entry.no != null) art.dataset.no = entry.no;
+  const sep = document.createElement("div");
+  sep.className = "chapter-sep";
+  sep.textContent = entry.no != null ? `— Bölüm ${entry.no} —` : `— ${entry.title || "Bölüm"} —`;
+  art.appendChild(sep);
+  entry.el = art; // renderParagraphs entry.el'e yazar → sep'ten ÖNCE atanmalı
+  if (!data.translation || data.translation.trim().length < 50) {
+    entry.empty = true;
+    art.appendChild(emptyChapterCard(entry));
+  } else {
+    entry.loaded = true;
+    renderParagraphs(entry, "");
+  }
+  return entry;
+}
+
+// Bölümün paragraflarını (arama sorgusu varsa vurgulu) article içine çiz — ayraç
+// dışındaki her şeyi (eski p / source-line / boş-kart) temizler, yeniden kurar.
+function renderParagraphs(entry, query) {
+  const art = entry.el || document.createElement("article");
+  [...art.children].forEach((n) => {
+    if (!n.classList.contains("chapter-sep")) n.remove();
+  });
+  const q = (query || "").trim();
+  entry.paras.forEach((para, i) => {
+    const p = document.createElement("p");
+    p.dataset.idx = i;
+    if (q) appendHighlighted(p, para, q);
+    else p.textContent = para;
+    art.appendChild(p);
+  });
+}
+
+function emptyChapterCard(entry) {
+  const card = document.createElement("div");
+  card.className = "empty-card reader-error-card";
+  card.style.position = "static";
+  card.style.margin = "2rem auto";
+  const title = document.createElement("div");
+  title.className = "error-title";
+  title.textContent = "Bölüm Boş";
+  const desc = document.createElement("p");
+  desc.textContent = "Bu bölümün çeviri metni boş veya çok kısa geldi. Çeviri başarısız olmuş olabilir.";
+  const actions = document.createElement("div");
+  actions.className = "error-actions";
+  const btn = document.createElement("button");
+  btn.className = "primary-btn";
+  btn.textContent = "Yeniden Çevir";
+  btn.addEventListener("click", () => retranslateChapter(entry));
+  actions.appendChild(btn);
+  card.append(title, desc, actions);
+  return card;
+}
+
+/* ---------- prefetch: sonraki bölümü sessizce ısıt ---------- */
+function prefetchNext(entry) {
+  const u = entry && entry.nextUrl;
+  if (!u || !/^https?:\/\//.test(u) || prefetched.has(u)) return;
+  prefetched.add(u);
+  fetch("/api/prefetch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url: u }),
+  }).catch(() => {});
+}
+
+/* ---------- akış sonu: sonraki bölümü otomatik ekle (IntersectionObserver) ---------- */
+function ensureBottomSentinel() {
+  let s = el("streamEnd");
+  if (!s) {
+    s = document.createElement("div");
+    s.id = "streamEnd";
+    s.className = "stream-end";
+  }
+  el("readerBody").appendChild(s); // her zaman en sona
+  updateEndCard();
+  if (bottomObserver) bottomObserver.disconnect();
+  bottomObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries.some((en) => en.isIntersecting)) maybeAppendNext();
+    },
+    { rootMargin: "800px 0px" } // görünmeden ~800px önce hazırla (dikişsiz akış)
+  );
+  bottomObserver.observe(s);
+}
+
+// Akışın sonuna göre uygun kartı göster: next varsa "hazırlanıyor" ipucu (gözlemci
+// birazdan ekler); web bölümü ama next yok → "SONRAKINI WEB'DEN GETİR"; sentetik/son
+// → "— Son bölüm —".
+function updateEndCard() {
+  const s = el("streamEnd");
+  if (!s || !stream.length) return;
+  const last = stream[stream.length - 1];
+  s.replaceChildren();
+  s.className = "stream-end";
+  if (last.nextUrl) {
+    const d = document.createElement("div");
+    d.className = "stream-hint";
+    d.textContent = "Sonraki bölüm hazırlanıyor…";
+    s.appendChild(d);
+  } else if (/^https?:\/\//.test(last.url || "")) {
+    const btn = document.createElement("button");
+    btn.className = "primary-btn stream-cta";
+    btn.textContent = "SONRAKINI WEB'DEN GETİR";
+    btn.addEventListener("click", () => discoverNextForLast(btn));
+    s.appendChild(btn);
+  } else {
+    const d = document.createElement("div");
+    d.className = "stream-end-note";
+    d.textContent = "— Son bölüm —";
+    s.appendChild(d);
+  }
+}
+
+async function maybeAppendNext() {
+  if (streamBusy || !stream.length) return;
+  const last = stream[stream.length - 1];
+  if (!last.nextUrl) return;
+  streamBusy = true;
+  const s = el("streamEnd");
+  s.replaceChildren();
+  const load = document.createElement("div");
+  load.className = "stream-loading";
+  load.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Sonraki bölüm yükleniyor…`;
+  s.appendChild(load);
+  try {
+    const data = await fetchChapterData(last.nextUrl, false);
+    const entry = buildChapterEntry(last.nextUrl, data);
+    stream.push(entry);
+    el("readerBody").insertBefore(entry.el, s);
+    updateEndCard();
+    updateActiveChapter();
+    prefetchNext(entry);
+  } catch (err) {
+    // D-B8: dikiş hatası → tam-ekran kart DEĞİL, ince satır-içi bant + TEKRAR DENE.
+    s.replaceChildren();
+    const band = document.createElement("div");
+    band.className = "stitch-error";
+    const msg = document.createElement("span");
+    msg.textContent = "Sonraki bölüm yüklenemedi.";
+    const retry = document.createElement("button");
+    retry.className = "pill";
+    retry.textContent = "TEKRAR DENE";
+    retry.addEventListener("click", () => {
+      updateEndCard();
+      maybeAppendNext();
+    });
+    band.append(msg, retry);
+    s.appendChild(band);
+  } finally {
+    streamBusy = false;
+  }
+}
+
+// "Sonrakini web'den getir": son bölümün sayfasını çekip next'ini öğrenir (çeviri
+// yakmaz, E-3); bulursa akışa ekler. Site engelliyse kullanıcıyı bilgilendirir.
+async function discoverNextForLast(btn) {
+  const last = stream[stream.length - 1];
+  if (!last) return;
   const orig = btn.textContent;
   btn.disabled = true;
   btn.textContent = "Aranıyor…";
@@ -1075,17 +1294,17 @@ async function discoverNextFromWeb() {
     const res = await fetch("/api/chapter/refresh-nav", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url }),
+      body: JSON.stringify({ url: last.url }),
     });
     if (!res.ok) throw new Error();
     const data = await res.json();
     if (data.next_url) {
-      currentNext = data.next_url;
-      navigate({ view: "reader", url: data.next_url, triggerId: "nextBtn" }, true);
+      last.nextUrl = data.next_url;
+      updateEndCard();
+      maybeAppendNext();
     } else {
-      btn.textContent = "SON BÖLÜM";
-      btn.dataset.mode = "end";
       btn.disabled = true;
+      btn.textContent = "SON BÖLÜM";
     }
   } catch {
     btn.disabled = false;
@@ -1094,126 +1313,121 @@ async function discoverNextFromWeb() {
   }
 }
 
-function renderChapter(data, ratio) {
-  setStatus(null);
-  failedAttempts = 0; // Başarılı yüklemede hata sayacını sıfırla
-  el("readerError").hidden = true; // Varsa hata kartını gizle
-  chapterLoaded = true;
-  currentChapterNo = data.chapter_no != null ? data.chapter_no : null;
-  currentChapterTitle = data.title || "";
-
-  el("readerBook").textContent = data.book_title || "";
-  el("readerChapter").textContent = data.title || "Bölüm";
-
-  // Boş/kısa çeviri durumu kontrolü (Design 2.2)
-  if (!data.translation || data.translation.trim().length < 50) {
-    const body = el("readerBody");
-    body.replaceChildren();
-
-    const card = document.createElement("div");
-    card.className = "reader-error-card";
-    card.style.position = "static";
-    card.style.margin = "2rem auto";
-
-    const title = document.createElement("div");
-    title.className = "error-title";
-    title.textContent = "Bölüm Boş";
-
-    const desc = document.createElement("p");
-    desc.textContent = "Bu bölümün çeviri metni boş veya çok kısa geldi. Çeviri işlemi başarısız olmuş olabilir.";
-
-    const actions = document.createElement("div");
-    actions.className = "error-actions";
-
-    const retransBtn = document.createElement("button");
-    retransBtn.className = "primary-btn";
-    retransBtn.textContent = "Yeniden Çevir";
-    retransBtn.addEventListener("click", () => {
-      loadChapter(currentUrl, { refresh: true });
-    });
-
-    actions.appendChild(retransBtn);
-    card.append(title, desc, actions);
-    body.appendChild(card);
-    el("readerBody").hidden = false;
-
-    applyReaderNav(data);
-
-    window.scrollTo(0, 0);
-    return;
+/* ---------- akış başı: önceki bölümü kaydırma-sabitlemeli ekle ---------- */
+function ensureTopCard() {
+  const first = stream[0];
+  const body = el("readerBody");
+  let t = el("streamTop");
+  if (first && first.prevUrl) {
+    if (!t) {
+      t = document.createElement("button");
+      t.id = "streamTop";
+      t.className = "stream-top";
+      t.textContent = "↑ ÖNCEKİ BÖLÜM";
+      t.addEventListener("click", () => prependPrev(t));
+    }
+    if (body.firstChild !== t) body.insertBefore(t, body.firstChild);
+    t.hidden = false;
+    t.disabled = false;
+    t.textContent = "↑ ÖNCEKİ BÖLÜM";
+  } else if (t) {
+    t.remove();
   }
-
-  currentParas = (data.translation || "")
-    .split(/\n\n+/)
-    .map((p) => p.trim())
-    .filter(Boolean);
-  
-  currentSource = data.source
-    ? data.source.split(/\n\n+/).map((p) => p.trim())
-    : [];
-  renderReaderBody("");
-  el("readerBody").hidden = false;
-
-  applyReaderNav(data);
-
-  // Başarıyla render edilen bölümü kitabın yerel "son okunan" işareti yap (çevrimdışı
-  // resume bunu kullanır). Boş/hatalı bölüm dalı bu satıra ulaşmaz → oraya resume olmaz.
-  saveLastRead(currentBookSlug, currentUrl);
-  // Okuma günlüğü: yalnız GERÇEK render (karar #8 — SW cache-first GET'i sunucuya
-  // ulaşmadığından istemci olayı şart; prefetch bu yola hiç girmez). Best-effort:
-  // çevrimdışıysa kayıt düşer, istatistik 1 eksik kalır — okuma bozulmaz.
-  fetch("/api/reading-log", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ day: localDay(), slug: currentBookSlug, url: currentUrl }),
-  }).catch(() => {});
-  restoreScroll(ratio || 0);
 }
 
-function renderReaderBody(query) {
-  const body = el("readerBody");
-  body.replaceChildren();
-  const q = (query || "").trim();
-  currentParas.forEach((para, i) => {
-    const p = document.createElement("p");
-    p.dataset.idx = i; // çift-tıkta hangi paragraf → İngilizce eşlemesi
-    if (q) appendHighlighted(p, para, q);
-    else p.textContent = para;
-    body.appendChild(p);
-  });
+async function prependPrev(btn) {
+  if (streamBusy) return;
+  const first = stream[0];
+  if (!first || !first.prevUrl) return;
+  streamBusy = true;
+  btn.textContent = "Yükleniyor…";
+  btn.disabled = true;
+  const beforeH = document.documentElement.scrollHeight;
+  try {
+    const data = await fetchChapterData(first.prevUrl, false);
+    const entry = buildChapterEntry(first.prevUrl, data);
+    stream.unshift(entry);
+    // Üst kart ile eski ilk bölüm arasına ekle → yeni ilk bölüm olur.
+    el("readerBody").insertBefore(entry.el, btn.nextSibling);
+    // Kaydırma sabitleme: eklenen yükseklik kadar aşağı it (görsel sıçrama olmasın).
+    const delta = document.documentElement.scrollHeight - beforeH;
+    window.scrollTo(0, window.scrollY + delta);
+    ensureTopCard();
+    prefetchNext(entry);
+    updateActiveChapter();
+  } catch (err) {
+    btn.disabled = false;
+    btn.textContent = "↑ ÖNCEKİ BÖLÜM";
+    alert("Önceki bölüm yüklenemedi.");
+  } finally {
+    streamBusy = false;
+  }
+}
+
+// Aktif bölümü yeniden çevir (Ayarlar → "Bu bölüm"). Ayraç korunur, gövde yeniden çizilir.
+async function retranslateChapter(entry) {
+  const btn = el("retranslate");
+  const orig = btn.innerHTML;
+  btn.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Yükleniyor…`;
+  btn.disabled = true;
+  try {
+    const data = await fetchChapterData(entry.url, true);
+    entry.paras = (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+    entry.source = data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
+    entry.nextUrl = data.next_url || entry.nextUrl;
+    entry.title = data.title || entry.title;
+    if (entry.paras.length) {
+      entry.empty = false;
+      entry.loaded = true;
+      renderParagraphs(entry, "");
+    }
+    if (entry.url === activeUrl) el("readerChapter").textContent = entry.title || "Bölüm";
+  } catch (err) {
+    alert("Yeniden çevrilemedi: " + (err.message || err));
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
 }
 
 /* ---------- çift-tık/çift-dokunma: paragrafın İngilizce orijinali ----------
    Tek tık okuyucuda bir şey yapmaz; 350ms içinde aynı paragrafa ikinci tık =
    çift-tık (masaüstü + mobil tek mantık). Açıksa kapatır (toggle). */
 let lastTapIdx = -1;
+let lastTapUrl = null;
 let lastTapAt = 0;
 
 function onParaTap(e) {
-  const p = e.target.closest("#readerBody p[data-idx]");
+  const p = e.target.closest("#readerBody article.chapter p[data-idx]");
   if (!p) return;
   const idx = Number(p.dataset.idx);
+  const url = p.closest("article.chapter").dataset.url;
   const now = Date.now();
-  if (idx === lastTapIdx && now - lastTapAt < 350) {
+  if (idx === lastTapIdx && url === lastTapUrl && now - lastTapAt < 350) {
     lastTapIdx = -1;
+    lastTapUrl = null;
     lastTapAt = 0;
-    toggleSource(p, idx);
+    toggleSource(p, idx, url);
   } else {
     lastTapIdx = idx;
+    lastTapUrl = url;
     lastTapAt = now;
   }
 }
 
-function toggleSource(p, idx) {
+// Kaynak (İngilizce orijinal) bölüm-yereldir: dokunulan paragrafın ait olduğu bölümün
+// source dizisinden okunur (aktif bölüm değil — akışta hangi paragrafa dokunulduysa o).
+function toggleSource(p, idx, url) {
   const sib = p.nextElementSibling;
   if (sib && sib.classList.contains("source-line")) {
     sib.remove(); // ikinci çift-tık → kapat
     return;
   }
-  if (currentSource[idx]) {
-    insertSourceLine(p, currentSource[idx], "");
+  const entry = entryFor(url);
+  if (entry && entry.source[idx]) {
+    insertSourceLine(p, entry.source[idx], "");
   } else {
-    loadSourceForChapter(p, idx); // eski bölüm: kaynak yok → bir kez yükselt
+    loadSourceForChapter(p, idx, url); // eski bölüm: kaynak yok → bir kez yükselt
   }
 }
 
@@ -1225,21 +1439,19 @@ function insertSourceLine(p, text, extraClass) {
   return div;
 }
 
-async function loadSourceForChapter(p, idx) {
-  if (!currentUrl || sourceLoading) return;
+async function loadSourceForChapter(p, idx, url) {
+  if (!url || sourceLoading) return;
   sourceLoading = true;
   const note = insertSourceLine(p, "İngilizce getiriliyor…", "source-loading");
   try {
-    const res = await fetch(
-      `/api/chapter?url=${encodeURIComponent(currentUrl)}&source=1`
-    );
+    const res = await fetch(`/api/chapter?url=${encodeURIComponent(url)}&source=1`);
     if (!res.ok) throw new Error();
     const data = await res.json();
-    currentSource = data.source
-      ? data.source.split(/\n\n+/).map((s) => s.trim())
-      : [];
+    const src = data.source ? data.source.split(/\n\n+/).map((s) => s.trim()) : [];
+    const entry = entryFor(url);
+    if (entry) entry.source = src;
     note.remove();
-    if (currentSource[idx]) insertSourceLine(p, currentSource[idx], "");
+    if (src[idx]) insertSourceLine(p, src[idx], "");
     else insertSourceLine(p, "Bu bölüm için İngilizce kaynak yok.", "source-empty");
   } catch {
     note.textContent = "İngilizce getirilemedi.";
@@ -1273,18 +1485,22 @@ function openFind() {
   el("findBar").hidden = false;
   el("findInput").focus();
 }
+// Arama AKTİF bölüme kapsanır (D-B9v2) — akıştaki tüm bölümleri taramaz.
 function closeFind() {
   el("findBar").hidden = true;
   el("findInput").value = "";
   findMatches = [];
   findIndex = -1;
   el("findCount").textContent = "";
-  if (currentParas.length) renderReaderBody("");
+  const e = activeEntry();
+  if (e && e.loaded) renderParagraphs(e, "");
 }
 function runFind() {
   const q = el("findInput").value.trim();
-  renderReaderBody(q);
-  findMatches = q ? Array.from(el("readerBody").querySelectorAll("mark")) : [];
+  const e = activeEntry();
+  if (!e || !e.loaded) return;
+  renderParagraphs(e, q);
+  findMatches = q ? Array.from(e.el.querySelectorAll("mark")) : [];
   findIndex = findMatches.length ? 0 : -1;
   updateFindUI();
   focusMatch();
@@ -1453,21 +1669,18 @@ el("fontFamily").addEventListener("click", () => {
   applySettings();
   updateSettingsUI();
 });
+// Ayarlar → "Bu bölüm — Yeniden çevir": AKTİF bölümü yerinde yeniden çevirir
+// (akışı sıfırlamaz — dikişler korunur).
 el("retranslate").addEventListener("click", () => {
   if (isNavigating) return;
-  if (currentUrl) loadChapter(currentUrl, { refresh: true, triggerId: "retranslate" });
+  const e = activeEntry();
+  if (e) retranslateChapter(e);
 });
 
-/* ---------- olaylar: okuyucu nav + bölümde arama ---------- */
-el("nextBtn").addEventListener("click", () => {
-  if (isNavigating) return;
-  if (el("nextBtn").dataset.mode === "discover") return discoverNextFromWeb();
-  if (currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" }, true);
-});
-el("prevBtn").addEventListener("click", () => {
-  if (isNavigating) return;
-  if (currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" }, true);
-});
+/* ---------- olaylar: okuyucu ---------- */
+// Sonsuz okuma v2: gezinme = kaydırma. Alt çubuk nav düğmeleri (SONRAKI/ÖNCEKİ) ve
+// yatay swipe kaldırıldı — sonraki bölüm akışa otomatik eklenir (gözlemci), önceki
+// akış başındaki kartla eklenir. Footer gizli (D-B9v2).
 el("readerBody").addEventListener("click", onParaTap); // çift-tık → İngilizce orijinal
 el("findBtn").addEventListener("click", () => {
   if (el("findBar").hidden) openFind();
@@ -1495,33 +1708,6 @@ window.addEventListener("pagehide", persistScroll);
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "hidden") persistScroll();
 });
-
-/* ---------- kaydırarak bölüm geçişi (swipe) ---------- */
-let touchX = null;
-let touchY = null;
-el("readerBody").addEventListener(
-  "touchstart",
-  (e) => {
-    if (e.touches.length !== 1) return;
-    touchX = e.touches[0].clientX;
-    touchY = e.touches[0].clientY;
-  },
-  { passive: true }
-);
-el("readerBody").addEventListener(
-  "touchend",
-  (e) => {
-    if (touchX === null) return;
-    const dx = e.changedTouches[0].clientX - touchX;
-    const dy = e.changedTouches[0].clientY - touchY;
-    touchX = touchY = null;
-    if (isNavigating) return;
-    if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx < 0 && currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" }, true);
-    else if (dx > 0 && currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" }, true);
-  },
-  { passive: true }
-);
 
 /* ---------- toplu çeviri (sunucu-taraflı arka plan iş) ---------- */
 // Kullanıcının "Arka Plana Al" dediği iş: ilerleme ekranı bir daha kendiliğinden

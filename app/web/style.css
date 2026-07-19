@@ -445,6 +445,96 @@ html, body {
 /* touch-action: çift-dokunmada mobil zoom'u kapatır → çift-dokunma İngilizceyi açar. */
 .reader-body p { margin: 0 0 1.1em; text-align: justify; hyphens: auto; touch-action: manipulation; }
 
+/* ---------- sonsuz okuma v2: bölüm akışı ---------- */
+.reader-body article.chapter { margin: 0; }
+/* Dikiş ayracı "— Bölüm N —": bölümler arası sessiz ritüel işaret. İlk bölümde
+   üstte fazla boşluk bırakmaz; sonrakilerde bölümü görsel olarak ayırır. */
+.chapter-sep {
+  text-align: center;
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--ink-soft);
+  padding: 0.4em 0 1.2em;
+}
+.reader-body article.chapter + article.chapter .chapter-sep,
+#streamTop + article.chapter .chapter-sep { padding-top: 2.2em; }
+
+/* Akış başı: "önceki bölüm" tap kartı (kaydırma-sabitlemeli prepend). */
+.stream-top {
+  display: block;
+  width: 100%;
+  max-width: var(--max);
+  margin: 0.4rem auto 0;
+  border: 2px dashed var(--line);
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  padding: 0.7rem;
+  border-radius: 8px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.stream-top:active { background: var(--surface); }
+
+/* Akış sonu: hazırlanıyor ipucu / yükleniyor / son bölüm / web'den getir / dikiş hatası. */
+.stream-end { padding: 1.6rem 0 0.8rem; text-align: center; }
+.stream-hint,
+.stream-end-note {
+  font-family: var(--sans);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  opacity: 0.8;
+}
+.stream-loading {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5em;
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--ink-soft);
+}
+.stream-cta {
+  display: inline-block;
+  border: 2px solid var(--accent);
+  background: var(--accent);
+  color: var(--on-accent, #fff);
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.85rem;
+  letter-spacing: 0.04em;
+  padding: 0.7rem 1.2rem;
+  border-radius: 999px;
+  cursor: pointer;
+  min-height: 44px;
+}
+.stream-cta:active { opacity: 0.85; }
+/* Dikiş hatası: tam-ekran kart DEĞİL, ince satır-içi bant + TEKRAR DENE (D-B8). */
+.stitch-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.7em;
+  flex-wrap: wrap;
+  justify-content: center;
+  border: 2px solid var(--line);
+  border-left: 4px solid var(--accent);
+  background: var(--surface);
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 0.85rem;
+  font-weight: 700;
+  padding: 0.6rem 0.9rem;
+  border-radius: 6px;
+}
+
 /* Paragrafa çift tıklayınca altında açılan İngilizce orijinal (iki-dilli okuma). */
 .reader-body .source-line {
   margin: -0.4em 0 1.3em;
@@ -471,15 +561,6 @@ html, body {
   font-style: italic;
 }
 
-.reader-footer {
-  position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  padding: 0.7rem 1rem;
-  padding-bottom: max(0.7rem, env(safe-area-inset-bottom));
-  background: linear-gradient(transparent, var(--bg) 30%);
-}
 .next-btn {
   display: block;
   width: 100%;
@@ -816,29 +897,6 @@ html, body {
 .reader-bar { position: sticky; }
 
 /* Footer: önceki (ikincil) + sonraki (birincil). prev gizliyse next tüm genişlik. */
-.footer-nav {
-  display: flex;
-  gap: 0.6rem;
-  max-width: var(--max);
-  margin: 0 auto;
-}
-.prev-btn {
-  flex: 0 0 auto;
-  border: 2px solid var(--line);
-  background: transparent;
-  color: var(--ink);
-  font-family: var(--sans);
-  font-weight: 900;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 0.9rem;
-  padding: 0.95rem 1rem;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.prev-btn:active { background: color-mix(in oklab, var(--ink) 10%, transparent); }
-.footer-nav .next-btn { flex: 1; margin: 0; }
-
 /* Bölüm arama kutusu (iOS zoom önlemek için font-size: 1rem = 16px) */
 .chapter-search {
   width: 100%;
