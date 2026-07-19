@@ -1221,7 +1221,12 @@ function buildChapterEntry(url, data) {
   if (entry.no != null) art.dataset.no = entry.no;
   const sep = document.createElement("div");
   sep.className = "chapter-sep";
-  sep.textContent = entry.no != null ? `— Bölüm ${entry.no} —` : `— ${entry.title || "Bölüm"} —`;
+  // Görsel içerikte ayraç başlığı gösterir ("Sayfa 32"); metin bölümde "Bölüm N".
+  sep.textContent = isHtml
+    ? `— ${entry.title || (entry.no != null ? "Bölüm " + entry.no : "Bölüm")} —`
+    : entry.no != null
+      ? `— Bölüm ${entry.no} —`
+      : `— ${entry.title || "Bölüm"} —`;
   art.appendChild(sep);
   entry.el = art; // renderParagraphs/renderHtml entry.el'e yazar → sep'ten ÖNCE atanmalı
   if (isHtml) {
@@ -1353,6 +1358,7 @@ async function maybeAppendNext() {
   const last = stream[stream.length - 1];
   if (!last.nextUrl) return;
   streamBusy = true;
+  let ok = false;
   const s = el("streamEnd");
   s.replaceChildren();
   const load = document.createElement("div");
@@ -1368,6 +1374,7 @@ async function maybeAppendNext() {
     updateEndCard();
     updateActiveChapter();
     prefetchNext(entry);
+    ok = true;
   } catch (err) {
     // D-B8: dikiş hatası → tam-ekran kart DEĞİL, ince satır-içi bant + TEKRAR DENE.
     s.replaceChildren();
@@ -1386,6 +1393,18 @@ async function maybeAppendNext() {
     s.appendChild(band);
   } finally {
     streamBusy = false;
+    // Kısa bölümlerde (PDF sayfası) sentinel margin İÇİNDE kalabilir; IntersectionObserver
+    // kenar-tetiklemeli olduğundan yeniden ateşlenmez ve akış "hazırlanıyor"da takılır.
+    // Yeniden gözlemle → hâlâ görünürdeyse gözlemci tekrar tetikler, sonraki eklenir.
+    // Görsel yüksekliği önden ayrıldığından (img width/height) sentinel gerçekten kayar,
+    // sonsuz döngü olmaz. Yalnız BAŞARIDA (kalıcı hatada TEKRAR DENE'yi döngüye sokma).
+    if (ok && bottomObserver) {
+      const sen = el("streamEnd");
+      if (sen) {
+        bottomObserver.unobserve(sen);
+        bottomObserver.observe(sen);
+      }
+    }
   }
 }
 
