@@ -32,7 +32,7 @@ _FLIGHTS: dict[str, _Flight] = {}
 _FLIGHTS_LOCK = threading.Lock()
 
 
-def _finalize_cached(cached: dict, url: str, background: bool = False) -> dict:
+def _finalize_cached(cached: dict, url: str, advance_position: bool = True) -> dict:
     """Önbellekten gelen bölümü kanonik slug'a hizala, kütüphane/sözlüğü güncelle."""
     canon = library.resolve_slug(cached["book_slug"])
     if canon != cached["book_slug"]:
@@ -44,7 +44,7 @@ def _finalize_cached(cached: dict, url: str, background: bool = False) -> dict:
     library.upsert_book(
         cached["book_slug"], cached["book_title"], url,
         cached["title"], cached["chapter_no"],
-        update_position=not background,
+        update_position=advance_position,
     )
     return cached
 
@@ -55,6 +55,7 @@ def get_or_translate(
     refresh: bool = False,
     want_source: bool = False,
     background: bool = False,
+    advance_position: bool | None = None,
 ) -> dict:
     """Bölümü önbellekten döndür ya da çek+çevir+önbelleğe yaz.
 
@@ -64,16 +65,23 @@ def get_or_translate(
     okuma için). FetchError / TranslateError fırlatabilir.
 
     background=True toplu çeviri işinden gelen çağrıları işaretler: çekim düşük
-    öncelikle yapılır (okuyucu isteği kapıda öne geçer) ve kitabın "kaldığın yer"
-    konumu İLERLETİLMEZ — arka planda hazırlanan bölüm okunmuş sayılmaz.
+    öncelikle yapılır (okuyucu isteği kapıda öne geçer).
+
+    advance_position: kitabın "kaldığın yer" konumu bu bölüme ilerlesin mi. None ise
+    `not background` (eski davranış). Sonsuz okumada okuyucu, akışa ÖNDEN eklenen
+    (henüz okunmamış) bölümleri `advance_position=False` ile çeker — konumu yalnız
+    AKTİF (okunan) bölümün position POST'u belirler; aksi halde önden-ekleme konumu
+    okunmamış bölüme kaydırıp aktif-POST ile yarışır (gerçek bulgu: current_url 7'de
+    takılırken cache'te bölüm 8 oluşuyordu).
     """
+    adv = (not background) if advance_position is None else advance_position
     if not refresh:
         cached = cache.get_chapter(url)
         if cached is not None:
             # Eski bölümü iki-dilli için yükselt: yalnız kaynak istendiğinde, yoksa ve
             # anahtar varsa yeniden çevir; aksi halde önbelleği aynen döndür (hızlı).
             if not (want_source and not cached.get("source") and api_key):
-                return _finalize_cached(cached, url, background=background)
+                return _finalize_cached(cached, url, advance_position=adv)
 
     if not api_key:
         raise TranslateError("GEMINI_API_KEY ayarlı değil.")
@@ -86,7 +94,7 @@ def get_or_translate(
     library.upsert_book(
         payload["book_slug"], payload["book_title"], url,
         payload["title"], payload["chapter_no"],
-        update_position=not background,
+        update_position=adv,
     )
     return payload
 

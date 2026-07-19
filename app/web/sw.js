@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v44"; // dilim 6: sonsuz okuma v2 (article akışı) + prefetch ısıtma
+const SHELL_CACHE = "novellink-shell-v45"; // dilim 6 fix: önden eklenen bölüm konumu oynatmasın (track=0)
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -114,6 +114,7 @@ self.addEventListener("fetch", (event) => {
     const refresh = url.searchParams.get("refresh") === "1";
     const key = new URL(url);
     key.searchParams.delete("refresh"); // refresh'li/refresh'siz aynı bölüm = aynı anahtar
+    key.searchParams.delete("track"); // track (konum ilerlet) da aynı bölüm = aynı anahtar
     event.respondWith(chapterFirst(request, key.toString(), refresh));
     return;
   }

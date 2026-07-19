@@ -70,14 +70,20 @@ def get_chapter(
     url: str = Query(..., description="novelbin bölüm URL'i"),
     refresh: bool = Query(False, description="Önbelleği yok say, yeniden çevir"),
     source: bool = Query(False, description="İki-dilli: hizalı İngilizce kaynağı da getir"),
+    track: bool = Query(True, description="Kitabın 'kaldığın yer' konumu bu bölüme ilerlesin mi"),
 ) -> dict:
     """Bölümü çek + Türkçe'ye çevir. Önbellekte varsa anında döner.
 
     source=1: yanıtta paragraf-hizalı İngilizce kaynak (`source`) da gelir; eski bölümde
     yoksa bir kez yeniden çevrilerek eklenir. (Sync def: Playwright thread havuzunda.)
+
+    track=0: sonsuz okumada akışa ÖNDEN eklenen (henüz okunmamış) bölümler için —
+    konumu ilerletme; konumu yalnız aktif bölümün position POST'u belirlesin.
     """
     try:
-        return pipeline.get_or_translate(url, API_KEY, refresh, want_source=source)
+        return pipeline.get_or_translate(
+            url, API_KEY, refresh, want_source=source, advance_position=track
+        )
     except (ImportedChapterMissing, CloudflareChallenge, FetchError, TranslateError) as exc:
         raise _pipeline_http_error(exc)
 

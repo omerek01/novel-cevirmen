@@ -327,6 +327,10 @@ function showView(name) {
    uygulamayı kapatmak yerine bir önceki ekrana döner. Kök (kütüphane) görünümünde
    geri tuşu uygulamadan çıkar (beklenen davranış). */
 function applyNavState(state) {
+  // Okuyucudan başka görünüme geçerken son konumu ANINDA yaz (uygulama-içi geri'de
+  // pagehide/visibilitychange tetiklenmez; throttle'lı son POST kaçarsa kütüphane/
+  // liste bir bölüm geride kalırdı).
+  if (!views.reader.hidden && state && state.view !== "reader") persistScroll();
   switch (state && state.view) {
     case "book":
       openBook(state.slug);
@@ -1065,8 +1069,15 @@ async function loadChapter(url, opts = {}) {
 
 // /api/chapter → veri ya da tipli hata (error_class ile). loadChapter/append/prepend
 // ve yeniden-çevir aynı çekim yolunu paylaşır (DRY).
-function fetchChapterData(url, refresh) {
-  const query = `/api/chapter?url=${encodeURIComponent(url)}` + (refresh ? "&refresh=1" : "");
+// track=false: akışa ÖNDEN eklenen (henüz okunmamış) bölümler → kitabın konumunu
+// SUNUCUDA ilerletme; konumu yalnız aktif bölümün position POST'u belirlesin. Aksi
+// halde önden-ekleme okunmamış bölüme konum yazıp aktif-POST'la yarışır (gerçek
+// bulgu: current_url 7'de takılırken cache'te bölüm 8 oluşuyordu).
+function fetchChapterData(url, refresh, track = true) {
+  const query =
+    `/api/chapter?url=${encodeURIComponent(url)}` +
+    (refresh ? "&refresh=1" : "") +
+    (track ? "" : "&track=0");
   return fetch(query).then(async (res) => {
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
@@ -1254,7 +1265,8 @@ async function maybeAppendNext() {
   load.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Sonraki bölüm yükleniyor…`;
   s.appendChild(load);
   try {
-    const data = await fetchChapterData(last.nextUrl, false);
+    // track=false: önden eklenen bölüm okunmuş sayılmaz → konumu ilerletmez.
+    const data = await fetchChapterData(last.nextUrl, false, false);
     const entry = buildChapterEntry(last.nextUrl, data);
     stream.push(entry);
     el("readerBody").insertBefore(entry.el, s);
@@ -1344,7 +1356,8 @@ async function prependPrev(btn) {
   btn.disabled = true;
   const beforeH = document.documentElement.scrollHeight;
   try {
-    const data = await fetchChapterData(first.prevUrl, false);
+    // track=false: geri eklenen bölüm de konumu ilerletmez (aktif = okunan).
+    const data = await fetchChapterData(first.prevUrl, false, false);
     const entry = buildChapterEntry(first.prevUrl, data);
     stream.unshift(entry);
     // Üst kart ile eski ilk bölüm arasına ekle → yeni ilk bölüm olur.
