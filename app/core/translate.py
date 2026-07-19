@@ -17,9 +17,12 @@ from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
-# Yedek zinciri: ilki meşgul/kota-dolu ise sıradakine düşer.
-# gemini-3.1-flash-lite günlük 500 istek (RPD); gemini-2.5-flash sadece 20.
-DEFAULT_MODELS = ("gemini-3.1-flash-lite", "gemini-2.5-flash", "gemini-2.5-flash-lite")
+# Çeviri modeli: yalnız gemini-3.1-flash-lite (kullanıcı tercihi — 2.5-flash/2.5-flash-lite
+# yedekleri kaldırıldı). gemini-3.1-flash-lite günlük 500 istek (RPD). Tek model olduğu
+# için yedek YOK: 500/503'te aynı modelde geri-çekilmeli 3 tekrar; 404/429 (kota dolu) veya
+# boş/engellenmiş (içerik filtresi) yanıtta düşecek model olmadığından "biraz sonra tekrar
+# deneyin" hatası döner (okuyucu bölümü tekrar açınca yeniden dener).
+DEFAULT_MODELS = ("gemini-3.1-flash-lite",)
 # Parça çıktısı modelin token sınırını aşıp çeviriyi kesmesin diye ölçülü tutulur.
 MAX_WORDS_PER_CHUNK = 1600
 RETRY_CODES = {500, 503}  # geçici sunucu hatası: aynı modelde tekrar dene
