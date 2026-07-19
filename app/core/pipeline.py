@@ -132,6 +132,10 @@ def _do_fetch_translate_save(
     url: str, api_key: str, background: bool, ticket
 ) -> dict:
     staged = cache.get_staged(url)
+    # GÖRSEL İÇERİK (PDF çevrilmiş sayfa / EPUB yerinde-çevrili HTML): raw_source
+    # metin yolundan ÖNCE — bu bölümler paragraf-çeviri değil, sayfa render / HTML üretir.
+    if staged is not None and staged.get("content_type") == "html":
+        return _render_import_page(url, staged, api_key)
     if staged is not None and staged.get("raw_source"):
         # İçe aktarılmış ham kaynak var → web'e GİTME, raw_source'tan çevir.
         # Şemadan bağımsız (raw_source-öncelikli routing): hem saf `paste://`
@@ -187,6 +191,42 @@ def _do_fetch_translate_save(
         "book_slug": book_slug,
         "book_title": book_title,
         "chapter_no": chapter["chapter_no"],
+        "cached": False,
+    }
+    cache.save_chapter(url, payload)
+    return payload
+
+
+def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
+    """Görsel içerik bölümü (content_type="html"): PDF sayfasını çevir+render / EPUB
+    HTML'ini yerinde çevir. Sonuç HTML olarak cache'lenir (tekrar açılışta yeniden
+    render/çeviri yok). Medya, sahnelenen (pdf-/epub-) slug altında saklanır."""
+    from . import import_translate
+
+    if not api_key:
+        raise TranslateError("GEMINI_API_KEY ayarlı değil.")
+    media_slug = staged["book_slug"]  # source.pdf / resimler bu slug altında
+    book_slug = library.resolve_slug(media_slug)
+    book = library.get_book(book_slug)
+    book_title = (book and book.get("title")) or staged["book_title"]
+    if url.startswith("pdf://"):
+        html = import_translate.translate_pdf_page(media_slug, staged["chapter_no"], api_key)
+    elif url.startswith("epub://"):
+        html = import_translate.translate_epub_html(staged["raw_source"], media_slug, api_key)
+    else:
+        raise TranslateError("Bilinmeyen görsel içerik türü.")
+    payload = {
+        "title": staged["title"],
+        "translation": html,
+        "source": None,
+        "detected_names": [],
+        "chunk_count": 1,
+        "next_url": staged["next_url"],
+        "prev_url": staged["prev_url"],
+        "book_slug": book_slug,
+        "book_title": book_title,
+        "chapter_no": staged["chapter_no"],
+        "content_type": "html",
         "cached": False,
     }
     cache.save_chapter(url, payload)

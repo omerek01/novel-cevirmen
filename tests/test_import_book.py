@@ -40,7 +40,7 @@ def _make_epub(title, chapters):
         os.remove(path)
 
 
-def test_epub_import_stages_chapters():
+def test_epub_import_html_mode():
     data = _make_epub("Kayıp Krallık", [
         ("Chapter 1", ["İlk paragraf metni.", "İkinci paragraf."]),
         ("Chapter 2", ["Üçüncü bölüm paragrafı biraz daha uzun olsun diye yazıldı."]),
@@ -51,26 +51,66 @@ def test_epub_import_stages_chapters():
     assert res["title"] == "Kayıp Krallık"
     assert res["slug"].startswith("epub-")
     assert res["first_url"] == synthetic.chapter_url(res["slug"], 1, "epub://")
+    assert library.get_book(res["slug"])["current_url"] == res["first_url"]
 
-    # Kitap rafta
-    book = library.get_book(res["slug"])
-    assert book is not None and book["current_url"] == res["first_url"]
-
-    # Bölümler sahneli: raw_source dolu, çeviri YOK (staged)
+    # Yerinde-HTML modu: content_type html, raw_source = gövde HTML'i (yapı korunur)
     staged1 = cache.get_staged(res["first_url"])
-    assert staged1 is not None
-    assert "İlk paragraf" in staged1["raw_source"]
-    assert cache.get_chapter(res["first_url"]) is None  # translation NULL → cache MISS (E-17)
+    assert staged1["content_type"] == "html"
+    assert "<p" in staged1["raw_source"] and "İlk paragraf" in staged1["raw_source"]
+    assert cache.get_chapter(res["first_url"]) is None  # sahneli, henüz çevrilmedi
 
-    # Zincir: 1 → 2 → 3
+    # Zincir 1 → 2
     url2 = synthetic.chapter_url(res["slug"], 2, "epub://")
     assert staged1["next_url"] == url2
-    staged2 = cache.get_staged(url2)
-    assert staged2["prev_url"] == res["first_url"]
-    assert staged2["chapter_no"] == 2
+    assert cache.get_staged(url2)["prev_url"] == res["first_url"]
 
-    # Paragraf sınırı korunmuş (çift satır sonu → translate hizalaması)
-    assert "\n\n" in staged1["raw_source"]
+
+def test_epub_image_extracted_to_media():
+    import io
+    from PIL import Image
+    from ebooklib import epub
+
+    buf = io.BytesIO()
+    Image.new("RGB", (6, 6), (200, 50, 50)).save(buf, "PNG")
+    png = buf.getvalue()
+
+    book = epub.EpubBook()
+    book.set_title("Resimli")
+    book.set_language("en")
+    img = epub.EpubImage(uid="i1", file_name="images/pic.png", media_type="image/png", content=png)
+    book.add_item(img)
+    c = epub.EpubHtml(title="Bir", file_name="c1.xhtml", lang="en")
+    c.content = '<html><body><h2>Bir</h2><p>Metin yeterince uzun burada.</p><img src="images/pic.png"/></body></html>'
+    book.add_item(c)
+    book.toc = (c,)
+    book.add_item(epub.EpubNcx())
+    book.add_item(epub.EpubNav())
+    book.spine = ["nav", c]
+    fd, path = tempfile.mkstemp(suffix=".epub")
+    os.close(fd)
+    epub.write_epub(path, book)
+    with open(path, "rb") as f:
+        data = f.read()
+    os.remove(path)
+
+    from core import media
+
+    res = import_book.import_epub(data, "resimli.epub")
+    staged = cache.get_staged(res["first_url"])
+    assert "/media/" in staged["raw_source"]  # img src /media'ya yeniden yazıldı
+    assert (media.book_dir(res["slug"]) / "pic.png").is_file()  # resim çıkarıldı
+
+
+def test_epub_page_translates_html_in_place(monkeypatch):
+    from core import pipeline
+
+    _stub_translate(monkeypatch)
+    data = _make_epub("Roman", [("Bir", ["The old man spoke softly to the boy."])])
+    res = import_book.import_epub(data, "roman.epub")
+    payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert payload["content_type"] == "html"
+    assert "Çeviri:" in payload["translation"]  # blok metni yerinde çevrildi
+    assert "<p" in payload["translation"]  # HTML yapısı korundu
 
 
 def test_epub_no_chapters_raises():
@@ -117,18 +157,54 @@ def _make_pdf(pages):
     return data
 
 
-def test_pdf_import_chapters_by_pages():
+def test_pdf_import_page_mode():
+    # Sayfa görsel modu: HER SAYFA = 1 bölüm (content_type html), kaynak PDF saklanır.
     data = _make_pdf([f"Sayfa {i} metni yeterince uzun olsun diye buraya yazildi." for i in range(1, 6)])
-    # 5 sayfa, 2 sayfa = 1 bölüm → 3 bölüm (1-2, 3-4, 5)
-    res = import_book.import_pdf(data, pages_per_chapter=2, filename="belge.pdf")
-    assert res["chapter_count"] == 3
+    res = import_book.import_pdf(data, filename="belge.pdf")
+    assert res["chapter_count"] == 5  # 5 sayfa → 5 bölüm
     assert res["slug"].startswith("pdf-")
-    assert res["title"] == "belge"  # dosya adından (uzantısız)
+    assert res["title"] == "belge"
     assert res["first_url"] == synthetic.chapter_url(res["slug"], 1, "pdf://")
 
+    from core import media
+
+    assert (media.book_dir(res["slug"]) / "source.pdf").is_file()  # render için kaynak saklandı
     staged = cache.get_staged(res["first_url"])
-    assert staged is not None and "Sayfa 1" in staged["raw_source"] and "Sayfa 2" in staged["raw_source"]
-    assert cache.get_chapter(res["first_url"]) is None  # staged, çevrilmemiş
+    assert staged["content_type"] == "html"
+    assert cache.get_chapter(res["first_url"]) is None  # sahneli, henüz render edilmedi
+
+
+def _stub_translate(monkeypatch):
+    from core import import_translate
+
+    def fake(text, api_key, glossary=None, models=("x",)):
+        blocks = text.split("\n\n")
+        return {
+            "translation": "\n\n".join("Çeviri: " + b for b in blocks),
+            "source": None, "detected_names": [], "chunk_count": 1,
+        }
+
+    monkeypatch.setattr(import_translate.translate, "translate_chapter", fake)
+
+
+def test_pdf_page_renders_translated_image(monkeypatch):
+    import re
+    from core import media, pipeline
+
+    _stub_translate(monkeypatch)
+    data = _make_pdf([f"Page {i}: the old man opened his eyes slowly here." for i in range(1, 4)])
+    res = import_book.import_pdf(data, filename="roman.pdf")
+
+    # Sayfa 1'i aç → çevrilmiş sayfa PNG render edilir, <img> HTML döner
+    payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert payload["content_type"] == "html"
+    assert '<img class="page-img"' in payload["translation"]
+    m = re.search(r'src="/media/([^"]+)"', payload["translation"])
+    assert m and media.resolve(m.group(1)) is not None  # PNG dosyası gerçekten var
+
+    # Tekrar aç → cache isabeti (cached=True), yeniden render/çeviri yapılmaz
+    p2 = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert p2["content_type"] == "html" and p2["cached"] is True
 
 
 def test_pdf_import_api_endpoint():
@@ -138,8 +214,8 @@ def test_pdf_import_api_endpoint():
 
     data = _make_pdf([f"Ikinci belge sayfa {i} icerigi burada duruyor efendim." for i in range(1, 4)])
     client = TestClient(server.app)
-    res = client.post("/api/import/pdf?filename=ikinci.pdf&pages_per_chapter=10", content=data)
+    res = client.post("/api/import/pdf?filename=ikinci.pdf", content=data)
     assert res.status_code == 200, res.text
     body = res.json()
-    assert body["chapter_count"] == 1  # 3 sayfa, 10 sayfa/bölüm → 1 bölüm
+    assert body["chapter_count"] == 3  # 3 sayfa → 3 bölüm (sayfa modu)
     assert body["slug"].startswith("pdf-")

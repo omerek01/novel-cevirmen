@@ -13,7 +13,7 @@ from __future__ import annotations
 import os
 import tempfile
 
-from . import library, synthetic
+from . import library, media, synthetic
 
 MAX_CHAPTERS = 5000  # akıl-sağlığı üst sınırı (tek dosyadan sınırsız satır üretmeyelim)
 _MIN_CHARS = 20  # bundan kısa "bölümler" (kapak, nav, boş sayfa) atlanır
@@ -23,8 +23,11 @@ class BookImportError(Exception):
     """İçe aktarım başarısız: bozuk/desteklenmeyen dosya ya da çevrilebilir bölüm yok."""
 
 
-def _epub_chapters(path: str) -> tuple[str, list[tuple[str, str]]]:
-    """EPUB'ı spine (okuma) sırasında gez; her doküman = bölüm. (kitap_başlığı, [(başlık, metin)])."""
+def _epub_html_docs(path: str) -> tuple[str, list[tuple[str, str, list[str]]]]:
+    """EPUB'ı spine sırasında gez; her doküman = bölüm HTML'i (resimler korunur).
+
+    Döner: (kitap_başlığı, [(bölüm_başlığı, gövde_html, [resim_basename...])]).
+    <img> src'leri BASENAME'e indirgenir (media rewrite import_epub'da yapılır)."""
     from bs4 import BeautifulSoup
     from ebooklib import ITEM_DOCUMENT, epub
 
@@ -32,99 +35,132 @@ def _epub_chapters(path: str) -> tuple[str, list[tuple[str, str]]]:
     md = book.get_metadata("DC", "title")
     book_title = ((md[0][0] if md and md[0] else "") or "").strip() or "İçe Aktarılan Kitap"
 
-    chapters: list[tuple[str, str]] = []
+    docs: list[tuple[str, str, list[str]]] = []
     seen: set[str] = set()
     for spine_id, _linear in book.spine:
         item = book.get_item_with_id(spine_id)
         if item is None or item.get_type() != ITEM_DOCUMENT or item.id in seen:
             continue
-        # EPUB3 nav (içindekiler) dokümanı da ITEM_DOCUMENT'tir → bölüm sayma (atla).
-        # Sınıf (EpubNav) VEYA manifest 'nav' özelliği ile yakala (üreticiye göre değişir).
         if isinstance(item, epub.EpubNav) or "nav" in (getattr(item, "properties", None) or []):
-            continue
+            continue  # EPUB3 içindekiler dokümanı → atla
         seen.add(item.id)
         soup = BeautifulSoup(item.get_content(), "html.parser")
         for tag in soup(["script", "style"]):
             tag.decompose()
-        # Paragraf sınırlarını KORU (translate \n\n'e böler, iki-dilli hizalama buna dayanır).
-        ps = soup.find_all("p")
-        if ps:
-            paras = [p.get_text(" ", strip=True) for p in ps]
-        else:  # <p> yoksa satır bazında böl
-            paras = [ln.strip() for ln in soup.get_text("\n").split("\n") if ln.strip()]
-        text = "\n\n".join(t for t in paras if t)
-        if len(text.strip()) < _MIN_CHARS:
+        body = soup.body or soup
+        imgs: list[str] = []
+        for img in body.find_all("img"):
+            src = (img.get("src") or "").split("?")[0]
+            base = os.path.basename(src)
+            if base:
+                imgs.append(base)
+                img["src"] = "@@IMG@@" + base  # media rewrite'ta değiştirilecek yer tutucu
+            else:
+                img.decompose()
+        text = body.get_text(strip=True)
+        if len(text) < _MIN_CHARS and not imgs:
             continue  # kapak/nav/boş → atla
-        h = soup.find(["h1", "h2", "h3"])
+        h = body.find(["h1", "h2", "h3"])
         title = (h.get_text(" ", strip=True) if h else "").strip()
-        chapters.append((title, text))
-    return book_title, chapters
+        html = "".join(str(c) for c in body.contents)
+        docs.append((title, html, imgs))
+    return book_title, docs
+
+
+def _epub_images(path: str) -> dict[str, bytes]:
+    """EPUB'ın gömülü resimlerini basename→bayt olarak indeksle."""
+    from ebooklib import ITEM_IMAGE, epub
+
+    book = epub.read_epub(path)
+    out: dict[str, bytes] = {}
+    for item in book.get_items_of_type(ITEM_IMAGE):
+        out[os.path.basename(item.get_name())] = item.get_content()
+    return out
 
 
 def import_epub(data: bytes, filename: str = "") -> dict:
-    """EPUB baytlarını sahneli kitaba çevir. Döner: {slug, title, chapter_count, first_url}."""
+    """EPUB'ı yerinde-HTML modunda içe aktar: gömülü resimler media'ya çıkarılır,
+    her doküman = bölüm (content_type="html", raw_source = resim-src'leri /media'ya
+    yeniden yazılmış gövde HTML'i). Çeviri OKUNUNCA yapılır (translate_epub_html:
+    blok metinleri yerinde Türkçe, resimler/yapı korunur)."""
     fd, path = tempfile.mkstemp(suffix=".epub")
     try:
         with os.fdopen(fd, "wb") as f:
             f.write(data)
         try:
-            book_title, chapters = _epub_chapters(path)
-        except Exception as exc:  # bozuk/desteklenmeyen dosya
+            book_title, docs = _epub_html_docs(path)
+            images = _epub_images(path)
+        except Exception as exc:
             raise BookImportError(f"EPUB okunamadı: {exc}") from exc
     finally:
         try:
             os.remove(path)  # E-13: geçici dosya silinir
         except OSError:
             pass
-    return _stage_book(book_title, chapters, "epub", "epub://")
+    if not docs:
+        raise BookImportError("EPUB'da çevrilebilir bölüm bulunamadı.")
+    if len(docs) > MAX_CHAPTERS:
+        docs = docs[:MAX_CHAPTERS]
+
+    slug = synthetic.allocate_slug(book_title, "epub")
+    # Kullanılan resimleri media'ya yaz; basename → /media/<slug>/<name> eşlemesi.
+    used = {b for _, _, imgs in docs for b in imgs}
+    img_url = {}
+    for base in used:
+        if base in images:
+            rel = media.write_bytes(slug, base, images[base])
+            img_url[base] = "/media/" + rel
+    first_url = synthetic.chapter_url(slug, 1, "epub://")
+    library.upsert_book(slug, book_title, first_url, docs[0][0] or "Bölüm 1", 1)
+    for i, (title, html, _imgs) in enumerate(docs, start=1):
+        # Yer tutucuları gerçek /media URL'leriyle değiştir (bulunmayan resim boşalır).
+        for base in _imgs:
+            html = html.replace("@@IMG@@" + base, img_url.get(base, ""))
+        synthetic.append_chapter(
+            slug, book_title, title or f"Bölüm {i}", html,
+            chapter_no=i, scheme="epub://", content_type="html",
+        )
+    return {"slug": slug, "title": book_title, "chapter_count": len(docs), "first_url": first_url}
 
 
-def import_pdf(data: bytes, pages_per_chapter: int = 10, filename: str = "") -> dict:
-    """PDF baytlarını sahneli kitaba çevir (PyMuPDF ile metin; N sayfa = 1 bölüm)."""
+def import_pdf(data: bytes, pages_per_chapter: int = 1, filename: str = "") -> dict:
+    """PDF'i sayfa görsel modunda içe aktar: kaynak PDF saklanır, HER SAYFA = 1 bölüm.
+
+    Sayfalar `pdf://slug/N` şemalı, content_type="html" sahneli satır olur. Çeviri
+    YAPILMAZ — bir sayfa OKUNUNCA (on-demand) metni yerinde Türkçe'yle değiştirilip
+    sayfa PNG render edilir (import_translate). raw_source = sayfa metni (yalnız
+    referans/arama; render kaynak PDF'ten yapılır)."""
     try:
         import fitz  # PyMuPDF
     except ImportError as exc:
         raise BookImportError(
             "PDF içe aktarımı için PyMuPDF kurulu değil (pip install PyMuPDF)."
         ) from exc
-    n = max(1, int(pages_per_chapter or 10))
     book_title = (os.path.splitext(os.path.basename(filename or ""))[0] or "").strip() or "İçe Aktarılan PDF"
-    chapters: list[tuple[str, str]] = []
     try:
         doc = fitz.open(stream=data, filetype="pdf")
     except Exception as exc:
         raise BookImportError(f"PDF okunamadı: {exc}") from exc
     try:
-        page_texts = [doc.load_page(i).get_text("text") for i in range(doc.page_count)]
+        n = doc.page_count
+        page_texts = [doc.load_page(i).get_text("text") for i in range(min(n, MAX_CHAPTERS))]
     finally:
         doc.close()
-    for start in range(0, len(page_texts), n):
-        block = "\n\n".join(t.strip() for t in page_texts[start : start + n] if t.strip())
-        # PDF metninde tek satır sonları paragraf değildir; çift satır sonu = paragraf.
-        block = "\n\n".join(seg.strip() for seg in block.split("\n\n") if seg.strip())
-        if len(block.strip()) < _MIN_CHARS:
-            continue
-        chapters.append(("", block))
-    return _stage_book(book_title, chapters, "pdf", "pdf://")
+    if n == 0:
+        raise BookImportError("PDF'de sayfa yok.")
 
-
-def _stage_book(book_title: str, chapters: list[tuple[str, str]], prefix: str, scheme: str) -> dict:
-    if not chapters:
-        raise BookImportError("Dosyada çevrilebilir bölüm bulunamadı.")
-    if len(chapters) > MAX_CHAPTERS:
-        chapters = chapters[:MAX_CHAPTERS]
-    slug = synthetic.allocate_slug(book_title, prefix)
-    first_url = synthetic.chapter_url(slug, 1, scheme)
-    first_title = chapters[0][0] or "Bölüm 1"
-    # Kitabı rafa yaz (slug'ı rezerve eder) + konum bölüm 1.
-    library.upsert_book(slug, book_title, first_url, first_title, 1)
-    for i, (title, text) in enumerate(chapters, start=1):
+    slug = synthetic.allocate_slug(book_title, "pdf")
+    media.write_bytes(slug, "source.pdf", data)  # render için kaynak saklanır
+    first_url = synthetic.chapter_url(slug, 1, "pdf://")
+    library.upsert_book(slug, book_title, first_url, "Sayfa 1", 1)
+    for i, txt in enumerate(page_texts, start=1):
         synthetic.append_chapter(
-            slug, book_title, title or f"Bölüm {i}", text, chapter_no=i, scheme=scheme
+            slug, book_title, f"Sayfa {i}", txt.strip() or "(resim sayfası)",
+            chapter_no=i, scheme="pdf://", content_type="html",
         )
     return {
         "slug": slug,
         "title": book_title,
-        "chapter_count": len(chapters),
+        "chapter_count": len(page_texts),
         "first_url": first_url,
     }
