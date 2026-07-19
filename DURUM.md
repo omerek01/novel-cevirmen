@@ -23,27 +23,34 @@ okuyabilmek + okuma deneyimini (yaşayan raf, sonsuz okuma) güçlendirmek.
 | 5 | ~~Yeni bölüm kontrolü (check-updates)~~ | ❌ **İPTAL** | Kullanıcı kararı (2026-07-19). Bir kez kodlanıp geri alınmıştı; değeri belirsiz bulundu, tümden düşürüldü. |
 | 6 | Sonsuz okuma v2 + prefetch | ✅ main'de | Bölüm akışı (`article` başına), otomatik ekleme, konum {url, oran}, sonrakini ısıtma. Fix'ler: konum-track, geri'de scrollRestoration |
 | 7 | EPUB/PDF görsel çeviri | ✅ main'de | PDF = çevrilmiş **sayfa görselleri** (resim/düzen korunur), EPUB = yerinde HTML çeviri; okudukça çevirir. Fix'ler: metin binmesi (dikey akış), kısa sayfa kaydırma |
-| 8 | **Manga çevirisi** | 🔨 **KODLANDI** (dal `dilim-8-manga`) | Gemini-vision ile balon OCR+çeviri+görsele yazma. Telefon QA bekliyor. |
+| 8 | **Manga çevirisi (yerel motor)** | 🔨 **KODLANDI** (dal `dilim-8-manga`) | Yerel manga-image-translator: inpaint ile temiz silme + düzgün dizgi, KOTASIZ. Telefon QA bekliyor. |
 
 **Ayrıca:** Çeviri modeli yalnız `gemini-3.1-flash-lite` (2.5 yedekleri kaldırıldı, kullanıcı kararı).
 
-## Son eklenen: Manga çevirisi (dal `dilim-8-manga`, telefon QA bekliyor)
-Yaklaşım (kullanıcı seçimi): comic-translate gibi ağır ML araçları yerine **mevcut Gemini'nin
-görü (multimodal) yeteneği**. Akış: manga sayfasını Gemini'ye gönder → balon metinleri + konumları
-+ Türkçe çevirileri al → PIL ile orijinali kapat (arka plan rengini örnekleyip), Türkçe'yi kutuya
-sığdırarak yaz → PNG. Çeviri okudukça; Dilim 7'nin görsel-içerik altyapısını aynen kullanır.
+## Son eklenen: Manga çevirisi — YEREL MOTOR (dal `dilim-8-manga`, telefon QA bekliyor)
+İlk deneme (Gemini-vision + PIL kutu bindirme) kullanıcı tarafından "aşırı kötü" bulundu (uzun
+webtoon'da sayfa başına 4-5 vision çağrısı = kota; kutu bindirme yaklaşık). Kullanıcı **yerel motoru**
+seçti (planın orijinal önerisi). Vision-yedek kod hâlâ duruyor (motor yoksa devreye girer).
 
-**İki giriş yolu:**
-- **DOSYA sekmesi:** CBZ/ZIP (sayfa görselleri) ya da tek görsel → `manga://slug/N`.
-- **URL sekmesi:** manga bölüm linki (asurascans vb.) yapıştır → siteden sayfa görselleri çekilir
-  (Playwright, CF-bypass; sayfa dizini sayı-adlı görselden bulunur → reklam/öneri gridleri elenir;
-  referer ile indirilir). Roman linkleri eski metin akışına gider.
+**Motor:** `manga-image-translator` (app'in KARDEŞ dizini `../manga-image-translator`, AYRI venv).
+Ağır görü işi YEREL: balon algılama + OCR + **LaMa inpaint** (orijinali temiz siler) + düzgün dizgi.
+Bulut vision çağrısı YOK; yalnız metin çevirisi Gemini'ye (sayfa başına **1 ucuz** çağrı, batch).
+`manga_engine.py` subprocess köprüsü (CPU, `--translator gemini`, `GEMINI_MODEL=gemini-3.1-flash-lite`).
 
-Gerçek asurascans (Solo Leveling) e2e doğrulandı: 22 gerçek sayfa (reklam elendi), balonlar doğal
-Türkçe, sanat korundu, akıllı kutu koyu zeminde batmıyor.
-- **Bilinen sınırlar:** bazı SFX ("SIGH", "WELL") İngilizce kalır; sayfa arasına sayı-adlı reklam
-  girerse (nadir) elenmez (kullanıcı o sayfayı silebilir); çok-sütun/sağdan-sola manga sırası
-  test edilmedi. İyileştirme sonraya.
+**Kurulum (kullanıcının PC'sinde yapıldı, `../manga-image-translator`):** `git clone` + `py -3.12 -m
+venv venv` + `venv/Scripts/python -m pip install -r requirements.txt`. Windows'ta **pydensecrf**
+derlenmiyor → requirements'tan çıkarıldı + `manga_translator/mask_refinement/text_mask_utils.py`
+import'u opsiyonel yamalandı (CRF iyileştirme atlanır). İlk çalıştırma modelleri indirir (~1-2GB).
+
+**İki giriş yolu:** DOSYA (CBZ/ZIP/görsel) + URL (asurascans → sayfalar çekilir, reklam/öneri gridi
+elenir). Reader: **kesintisiz** (webtoon, ayraçsız).
+
+**Gerçek e2e (Swordmaster 15000px webtoon) GÖRSEL doğrulandı:** orijinal İngilizce temiz inpaint,
+Türkçe balona düzgün dizildi ("TEMEL KILIÇ USTALIĞI TEORİSİ Mİ?") — sanki baştan Türkçe basılmış.
+**Süre: ~49s/sayfa** (CPU, model yükleme dahil; prefetch ile okurken sonraki hazırlanır).
+- **Sınırlar/sonraya:** CPU'da sayfa başına ~40-50s (subprocess her seferinde model yükler — server-
+  modu hızlandırır); SFX çevrilmez (doğru); bazı uzun kelime satır sonu; motor kurulu değilse
+  Gemini-vision yedeğine düşer.
 
 ## Bilinçle ertelenenler (ihtiyaç olunca)
 - Okuma geçmişi listesi ekranı · Ayarlar'da "sistem" bloğu (son kontrol, bekleyen iş, cache boyutu)
