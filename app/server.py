@@ -7,6 +7,7 @@ Telefondan erişim: http://<PC-LAN-IP>:8000  (aynı Wi-Fi)
 from __future__ import annotations
 
 import sys
+import threading
 from pathlib import Path
 
 APP_DIR = Path(__file__).resolve().parent
@@ -79,6 +80,52 @@ def get_chapter(
         return pipeline.get_or_translate(url, API_KEY, refresh, want_source=source)
     except (ImportedChapterMissing, CloudflareChallenge, FetchError, TranslateError) as exc:
         raise _pipeline_http_error(exc)
+
+
+class PrefetchRequest(BaseModel):
+    url: str  # arka planda ısıtılacak bölümün (genelde next_url) http(s) adresi
+
+
+# Uçuştaki prefetch'ler — aynı URL için ikinci tetiği (fetch/translate masrafı) engeller.
+# Single-flight pipeline'da da tekilleştirir; bu set, thread bile açmadan erken kesip
+# gereksiz iş parçacığı/DB dokunuşu üretmez.
+_PREFETCH_INFLIGHT: set[str] = set()
+_PREFETCH_LOCK = threading.Lock()
+
+
+@app.post("/api/prefetch")
+def prefetch_chapter(req: PrefetchRequest) -> dict:
+    """Sonraki bölümü sessizce arka planda hazırla (sonsuz okuma ısıtması).
+
+    Okuyucu bir bölüm açınca `next_url`'i bu uçla ısıtır: kullanıcı akışın sonuna
+    geldiğinde bölüm cache'te hazır olur (0 bekleme). `background=True` → çekim ve
+    çeviri DÜŞÜK öncelikli (okuyucunun canlı isteği kapıda öne geçer, E-1) ve
+    kitabın "kaldığın yer" konumu İLERLETİLMEZ — ısıtılan bölüm okunmuş sayılmaz.
+    Yalnız http(s) ısıtılır; sentetik şemalar (`paste://`) yok sayılır. Fire-and-
+    forget: uç hemen döner, iş daemon thread'de sürer; hata yutulur (okuyucu bölümü
+    gerçekten açınca zaten yeniden dener). reading-log'a hiç girmez (karar #8).
+    """
+    url = req.url
+    if not API_KEY or not url or not url.startswith(("http://", "https://")):
+        return {"ok": True, "queued": False}
+    if cache.get_chapter(url) is not None:
+        return {"ok": True, "queued": False, "cached": True}
+    with _PREFETCH_LOCK:
+        if url in _PREFETCH_INFLIGHT:
+            return {"ok": True, "queued": False}
+        _PREFETCH_INFLIGHT.add(url)
+
+    def _run() -> None:
+        try:
+            pipeline.get_or_translate(url, API_KEY, background=True)
+        except Exception:
+            pass  # prefetch en iyi çabadır; okuyucu bölümü açınca yeniden dener
+        finally:
+            with _PREFETCH_LOCK:
+                _PREFETCH_INFLIGHT.discard(url)
+
+    threading.Thread(target=_run, daemon=True).start()
+    return {"ok": True, "queued": True}
 
 
 @app.delete("/api/chapter")
