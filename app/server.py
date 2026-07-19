@@ -22,12 +22,13 @@ mimetypes.add_type("application/manifest+json", ".webmanifest")
 mimetypes.add_type("image/svg+xml", ".svg")
 
 from dotenv import load_dotenv  # noqa: E402
-from fastapi import FastAPI, HTTPException, Query, Response  # noqa: E402
+from fastapi import FastAPI, HTTPException, Query, Request, Response  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
+from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import cache, epub_export, glossary, jobs, library, pipeline, reading_log, synthetic  # noqa: E402
+from core import cache, epub_export, glossary, import_book, jobs, library, pipeline, reading_log, synthetic  # noqa: E402
 from core.synthetic import ImportedChapterMissing  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
 from core.translate import TranslateError  # noqa: E402
@@ -231,6 +232,47 @@ def remove_book(slug: str) -> dict:
     if not ok:
         raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
     return {"ok": True}
+
+
+MAX_UPLOAD = 50 * 1024 * 1024  # 50MB yükleme sınırı (plan / D-B8)
+
+
+async def _read_upload(request: Request) -> bytes:
+    """Yükleme gövdesini oku + boyut sınırını uygula (dosya adı asla path'e geçmez)."""
+    body = await request.body()
+    if not body:
+        raise HTTPException(status_code=400, detail="Boş dosya.")
+    if len(body) > MAX_UPLOAD:
+        raise HTTPException(status_code=413, detail="Dosya 50MB sınırını aşıyor.")
+    return body
+
+
+@app.post("/api/import/epub")
+async def import_epub_endpoint(request: Request, filename: str = Query("")) -> dict:
+    """EPUB dosyasını (ham gövde) sahneli kitaba çevir. Çeviri YAPMAZ — bölümler
+    okununca ya da TOPLU ÇEVİR ile çevrilir (kota kapısı). Döner: {slug, title,
+    chapter_count, first_url}. Ağır parse thread havuzunda (event loop bloklanmaz)."""
+    body = await _read_upload(request)
+    try:
+        return await run_in_threadpool(import_book.import_epub, body, filename)
+    except import_book.BookImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@app.post("/api/import/pdf")
+async def import_pdf_endpoint(
+    request: Request,
+    filename: str = Query(""),
+    pages_per_chapter: int = Query(10, ge=1, le=200),
+) -> dict:
+    """PDF dosyasını sahneli kitaba çevir (N sayfa = 1 bölüm). Çeviri YAPMAZ."""
+    body = await _read_upload(request)
+    try:
+        return await run_in_threadpool(
+            import_book.import_pdf, body, pages_per_chapter, filename
+        )
+    except import_book.BookImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/import/paste")

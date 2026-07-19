@@ -109,6 +109,12 @@ override), `connect()` (WAL + `busy_timeout`), `ensure_column()` (idempotent mig
 
 **`app/core/epub_export.py`** — EbookLib ile cache'teki çevrilmiş bölümlerden ePub üretir.
 
+**`app/core/import_book.py`** — EPUB (EbookLib, spine sırası) / PDF (PyMuPDF, N sayfa =
+1 bölüm) dosyalarından kitap içe aktarır: bölümleri `epub://`/`pdf://` şemalı **sahneli**
+satır (raw_source dolu, translation NULL) olarak yazar; ÇEVİRMEZ — okuma/bulk raw_source'tan
+çevirir (kota kapısı). `synthetic.append_chapter(scheme=...)` ile zincirler. Uçlar: `POST
+/api/import/epub`, `POST /api/import/pdf` (ham gövde, 50MB sınır, ağır parse threadpool'da).
+
 **`app/web/`** — Çerçevesiz (vanilla JS) PWA, **build adımı yok**: `app.js`, `index.html`,
 `style.css`, `sw.js`. **`scripts/start_chrome_cdp.py`** — gerçek Chrome'u `:9222` debug
 portu + ayrı profil (`cache/.chrome-cdp`) ile açar. **`faz0/`** — eski kavram-kanıtı
