@@ -109,11 +109,23 @@ override), `connect()` (WAL + `busy_timeout`), `ensure_column()` (idempotent mig
 
 **`app/core/epub_export.py`** — EbookLib ile cache'teki çevrilmiş bölümlerden ePub üretir.
 
-**`app/core/import_book.py`** — EPUB (EbookLib, spine sırası) / PDF (PyMuPDF, N sayfa =
-1 bölüm) dosyalarından kitap içe aktarır: bölümleri `epub://`/`pdf://` şemalı **sahneli**
-satır (raw_source dolu, translation NULL) olarak yazar; ÇEVİRMEZ — okuma/bulk raw_source'tan
-çevirir (kota kapısı). `synthetic.append_chapter(scheme=...)` ile zincirler. Uçlar: `POST
-/api/import/epub`, `POST /api/import/pdf` (ham gövde, 50MB sınır, ağır parse threadpool'da).
+**`app/core/import_book.py`** — EPUB/PDF dosyalarından **GÖRSEL** kitap içe aktarır (web-
+romanı gibi düz metin DEĞİL; sayfa/bölümün kendisi çevrilir, resim+düzen korunur). PDF:
+her SAYFA = 1 bölüm, kaynak PDF `media`'ya saklanır (`pdf://slug/N`). EPUB: her doküman =
+1 bölüm, gömülü resimler `media`'ya çıkarılır + `<img src>` `/media`'ya yeniden yazılır,
+gövde HTML'i raw_source'ta (`epub://slug/N`). İkisi de `content_type="html"` sahneli satır;
+İÇE AKTARIM ÇEVİRMEZ, yalnız sahneler. Uçlar `POST /api/import/epub` · `/pdf` (ham gövde,
+50MB, parse threadpool).
+
+**`app/core/import_translate.py`** — içe aktarılan sayfayı OKUDUKÇA (on-demand) çevir+üret:
+PDF → sayfa metin bloklarını bbox'la çıkar, hizalı Türkçe çeviri, orijinali redaction ile
+sil + Türkçe'yi aynı yere yaz (Türkçe TTF, font otomatik küçülür), sayfayı PNG render →
+`<img>` HTML. EPUB → HTML'i temizle (script/on*/href elenir), blok metinleri yerinde çevir,
+resim/yapı korunur. `pipeline._render_import_page` bunu çağırır; sonuç HTML cache'lenir.
+
+**`app/core/media.py`** — içe aktarılan kitapların medyası (`cache/media/<slug>/`: kaynak
+PDF, render'lı sayfa PNG'leri, EPUB resimleri). `GET /media/<yol>` ile YALNIZ çevrimiçi
+servis (SW DATA_CACHE'ine girmez); path-traversal korumalı.
 
 **`app/web/`** — Çerçevesiz (vanilla JS) PWA, **build adımı yok**: `app.js`, `index.html`,
 `style.css`, `sw.js`. **`scripts/start_chrome_cdp.py`** — gerçek Chrome'u `:9222` debug
