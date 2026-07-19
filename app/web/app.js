@@ -2185,6 +2185,12 @@ updateSettingsUI();
 document.querySelectorAll("#shelfFilters .chip").forEach((c) => {
   c.setAttribute("aria-pressed", String(c.dataset.filter === shelfFilter));
 });
+// Tarayıcının otomatik scroll restorasyonunu KAPAT (SPA kendi restorasyonunu yapar:
+// loadChapter restoreRatio). Aksi halde geri jestinde tarayıcı pencereyi tepeye
+// kaydırır, reader HÂLÂ görünürken bir scroll olayı tetiklenir ve updateActiveChapter
+// aktif bölümü akışın İLK (en üstteki) bölümüne sıfırlar → konum başladığın bölüme
+// geri yazılır ("bir önceki/ilk bölüme dönüyor" bug'ı; sonsuz okuma v2 ile geldi).
+if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 history.replaceState({ view: "library" }, ""); // kök kayıt: buradan geri = uygulamadan çık
 renderLibrary();
 showView("library");
