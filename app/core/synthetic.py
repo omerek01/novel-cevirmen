@@ -13,7 +13,8 @@ import time
 
 from . import cache, db
 
-SYNTHETIC_SCHEMES = ("paste://", "pdf://", "manga://")
+SYNTHETIC_SCHEMES = ("paste://", "pdf://", "manga://", "epub://")
+SYNTHETIC_SLUG_PREFIXES = ("paste-", "pdf-", "manga-", "epub-")
 
 
 def is_synthetic_url(url: str) -> bool:
@@ -21,24 +22,24 @@ def is_synthetic_url(url: str) -> bool:
 
 
 def is_synthetic_slug(slug: str) -> bool:
-    return bool(slug) and slug.startswith(("paste-", "pdf-", "manga-"))
+    return bool(slug) and slug.startswith(SYNTHETIC_SLUG_PREFIXES)
 
 
 class ImportedChapterMissing(Exception):
     """Sentetik bölümün satırı yok — kaynak geri getirilemez (E-7: 404'e gider)."""
 
 
-def slugify_title(title: str) -> str:
-    """Başlıktan paste- önekli slug (E-13: boş sonuç → paste-<rastgele6>)."""
+def slugify_title(title: str, prefix: str = "paste") -> str:
+    """Başlıktan <prefix>- önekli slug (E-13: boş sonuç → <prefix>-<rastgele6>)."""
     s = re.sub(r"[^a-z0-9]+", "-", (title or "").lower()).strip("-")
     if not s:
-        return f"paste-{secrets.token_hex(3)}"
-    return f"paste-{s}"
+        return f"{prefix}-{secrets.token_hex(3)}"
+    return f"{prefix}-{s}"
 
 
-def allocate_slug(title: str) -> str:
-    """Çakışmayan slug tahsis et: paste-x, paste-x-2, paste-x-3 …"""
-    base = slugify_title(title)
+def allocate_slug(title: str, prefix: str = "paste") -> str:
+    """Çakışmayan slug tahsis et: <prefix>-x, <prefix>-x-2, <prefix>-x-3 …"""
+    base = slugify_title(title, prefix)
     from . import library
     library._connect().close()  # books şeması garanti (tembel oluşturma)
     conn = db.connect()
@@ -55,8 +56,8 @@ def allocate_slug(title: str) -> str:
         conn.close()
 
 
-def chapter_url(slug: str, no: int) -> str:
-    return f"paste://{slug}/{no}"
+def chapter_url(slug: str, no: int, scheme: str = "paste://") -> str:
+    return f"{scheme}{slug}/{no}"
 
 
 def append_chapter(
@@ -65,11 +66,13 @@ def append_chapter(
     chapter_title: str,
     raw_text: str,
     chapter_no: int | None = None,
+    scheme: str = "paste://",
 ) -> dict:
     """Kitabın zincirine sahneli bölüm ekle — TEK transaction (E-23).
 
     Numara tahsisi (max+1, elle geçersiz kılınabilir) + INSERT (çakışmada hata,
     REPLACE değil) + önceki kuyruk bölümünün next_url bağlaması atomiktir.
+    scheme: paste:// (metin) / epub:// / pdf:// — sahneli URL'nin şeması.
     Döner: {"url", "chapter_no", "prev_url"}.
     """
     cache._connect().close()  # chapters şeması + raw_source sütunu garanti
@@ -83,7 +86,7 @@ def append_chapter(
         ).fetchone()
         prev_url, prev_no = (row[0], row[1]) if row else (None, None)
         no = chapter_no if chapter_no is not None else (prev_no or 0) + 1
-        url = chapter_url(slug, no)
+        url = chapter_url(slug, no, scheme)
         conn.execute(
             "INSERT INTO chapters (url, book_slug, book_title, title, chapter_no, "
             "translation, next_url, prev_url, raw_source, created_at) "
