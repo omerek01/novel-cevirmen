@@ -232,73 +232,132 @@ def _manga_regions(image_bytes: str, api_key: str) -> list[dict]:
     return []
 
 
+_SEG_HEIGHT = 3600  # Gemini bu boyda görselde balonları doğru okur/konumlar. Uzun webtoon
+_SEG_OVERLAP = 250  # şeritleri (10-15 bin px) bu dilimlere bölünür; sınırda kesilen balon
+# örtüşme sayesinde en az bir dilimde TAM kalır, kopyalar IOU ile temizlenir.
+
+
+def _png_bytes(img) -> bytes:
+    import io
+
+    b = io.BytesIO()
+    img.save(b, "PNG")
+    return b.getvalue()
+
+
+def _region_px(r, W, seg_h, y_off):
+    """Gemini bölgesini (box_2d 0-1000, dilime göre) tam görsel piksel bbox'ına çevir."""
+    box = r.get("box_2d") or r.get("bbox")
+    tr = (r.get("tr") or r.get("translation") or "").strip()
+    if not box or len(box) != 4 or not tr:
+        return None
+    ymin, xmin, ymax, xmax = box
+    x0, x1 = xmin / 1000 * W, xmax / 1000 * W
+    y0, y1 = y_off + ymin / 1000 * seg_h, y_off + ymax / 1000 * seg_h
+    if x1 <= x0 or y1 <= y0:
+        return None
+    return (x0, y0, x1, y1, tr)
+
+
+def _dedupe_regions(regs):
+    """Örtüşen dilimlerde iki kez saptanan balonları IOU ile tekilleştir (büyüğü kalır)."""
+    def area(b):
+        return max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+
+    def iou(a, b):
+        ix0, iy0 = max(a[0], b[0]), max(a[1], b[1])
+        ix1, iy1 = min(a[2], b[2]), min(a[3], b[3])
+        inter = max(0.0, ix1 - ix0) * max(0.0, iy1 - iy0)
+        u = area(a) + area(b) - inter
+        return inter / u if u > 0 else 0.0
+
+    kept = []
+    for r in sorted(regs, key=lambda r: area(r[:4]), reverse=True):
+        if any(iou(r[:4], k[:4]) > 0.4 for k in kept):
+            continue
+        kept.append(r)
+    return kept
+
+
+def _manga_regions_all(img, api_key):
+    """Sayfayı çevirilecek bölgelere ayır. UZUN webtoon (>_SEG_HEIGHT) dilimlere bölünür;
+    her dilim ayrı Gemini çağrısıyla okunur (devasa görselde OCR/konum bozuluyor) →
+    koordinatlar tam görsele eşlenir → örtüşen kopyalar temizlenir."""
+    W, H = img.size
+    raw = []
+    if H <= _SEG_HEIGHT:
+        for r in _manga_regions(_png_bytes(img), api_key):
+            px = _region_px(r, W, H, 0)
+            if px:
+                raw.append(px)
+    else:
+        y = 0
+        while y < H:
+            y1 = min(y + _SEG_HEIGHT, H)
+            seg = img.crop((0, y, W, y1))
+            for r in _manga_regions(_png_bytes(seg), api_key):
+                px = _region_px(r, W, y1 - y, y)
+                if px:
+                    raw.append(px)
+            if y1 >= H:
+                break
+            y = y1 - _SEG_OVERLAP  # örtüşme: sınırdaki balon en az bir dilimde tam
+    return _dedupe_regions(raw)
+
+
 def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
-    """Manga sayfasını çevir: Gemini-vision balon OCR+çeviri → orijinali kapat, Türkçe'yi
-    üstüne yaz → PNG render → media'ya kaydet → <img> HTML döndür."""
-    from PIL import Image, ImageDraw, ImageFont
+    """Manga sayfasını çevir: Gemini-vision balon OCR+çeviri (uzun şerit dilimlenir) →
+    orijinali kapat, Türkçe'yi üstüne yaz → PNG render → media → <img> HTML döndür."""
+    from PIL import Image, ImageDraw
 
     src = media.book_dir(slug) / f"src-{page_no}"
     if not src.is_file():
         raise translate.TranslateError("Manga sayfası bulunamadı (yeniden içe aktarın).")
     img = Image.open(str(src)).convert("RGB")  # PIL formatı içerikten algılar (jpg/png/webp)
-    # Gemini'ye PNG olarak gönder
-    import io
-
-    buf = io.BytesIO()
-    img.save(buf, "PNG")
-    regions = _manga_regions(buf.getvalue(), api_key)
-
     W, H = img.size
+    regions = _manga_regions_all(img, api_key)
+
     orig = img.copy()  # renk örneklemesi orijinalden (çizilen kutular bulaşmasın)
     draw = ImageDraw.Draw(img)
     fontfile = _tr_font()
-    for r in regions:
-        box = r.get("box_2d") or r.get("bbox")
-        tr = (r.get("tr") or r.get("translation") or "").strip()
-        if not box or len(box) != 4 or not tr:
-            continue
-        ymin, xmin, ymax, xmax = box
-        x0, y0 = xmin / 1000 * W, ymin / 1000 * H
-        x1, y1 = xmax / 1000 * W, ymax / 1000 * H
-        if x1 <= x0 or y1 <= y0:
-            continue
+    for (x0, y0, x1, y1, tr) in regions:
         fill, ink = _bubble_colors(orig, (x0, y0, x1, y1))
         _draw_translated_bubble(draw, (x0, y0, x1, y1), tr, fontfile, fill, ink)
 
-    out = io.BytesIO()
-    img.save(out, "PNG")
-    rel = media.write_bytes(slug, f"page-{page_no}.png", out.getvalue())
+    rel = media.write_bytes(slug, f"page-{page_no}.png", _png_bytes(img))
     return page_image_html(rel, page_no, W, H)
 
 
 def _bubble_colors(img, box):
-    """Balon arka plan rengini KÖŞELERDEN örnekle (merkez metindir) + kontrastlı yazı
-    rengi seç. Beyaz balon→beyaz dolgu/siyah yazı; koyu zemin→koyu dolgu/beyaz yazı."""
+    """Balon arka plan rengini MEDYAN'la örnekle (metin azınlık → medyan arka plandır) +
+    kontrastlı yazı rengi. Açık balon → TEMİZ BEYAZ dolgu/siyah yazı (gri sızma önlenir);
+    koyu zemin → koyu dolgu/beyaz yazı."""
     from PIL import ImageStat
 
     x0, y0, x1, y1 = (int(v) for v in box)
-    w, h = x1 - x0, y1 - y0
-    if w < 8 or h < 8:
+    if x1 - x0 < 8 or y1 - y0 < 8:
         return (255, 255, 255), (0, 0, 0)
-    s = max(2, min(w, h) // 8)
-    corners = [(x0, y0, x0 + s, y0 + s), (x1 - s, y0, x1, y0 + s),
-               (x0, y1 - s, x0 + s, y1), (x1 - s, y1 - s, x1, y1)]
-    rr = gg = bb = 0.0
-    for c in corners:
-        m = ImageStat.Stat(img.crop(c)).mean
-        rr += m[0]; gg += m[1]; bb += m[2]
-    rr, gg, bb = rr / 4, gg / 4, bb / 4
-    lum = 0.299 * rr + 0.587 * gg + 0.114 * bb
-    return (int(rr), int(gg), int(bb)), ((0, 0, 0) if lum > 140 else (255, 255, 255))
+    med = ImageStat.Stat(img.crop((x0, y0, x1, y1))).median
+    r, g, b = med[0], med[1], med[2]
+    lum = 0.299 * r + 0.587 * g + 0.114 * b
+    if lum >= 175:  # beyaz/açık balon → temiz beyaz (medyan hafif gri olsa da)
+        return (255, 255, 255), (0, 0, 0)
+    if lum <= 70:  # koyu balon/zemin → koyu dolgu, beyaz yazı
+        return (int(r), int(g), int(b)), (255, 255, 255)
+    return (int(r), int(g), int(b)), ((0, 0, 0) if lum > 130 else (255, 255, 255))
 
 
 def _draw_translated_bubble(draw, box, text, fontfile, fill=(255, 255, 255), ink=(0, 0, 0)):
-    """Balonu arka plan rengiyle kapat + Türkçe'yi kontrastlı renkte kutuya sığdır."""
+    """Orijinali kapat (bbox biraz GENİŞLETİLİR — sızan yazı kalmasın) + Türkçe'yi
+    kontrastlı renkte, kutuya sığacak şekilde ORTALAYARAK yaz."""
     from PIL import ImageFont
 
     x0, y0, x1, y1 = box
-    draw.rectangle((x0, y0, x1, y1), fill=fill)
-    bw, bh = x1 - x0 - 8, y1 - y0 - 6
+    # Gemini bbox'ı bazen metinden dar → üstte/altta orijinal sızıyor. Biraz genişlet.
+    padx = max(3.0, (x1 - x0) * 0.06)
+    pady = max(3.0, (y1 - y0) * 0.10)
+    draw.rectangle((x0 - padx, y0 - pady, x1 + padx, y1 + pady), fill=fill)
+    bw, bh = (x1 - x0) + 2 * padx - 8, (y1 - y0) + 2 * pady - 6
     size = 22
     while size >= 9:
         font = ImageFont.truetype(fontfile, size) if fontfile else ImageFont.load_default()
@@ -315,7 +374,11 @@ def _draw_translated_bubble(draw, box, text, fontfile, fill=(255, 255, 255), ink
         if len(lines) * (size + 3) <= bh or size == 9:
             break
         size -= 1
-    yy = y0 + 3
+    # Kutuya göre DİKEY + YATAY ortala (kısa metin köşede boş durmasın).
+    total_h = len(lines) * (size + 3)
+    yy = (y0 - pady) + max(3.0, ((y1 - y0) + 2 * pady - total_h) / 2)
+    cx = (x0 + x1) / 2
     for ln in lines:
-        draw.text((x0 + 4, yy), ln, fill=ink, font=font)
+        lw = draw.textlength(ln, font=font)
+        draw.text((cx - lw / 2, yy), ln, fill=ink, font=font)
         yy += size + 3
