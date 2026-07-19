@@ -27,11 +27,13 @@
     "skip_lang": null,
     "gpt_config": null,
     "translator_chain": null,
-    "selective_translation": null
+    "selective_translation": null,
+    "enable_post_translation_check": false,
+    "post_check_max_retry_attempts": 0
   },
   "detector": {
     "detector": "default",
-    "detection_size": 2048,
+    "detection_size": 1536,
     "text_threshold": 0.5,
     "det_rotate": false,
     "det_auto_rotate": false,
@@ -47,7 +49,7 @@
   },
   "inpainter": {
     "inpainter": "lama_large",
-    "inpainting_size": 2048,
+    "inpainting_size": 1024,
     "inpainting_precision": "fp32"
   },
   "ocr": {
