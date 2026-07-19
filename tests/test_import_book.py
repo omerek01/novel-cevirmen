@@ -307,6 +307,49 @@ def test_pick_page_images_excludes_cover_and_sorts():
     assert picked[0].endswith("001.webp") and picked[-1].endswith("010.webp")  # doğal sıra
 
 
+def test_manga_continue_appends_next_chapter(monkeypatch):
+    pytest.importorskip("httpx")
+    import io
+
+    from PIL import Image
+    from fastapi.testclient import TestClient
+
+    from core import library, manga_batch, manga_fetch
+    import server
+
+    def _img():
+        b = io.BytesIO()
+        Image.new("RGB", (760, 1200), (240, 240, 240)).save(b, "PNG")
+        return b.getvalue()
+
+    res = import_book._stage_manga("Devam Testi", [_img() for _ in range(3)])
+    slug = res["slug"]
+    library.set_manga_source(slug, "https://site/ch/1", "https://site/ch/2")
+
+    # Sonraki bölüm fetch'i sahte: 2 yeni sayfa + sonraki-sonraki URL.
+    monkeypatch.setattr(
+        manga_fetch, "fetch_manga_chapter",
+        lambda url: {"title": "Devam Testi", "images": [_img(), _img()], "next_url": "https://site/ch/3"},
+    )
+    monkeypatch.setattr(manga_batch, "ensure_started", lambda s, k: {"running": True})
+    monkeypatch.setattr(server, "API_KEY", "test-key")
+    client = TestClient(server.app)
+
+    r = client.post("/api/manga/continue", json={"slug": slug})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["available"] and body["added"] == 2 and body["has_next"]
+    # Yeni sayfalar zincire eklendi (4, 5); kaynak/sonraki URL ilerledi.
+    assert cache.get_staged(f"manga://{slug}/4") is not None
+    assert cache.get_staged(f"manga://{slug}/5") is not None
+    bk = library.get_book(slug)
+    assert bk["manga_source_url"] == "https://site/ch/2" and bk["manga_next_url"] == "https://site/ch/3"
+
+    # Sonraki URL yoksa → devam yok (available False).
+    library.set_manga_source(slug, "https://site/ch/3", None)
+    assert client.post("/api/manga/continue", json={"slug": slug}).json()["available"] is False
+
+
 def test_expand_tall_pages_slices_webtoon():
     import io
 

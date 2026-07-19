@@ -115,11 +115,41 @@ def import_manga(data: bytes, filename: str = "") -> dict:
 
 
 def import_manga_url(url: str) -> dict:
-    """Manga bölümünü WEB'den çek (asurascans vb.) → sayfaları sahnele. Çeviri okudukça."""
+    """Manga bölümünü WEB'den çek (asurascans vb.) → sayfaları sahnele. Çeviri okudukça.
+
+    Kaynak + sonraki-bölüm URL'i kitaba saklanır → okuyucu bölüm sonunda otomatik devam
+    eder (novel sonsuz okumanın manga karşılığı)."""
     from . import manga_fetch
 
     r = manga_fetch.fetch_manga_chapter(url)
-    return _stage_manga(r["title"], r["images"])
+    res = _stage_manga(r["title"], r["images"])
+    library.set_manga_source(res["slug"], url, r.get("next_url"))
+    res["has_next"] = bool(r.get("next_url"))
+    return res
+
+
+def append_manga_chapter(slug: str, book_title: str, images: list[bytes]) -> dict:
+    """Var olan manga kitabına yeni bölümün sayfalarını EKLE (kesintisiz numaralandırma).
+
+    Sonsuz devam: mevcut son sayfadan sonra devam eden src-N + manga:// bölümleri yazar
+    (zincir next_url ile bağlanır). Uzun şeritler yine dilimlenir. Döner: {added, first_url}."""
+    if not images:
+        return {"added": 0, "first_url": None}
+    images = _expand_tall_pages(images)
+    existing = [int(p.name[4:]) for p in media.book_dir(slug).glob("src-*") if p.name[4:].isdigit()]
+    start = (max(existing) + 1) if existing else 1
+    if start - 1 + len(images) > MAX_CHAPTERS:
+        images = images[: MAX_CHAPTERS - (start - 1)]
+    first_url = None
+    for i, raw in enumerate(images, start=start):
+        media.write_bytes(slug, f"src-{i}", raw)
+        r = synthetic.append_chapter(
+            slug, book_title, f"Sayfa {i}", "(manga sayfası)",
+            chapter_no=i, scheme="manga://", content_type="html",
+        )
+        if first_url is None:
+            first_url = r["url"]
+    return {"added": len(images), "first_url": first_url}
 
 
 def _stage_manga(book_title: str, images: list[bytes]) -> dict:

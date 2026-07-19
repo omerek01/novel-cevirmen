@@ -322,6 +322,45 @@ def import_manga_url_endpoint(req: MangaUrlRequest) -> dict:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+class MangaContinueRequest(BaseModel):
+    slug: str  # devam ettirilecek manga kitabının slug'ı
+
+
+@app.post("/api/manga/continue")
+def manga_continue(req: MangaContinueRequest) -> dict:
+    """Manga bölümü bitince SONRAKİ bölümü site'den çek + zincire ekle (sonsuz devam).
+
+    Kitapta saklı manga_next_url'i çeker, sayfaları dilimleyip mevcut kitaba ekler,
+    kaynak/sonraki URL'i günceller, batch çeviriyi başlatır. Novel sonsuz okumanın manga
+    karşılığı. Sync def: Playwright threadpool'da. Döner: {available, first_url, added,
+    has_next}. available False → devam yok (son bölüm / manga değil / next yok)."""
+    from core import manga_batch, manga_fetch
+
+    slug = library.resolve_slug(req.slug)
+    book = library.get_book(slug)
+    if not book or not slug.startswith("manga-"):
+        return {"available": False, "reason": "not_manga"}
+    nxt = book.get("manga_next_url")
+    if not nxt:
+        return {"available": False, "reason": "no_next"}
+    try:
+        r = manga_fetch.fetch_manga_chapter(nxt)
+    except (CloudflareChallenge, FetchError) as exc:
+        raise _pipeline_http_error(exc)
+    res = import_book.append_manga_chapter(slug, book["title"], r.get("images") or [])
+    if not res.get("added"):
+        return {"available": False, "reason": "empty"}  # boş çekim → retryable, next korunur
+    library.set_manga_source(slug, nxt, r.get("next_url"))
+    if API_KEY:
+        manga_batch.ensure_started(slug, API_KEY)
+    return {
+        "available": True,
+        "first_url": res.get("first_url"),
+        "added": res.get("added", 0),
+        "has_next": bool(r.get("next_url")),
+    }
+
+
 @app.post("/api/import/manga")
 async def import_manga_endpoint(request: Request, filename: str = Query("")) -> dict:
     """Manga'yı (CBZ/ZIP ya da tek görsel, ham gövde) sahneli kitaba çevir. Çeviri

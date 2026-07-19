@@ -138,10 +138,15 @@ def translate_chapter_engine(slug: str, api_key: str, on_page=None) -> None:
 
     from PIL import Image
 
+    from . import cache
+
     src_dir = media.book_dir(slug)
     nums = sorted(
         int(p.name[4:]) for p in src_dir.glob("src-*") if p.name[4:].isdigit()
     )
+    # Artımlı: zaten çevrili (cache'te) sayfaları atla → sonsuz devamda yalnız YENİ
+    # sayfalar çevrilir, batch yeniden başlarsa kaldığı yerden sürer.
+    nums = [n for n in nums if not cache.get_chapter(f"manga://{slug}/{n}")]
     if not nums:
         return
     with tempfile.TemporaryDirectory() as td:

@@ -43,6 +43,7 @@ const loggedReads = new Set(); // bu oturumda reading-log'a yazılmış url'ler
 const prefetched = new Set(); // ısıtma (prefetch) tetiklenmiş next url'leri
 let sourceLoading = false; // eski bölüm kaynağı yüklenirken çift-istek engeli
 let offlineStop = false;
+let mangaNextExhausted = false; // manga: site'de sonraki bölüm kalmadı → devam deneme (resetStream'de sıfırlanır)
 let isRestoring = false; // programatik scroll sırasında kaydı baskıla
 let scrollSaveTimer = null;
 let bulkPollTimer = null;
@@ -1163,6 +1164,7 @@ function resetStream() {
   stream = [];
   activeUrl = null;
   streamBusy = false;
+  mangaNextExhausted = false; // yeni kitap/bölüm → manga devam bayrağını sıfırla
   loggedReads.clear();
   if (bottomObserver) {
     bottomObserver.disconnect();
@@ -1394,6 +1396,12 @@ function updateEndCard() {
     d.className = "stream-hint";
     d.textContent = "Sonraki bölüm hazırlanıyor…";
     s.appendChild(d);
+  } else if (last.isManga && last.bookSlug && !mangaNextExhausted) {
+    // Manga zincir sonu ama site'de sonraki bölüm olabilir → gözlemci devam eder.
+    const d = document.createElement("div");
+    d.className = "stream-hint";
+    d.textContent = "Sonraki bölüm hazırlanıyor…";
+    s.appendChild(d);
   } else if (/^https?:\/\//.test(last.url || "")) {
     const btn = document.createElement("button");
     btn.className = "primary-btn stream-cta";
@@ -1411,7 +1419,10 @@ function updateEndCard() {
 async function maybeAppendNext() {
   if (streamBusy || !stream.length) return;
   const last = stream[stream.length - 1];
-  if (!last.nextUrl || last.translating) return; // son sayfa çevriliyorsa sıradakini bekle
+  if (last.translating) return; // sayfa çevriliyorsa sıradakini bekle
+  // Manga zincir sonu (nextUrl yok) ama site'de sonraki bölüm olabilir → otomatik devam.
+  const mangaContinue = !last.nextUrl && last.isManga && last.bookSlug && !mangaNextExhausted;
+  if (!last.nextUrl && !mangaContinue) return;
   streamBusy = true;
   let ok = false;
   const s = el("streamEnd");
@@ -1421,9 +1432,27 @@ async function maybeAppendNext() {
   load.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Sonraki bölüm yükleniyor…`;
   s.appendChild(load);
   try {
+    let targetUrl = last.nextUrl;
+    if (mangaContinue) {
+      // Site'den SONRAKİ bölümü çek + zincire ekle (novel sonsuz okumanın manga karşılığı).
+      const cont = await fetch("/api/manga/continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: last.bookSlug }),
+      }).then((r) => r.json());
+      if (!cont.available || !cont.first_url) {
+        mangaNextExhausted = true; // son bölüm / devam yok → bir daha deneme
+        s.replaceChildren();
+        updateEndCard();
+        return; // finally streamBusy'yi bırakır
+      }
+      targetUrl = cont.first_url;
+      last.nextUrl = targetUrl; // JS zincirini bağla (aynı bölümü tekrar tetikleme)
+      if (!cont.has_next) mangaNextExhausted = true; // bu son bölümdü
+    }
     // track=false: önden eklenen bölüm okunmuş sayılmaz → konumu ilerletmez.
-    const data = await fetchChapterData(last.nextUrl, false, false);
-    const entry = buildChapterEntry(last.nextUrl, data);
+    const data = await fetchChapterData(targetUrl, false, false);
+    const entry = buildChapterEntry(targetUrl, data);
     stream.push(entry);
     el("readerBody").insertBefore(entry.el, s);
     updateEndCard();

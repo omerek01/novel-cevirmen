@@ -20,10 +20,15 @@ def status(slug: str) -> dict:
 
 
 def _count_pages(slug: str) -> int:
-    from . import media
+    """Bu batch'in çevireceği sayfa sayısı = cache'te OLMAYAN src sayfaları. Sonsuz
+    devamda yalnız yeni sayfalar sayılır (on_page'in bildirdiği total ile hizalı)."""
+    from . import cache, media
 
     d = media.book_dir(slug)
-    return sum(1 for p in d.glob("src-*") if p.name[4:].isdigit())
+    return sum(
+        1 for p in d.glob("src-*")
+        if p.name[4:].isdigit() and not cache.get_chapter(f"manga://{slug}/{p.name[4:]}")
+    )
 
 
 def ensure_started(slug: str, api_key: str) -> dict:

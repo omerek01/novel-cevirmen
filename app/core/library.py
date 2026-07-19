@@ -41,6 +41,11 @@ def _connect() -> sqlite3.Connection:
     # Kitap yaşam durumu: okunuyor/beklemede/bitti (NULL = okunuyor). Rafta
     # filtre + kitap görünümünde düzenleme; sırtta gösterilmez (D-B2v2).
     db.ensure_column(conn, "books", "status", "status TEXT")
+    # Manga sonsuz devam: son çekilen bölümün site URL'i + sonraki bölümün URL'i.
+    # Okuyucu manga bölümünün sonuna gelince next_source_url'i çekip ekler (novel
+    # sonsuz okumanın manga karşılığı). Yalnız web'den çekilen manga'da dolu.
+    db.ensure_column(conn, "books", "manga_source_url", "manga_source_url TEXT")
+    db.ensure_column(conn, "books", "manga_next_url", "manga_next_url TEXT")
     return conn
 
 
@@ -278,6 +283,24 @@ def set_status(slug: str, status: str) -> bool:
         conn.close()
 
 
+def set_manga_source(slug: str, source_url: str | None, next_url: str | None) -> None:
+    """Manga kitabının son çekilen bölüm URL'i + sonraki bölüm URL'ini kaydet.
+
+    Web'den manga çekilince/devam edilince çağrılır; okuyucu next_url ile sonraki
+    bölümü çeker. Kitap yoksa sessizce yok sayılır."""
+    if not slug:
+        return
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE books SET manga_source_url = ?, manga_next_url = ? WHERE slug = ?",
+            (source_url or None, next_url or None, slug),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def delete_book(slug: str) -> bool:
     """Kitabı ve ona bağlı HER ŞEYİ kalıcı sil: bölümler, sözlük, okuma günlüğü,
     alias'lar, books satırı. Bölümü olmayan (mükerrer içe aktarım kalıntısı) kitap
@@ -344,7 +367,7 @@ def get_book(slug: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
-            "updated_at, status FROM books WHERE slug = ?",
+            "updated_at, status, manga_source_url, manga_next_url FROM books WHERE slug = ?",
             (slug,),
         ).fetchone()
     finally:
@@ -360,6 +383,8 @@ def get_book(slug: str) -> dict | None:
         "current_ratio": row[5] or 0.0,
         "updated_at": row[6] or 0.0,
         "status": row[7] or "okunuyor",
+        "manga_source_url": row[8],
+        "manga_next_url": row[9],
     }
 
 

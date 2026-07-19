@@ -39,6 +39,31 @@ _EXTRACT_JS = """
 }
 """
 
+# Sonraki bölüm bağlantısı: prev/next navigasyonundan "next"i seç. Site-bağımsız sezgi:
+# href bir bölüm URL'i (/chapter/) VE (rel=next | sınıf/metin "next"/"sonraki"). Bulunmazsa
+# '' (son bölümdeyiz → devam yok). Prev'i "next" sanmamak için "prev/önceki" metnini eler.
+_NEXT_JS = """
+() => {
+  const here = location.href;
+  const isNext = (a) => {
+    const rel = (a.getAttribute('rel') || '').toLowerCase();
+    const cls = (a.className || '').toString().toLowerCase();
+    const txt = (a.textContent || '').trim().toLowerCase();
+    const aria = (a.getAttribute('aria-label') || '').toLowerCase();
+    if (/prev|önceki|onceki/.test(cls) || /prev|önceki|onceki/.test(txt) || /prev/.test(aria)) return false;
+    return rel === 'next' || /(^|[\\s_-])next([\\s_-]|$)/.test(cls)
+      || /next|sonraki/.test(txt) || /next|sonraki/.test(aria);
+  };
+  for (const a of document.querySelectorAll('a[href]')) {
+    let href = '';
+    try { href = new URL(a.getAttribute('href'), here).href; } catch { continue; }
+    if (!href || href === here || !/\\/chapter\\//i.test(href)) continue;
+    if (isNext(a)) return href;
+  }
+  return '';
+}
+"""
+
 
 def is_manga_url(url: str) -> bool:
     host = (urlparse(url).hostname or "").lower()
@@ -139,7 +164,11 @@ def fetch_manga_chapter(url: str, priority: str = "interactive", ticket: GateTic
                         continue  # tek görsel düşerse diğerleri devam
                 if not images:
                     raise FetchError("Manga sayfaları indirilemedi.")
-                return {"title": title, "images": images}
+                try:
+                    next_url = (page.evaluate(_NEXT_JS) or "").strip()
+                except Exception:
+                    next_url = ""
+                return {"title": title, "images": images, "next_url": next_url or None}
             finally:
                 ctx.close()
     finally:
