@@ -36,17 +36,25 @@ def _connect() -> sqlite3.Connection:
     db.ensure_column(conn, "chapters", "prev_url", "prev_url TEXT")
     # source_text: çeviriyle paragraf-hizalı İngilizce kaynak (iki-dilli okuma).
     db.ensure_column(conn, "chapters", "source_text", "source_text TEXT")
+    # raw_source (E-18): içe aktarımın DEĞİŞMEZ ham kaynağı. source_text hizalı
+    # iki-dilli metindir ve hizalama tutmayınca bilerek NULL olur — ikisi
+    # birbirinin yerine geçemez. Sentetik refresh/¶-yeniden-çevir buradan okur.
+    db.ensure_column(conn, "chapters", "raw_source", "raw_source TEXT")
     return conn
 
 
 def get_chapter(url: str) -> dict | None:
-    """Önbellekte varsa bölümü döndürür (cached=True), yoksa None."""
+    """Önbellekte varsa ÇEVRİLMİŞ bölümü döndürür (cached=True), yoksa None.
+
+    E-17: sahneli satırlar (translation IS NULL — içe aktarım işi henüz
+    çevirmedi) okuma yolunda cache MISS sayılır; yalnız iş yolu onları gezer
+    (get_staged). Aksi halde okuyucu boş bölüm alırdı."""
     conn = _connect()
     try:
         row = conn.execute(
             "SELECT book_slug, book_title, title, chapter_no, translation, "
             "next_url, detected_names, chunk_count, prev_url, source_text "
-            "FROM chapters WHERE url = ?",
+            "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
     finally:
@@ -110,17 +118,50 @@ def update_nav(url: str, next_url: str | None, prev_url: str | None) -> bool:
         conn.close()
 
 
+def get_staged(url: str) -> dict | None:
+    """Satırı çeviri durumundan bağımsız döndür (İŞ YOLU — okuma yolu değil).
+
+    İçe aktarım işi sahneli (translation NULL) satırları bununla gezer;
+    raw_source (E-18) ham kaynağı taşır."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT book_slug, book_title, title, chapter_no, translation, "
+            "next_url, prev_url, raw_source FROM chapters WHERE url = ?",
+            (url,),
+        ).fetchone()
+    finally:
+        conn.close()
+    if row is None:
+        return None
+    return {
+        "book_slug": row[0], "book_title": row[1], "title": row[2],
+        "chapter_no": row[3], "translation": row[4], "next_url": row[5],
+        "prev_url": row[6], "raw_source": row[7],
+    }
+
+
 def save_chapter(url: str, data: dict) -> None:
-    """Çevrilen bölümü önbelleğe yaz (varsa üzerine)."""
+    """Çevrilen bölümü önbelleğe yaz (varsa üzerine).
+
+    E-16: ON CONFLICT (REPLACE değil) — adı geçmeyen raw_source her çeviri
+    yazımında sessizce silinmesin (içe aktarımın ham kaynağı değişmezdir)."""
     conn = _connect()
     try:
         conn.execute(
             """
-            INSERT OR REPLACE INTO chapters
+            INSERT INTO chapters
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(url) DO UPDATE SET
+                book_slug = excluded.book_slug, book_title = excluded.book_title,
+                title = excluded.title, chapter_no = excluded.chapter_no,
+                translation = excluded.translation, next_url = excluded.next_url,
+                detected_names = excluded.detected_names,
+                chunk_count = excluded.chunk_count, created_at = excluded.created_at,
+                prev_url = excluded.prev_url, source_text = excluded.source_text
             """,
             (
                 url,

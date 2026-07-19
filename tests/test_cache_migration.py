@@ -62,7 +62,11 @@ def test_save_get_roundtrips_prev_url():
 
 
 def test_fresh_db_has_prev_url():
-    cache.save_chapter("u9", {"book_slug": "s", "title": "B", "prev_url": "u8"})
+    # translation şart: çevirisiz satır artık SAHNELİ sayılır ve okuma yolunda
+    # görünmez (E-17) — bu test yalnız prev_url roundtrip'ini doğrular.
+    cache.save_chapter(
+        "u9", {"book_slug": "s", "title": "B", "prev_url": "u8", "translation": "x"}
+    )
     assert cache.get_chapter("u9")["prev_url"] == "u8"
 
 

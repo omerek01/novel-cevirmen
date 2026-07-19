@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 
-from . import budget, cache, glossary, library
+from . import budget, cache, glossary, library, synthetic
 from . import fetch as _fetch_mod
 from .fetch import fetch_chapter
 from .translate import TranslateError, translate_chapter
@@ -123,10 +123,28 @@ def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
 def _do_fetch_translate_save(
     url: str, api_key: str, background: bool, ticket
 ) -> dict:
-    # FetchError sızabilir. Toplu iş düşük öncelikli: okuyucu kapıda öne geçer.
-    chapter = fetch_chapter(
-        url, priority="bulk" if background else "interactive", ticket=ticket
-    )
+    if synthetic.is_synthetic_url(url):
+        # E-7/E-11: içe aktarılan bölüm web'den çekilemez — kaynak sahneli
+        # satırın raw_source'undadır; satır yoksa fetch'e/kapıya İNMEDEN 404.
+        staged = cache.get_staged(url)
+        if staged is None or not staged.get("raw_source"):
+            raise synthetic.ImportedChapterMissing(
+                "İçe aktarılan bölümün kaynağı bulunamadı; yeniden içe aktarın."
+            )
+        chapter = {
+            "book_slug": staged["book_slug"],
+            "book_title": staged["book_title"],
+            "title": staged["title"],
+            "chapter_no": staged["chapter_no"],
+            "text": staged["raw_source"],
+            "next_url": staged["next_url"],
+            "prev_url": staged["prev_url"],
+        }
+    else:
+        # FetchError sızabilir. Toplu iş düşük öncelikli: okuyucu kapıda öne geçer.
+        chapter = fetch_chapter(
+            url, priority="bulk" if background else "interactive", ticket=ticket
+        )
 
     # Birleştirilmiş kitap: slug'ı kanonikleştir, böylece bölüm/sözlük tek kitapta toplanır.
     book_slug = library.resolve_slug(chapter["book_slug"])
@@ -170,6 +188,10 @@ def refresh_metadata(url: str) -> dict:
     Gemini'ye gitmez (refresh=True tam çeviri yakar + ¶-yamalarını ezerdi).
     Döner: {"next_url": ..., "prev_url": ...}.
     """
+    if synthetic.is_synthetic_url(url):
+        # Sentetik zincirde "kaynakta yeni bölüm var mı" diye bir şey yoktur.
+        staged = cache.get_staged(url) or {}
+        return {"next_url": staged.get("next_url"), "prev_url": staged.get("prev_url")}
     chapter = fetch_chapter(url, priority="bulk")
     nav = {"next_url": chapter.get("next_url"), "prev_url": chapter.get("prev_url")}
     cache.update_nav(url, nav["next_url"], nav["prev_url"])

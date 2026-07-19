@@ -275,7 +275,10 @@ def _start_thread(job_id: str, api_key: str | None) -> bool:
     return True
 
 
-def start_bulk(slug: str, start_url: str, count: int, api_key: str | None) -> str:
+def start_bulk(
+    slug: str, start_url: str, count: int, api_key: str | None,
+    job_type: str = "bulk",
+) -> str:
     """Arka plan toplu çeviri başlat; işi SQLite'a yazıp kimliğini döndür.
 
     Aynı kitap için zaten koşan bir iş varsa yenisi açılmaz: mevcut işin kimliği
@@ -288,7 +291,7 @@ def start_bulk(slug: str, start_url: str, count: int, api_key: str | None) -> st
     with _LOCK:
         # E-22: tekilleştirme anahtarı (slug, type) — başka tipte bir iş
         # (örn. check-updates) bulk dedup'unu tetiklemez.
-        existing = get_book_job(slug, job_type="bulk")
+        existing = get_book_job(slug, job_type=job_type)
         if existing and existing["state"] == "running":
             _start_thread(existing["id"], api_key)  # canlıysa no-op, değilse sürdür
             return existing["id"]
@@ -303,7 +306,7 @@ def start_bulk(slug: str, start_url: str, count: int, api_key: str | None) -> st
             "state": "running",
             "message": "Hazırlanıyor…",
             "next_url": start_url,
-            "type": "bulk",
+            "type": job_type,
             "params": None,
             "stop": False,
             "updated_at": time.time(),
@@ -440,4 +443,6 @@ def _run_bulk(job_id: str, api_key: str | None) -> None:
 
 # Tip -> koşucu kayıt tablosu. Yeni iş tipleri (epub-import, check-updates, ...)
 # buraya eklenir; checkpoint/rozet/arka-plana-al davranışını miras alır.
-_RUNNERS = {"bulk": _run_bulk}
+# paste-import da zincir gezicisidir: sahneli sentetik bölümler pipeline'ın
+# content yolundan (raw_source) çevrilir — _run_bulk aynen çalışır (DRY).
+_RUNNERS = {"bulk": _run_bulk, "paste-import": _run_bulk}
