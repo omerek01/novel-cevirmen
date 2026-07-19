@@ -119,9 +119,11 @@ gövde HTML'i raw_source'ta (`epub://slug/N`). İkisi de `content_type="html"` s
 
 **`app/core/import_translate.py`** — içe aktarılan sayfayı OKUDUKÇA (on-demand) çevir+üret:
 PDF → sayfa metin bloklarını bbox'la çıkar, hizalı Türkçe çeviri, orijinali redaction ile
-sil + Türkçe'yi aynı yere yaz (Türkçe TTF, font otomatik küçülür), sayfayı PNG render →
-`<img>` HTML. EPUB → HTML'i temizle (script/on*/href elenir), blok metinleri yerinde çevir,
-resim/yapı korunur. `pipeline._render_import_page` bunu çağırır; sonuç HTML cache'lenir.
+sil + Türkçe'yi aynı yere DİKEY AKIŞLA yaz (üst üste binmesin; Türkçe TTF, font küçülür),
+sayfayı PNG render → `<img>` HTML. EPUB → HTML'i temizle (script/on*/href elenir), blok
+metinleri yerinde çevir, resim/yapı korunur. MANGA → sayfa görselini **Gemini-vision**'a
+gönder (balon metni + bbox + Türkçe), PIL ile orijinali kapat + Türkçe'yi kutuya yaz.
+`pipeline._render_import_page` üçünü de çağırır (pdf://·epub://·manga://); sonuç HTML cache'lenir.
 
 **`app/core/media.py`** — içe aktarılan kitapların medyası (`cache/media/<slug>/`: kaynak
 PDF, render'lı sayfa PNG'leri, EPUB resimleri). `GET /media/<yol>` ile YALNIZ çevrimiçi

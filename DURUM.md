@@ -23,20 +23,19 @@ okuyabilmek + okuma deneyimini (yaşayan raf, sonsuz okuma) güçlendirmek.
 | 5 | ~~Yeni bölüm kontrolü (check-updates)~~ | ❌ **İPTAL** | Kullanıcı kararı (2026-07-19). Bir kez kodlanıp geri alınmıştı; değeri belirsiz bulundu, tümden düşürüldü. |
 | 6 | Sonsuz okuma v2 + prefetch | ✅ main'de | Bölüm akışı (`article` başına), otomatik ekleme, konum {url, oran}, sonrakini ısıtma. Fix'ler: konum-track, geri'de scrollRestoration |
 | 7 | EPUB/PDF görsel çeviri | ✅ main'de | PDF = çevrilmiş **sayfa görselleri** (resim/düzen korunur), EPUB = yerinde HTML çeviri; okudukça çevirir. Fix'ler: metin binmesi (dikey akış), kısa sayfa kaydırma |
-| 8 | **Manga çevirisi** | 🔜 **SIRADAKİ** | Planda "tracer bullet" (Scope 10) — fazın en büyük/riskli parçası, bilinçle ertelenmişti. Balon algılama + OCR + çeviri + görsele geri yazma. Yaklaşım kullanıcıyla seçilecek. |
+| 8 | **Manga çevirisi** | 🔨 **KODLANDI** (dal `dilim-8-manga`) | Gemini-vision ile balon OCR+çeviri+görsele yazma. Telefon QA bekliyor. |
 
 **Ayrıca:** Çeviri modeli yalnız `gemini-3.1-flash-lite` (2.5 yedekleri kaldırıldı, kullanıcı kararı).
 
-## Sıradaki iş: Manga çevirisi (planda Scope 10 — "tracer bullet")
-Manga sayfaları resimdir; metin **balonların içine gömülüdür** (PDF gibi çıkarılabilir metin yok).
-Bu yüzden akış: **balon algıla → OCR (resimden metin oku) → Türkçe'ye çevir → orijinali kapatıp
-Türkçe'yi görselin üstüne yaz**. Plan bunu fazın "en büyük ve en riskli parçası" sayıp ayrı bir
-tracer bullet'a (tek bölüm ≈20 sayfa uçtan uca) bırakmıştı; tam akış (CBZ/klasör, seri takibi)
-Faz N+1'e ertelenmişti.
-
-**İyi haber:** Dilim 7'de kurduğum altyapı (media sunumu, `content_type`, sayfa-görseli okuyucusu,
-yerinde metin değiştirme) manga'nın gösterme/servis tarafını zaten karşılıyor. Eksik olan tek şey:
-resimden metni ÇIKARMAK (OCR + balon). İki yol var — kullanıcıyla seçiliyor (bkz. sohbet).
+## Son eklenen: Manga çevirisi (dal `dilim-8-manga`, telefon QA bekliyor)
+Yaklaşım (kullanıcı seçimi): comic-translate gibi ağır ML araçları yerine **mevcut Gemini'nin
+görü (multimodal) yeteneği**. Akış: manga sayfasını Gemini'ye gönder → balon metinleri + konumları
++ Türkçe çevirileri al → PIL ile orijinali kapat, Türkçe'yi kutuya sığdırarak yaz → PNG.
+- İçe aktarım: **CBZ/ZIP** (sayfa görselleri) ya da tek görsel → `manga://slug/N`, her sayfa=1 bölüm.
+- Çeviri okudukça (on-demand); Dilim 7'nin görsel-içerik altyapısını aynen kullanır.
+- Prototip + gerçek Gemini e2e ile görsel doğrulandı (3 balon doğru bulundu/çevrildi, glifler tam).
+- **Bilinen sınır:** balon beyaz kutuyla kapatılıyor (çoğu balon beyaz → doğal); renkli balon/SFX/
+  sanat üstü yazıda kutu göze batabilir. İyileştirme (bg-renk örnekleme, yuvarlak balon) sonraya.
 
 ## Bilinçle ertelenenler (ihtiyaç olunca)
 - Okuma geçmişi listesi ekranı · Ayarlar'da "sistem" bloğu (son kontrol, bekleyen iş, cache boyutu)
