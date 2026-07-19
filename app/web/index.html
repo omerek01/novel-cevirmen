@@ -47,10 +47,9 @@
       Bu durumda kitap yok.
       <button id="filterClear" class="ghost-line-btn">FİLTREYİ TEMİZLE</button>
     </p>
-    <div class="shelf-wrap">
-      <div id="shelf" class="shelf"></div>
-      <div class="shelf-board"></div>
-    </div>
+    <!-- Tür-bazlı raflar (Noveller / Mangalar / Kitaplar) JS'te kurulur; her tür
+         kendi raf tahtasında. Tek tür varsa başlık gizlenir (gereksiz gürültü yok). -->
+    <div id="shelves" class="shelves"></div>
     <!-- D-B3/D-B11v2: istatistik fişte değil, rafın altında sessiz tek satır. -->
     <p id="libStats" class="lib-stats" hidden></p>
     <div class="lib-actions">

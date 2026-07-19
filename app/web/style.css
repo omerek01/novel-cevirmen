@@ -91,6 +91,38 @@ html, body {
   justify-content: center;
 }
 .ghost-btn:active { background: color-mix(in oklab, var(--ink) 12%, transparent); }
+.ghost-btn svg { display: block; }
+
+/* ---------- Erişilebilirlik + etkileşim cilası (ui-ux-pro-max kuralları) ---------- */
+/* Klavye odağı: her etkileşimli öğede görünür halka (fare tıklamasında görünmez). */
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2.5px solid var(--accent);
+  outline-offset: 2px;
+}
+.ghost-line-btn svg { vertical-align: -0.26em; margin-right: 0.12em; }
+
+/* Masaüstü hover (dokunmatikte :active yeterli; hover cihazlarda net geri bildirim). */
+@media (hover: hover) {
+  .spine:hover {
+    transform: translateY(-5px); /* kitabı raftan çeker gibi */
+    box-shadow: 3px 10px 22px rgba(0, 0, 0, 0.42);
+  }
+  .spine-add:hover { background: color-mix(in oklab, var(--accent) 9%, transparent); }
+  .resume-fiche { transition: transform 140ms ease; }
+  .resume-fiche:hover { transform: translateY(-2px); }
+  .chip:hover { border-color: var(--accent); }
+  .ghost-btn:hover { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+  .ghost-line-btn:hover { border-color: var(--accent); }
+}
+
+/* Hareketi azalt tercihi: tüm geçiş/animasyonları neredeyse kapat. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 
 /* ---------- Kütüphane ---------- */
 .lib-header {
@@ -109,20 +141,55 @@ html, body {
   line-height: 1.6;
 }
 
-.shelf-wrap { padding: 0.5rem 1rem 3rem; }
+/* Tür-bazlı raflar: her tür (Noveller/Mangalar/Kitaplar) kendi tahtasında. */
+.shelves { padding: 0.5rem 0 3rem; }
+.shelf-section + .shelf-section { margin-top: 1.6rem; }
+
+.shelf-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 0.55rem;
+  padding: 0 1rem 0.1rem;
+}
+.shelf-heading-name {
+  font-weight: 800;
+  font-size: 0.86rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink);
+}
+.shelf-count {
+  font-weight: 800;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+  padding: 0.08rem 0.42rem;
+  border: 1.5px solid color-mix(in oklab, var(--ink) 22%, transparent);
+  border-radius: 999px;
+  line-height: 1.4;
+}
+
+.shelf-wrap { padding: 0 1rem; }
 .shelf {
   display: flex;
   align-items: flex-end;
   gap: 12px;
   overflow-x: auto;
-  padding: 1.5rem 0.2rem 0;
+  padding: 1.2rem 0.2rem 0;
   scrollbar-width: thin;
+  scroll-snap-type: x proximity; /* sırtlar kaydırınca hizalanır (dokunmatik his) */
+  overscroll-behavior-x: contain;
 }
+.spine { scroll-snap-align: start; }
 .shelf-board {
-  height: 16px;
-  background: var(--shelf);
+  height: 15px;
+  /* Ahşap raf tahtası: sıcak koyu tonda ince eğim + üstte hafif ışık (metafor, slop değil). */
+  background:
+    linear-gradient(180deg,
+      color-mix(in oklab, var(--shelf), #ffffff 10%) 0 2px,
+      var(--shelf) 2px 100%);
   border-radius: 2px;
-  box-shadow: 0 8px 18px rgba(0, 0, 0, 0.28);
+  box-shadow: 0 9px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
 .spine {
@@ -145,7 +212,7 @@ html, body {
   padding: 14px 6px;
   cursor: pointer;
   box-shadow: 2px 5px 12px rgba(0, 0, 0, 0.35);
-  transition: transform 120ms ease;
+  transition: transform 140ms ease, box-shadow 140ms ease;
 }
 .spine:active { transform: translateY(2px); }
 

@@ -12,7 +12,23 @@ const DEFAULT_SETTINGS = {
   margin: "normal",
 };
 const THEMES = ["light", "sepia", "dark"];
-const THEME_ICON = { light: "☾", sepia: "☀", dark: "☀" };
+// SVG ikonlar (emoji yerine — temiz çizgi ikon, currentColor). skill kuralı: emoji ikon yok.
+const SVG = (p, sz = 22) =>
+  `<svg viewBox="0 0 24 24" width="${sz}" height="${sz}" fill="none" stroke="currentColor" ` +
+  `stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${p}</svg>`;
+const ICONS = {
+  moon: SVG('<path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/>'),
+  sun: SVG(
+    '<circle cx="12" cy="12" r="4.2"/><path d="M12 2v2.2M12 19.8V22M4.9 4.9l1.6 1.6' +
+      'M17.5 17.5l1.6 1.6M2 12h2.2M19.8 12H22M4.9 19.1l1.6-1.6M17.5 6.5l1.6-1.6"/>'
+  ),
+  search: SVG('<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.2-4.2"/>'),
+  sliders: SVG(
+    '<path d="M4 8h11M19 8h1M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2"/><circle cx="9" cy="16" r="2"/>'
+  ),
+  download: SVG('<path d="M12 3v11M8 11l4 4 4-4M5 20h14"/>', 18),
+};
+const THEME_ICON = { light: ICONS.moon, sepia: ICONS.sun, dark: ICONS.sun };
 const LINE_HEIGHTS = { sik: "1.5", normal: "1.75", seyrek: "2.1" };
 const MARGINS = { dar: "0.8rem", normal: "1.3rem", genis: "2.2rem" };
 
@@ -300,7 +316,7 @@ function markSegment(group, value, attr) {
 function updateSettingsUI() {
   el("fontValue").textContent = settings.fontPx;
   el("fontFamily").textContent = settings.font === "sans" ? "Sans" : "Serif";
-  el("libThemeToggle").textContent = THEME_ICON[settings.theme] || "☾";
+  el("libThemeToggle").innerHTML = THEME_ICON[settings.theme] || ICONS.moon;
   markSegment("theme", settings.theme, "data-theme-opt");
   markSegment("lh", settings.lineHeight, "data-lh");
   markSegment("mg", settings.margin, "data-mg");
@@ -394,6 +410,23 @@ function spineColor(slug) {
 }
 
 /* ---------- kütüphane ---------- */
+// Kitabın türü — slug öneki / şemasından türetilir (backend'e sütun gerekmez).
+// manga:// & manga- → manga; pdf/epub → kitap; gerisi (web novel + paste) → novel.
+function bookKind(book) {
+  const s = book.slug || "";
+  const u = book.current_url || "";
+  if (s.startsWith("manga-") || u.startsWith("manga://")) return "manga";
+  if (s.startsWith("pdf-") || s.startsWith("epub-") || u.startsWith("pdf://") || u.startsWith("epub://"))
+    return "kitap";
+  return "novel";
+}
+// Raf sırası + başlıkları (tür-bazlı raflar). Boş tür rafı çizilmez.
+const KIND_SHELVES = [
+  { kind: "novel", label: "Noveller" },
+  { kind: "manga", label: "Mangalar" },
+  { kind: "kitap", label: "Kitaplar" },
+];
+
 // Raf durum filtresi (D-B2v2: yaşam durumu sırtta görünmez, yalnız filtre).
 const LS_FILTER = "novellink:shelfFilter";
 let shelfFilter = localStorage.getItem(LS_FILTER) || "all";
@@ -485,16 +518,70 @@ async function renderLibStats() {
   }
 }
 
+// Tek kitap sırtı (spine) düğmesi üret.
+function makeSpine(book, jobChecks) {
+  const spine = document.createElement("button");
+  spine.className = "spine";
+  spine.dataset.slug = book.slug; // rozet anketi sırtı yerinde bulabilsin
+  spine.style.setProperty("--spine", spineColor(book.slug));
+  // Etiket, resume ile AYNI merge'i kullanır → çevrimdışı okunan son bölüm de görünür
+  // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
+  const chNo = resolveResume(book, book.slug).chapterNo;
+  const tag = chNo ? "BÖL. " + chNo : "OKU";
+  spine.innerHTML =
+    `<span class="spine-title" lang="en">${escapeHtml(book.title)}</span>` +
+    '<span class="spine-job" hidden></span>' +
+    `<span class="spine-tag">${tag}</span>`;
+  spine.addEventListener("click", () => navigate({ view: "book", slug: book.slug }));
+  jobChecks.push(fetchBookJob(book.slug).then((job) => applyJobBadge(spine, job)));
+  return spine;
+}
+
+// "+ KİTAP EKLE" sırtı (rafın sonundaki boş yuva metaforu).
+function makeAddSpine() {
+  const add = document.createElement("button");
+  add.className = "spine spine-add";
+  add.innerHTML =
+    '<span class="spine-plus" aria-hidden="true">+</span><span class="spine-addlabel">KİTAP EKLE</span>';
+  add.addEventListener("click", openAddModal);
+  return add;
+}
+
+// Bir tür rafı: başlık (varsa) + sırtlar + raf tahtası. withAdd → ekle sırtı sona.
+function buildShelfSection(label, books, withAdd, jobChecks) {
+  const section = document.createElement("section");
+  section.className = "shelf-section";
+  if (label) {
+    const head = document.createElement("div");
+    head.className = "shelf-heading";
+    head.innerHTML =
+      `<span class="shelf-heading-name">${escapeHtml(label)}</span>` +
+      `<span class="shelf-count">${books.length}</span>`;
+    section.appendChild(head);
+  }
+  const wrap = document.createElement("div");
+  wrap.className = "shelf-wrap";
+  const shelf = document.createElement("div");
+  shelf.className = "shelf";
+  for (const book of books) shelf.appendChild(makeSpine(book, jobChecks));
+  if (withAdd) shelf.appendChild(makeAddSpine());
+  const board = document.createElement("div");
+  board.className = "shelf-board";
+  wrap.append(shelf, board);
+  section.appendChild(wrap);
+  return section;
+}
+
 async function renderLibrary() {
   clearTimeout(libraryJobPollTimer);
   const books = await fetchBooks();
-  const shelf = el("shelf");
+  const shelves = el("shelves");
   el("libLoading").hidden = true;
 
   // D-PWA-Durum: sunucuya ulaşılamadı ≠ boş kütüphane. Raf daha önce çizildiyse
   // eldekini koru (anket yenilemesi rafı silmesin); hiç çizilmediyse hata yüzeyi.
   if (books === null) {
-    if (!shelf.querySelector(".spine")) {
+    if (!shelves.querySelector(".spine")) {
       el("libError").hidden = false;
       el("emptyState").hidden = true;
       el("filterEmpty").hidden = true;
@@ -505,7 +592,7 @@ async function renderLibrary() {
   }
   el("libError").hidden = true;
 
-  shelf.replaceChildren();
+  shelves.replaceChildren();
   el("emptyState").hidden = books.length > 0;
   el("shelfFilters").hidden = books.length === 0;
   renderResumeFiche(books);
@@ -520,34 +607,24 @@ async function renderLibrary() {
   visible.sort((a, b) => bookFreshness(b) - bookFreshness(a));
   el("filterEmpty").hidden = !(books.length > 0 && visible.length === 0);
 
+  // Türe göre grupla; boş türün rafı çizilmez. Tek tür varsa başlık gizli (tek raf).
+  const groups = { novel: [], manga: [], kitap: [] };
+  for (const b of visible) groups[bookKind(b)].push(b);
+  const active = KIND_SHELVES.filter((k) => groups[k.kind].length);
   const jobChecks = [];
-  for (const book of visible) {
-    const spine = document.createElement("button");
-    spine.className = "spine";
-    spine.dataset.slug = book.slug; // rozet anketi sırtı yerinde bulabilsin
-    spine.style.setProperty("--spine", spineColor(book.slug));
-    // Etiket, resume ile AYNI merge'i kullanır → çevrimdışı okunan son bölüm de görünür
-    // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
-    const chNo = resolveResume(book, book.slug).chapterNo;
-    const tag = chNo ? "BÖL. " + chNo : "OKU";
-    spine.innerHTML =
-      `<span class="spine-title" lang="en">${escapeHtml(book.title)}</span>` +
-      '<span class="spine-job" hidden></span>' +
-      `<span class="spine-tag">${tag}</span>`;
-    spine.addEventListener("click", () => navigate({ view: "book", slug: book.slug }));
-    shelf.appendChild(spine);
-    jobChecks.push(fetchBookJob(book.slug).then((job) => applyJobBadge(spine, job)));
+  if (!active.length) {
+    // Kütüphane boş / filtre boş → yalnız ekle sırtı taşıyan tek raf (başlıksız).
+    shelves.appendChild(buildShelfSection(null, [], visible.length === 0, jobChecks));
+  } else {
+    active.forEach((k, i) => {
+      const withAdd = i === active.length - 1; // ekle sırtı son rafta
+      const label = active.length > 1 ? k.label : null; // tek raf → başlık yok
+      shelves.appendChild(buildShelfSection(label, groups[k.kind], withAdd, jobChecks));
+    });
   }
 
-  const add = document.createElement("button");
-  add.className = "spine spine-add";
-  add.innerHTML =
-    '<span class="spine-plus">+</span><span class="spine-addlabel">KİTAP EKLE</span>';
-  add.addEventListener("click", openAddModal);
-  shelf.appendChild(add);
-
-  const active = (await Promise.all(jobChecks)).some(Boolean);
-  if (active && !views.library.hidden) {
+  const busy = (await Promise.all(jobChecks)).some(Boolean);
+  if (busy && !views.library.hidden) {
     libraryJobPollTimer = setTimeout(refreshShelfBadges, 2500);
   }
 }
@@ -576,7 +653,7 @@ function applyJobBadge(spine, job) {
 async function refreshShelfBadges() {
   clearTimeout(libraryJobPollTimer);
   if (views.library.hidden) return;
-  const spines = [...document.querySelectorAll("#shelf .spine[data-slug]")];
+  const spines = [...document.querySelectorAll("#shelves .spine[data-slug]")];
   const anyRunning = (
     await Promise.all(
       spines.map(async (s) => applyJobBadge(s, await fetchBookJob(s.dataset.slug)))
@@ -2433,6 +2510,12 @@ document.querySelectorAll("#shelfFilters .chip").forEach((c) => {
 // geri yazılır ("bir önceki/ilk bölüme dönüyor" bug'ı; sonsuz okuma v2 ile geldi).
 if ("scrollRestoration" in history) history.scrollRestoration = "manual";
 history.replaceState({ view: "library" }, ""); // kök kayıt: buradan geri = uygulamadan çık
+
+// Statik ikonları SVG ile doldur (emoji yerine; aria-label butonda zaten var).
+el("findBtn").innerHTML = ICONS.search;
+el("settingsBtn").innerHTML = ICONS.sliders;
+el("offlineAllBtn").innerHTML = ICONS.download + " HEPSİNİ ÇEVRİMDIŞI İNDİR";
+
 renderLibrary();
 showView("library");
 
