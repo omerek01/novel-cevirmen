@@ -234,15 +234,12 @@
       </div>
       <div id="addTabDosya" hidden>
         <p class="modal-hint">
-          EPUB veya PDF dosyası seç: bölümler ayıklanıp rafa eklenir. Çeviri, bölümü
-          okudukça (ya da TOPLU ÇEVİR ile) yapılır — kotan tek dosyayla tükenmez.
+          EPUB veya PDF dosyası seç. PDF <b>sayfa sayfa</b> (resimler ve düzen korunarak),
+          EPUB <b>bölüm bölüm</b> Türkçe'ye çevrilir. Çeviri okudukça yapılır — kotan
+          tek dosyayla tükenmez.
         </p>
         <input id="fileInput" class="paste-field" type="file"
                accept=".epub,.pdf,application/epub+zip,application/pdf" />
-        <div id="pdfPagesRow" class="file-opt" hidden>
-          <label for="pdfPages">Kaç sayfa = 1 bölüm</label>
-          <input id="pdfPages" type="number" min="1" max="200" value="10" inputmode="numeric" />
-        </div>
         <div id="uploadProgress" class="upload-progress" hidden>
           <div class="upload-bar"><span></span></div>
           <p id="uploadStatus" class="modal-hint" aria-live="polite"></p>

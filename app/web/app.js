@@ -853,13 +853,8 @@ function setAddTab(tab) {
 }
 
 // EPUB/PDF dosyasını içe aktar: ham gövde + XHR (yükleme yüzdesi). Başarıda ilk bölüme
-// gider (reader bölümü on-demand çevirir). Çeviri YAPILMAZ, yalnız sahnelenir → kota
-// tek dosyayla tükenmez.
-function onFilePick() {
-  const f = el("fileInput").files[0] || null;
-  el("pdfPagesRow").hidden = !(f && /\.pdf$/i.test(f.name));
-}
-
+// gider (reader sayfayı/bölümü OKUDUKÇA çevirir: PDF sayfa görseli, EPUB yerinde HTML).
+// İçe aktarım ÇEVİRMEZ, yalnız sahneler → kota tek dosyayla tükenmez.
 function uploadFile() {
   const f = el("fileInput").files[0] || null;
   if (!f) return el("fileInput").focus();
@@ -867,11 +862,9 @@ function uploadFile() {
   const isEpub = /\.epub$/i.test(f.name);
   if (!isPdf && !isEpub) return alert("Yalnız EPUB veya PDF dosyası seçilebilir.");
   if (f.size > 50 * 1024 * 1024) return alert("Dosya 50MB sınırını aşıyor.");
-  const pages = Math.max(1, Math.min(200, parseInt(el("pdfPages").value, 10) || 10));
   const endpoint =
     (isPdf ? "/api/import/pdf" : "/api/import/epub") +
-    `?filename=${encodeURIComponent(f.name)}` +
-    (isPdf ? `&pages_per_chapter=${pages}` : "");
+    `?filename=${encodeURIComponent(f.name)}`;
 
   const prog = el("uploadProgress");
   const bar = prog.querySelector(".upload-bar span");
@@ -959,7 +952,6 @@ async function openAddModal() {
   restorePasteDraft();
   // Dosya sekmesini sıfırla (önceki hata/ilerleme kalmasın).
   el("fileInput").value = "";
-  el("pdfPagesRow").hidden = true;
   el("uploadProgress").hidden = true;
   el("uploadStatus").textContent = "";
   setAddTab(addTab);
@@ -1201,12 +1193,18 @@ function chapterListPrev(url) {
 // (ritüel dikiş); boş/kısa çeviri → bölüm-yerel "Bölüm Boş" kartı. Render etmez,
 // sadece kurar (çağıran DOM'a ekler).
 function buildChapterEntry(url, data) {
-  const paras = (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
-  const source = data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
+  // content_type="html": görsel içerik (PDF çevrilmiş sayfa <img> / EPUB yerinde HTML).
+  // Paragraf/iki-dilli/arama yok; translation innerHTML olarak basılır.
+  const isHtml = data.content_type === "html";
+  const paras = isHtml
+    ? []
+    : (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  const source = !isHtml && data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
   const entry = {
     url,
     no: data.chapter_no != null ? data.chapter_no : null,
     title: data.title || "",
+    html: isHtml ? data.translation || "" : null,
     paras,
     source,
     nextUrl: data.next_url || null,
@@ -1218,15 +1216,18 @@ function buildChapterEntry(url, data) {
     empty: false,
   };
   const art = document.createElement("article");
-  art.className = "chapter";
+  art.className = "chapter" + (isHtml ? " chapter-html" : "");
   art.dataset.url = url;
   if (entry.no != null) art.dataset.no = entry.no;
   const sep = document.createElement("div");
   sep.className = "chapter-sep";
   sep.textContent = entry.no != null ? `— Bölüm ${entry.no} —` : `— ${entry.title || "Bölüm"} —`;
   art.appendChild(sep);
-  entry.el = art; // renderParagraphs entry.el'e yazar → sep'ten ÖNCE atanmalı
-  if (!data.translation || data.translation.trim().length < 50) {
+  entry.el = art; // renderParagraphs/renderHtml entry.el'e yazar → sep'ten ÖNCE atanmalı
+  if (isHtml) {
+    entry.loaded = true;
+    renderHtmlContent(entry);
+  } else if (!data.translation || data.translation.trim().length < 50) {
     entry.empty = true;
     art.appendChild(emptyChapterCard(entry));
   } else {
@@ -1234,6 +1235,19 @@ function buildChapterEntry(url, data) {
     renderParagraphs(entry, "");
   }
   return entry;
+}
+
+// Görsel içerik (PDF sayfa görseli / EPUB HTML): translation'ı innerHTML olarak bas.
+// EPUB HTML sunucuda temizlenir (script/on* yok); PDF <img> üretilmiştir → güvenli.
+function renderHtmlContent(entry) {
+  const art = entry.el;
+  [...art.children].forEach((n) => {
+    if (!n.classList.contains("chapter-sep")) n.remove();
+  });
+  const div = document.createElement("div");
+  div.className = "html-content";
+  div.innerHTML = entry.html || "";
+  art.appendChild(div);
 }
 
 // Bölümün paragraflarını (arama sorgusu varsa vurgulu) article içine çiz — ayraç
@@ -1466,14 +1480,20 @@ async function retranslateChapter(entry) {
   btn.disabled = true;
   try {
     const data = await fetchChapterData(entry.url, true);
-    entry.paras = (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
-    entry.source = data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
     entry.nextUrl = data.next_url || entry.nextUrl;
     entry.title = data.title || entry.title;
-    if (entry.paras.length) {
-      entry.empty = false;
+    if (data.content_type === "html") {
+      entry.html = data.translation || "";
       entry.loaded = true;
-      renderParagraphs(entry, "");
+      renderHtmlContent(entry);
+    } else {
+      entry.paras = (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+      entry.source = data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
+      if (entry.paras.length) {
+        entry.empty = false;
+        entry.loaded = true;
+        renderParagraphs(entry, "");
+      }
     }
     if (entry.url === activeUrl) el("readerChapter").textContent = entry.title || "Bölüm";
   } catch (err) {
@@ -1587,12 +1607,12 @@ function closeFind() {
   findIndex = -1;
   el("findCount").textContent = "";
   const e = activeEntry();
-  if (e && e.loaded) renderParagraphs(e, "");
+  if (e && e.loaded && !e.html) renderParagraphs(e, "");
 }
 function runFind() {
   const q = el("findInput").value.trim();
   const e = activeEntry();
-  if (!e || !e.loaded) return;
+  if (!e || !e.loaded || e.html) return; // görsel içerikte (PDF/EPUB) arama yok
   renderParagraphs(e, q);
   findMatches = q ? Array.from(e.el.querySelectorAll("mark")) : [];
   findIndex = findMatches.length ? 0 : -1;
@@ -2256,7 +2276,6 @@ el("addConfirm").addEventListener("click", () => {
     navigate({ view: "reader", url });
   }
 });
-el("fileInput")?.addEventListener("change", onFilePick);
 el("addUrlInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") el("addConfirm").click();
 });

@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v47"; // dilim 7: EPUB/PDF içe aktarım (DOSYA sekmesi)
+const SHELL_CACHE = "novellink-shell-v48"; // dilim 7: PDF çevrilmiş sayfa görseli + EPUB yerinde HTML çeviri
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",

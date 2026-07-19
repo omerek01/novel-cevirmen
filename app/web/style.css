@@ -445,6 +445,21 @@ html, body {
 /* touch-action: çift-dokunmada mobil zoom'u kapatır → çift-dokunma İngilizceyi açar. */
 .reader-body p { margin: 0 0 1.1em; text-align: justify; hyphens: auto; touch-action: manipulation; }
 
+/* ---------- görsel içerik (PDF çevrilmiş sayfa / EPUB yerinde HTML) ---------- */
+.reader-body .html-content { line-height: var(--reading-line-height); }
+.reader-body .html-content img { display: block; max-width: 100%; height: auto; margin: 0.6em auto; }
+/* PDF çevrilmiş sayfa görseli: reader genişliğinde, ince kenarlıkla ayrık. */
+.reader-body .chapter-html .page-img {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  margin: 0 0 1rem;
+}
+.reader-body .html-content p { margin: 0 0 1.1em; text-align: justify; }
+.reader-body .html-content h1,
+.reader-body .html-content h2,
+.reader-body .html-content h3 { line-height: 1.25; margin: 1.2em 0 0.5em; }
+
 /* ---------- sonsuz okuma v2: bölüm akışı ---------- */
 .reader-body article.chapter { margin: 0; }
 /* Dikiş ayracı "— Bölüm N —": bölümler arası sessiz ritüel işaret. İlk bölümde
@@ -612,24 +627,6 @@ html, body {
 .paste-text { resize: vertical; min-height: 7.5rem; }
 
 /* Dosya (EPUB/PDF) içe aktarım */
-.file-opt {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.6rem;
-  margin-bottom: 0.6rem;
-  font-weight: 700;
-  font-size: 0.9rem;
-}
-.file-opt input {
-  width: 5rem;
-  padding: 0.5rem;
-  font-size: 1rem;
-  color: var(--ink);
-  background: var(--bg);
-  border: 2px solid var(--line);
-  border-radius: 5px;
-}
 .upload-progress { margin: 0.4rem 0 0.2rem; }
 .upload-bar {
   height: 8px;
