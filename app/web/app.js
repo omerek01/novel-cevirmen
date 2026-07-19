@@ -2281,6 +2281,38 @@ el("pasteBookSelect").addEventListener("change", () => {
   // Mevcut kitaba eklerken kitap adı alanı anlamsız — gizle.
   el("pasteBookTitle").hidden = !!el("pasteBookSelect").value;
 });
+// Manga siteleri (URL bölüm linki → siteden sayfa görselleri çekip Gemini-vision ile
+// çevir). Roman siteleri metin akışına gider; manga siteleri resim akışına.
+function isMangaUrl(u) {
+  return /asurascans?\.com|asuracomic\.net|reaperscans|flamecomics|mangadex\.org/i.test(u || "");
+}
+
+async function importMangaUrl(url) {
+  const btn = el("addConfirm");
+  const orig = btn.innerHTML;
+  btn.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Manga çekiliyor…`;
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/import/manga-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.detail?.message || e.detail || `Hata (${res.status})`);
+    }
+    const data = await res.json();
+    closeAddModal();
+    navigate({ view: "reader", url: data.first_url });
+  } catch (err) {
+    alert("Manga çekilemedi: " + (err.message || err));
+  } finally {
+    btn.innerHTML = orig;
+    btn.disabled = false;
+  }
+}
+
 el("addConfirm").addEventListener("click", () => {
   if (addTab === "paste") {
     submitPaste();
@@ -2292,6 +2324,7 @@ el("addConfirm").addEventListener("click", () => {
   }
   const url = el("addUrlInput").value.trim();
   if (url) {
+    if (isMangaUrl(url)) return importMangaUrl(url); // manga sitesi → sayfaları çek+çevir
     closeAddModal();
     navigate({ view: "reader", url });
   }
