@@ -310,8 +310,10 @@ def test_pick_page_images_excludes_cover_and_sorts():
 def test_manga_page_renders_translated_image(monkeypatch):
     import re
 
-    from core import import_translate, media, pipeline
+    from core import import_translate, manga_engine, media, pipeline
 
+    # Yerel motor kurulu olsa bile bu test VİSİON YEDEĞİNİ doğrular (motoru kapat).
+    monkeypatch.setattr(manga_engine, "available", lambda: False)
     # Gemini-vision yerine sabit bölge (gerçek çağrı yok)
     monkeypatch.setattr(
         import_translate, "_manga_regions",

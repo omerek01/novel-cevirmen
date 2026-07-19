@@ -306,8 +306,14 @@ def _manga_regions_all(img, api_key):
 
 
 def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
-    """Manga sayfasını çevir: Gemini-vision balon OCR+çeviri (uzun şerit dilimlenir) →
-    orijinali kapat, Türkçe'yi üstüne yaz → PNG render → media → <img> HTML döndür."""
+    """Manga sayfasını çevir. ÖNCELİK: yerel motor (manga-image-translator) — kotasız,
+    orijinali temizce siler (inpaint) + düzgün dizer. Motor kurulu değilse YEDEK:
+    Gemini-vision (uzun şerit dilimlenir → balon OCR/çeviri → orijinali kapat, üstüne yaz)."""
+    from . import manga_engine
+
+    if manga_engine.available():
+        return manga_engine.translate_manga_page_engine(slug, page_no, api_key)
+
     from PIL import Image, ImageDraw
 
     src = media.book_dir(slug) / f"src-{page_no}"
