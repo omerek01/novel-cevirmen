@@ -61,6 +61,35 @@ def resolve_slug(slug: str) -> str:
     return row[0] if row else slug
 
 
+def set_alias(alias: str, canonical: str) -> None:
+    """`alias` slug'ını `canonical`'a yönlendir (resolve_slug bunu okur).
+
+    Paste+web köprüsü: web devamı bir web bölümü çekildiğinde host-türevli slug
+    (örn. renegade-immortal) hedef paste kitabına çözülsün → AYRI kitap açılmaz
+    (bölünme fix). Boş/kendine yönlendirme yok sayılır; hedef başka bir alias ise
+    kanonik köke iner (alias zinciri olmaz)."""
+    alias = (alias or "").strip()
+    canonical = (canonical or "").strip()
+    if not alias or not canonical or alias == canonical:
+        return
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT canonical FROM aliases WHERE alias = ?", (canonical,)
+        ).fetchone()
+        if row:
+            canonical = row[0]
+        if alias == canonical:
+            return
+        conn.execute(
+            "INSERT OR REPLACE INTO aliases (alias, canonical) VALUES (?, ?)",
+            (alias, canonical),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def merge_books(source: str, target: str) -> str:
     """`source` kitabını `target` kitabıyla birleştirir.
 
@@ -71,11 +100,11 @@ def merge_books(source: str, target: str) -> str:
     target = (target or "").strip()
     if not source or not target or source == target:
         return target or source
-    # E-8: sentetik kitaplar (paste-/pdf-/manga-) merge'e SOKULMAZ — "UI
-    # listelemez" uygulama değildir; sunucu reddeder (zincir n±1 bozulurdu).
-    from . import synthetic
-    if synthetic.is_synthetic_slug(source) or synthetic.is_synthetic_slug(target):
-        raise ValueError("İçe aktarılan (sentetik) kitaplar birleştirilemez.")
+    # NOT (eski E-8 kaldırıldı): sentetik (paste-/…) kitaplar da birleştirilebilir.
+    # Kullanıcı ch1'i yapıştırıp gerisini web'den çekince oluşan paste+web bölünmesini
+    # tek seride toplayabilmeli. Merge yalnız book_slug'ı gruplar; next/prev URL
+    # bazlı olduğundan zincir korunur. Bölüm no çakışması olursa liste ikisini de
+    # gösterir (kişisel kullanım; kullanıcı bilinçli birleştirir).
     conn = _connect()
     try:
         # Hedef kendisi bir alias'sa kanonik köke in (alias zinciri olmasın).

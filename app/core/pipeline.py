@@ -199,6 +199,12 @@ def fetch_into_book(
     if not api_key:
         raise TranslateError("GEMINI_API_KEY ayarlı değil.")
     chapter = fetch_chapter(url, priority="interactive")
+    # Bölünme fix: bu web serisinin host-türevli slug'ını (örn. renegade-immortal)
+    # hedef kitaba alias'la → kullanıcı SONRAKI BÖLÜM ile normal okuyucudan devam
+    # ettiğinde de bölümler AYRI kitap açmaz, resolve_slug hedefe çözer.
+    host_slug = chapter.get("book_slug")
+    if host_slug and host_slug != target_slug:
+        library.set_alias(host_slug, target_slug)
     book_glossary = glossary.get_glossary(target_slug)
     result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
     tail = cache.tail_chapter(target_slug)

@@ -71,14 +71,56 @@ def test_translate_from_raw_source_and_immutability(monkeypatch):
     assert cache.get_staged(ch["url"])["raw_source"] == "hello raw"
 
 
-def test_merge_rejects_synthetic_on_server():
-    """Madde 15 (E-8): sentetik slug merge SUNUCUDA reddedilir (400)."""
-    library.upsert_book("paste-k", "K", "u1", "B1", 1)
-    library.upsert_book("normal", "N", "u2", "B1", 1)
-    res = _client().post("/api/book/paste-k/merge-into", json={"target": "normal"})
-    assert res.status_code == 400
-    res = _client().post("/api/book/normal/merge-into", json={"target": "paste-k"})
-    assert res.status_code == 400
+def test_merge_bridges_synthetic_and_web():
+    """E-8 kaldırıldı: paste kitabı web kitabıyla birleştirilebilir (paste+web tek
+    seri). Kullanıcı ch1'i yapıştırıp gerisini web'den çekince oluşan bölünmeyi
+    tek kitapta toplayabilmeli."""
+    synthetic.append_chapter("paste-k", "K", "B1", "one")
+    synthetic.append_chapter("paste-k", "K", "B2", "two")
+    library.upsert_book("paste-k", "K", "paste://paste-k/1", "B1", 1)
+    cache.save_chapter("http://s/3", {
+        "book_slug": "web-k", "book_title": "Web K", "title": "B3", "chapter_no": 3,
+        "translation": "ç", "next_url": None, "prev_url": None,
+        "detected_names": [], "chunk_count": 1})
+    library.upsert_book("web-k", "Web K", "http://s/3", "B3", 3)
+    # Bölünmüş web kitabını paste kitabına birleştir (artık 200).
+    res = _client().post("/api/book/web-k/merge-into", json={"target": "paste-k"})
+    assert res.status_code == 200
+    assert library.get_book("web-k") is None
+    assert library.resolve_slug("web-k") == "paste-k"
+    urls = {c["url"] for c in cache.list_chapters("paste-k")}
+    assert "http://s/3" in urls and "paste://paste-k/1" in urls
+
+
+def test_fetch_into_book_aliases_host_slug_no_split(monkeypatch):
+    """Bölünme fix: web devamı host slug'ını hedefe alias'lar → SONRAKI bölümler
+    normal okuyucu yolundan da AYRI kitap açmaz."""
+    synthetic.append_chapter("paste-k", "K", "B1", "one")
+    library.upsert_book("paste-k", "K", "paste://paste-k/1", "B1", 1)
+
+    def fake_fetch2(url, **k):
+        return {"book_slug": "renegade-immortal", "book_title": "Renegade Immortal",
+                "title": "B2", "chapter_no": 2, "text": "web two",
+                "next_url": "http://site/ch3", "prev_url": None}
+
+    monkeypatch.setattr(pipeline, "fetch_chapter", fake_fetch2)
+    monkeypatch.setattr(pipeline, "translate_chapter",
+                        lambda t, api_key=None, glossary=None: {
+                            "translation": "ç", "source": None,
+                            "detected_names": [], "chunk_count": 1})
+    pipeline.fetch_into_book("http://site/ch2", "paste-k", "anahtar")
+    # Host slug hedefe çözülür (alias kuruldu).
+    assert library.resolve_slug("renegade-immortal") == "paste-k"
+
+    # ch3'ü NORMAL okuyucu yolundan çek → host slug döner ama paste-k'ya girer.
+    def fake_fetch3(url, **k):
+        return {"book_slug": "renegade-immortal", "book_title": "Renegade Immortal",
+                "title": "B3", "chapter_no": 3, "text": "web three",
+                "next_url": None, "prev_url": "http://site/ch2"}
+
+    monkeypatch.setattr(pipeline, "fetch_chapter", fake_fetch3)
+    out = pipeline.get_or_translate("http://site/ch3", "anahtar")
+    assert out["book_slug"] == "paste-k"  # AYRI kitap açılmadı
 
 
 def test_delete_only_last_chapter_nulls_prev_next():
