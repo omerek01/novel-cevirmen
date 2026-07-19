@@ -272,9 +272,14 @@ function applyNavState(state) {
   }
 }
 
-// İleri navigasyon: geçmişe yeni kayıt ekle ve görünümü çiz.
-function navigate(state) {
-  history.pushState(state, "");
+// Navigasyon. replace=false (varsayılan): seviye geçişi → geçmişe YENİ kayıt (push).
+// replace=true: aynı seviyede kalır (bölüm↔bölüm) → üstteki kaydı DEĞİŞTİR, geçmişi
+// büyütme. Böylece okuyucu tek history kaydı tutar ve "geri" hep bir üst seviyeye
+// (kitap/kütüphane) gider — bölüm bölüm geriye taramaz. Tüm "geri" aksiyonları
+// history.back() kullanır (aşağıda), pushState DEĞİL → jest görsel hiyerarşiyle uyumlu.
+function navigate(state, replace = false) {
+  if (replace) history.replaceState(state, "");
+  else history.pushState(state, "");
   applyNavState(state);
 }
 
@@ -906,7 +911,9 @@ function renderError(err, url, refresh) {
   backToLibBtn.textContent = "Kitaplığa Dön";
   backToLibBtn.addEventListener("click", () => {
     errorCard.hidden = true;
-    navigate({ view: "library" });
+    // Hatalı okuyucu kaydını kütüphaneyle DEĞİŞTİR (push değil) → geçmiş kirlenmez,
+    // geri jesti bu ölü bölüme dönmez.
+    navigate({ view: "library" }, true);
   });
 
   if (errorClass === "CloudflareChallenge") {
@@ -1074,7 +1081,7 @@ async function discoverNextFromWeb() {
     const data = await res.json();
     if (data.next_url) {
       currentNext = data.next_url;
-      navigate({ view: "reader", url: data.next_url, triggerId: "nextBtn" });
+      navigate({ view: "reader", url: data.next_url, triggerId: "nextBtn" }, true);
     } else {
       btn.textContent = "SON BÖLÜM";
       btn.dataset.mode = "end";
@@ -1342,20 +1349,16 @@ document.querySelectorAll("[data-status-opt]").forEach((b) =>
 
 /* ---------- olaylar: navigasyon ---------- */
 el("libThemeToggle").addEventListener("click", cycleTheme);
-el("backBtn").addEventListener("click", () => {
-  if (currentBookSlug) navigate({ view: "book", slug: currentBookSlug });
-  else navigate({ view: "library" });
-});
-el("bookBackBtn").addEventListener("click", () => {
-  navigate({ view: "library" });
-});
+// Tüm "geri" düğmeleri = history.back(): geçmiş yığınını POP eder (popstate → önceki
+// görünüm). navigate() (push) KULLANMAZ — aksi halde "geri" ileri kayıt iter ve jest
+// desenkron olurdu (bu bug'ın kök nedeni). Kök kayıt daima {library} (init'te
+// replaceState) olduğundan back güvenli; kütüphanede back = uygulamadan çıkış.
+el("backBtn").addEventListener("click", () => history.back());
+el("bookBackBtn").addEventListener("click", () => history.back());
 el("openGlossaryBtn").addEventListener("click", () => {
   if (currentBookSlug) navigate({ view: "glossary", slug: currentBookSlug });
 });
-el("glossaryBackBtn").addEventListener("click", () => {
-  if (currentBookSlug) navigate({ view: "book", slug: currentBookSlug });
-  else navigate({ view: "library" });
-});
+el("glossaryBackBtn").addEventListener("click", () => history.back());
 el("glossAddBtn").addEventListener("click", async () => {
   const source = el("glossSource").value.trim();
   if (!source) return;
@@ -1459,11 +1462,11 @@ el("retranslate").addEventListener("click", () => {
 el("nextBtn").addEventListener("click", () => {
   if (isNavigating) return;
   if (el("nextBtn").dataset.mode === "discover") return discoverNextFromWeb();
-  if (currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" });
+  if (currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" }, true);
 });
 el("prevBtn").addEventListener("click", () => {
   if (isNavigating) return;
-  if (currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" });
+  if (currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" }, true);
 });
 el("readerBody").addEventListener("click", onParaTap); // çift-tık → İngilizce orijinal
 el("findBtn").addEventListener("click", () => {
@@ -1514,8 +1517,8 @@ el("readerBody").addEventListener(
     touchX = touchY = null;
     if (isNavigating) return;
     if (Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 1.5) return;
-    if (dx < 0 && currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" });
-    else if (dx > 0 && currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" });
+    if (dx < 0 && currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" }, true);
+    else if (dx > 0 && currentPrev) navigate({ view: "reader", url: currentPrev, triggerId: "prevBtn" }, true);
   },
   { passive: true }
 );
@@ -1866,7 +1869,7 @@ async function deleteCurrentBook() {
       method: "DELETE",
     });
     if (!res.ok) throw new Error();
-    navigate({ view: "library" }); // silinen kitap raftan kalkar
+    history.back(); // silinen kitap görünümünden bir üste (kütüphane) dön — geçmişi büyütme
   } catch {
     alert("Silme başarısız — sunucuya ulaşılamadı.");
   }
