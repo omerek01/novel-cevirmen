@@ -307,6 +307,43 @@ def test_pick_page_images_excludes_cover_and_sorts():
     assert picked[0].endswith("001.webp") and picked[-1].endswith("010.webp")  # doğal sıra
 
 
+def test_manga_engine_triggers_batch(monkeypatch):
+    from core import manga_batch, manga_engine, pipeline
+    from core.synthetic import MangaTranslating
+
+    monkeypatch.setattr(manga_engine, "available", lambda: True)
+    calls = []
+    monkeypatch.setattr(
+        manga_batch, "ensure_started",
+        lambda slug, key: (calls.append(slug), {"done": 2, "total": 5})[1],
+    )
+    res = import_book.import_manga(_make_cbz(3), "m.cbz")
+    with pytest.raises(MangaTranslating) as ei:
+        pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert ei.value.done == 2 and ei.value.total == 5
+    assert calls  # batch iş tetiklendi
+
+
+def test_manga_translating_api_response(monkeypatch):
+    pytest.importorskip("httpx")
+    from fastapi.testclient import TestClient
+
+    from core import manga_batch, manga_engine
+    import server
+
+    monkeypatch.setattr(manga_engine, "available", lambda: True)
+    monkeypatch.setattr(manga_batch, "ensure_started", lambda slug, key: {"done": 1, "total": 4})
+    monkeypatch.setattr(server, "API_KEY", "test-key")
+    res = import_book.import_manga(_make_cbz(2), "m.cbz")
+    r = TestClient(server.app).get("/api/chapter", params={"url": res["first_url"]})
+    assert r.status_code == 200
+    # no-store ŞART: SW bu geçici yanıtı cache'lemesin (poll bayat placeholder'a kilitlenir).
+    assert r.headers.get("cache-control") == "no-store"
+    body = r.json()
+    assert body["content_type"] == "translating" and body["total"] == 4
+    assert body["next_url"] == synthetic.chapter_url(res["slug"], 2, "manga://")
+
+
 def test_manga_page_renders_translated_image(monkeypatch):
     import re
 

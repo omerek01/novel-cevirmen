@@ -128,3 +128,115 @@ def translate_manga_page_engine(slug: str, page_no: int, api_key: str) -> str:
     from .import_translate import page_image_html
 
     return page_image_html(rel, page_no, w, h)
+
+
+def translate_chapter_engine(slug: str, api_key: str, on_page=None) -> None:
+    """TÜM bölümü TEK motor çağrısıyla çevir (folder-mode) → modeller BİR KEZ yüklenir
+    (sayfa başına ~8s'ye düşer). Her sayfa bittikçe cache'e yazılır (ilerlemeli okuma);
+    on_page(n, done, total) çağrılır. Motorun çıktı ürettiği sırayla ilerler."""
+    import time
+
+    from PIL import Image
+
+    src_dir = media.book_dir(slug)
+    nums = sorted(
+        int(p.name[4:]) for p in src_dir.glob("src-*") if p.name[4:].isdigit()
+    )
+    if not nums:
+        return
+    with tempfile.TemporaryDirectory() as td:
+        inp = Path(td) / "in"
+        out = Path(td) / "out"
+        inp.mkdir()
+        for n in nums:
+            with Image.open(str(src_dir / f"src-{n}")) as im:
+                im.convert("RGB").save(str(inp / f"{n}.png"), "PNG")
+
+        env = dict(os.environ)
+        if api_key:
+            env["GEMINI_API_KEY"] = api_key
+        env.setdefault("GEMINI_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"))
+        cmd = [
+            str(engine_python()), "-m", "manga_translator", "local",
+            "-i", str(inp), "-o", str(out), "--config-file", str(_CONFIG), "--overwrite",
+        ]
+        font = _font()
+        if font:
+            cmd += ["--font-path", font]
+        proc = subprocess.Popen(
+            cmd, cwd=str(engine_dir()), env=env,
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        )
+        saved: set[int] = set()
+        total = len(nums)
+        while True:
+            for n in nums:
+                if n in saved:
+                    continue
+                op = _find_out_page(out, n)  # folder-mode alt-dizine yazabilir → recursive
+                if op is not None:
+                    try:
+                        with Image.open(str(op)) as im:  # tam yazıldı mı doğrula
+                            im.load()
+                        data = op.read_bytes()
+                    except Exception:
+                        continue  # yazım sürüyor → sonraki turda
+                    _save_engine_page(slug, n, data)
+                    saved.add(n)
+                    if on_page:
+                        on_page(n, len(saved), total)
+            done = proc.poll() is not None
+            if done and len(saved) >= total:
+                break
+            if done:
+                # Süreç bitti ama bazı sayfa çıktısı yok (metin yok/atlandı) → orijinali sakla.
+                for n in nums:
+                    if n not in saved:
+                        _save_engine_page(slug, n, (src_dir / f"src-{n}").read_bytes())
+                        saved.add(n)
+                        if on_page:
+                            on_page(n, len(saved), total)
+                break
+            time.sleep(2)
+
+
+def _find_out_page(out: Path, n: int):
+    """Motorun n. sayfa çıktısını bul. Folder-mode girdi adını korur (`n.png`) ama
+    çıktıyı alt-dizine yazabilir → düz yolu dene, yoksa recursive `n.<img>` ara."""
+    direct = out / f"{n}.png"
+    if direct.is_file():
+        return direct
+    for ext in ("png", "jpg", "jpeg", "webp"):
+        hits = glob.glob(str(out / "**" / f"{n}.{ext}"), recursive=True)
+        if hits:
+            return Path(hits[0])
+    return None
+
+
+def _save_engine_page(slug: str, n: int, data: bytes) -> None:
+    """Çevrilmiş sayfayı media + cache'e yaz (reader anında bulur)."""
+    import io
+
+    from PIL import Image
+
+    from . import cache
+    from .import_translate import page_image_html
+
+    with Image.open(io.BytesIO(data)) as im:
+        if im.mode != "RGB":
+            im = im.convert("RGB")
+        buf = io.BytesIO()
+        im.save(buf, "PNG")
+        data = buf.getvalue()
+        w, h = im.size
+    rel = media.write_bytes(slug, f"page-{n}.png", data)
+    url = f"manga://{slug}/{n}"
+    staged = cache.get_staged(url) or {}
+    cache.save_chapter(url, {
+        "title": staged.get("title") or f"Sayfa {n}",
+        "translation": page_image_html(rel, n, w, h),
+        "source": None, "detected_names": [], "chunk_count": 1,
+        "next_url": staged.get("next_url"), "prev_url": staged.get("prev_url"),
+        "book_slug": slug, "book_title": staged.get("book_title") or "Manga",
+        "chapter_no": n, "content_type": "html",
+    })

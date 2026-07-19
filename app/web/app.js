@@ -1238,7 +1238,12 @@ function buildChapterEntry(url, data) {
     art.appendChild(sep);
   }
   entry.el = art; // renderParagraphs/renderHtml entry.el'e yazar → sep'ten ÖNCE atanmalı
-  if (isHtml) {
+  if (data.content_type === "translating") {
+    // Manga: bölüm arka planda çevriliyor, bu sayfa henüz hazır değil → yer tutucu + poll.
+    entry.translating = true;
+    renderTranslatingPlaceholder(entry, data.done, data.total);
+    pollTranslating(entry);
+  } else if (isHtml) {
     entry.loaded = true;
     renderHtmlContent(entry);
   } else if (!data.translation || data.translation.trim().length < 50) {
@@ -1249,6 +1254,47 @@ function buildChapterEntry(url, data) {
     renderParagraphs(entry, "");
   }
   return entry;
+}
+
+// Çevriliyor yer tutucu (manga sayfası batch'te sırasını bekliyor).
+function renderTranslatingPlaceholder(entry, done, total) {
+  const art = entry.el;
+  [...art.children].forEach((n) => {
+    if (!n.classList.contains("chapter-sep")) n.remove();
+  });
+  const div = document.createElement("div");
+  div.className = "manga-translating";
+  const prog = total ? ` (${done}/${total})` : "";
+  div.innerHTML =
+    `<span class="loading-spinner" aria-hidden="true"></span> Sayfa çevriliyor…${prog}`;
+  art.appendChild(div);
+}
+
+// Çevriliyor sayfayı poll et: hazır olunca görsele çevir, değilse ilerlemeyi güncelle.
+async function pollTranslating(entry) {
+  await new Promise((r) => setTimeout(r, 3500));
+  if (views.reader.hidden || !stream.includes(entry)) return; // reader kapandı/akış sıfırlandı
+  let data;
+  try {
+    data = await fetchChapterData(entry.url, false, false);
+  } catch {
+    return pollTranslating(entry); // ağ hatası → tekrar dene
+  }
+  if (!stream.includes(entry)) return;
+  if (data.content_type === "translating") {
+    renderTranslatingPlaceholder(entry, data.done, data.total);
+    return pollTranslating(entry);
+  }
+  if (data.content_type === "html") {
+    entry.html = data.translation || "";
+    entry.translating = false;
+    entry.loaded = true;
+    entry.nextUrl = data.next_url || entry.nextUrl;
+    renderHtmlContent(entry);
+    updateActiveChapter();
+    updateEndCard();
+    maybeAppendNext(); // sıradaki sayfayı da akışa al
+  }
 }
 
 // Görsel içerik (PDF sayfa görseli / EPUB HTML): translation'ı innerHTML olarak bas.
@@ -1365,7 +1411,7 @@ function updateEndCard() {
 async function maybeAppendNext() {
   if (streamBusy || !stream.length) return;
   const last = stream[stream.length - 1];
-  if (!last.nextUrl) return;
+  if (!last.nextUrl || last.translating) return; // son sayfa çevriliyorsa sıradakini bekle
   streamBusy = true;
   let ok = false;
   const s = el("streamEnd");

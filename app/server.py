@@ -30,7 +30,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from core import cache, epub_export, glossary, import_book, jobs, library, media, pipeline, reading_log, synthetic  # noqa: E402
-from core.synthetic import ImportedChapterMissing  # noqa: E402
+from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
 from core.translate import TranslateError  # noqa: E402
 
@@ -69,6 +69,7 @@ def _pipeline_http_error(exc: BaseException) -> HTTPException:
 
 @app.get("/api/chapter")
 def get_chapter(
+    response: Response,
     url: str = Query(..., description="novelbin bölüm URL'i"),
     refresh: bool = Query(False, description="Önbelleği yok say, yeniden çevir"),
     source: bool = Query(False, description="İki-dilli: hizalı İngilizce kaynağı da getir"),
@@ -86,6 +87,24 @@ def get_chapter(
         return pipeline.get_or_translate(
             url, API_KEY, refresh, want_source=source, advance_position=track
         )
+    except MangaTranslating as exc:
+        # Manga bölümü arka planda çevriliyor → sayfa henüz hazır değil. Okuyucu
+        # "çevriliyor N/total" gösterip poll eder (hata değil, 200). no-store ŞART:
+        # service worker bu geçici yanıtı cache'lerse (track'i anahtardan siler)
+        # poll aynı bayat "translating"e düşer, sayfa asla html'e dönmez.
+        response.headers["Cache-Control"] = "no-store"
+        staged = cache.get_staged(url) or {}
+        return {
+            "content_type": "translating",
+            "title": staged.get("title") or "Sayfa",
+            "chapter_no": staged.get("chapter_no"),
+            "next_url": staged.get("next_url"),
+            "prev_url": staged.get("prev_url"),
+            "book_slug": staged.get("book_slug"),
+            "book_title": staged.get("book_title") or "Manga",
+            "translation": "", "source": None, "detected_names": [], "chunk_count": 1,
+            "done": exc.done, "total": exc.total, "cached": False,
+        }
     except (ImportedChapterMissing, CloudflareChallenge, FetchError, TranslateError) as exc:
         raise _pipeline_http_error(exc)
 

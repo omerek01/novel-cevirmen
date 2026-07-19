@@ -214,6 +214,15 @@ def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
     elif url.startswith("epub://"):
         html = import_translate.translate_epub_html(staged["raw_source"], media_slug, api_key)
     elif url.startswith("manga://"):
+        from . import manga_engine
+
+        if manga_engine.available():
+            # Yerel motor: TÜM bölümü tek çağrıda arka planda çevir (model bir kez →
+            # ~8s/sayfa). Sayfa hazır değilse "çevriliyor" → okuyucu poll eder.
+            from . import manga_batch
+
+            st = manga_batch.ensure_started(media_slug, api_key)
+            raise synthetic.MangaTranslating(st.get("done", 0), st.get("total", 0))
         html = import_translate.translate_manga_page(media_slug, staged["chapter_no"], api_key)
     else:
         raise TranslateError("Bilinmeyen görsel içerik türü.")

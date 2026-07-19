@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v52"; // manga KESİNTİSİZ (webtoon, ayraçsız) — sayfa sayfa bölme
+const SHELL_CACHE = "novellink-shell-v53"; // manga tüm-bölüm batch — arka planda çevrilir, sayfalar sırayla belirir
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -72,7 +72,12 @@ async function chapterFirst(request, cacheKey, forceNetwork) {
   }
   try {
     const res = await fetch(request);
-    if (res.ok) cache.put(cacheKey, res.clone());
+    // "translating" gibi GEÇİCİ yanıtları (no-store) ASLA cache'leme: anahtardan
+    // track silindiği için poll aynı anahtara düşer, bayat placeholder'a kilitlenir
+    // ve sayfa asla html'e dönmezdi. Nihai bölüm (html/çeviri) normalce saklanır.
+    if (res.ok && res.headers.get("Cache-Control") !== "no-store") {
+      cache.put(cacheKey, res.clone());
+    }
     return res;
   } catch (err) {
     const hit = await cache.match(cacheKey); // refresh çevrimdışıysa eskiye düş

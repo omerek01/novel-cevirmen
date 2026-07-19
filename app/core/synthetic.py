@@ -29,6 +29,16 @@ class ImportedChapterMissing(Exception):
     """Sentetik bölümün satırı yok — kaynak geri getirilemez (E-7: 404'e gider)."""
 
 
+class MangaTranslating(Exception):
+    """Manga sayfası henüz çevrilmedi ama bölüm-batch işi çalışıyor → okuyucu
+    'çevriliyor N/total' gösterip polling yapar (hata DEĞİL)."""
+
+    def __init__(self, done: int = 0, total: int = 0) -> None:
+        super().__init__("Manga bölümü çevriliyor")
+        self.done = done
+        self.total = total
+
+
 def slugify_title(title: str, prefix: str = "paste") -> str:
     """Başlıktan <prefix>- önekli slug (E-13: boş sonuç → <prefix>-<rastgele6>)."""
     s = re.sub(r"[^a-z0-9]+", "-", (title or "").lower()).strip("-")

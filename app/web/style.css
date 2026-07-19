@@ -460,6 +460,21 @@ html, body {
 .reader-body .html-content h2,
 .reader-body .html-content h3 { line-height: 1.25; margin: 1.2em 0 0.5em; }
 
+/* Manga sayfası arka planda çevriliyor (batch sırasını bekliyor) → yer tutucu. */
+.reader-body .manga-translating {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6em;
+  min-height: 45vh;
+  padding: 2rem 1rem;
+  font-family: var(--sans);
+  font-weight: 700;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+  text-align: center;
+}
+
 /* Manga (webtoon): KESİNTİSİZ — sayfa görselleri boşluksuz üst üste, kenardan kenara. */
 .reader-body.manga-mode { padding-left: 0; padding-right: 0; padding-top: 0; }
 .reader-body .chapter-manga { margin: 0; }
