@@ -860,11 +860,12 @@ function uploadFile() {
   if (!f) return el("fileInput").focus();
   const isPdf = /\.pdf$/i.test(f.name);
   const isEpub = /\.epub$/i.test(f.name);
-  if (!isPdf && !isEpub) return alert("Yalnız EPUB veya PDF dosyası seçilebilir.");
+  const isManga = /\.(cbz|zip|jpe?g|png|webp)$/i.test(f.name);
+  if (!isPdf && !isEpub && !isManga)
+    return alert("Yalnız EPUB, PDF veya manga (CBZ/ZIP/görsel) dosyası seçilebilir.");
   if (f.size > 50 * 1024 * 1024) return alert("Dosya 50MB sınırını aşıyor.");
-  const endpoint =
-    (isPdf ? "/api/import/pdf" : "/api/import/epub") +
-    `?filename=${encodeURIComponent(f.name)}`;
+  const path = isPdf ? "/api/import/pdf" : isEpub ? "/api/import/epub" : "/api/import/manga";
+  const endpoint = path + `?filename=${encodeURIComponent(f.name)}`;
 
   const prog = el("uploadProgress");
   const bar = prog.querySelector(".upload-bar span");
