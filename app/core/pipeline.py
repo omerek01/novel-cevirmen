@@ -123,14 +123,13 @@ def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
 def _do_fetch_translate_save(
     url: str, api_key: str, background: bool, ticket
 ) -> dict:
-    if synthetic.is_synthetic_url(url):
-        # E-7/E-11: içe aktarılan bölüm web'den çekilemez — kaynak sahneli
-        # satırın raw_source'undadır; satır yoksa fetch'e/kapıya İNMEDEN 404.
-        staged = cache.get_staged(url)
-        if staged is None or not staged.get("raw_source"):
-            raise synthetic.ImportedChapterMissing(
-                "İçe aktarılan bölümün kaynağı bulunamadı; yeniden içe aktarın."
-            )
+    staged = cache.get_staged(url)
+    if staged is not None and staged.get("raw_source"):
+        # İçe aktarılmış ham kaynak var → web'e GİTME, raw_source'tan çevir.
+        # Şemadan bağımsız (raw_source-öncelikli routing): hem saf `paste://`
+        # zinciri hem de bir web (http) URL'sine elle yapıştırılan "takılan bölüm"
+        # (site engelli/çevrimdışıyken doldurulan) buradan okunur. Kitap web-yerli
+        # kalır; refresh de raw_source'tan yeniden çevirir, fetch'e inmez.
         chapter = {
             "book_slug": staged["book_slug"],
             "book_title": staged["book_title"],
@@ -140,6 +139,12 @@ def _do_fetch_translate_save(
             "next_url": staged["next_url"],
             "prev_url": staged["prev_url"],
         }
+    elif synthetic.is_synthetic_url(url):
+        # E-7/E-11: sentetik URL ama satır/kaynak yok → web'den çekilemez;
+        # fetch'e/kapıya İNMEDEN 404.
+        raise synthetic.ImportedChapterMissing(
+            "İçe aktarılan bölümün kaynağı bulunamadı; yeniden içe aktarın."
+        )
     else:
         # FetchError sızabilir. Toplu iş düşük öncelikli: okuyucu kapıda öne geçer.
         chapter = fetch_chapter(
@@ -177,6 +182,50 @@ def _do_fetch_translate_save(
         "cached": False,
     }
     cache.save_chapter(url, payload)
+    return payload
+
+
+def fetch_into_book(
+    url: str, target_slug: str, api_key: str | None, chapter_no: int | None = None
+) -> dict:
+    """Bir web URL'sini BELİRLİ kitaba 'sonraki bölüm' olarak çek+çevir+bağla.
+
+    "Web'den devam" (B): paste ya da web kitabının kuyruğuna, verilen web adresinden
+    çekilen bölümü ekler. Sayfanın GERÇEK next_url'ü KORUNUR → sonraki bölümler
+    kendiliğinden siteden gelmeye devam eder (asıl amaç). book_slug hedefe ZORLANIR
+    (host-türevli slug'a düşmez) — bölüm doğru kitapta toplanır, sentetik zincire de
+    bağlanabilir. Konum İLERLETİLMEZ. FetchError / TranslateError sızabilir.
+    """
+    if not api_key:
+        raise TranslateError("GEMINI_API_KEY ayarlı değil.")
+    chapter = fetch_chapter(url, priority="interactive")
+    book_glossary = glossary.get_glossary(target_slug)
+    result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
+    tail = cache.tail_chapter(target_slug)
+    no = chapter_no if chapter_no is not None else ((tail["chapter_no"] or 0) + 1 if tail else 1)
+    prev_url = tail["url"] if tail else None
+    book = library.get_book(target_slug)
+    book_title = (book and book.get("title")) or chapter["book_title"]
+    payload = {
+        "title": chapter["title"],
+        "translation": result["translation"],
+        "source": result.get("source"),
+        "detected_names": result["detected_names"],
+        "chunk_count": result["chunk_count"],
+        "next_url": chapter["next_url"],  # sayfanın gerçek next'i → web'den devam eder
+        "prev_url": prev_url,
+        "book_slug": target_slug,
+        "book_title": book_title,
+        "chapter_no": no,
+        "cached": False,
+    }
+    cache.save_chapter(url, payload)
+    if prev_url:
+        cache.set_next(prev_url, url)  # kuyruğun next'ini yeni bölüme bağla (zincir)
+    glossary.merge_names(target_slug, result["detected_names"])
+    library.upsert_book(
+        target_slug, book_title, url, chapter["title"], no, update_position=False
+    )
     return payload
 
 

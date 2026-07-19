@@ -103,6 +103,79 @@ def append_chapter(
         conn.close()
 
 
+def stage_url_chapter(
+    slug: str,
+    book_title: str,
+    chapter_title: str,
+    raw_text: str,
+    url: str,
+    chapter_no: int | None = None,
+) -> dict:
+    """Belirli bir (genelde http) URL'ye elle yapıştırılan bölümü sahnele.
+
+    "Takılan bölüm doldurma": bir web kitabında Cloudflare/52x ile çekilemeyen
+    bölümün İngilizce metnini o gerçek URL'nin altına sahneli satır (translation
+    NULL, raw_source dolu) yazar; kitap web-yerli kalır (`paste://` üretmez).
+    Pipeline raw_source-öncelikli routing ile web'e inmeden bundan çevirir.
+
+    Bağlama: URL'yi zaten `next_url`'ünde gösteren bir bölüm varsa (engellenen
+    bölümün öncesi) prev ona bağlanır; yoksa kitabın kuyruğuna eklenir ve kuyruğun
+    `next_url`'ü bu URL'ye bağlanır. Var olan satır varsa raw_source/başlık
+    güncellenir (yeniden doldurma) ve translation NULL'lanır → yeniden çevrilir.
+    Döner: {"url", "chapter_no"}.
+    """
+    cache._connect().close()  # chapters şeması + raw_source sütunu garanti
+    conn = db.connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        existing = conn.execute(
+            "SELECT chapter_no FROM chapters WHERE url = ?", (url,)
+        ).fetchone()
+        if existing is not None:
+            conn.execute(
+                "UPDATE chapters SET book_slug = ?, book_title = ?, title = ?, "
+                "raw_source = ?, translation = NULL WHERE url = ?",
+                (slug, book_title, chapter_title, raw_text, url),
+            )
+            conn.commit()
+            return {"url": url, "chapter_no": existing[0]}
+        # URL'yi next'inde gösteren bölüm (engellenenin öncesi) → prev o.
+        pointer = conn.execute(
+            "SELECT url, chapter_no FROM chapters WHERE book_slug = ? AND next_url = ? "
+            "ORDER BY chapter_no DESC LIMIT 1",
+            (slug, url),
+        ).fetchone()
+        if pointer is not None:
+            prev_url, prev_no, link_forward = pointer[0], pointer[1], False
+        else:  # kimse göstermiyor → kuyruğa ekle, kuyruğun next'ini bu URL'ye bağla
+            tail = conn.execute(
+                "SELECT url, chapter_no FROM chapters WHERE book_slug = ? "
+                "ORDER BY chapter_no DESC LIMIT 1",
+                (slug,),
+            ).fetchone()
+            prev_url, prev_no, link_forward = (
+                (tail[0], tail[1], True) if tail else (None, None, False)
+            )
+        no = chapter_no if chapter_no is not None else (prev_no or 0) + 1
+        conn.execute(
+            "INSERT INTO chapters (url, book_slug, book_title, title, chapter_no, "
+            "translation, next_url, prev_url, raw_source, created_at) "
+            "VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)",
+            (url, slug, book_title, chapter_title, no, prev_url, raw_text, time.time()),
+        )
+        if link_forward and prev_url:
+            conn.execute(
+                "UPDATE chapters SET next_url = ? WHERE url = ?", (url, prev_url)
+            )
+        conn.commit()
+        return {"url": url, "chapter_no": no}
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def delete_last_chapter(slug: str, url: str) -> bool:
     """Yalnız zincirin SON bölümü silinebilir; önceki bölümün next_url'ü NULL'lanır."""
     conn = db.connect()

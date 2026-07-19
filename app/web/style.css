@@ -650,6 +650,9 @@ html, body {
   cursor: pointer;
 }
 .ghost-line-btn:active { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+/* Yıkıcı aksiyon (kitabı sil): kenarlık + yazı kırmızı, zemin şeffaf kalır. */
+.ghost-line-btn.danger-line { color: #c0392b; border-color: color-mix(in oklab, #c0392b 55%, var(--line)); }
+.ghost-line-btn.danger-line:active { background: color-mix(in oklab, #c0392b 12%, transparent); }
 
 /* Kütüphane aksiyonları + birleştirme listesi */
 .lib-actions { padding: 0 1rem; }

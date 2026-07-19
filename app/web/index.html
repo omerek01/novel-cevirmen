@@ -78,11 +78,13 @@
           <button class="seg" data-status-opt="bitti">Bitti</button>
         </div>
       </div>
+      <button id="addChapterBtn" class="ghost-line-btn">BÖLÜM EKLE (METİN / URL) →</button>
       <button id="openGlossaryBtn" class="ghost-line-btn">SÖZLÜK / TERİMLER →</button>
       <button id="bulkBtn" class="ghost-line-btn">TOPLU ÇEVİR (İLERİ HAZIRLA) →</button>
       <button id="epubBtn" class="ghost-line-btn">ePub İNDİR →</button>
       <button id="offlineBtn" class="ghost-line-btn">ÇEVRİMDIŞI İNDİR (TELEFONA) →</button>
       <button id="mergeBtn" class="ghost-line-btn">BAŞKA KİTAPLA BİRLEŞTİR →</button>
+      <button id="deleteBookBtn" class="ghost-line-btn danger-line">KİTABI SİL →</button>
       <h2 class="section-label small">BÖLÜMLER</h2>
       <input id="chapterSearch" class="chapter-search" type="search" inputmode="search"
              autocomplete="off" placeholder="Bölüm ara (başlık veya numara)…"
@@ -297,6 +299,36 @@
       <p id="offlineProgressText" class="modal-hint">Hazırlanıyor…</p>
       <div class="modal-actions">
         <button id="offlineStop" class="pill">Durdur</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- BÖLÜM EKLE (bu kitaba) -->
+  <div id="chapterAddModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">BÖLÜM EKLE</h3>
+      <div class="segmented" role="group" aria-label="Ekleme yöntemi">
+        <button class="seg" data-chadd-tab="paste" aria-pressed="true">METİN YAPIŞTIR</button>
+        <button class="seg" data-chadd-tab="url" aria-pressed="false">WEB ADRESİ</button>
+      </div>
+      <div id="chAddPaste">
+        <p id="chAddPasteHint" class="modal-hint"></p>
+        <input id="chAddPasteUrl" class="paste-field" type="url" inputmode="url"
+               autocomplete="off" placeholder="Bölüm adresi (URL)" />
+        <input id="chAddTitle" class="paste-field" type="text"
+               autocomplete="off" placeholder="Bölüm başlığı (isteğe bağlı)" />
+        <textarea id="chAddText" class="paste-field paste-text" rows="7"
+                  placeholder="İngilizce bölüm metnini yapıştır…"></textarea>
+      </div>
+      <div id="chAddUrl" hidden>
+        <p class="modal-hint">Bu adresten bölüm çekilir, çevrilir ve sonraki bölüm
+          olarak eklenir. Sonraki bölümler yine siteden gelir. Çekme biraz sürebilir.</p>
+        <input id="chAddFetchUrl" class="paste-field" type="url" inputmode="url"
+               autocomplete="off" placeholder="https://site.com/…/bolum-123" />
+      </div>
+      <div class="modal-actions">
+        <button id="chAddCancel" class="pill">Vazgeç</button>
+        <button id="chAddConfirm" class="next-btn">Ekle</button>
       </div>
     </div>
   </div>

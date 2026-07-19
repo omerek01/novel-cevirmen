@@ -118,6 +118,33 @@ def update_nav(url: str, next_url: str | None, prev_url: str | None) -> bool:
         conn.close()
 
 
+def tail_chapter(book_slug: str) -> dict | None:
+    """Kitabın en yüksek numaralı (kuyruk) bölümü — zincire sona ekleme için."""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT url, chapter_no FROM chapters WHERE book_slug = ? "
+            "ORDER BY chapter_no IS NULL, chapter_no DESC LIMIT 1",
+            (book_slug,),
+        ).fetchone()
+    finally:
+        conn.close()
+    return {"url": row[0], "chapter_no": row[1]} if row else None
+
+
+def set_next(url: str, next_url: str | None) -> bool:
+    """Yalnız bir satırın next_url'ünü güncelle (prev_url'e DOKUNMAZ). Satır yoksa False."""
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "UPDATE chapters SET next_url = ? WHERE url = ?", (next_url, url)
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def get_staged(url: str) -> dict | None:
     """Satırı çeviri durumundan bağımsız döndür (İŞ YOLU — okuma yolu değil).
 

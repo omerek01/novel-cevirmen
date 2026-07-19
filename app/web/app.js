@@ -328,16 +328,23 @@ function setShelfFilter(value) {
   renderLibrary();
 }
 
-// Devam fişi hedefi: en TAZE okunan kitap (sunucu updated_at ile yerel son-okuma
-// ts'inin büyüğü kitap başına alınır; kitaplar arasında en yenisi kazanır).
+// Kitabın "tazeliği" (ms): sunucu updated_at'i (çok-cihaz paylaşımı) ile yerel
+// son-okuma ts'inin büyüğü. Yerel ts, çevrimdışı okumada veya konum POST'u sessizce
+// düştüğünde (persistScroll .catch) sunucudan taze olabilir. Hem devam fişi hem raf
+// sırası bunu kullanır → ikisi tutarlı: en son okunan hem fişte hem rafın başında.
+function bookFreshness(book) {
+  const local = getLastRead(book.slug);
+  return Math.max((book.updated_at || 0) * 1000, (local && local.ts) || 0);
+}
+
+// Devam fişi hedefi: en TAZE okunan kitap (kitaplar arasında en yenisi kazanır).
 function pickResumeBook(books) {
   let best = null;
   let bestTs = -1;
   for (const book of books) {
     const target = resolveResume(book, book.slug);
     if (!target.url) continue;
-    const local = getLastRead(book.slug);
-    const ts = Math.max((book.updated_at || 0) * 1000, (local && local.ts) || 0);
+    const ts = bookFreshness(book);
     if (ts > bestTs) {
       bestTs = ts;
       best = { book, target };
@@ -369,8 +376,10 @@ function renderResumeFiche(books) {
       target.chapterNo ? "BÖL. " + target.chapterNo : "SON BÖLÜM"
     }${chTitle ? ' <span class="fiche-chname" lang="en">· ' + escapeHtml(chTitle) + "</span>" : ""}</span>` +
     `<span class="fiche-progress" aria-hidden="true"><span style="width:${pct}%"></span></span>`;
-  fiche.onclick = () =>
+  fiche.onclick = () => {
+    currentBookSlug = book.slug; // ilk bölüm hata verirse "metni yapıştır" doğru kitaba yazsın
     navigate({ view: "reader", url: target.url, ratio: target.ratio });
+  };
   fiche.hidden = false;
 }
 
@@ -424,6 +433,10 @@ async function renderLibrary() {
   const visible = books.filter(
     (b) => shelfFilter === "all" || (b.status || "okunuyor") === shelfFilter
   );
+  // Raf sırası = en son okunan en başta. Sunucu updated_at DESC döner ama yerel
+  // son-okuma (çevrimdışı / düşmüş POST) sunucuya yansımamış olabilir; fişle aynı
+  // tazelik ölçüsüyle istemcide yeniden sıralarız → devam ettiğin kitap rafın başında.
+  visible.sort((a, b) => bookFreshness(b) - bookFreshness(a));
   el("filterEmpty").hidden = !(books.length > 0 && visible.length === 0);
 
   const jobChecks = [];
@@ -926,7 +939,7 @@ function renderError(err, url, refresh) {
     } else {
       desc.textContent = `Hata: ${msgText}`;
     }
-    
+
     actions.append(retryBtn, backToLibBtn);
     retryBtn.focus();
   }
@@ -1012,6 +1025,68 @@ function computePrev(data) {
   return data.prev_url || null; // listede yok / başı → sayfadan çekilen yedek
 }
 
+function isSyntheticSlug(slug) {
+  return !!slug && (slug.startsWith("paste-") || slug.startsWith("pdf-") || slug.startsWith("manga-"));
+}
+
+// Alt çubuk gezinme düğmelerini kur. "Sonraki" bilinmiyorsa ve bölüm bir web (http)
+// adresiyse "SONRAKINI WEB'DEN GETİR" moduna geçer: yapıştırılan/eski bölümden sonra
+// siteden devam edebilmek için sayfanın nav'ı web'den keşfedilir (refresh-nav, E-3).
+function applyReaderNav(data) {
+  currentNext = data.next_url || null;
+  currentBookSlug = data.book_slug || currentBookSlug;
+  currentPrev = computePrev(data);
+  const next = el("nextBtn");
+  if (currentNext) {
+    next.disabled = false;
+    next.dataset.mode = "next";
+    next.textContent = "SONRAKI BÖLÜM →";
+  } else if (/^https?:\/\//.test(currentUrl || "")) {
+    next.disabled = false;
+    next.dataset.mode = "discover";
+    next.textContent = "SONRAKINI WEB'DEN GETİR";
+  } else {
+    next.disabled = true;
+    next.dataset.mode = "end";
+    next.textContent = "SON BÖLÜM";
+  }
+  const prev = el("prevBtn");
+  prev.hidden = !currentPrev;
+  prev.disabled = !currentPrev;
+  el("readerFooter").hidden = false;
+}
+
+// "Sonrakini web'den getir": mevcut bölümün sayfasını çekip next'ini öğrenir
+// (çeviri yakmaz), bulursa oraya geçer. Site engelliyse kullanıcıyı bilgilendirir.
+async function discoverNextFromWeb() {
+  const btn = el("nextBtn");
+  const url = currentUrl;
+  const orig = btn.textContent;
+  btn.disabled = true;
+  btn.textContent = "Aranıyor…";
+  try {
+    const res = await fetch("/api/chapter/refresh-nav", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    if (data.next_url) {
+      currentNext = data.next_url;
+      navigate({ view: "reader", url: data.next_url, triggerId: "nextBtn" });
+    } else {
+      btn.textContent = "SON BÖLÜM";
+      btn.dataset.mode = "end";
+      btn.disabled = true;
+    }
+  } catch {
+    btn.disabled = false;
+    btn.textContent = orig;
+    alert("Sonraki bölüm bulunamadı — site engelli olabilir. Kitap görünümünden 'BÖLÜM EKLE' ile metni de yapıştırabilirsiniz.");
+  }
+}
+
 function renderChapter(data, ratio) {
   setStatus(null);
   failedAttempts = 0; // Başarılı yüklemede hata sayacını sıfırla
@@ -1055,17 +1130,7 @@ function renderChapter(data, ratio) {
     body.appendChild(card);
     el("readerBody").hidden = false;
 
-    currentNext = data.next_url || null;
-    currentBookSlug = data.book_slug || currentBookSlug;
-    currentPrev = computePrev(data);
-
-    const next = el("nextBtn");
-    next.disabled = !currentNext;
-    next.textContent = currentNext ? "SONRAKI BÖLÜM →" : "SON BÖLÜM";
-    const prev = el("prevBtn");
-    prev.hidden = !currentPrev;
-    prev.disabled = !currentPrev;
-    el("readerFooter").hidden = false;
+    applyReaderNav(data);
 
     window.scrollTo(0, 0);
     return;
@@ -1082,17 +1147,7 @@ function renderChapter(data, ratio) {
   renderReaderBody("");
   el("readerBody").hidden = false;
 
-  currentNext = data.next_url || null;
-  currentBookSlug = data.book_slug || currentBookSlug;
-  currentPrev = computePrev(data);
-
-  const next = el("nextBtn");
-  next.disabled = !currentNext;
-  next.textContent = currentNext ? "SONRAKI BÖLÜM →" : "SON BÖLÜM";
-  const prev = el("prevBtn");
-  prev.hidden = !currentPrev;
-  prev.disabled = !currentPrev;
-  el("readerFooter").hidden = false;
+  applyReaderNav(data);
 
   // Başarıyla render edilen bölümü kitabın yerel "son okunan" işareti yap (çevrimdışı
   // resume bunu kullanır). Boş/hatalı bölüm dalı bu satıra ulaşmaz → oraya resume olmaz.
@@ -1403,6 +1458,7 @@ el("retranslate").addEventListener("click", () => {
 /* ---------- olaylar: okuyucu nav + bölümde arama ---------- */
 el("nextBtn").addEventListener("click", () => {
   if (isNavigating) return;
+  if (el("nextBtn").dataset.mode === "discover") return discoverNextFromWeb();
   if (currentNext) navigate({ view: "reader", url: currentNext, triggerId: "nextBtn" });
 });
 el("prevBtn").addEventListener("click", () => {
@@ -1709,6 +1765,112 @@ async function runOfflineDownload(slugs) {
 
 /* ---------- kitap birleştir ---------- */
 el("mergeBtn")?.addEventListener("click", openMergeModal);
+el("deleteBookBtn")?.addEventListener("click", deleteCurrentBook);
+
+/* ---------- bu kitaba bölüm ekle (metin yapıştır / web adresinden çek) ---------- */
+let chAddTab = "paste";
+el("addChapterBtn")?.addEventListener("click", openChapterAddModal);
+el("chAddCancel")?.addEventListener("click", () => (el("chapterAddModal").hidden = true));
+el("chapterAddModal")?.addEventListener("click", (e) => {
+  if (e.target === el("chapterAddModal")) el("chapterAddModal").hidden = true;
+});
+document.querySelectorAll("#chapterAddModal .seg[data-chadd-tab]").forEach((b) =>
+  b.addEventListener("click", () => setChAddTab(b.dataset.chaddTab))
+);
+el("chAddConfirm")?.addEventListener("click", submitChapterAdd);
+
+function setChAddTab(tab) {
+  chAddTab = tab;
+  document.querySelectorAll("#chapterAddModal .seg[data-chadd-tab]").forEach((b) =>
+    b.setAttribute("aria-pressed", String(b.dataset.chaddTab === tab))
+  );
+  el("chAddPaste").hidden = tab !== "paste";
+  el("chAddUrl").hidden = tab !== "url";
+}
+
+function openChapterAddModal() {
+  if (!currentBookSlug) return;
+  const synth = isSyntheticSlug(currentBookSlug);
+  // Sentetik (içe aktarılan) kitapta metin URL'siz eklenir; web kitabında bölümün
+  // gerçek adresi gerekir (o adrese kaydedilir → kitap web-yerli kalır).
+  el("chAddPasteUrl").hidden = synth;
+  el("chAddPasteHint").textContent = synth
+    ? "Bu içe aktarılan kitaba yeni bölüm eklenir (sıradaki numara)."
+    : "Takılan/eksik bir bölümün metnini, o bölümün web adresiyle yapıştır. Kitap web bağlantısını korur.";
+  ["chAddPasteUrl", "chAddTitle", "chAddText", "chAddFetchUrl"].forEach((id) => (el(id).value = ""));
+  setChAddTab("paste");
+  el("chapterAddModal").hidden = false;
+}
+
+async function submitChapterAdd() {
+  if (!currentBookSlug) return;
+  const btn = el("chAddConfirm");
+  const synth = isSyntheticSlug(currentBookSlug);
+  let endpoint, body, slow = false;
+  if (chAddTab === "url") {
+    const url = el("chAddFetchUrl").value.trim();
+    if (!/^https?:\/\//.test(url)) return el("chAddFetchUrl").focus();
+    endpoint = `/api/book/${encodeURIComponent(currentBookSlug)}/fetch-next`;
+    body = { url };
+    slow = true; // çekme + çeviri sürebilir
+  } else {
+    const text = el("chAddText").value.trim();
+    if (!text) return el("chAddText").focus();
+    const title = el("chAddTitle").value.trim() || null;
+    if (synth) {
+      endpoint = "/api/import/paste";
+      body = { slug: currentBookSlug, text, title: title || "Bölüm" };
+    } else {
+      const url = el("chAddPasteUrl").value.trim();
+      if (!/^https?:\/\//.test(url)) {
+        el("chAddPasteUrl").focus();
+        return alert("Bu bölümün web adresini (URL) gir.");
+      }
+      endpoint = "/api/import/paste-url";
+      body = { url, slug: currentBookSlug, text, title };
+    }
+  }
+  btn.disabled = true;
+  const orig = btn.textContent;
+  if (slow) btn.textContent = "Çekiliyor…";
+  try {
+    const res = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail?.message || err.detail || "Ekleme başarısız.");
+    }
+    el("chapterAddModal").hidden = true;
+    openBook(currentBookSlug); // liste yenilensin, yeni bölüm görünsün
+  } catch (e) {
+    alert(String(e.message || e));
+  } finally {
+    btn.disabled = false;
+    btn.textContent = orig;
+  }
+}
+
+// Kitabı + tüm bölümlerini kalıcı sil. Boş/mükerrer kitapları raftan kaldırır
+// (sentetik kitaplar merge edilemez ama silinebilir). Onay ister, geri alınamaz.
+async function deleteCurrentBook() {
+  if (!currentBookSlug) return;
+  const name = (currentBook && currentBook.title) || currentBookSlug;
+  const n = currentChapters ? currentChapters.length : 0;
+  const detail = n ? `\n${n} bölüm ve sözlüğü de silinir.` : "";
+  if (!confirm(`"${name}" kitabı kalıcı olarak silinsin mi?${detail}\nBu işlem geri alınamaz.`)) return;
+  try {
+    const res = await fetch(`/api/book/${encodeURIComponent(currentBookSlug)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error();
+    navigate({ view: "library" }); // silinen kitap raftan kalkar
+  } catch {
+    alert("Silme başarısız — sunucuya ulaşılamadı.");
+  }
+}
 el("mergeCancel")?.addEventListener("click", () => {
   el("mergeModal").hidden = true;
 });

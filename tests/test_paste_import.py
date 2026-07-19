@@ -117,3 +117,165 @@ def test_import_paste_endpoint_stages_and_starts_job(monkeypatch):
     # Boş metin reddedilir.
     res = _client().post("/api/import/paste", json={"title": "x", "text": "  "})
     assert res.status_code == 400
+
+
+def test_same_book_title_appends_not_duplicates(monkeypatch):
+    """Aynı başlıkla ikinci içe aktarım YENİ kitap (-2) açmaz, mevcut kitaba ekler."""
+    from core import jobs
+
+    monkeypatch.setattr(jobs, "_start_thread", lambda job_id, api_key: True)
+    c = _client()
+    first = c.post("/api/import/paste", json={
+        "title": "Bölüm 1", "text": "one", "book_title": "Same Book",
+    }).json()
+    second = c.post("/api/import/paste", json={
+        "title": "Bölüm 2", "text": "two", "book_title": "Same Book",
+    }).json()
+    # Aynı slug, artan bölüm no; tek kütüphane kaydı.
+    assert first["slug"] == second["slug"] == "paste-same-book"
+    assert (first["chapter_no"], second["chapter_no"]) == (1, 2)
+    paste_books = [b for b in library.list_books() if b["slug"].startswith("paste-")]
+    assert len(paste_books) == 1
+    assert len(cache.list_chapters("paste-same-book")) == 2
+
+
+def test_paste_url_fills_blocked_web_chapter(monkeypatch):
+    """A: web kitabında takılan bölümün metni GERÇEK URL'ye yapıştırılır; pipeline
+    web'e inmeden raw_source'tan çevirir (raw_source-öncelikli routing)."""
+    # N: çekilmiş bölüm, next'i engellenen URL'ye işaret ediyor.
+    cache.save_chapter("http://site/1", {
+        "book_slug": "solo", "book_title": "Solo", "title": "B1", "chapter_no": 1,
+        "translation": "çeviri1", "next_url": "http://site/2", "prev_url": None,
+        "detected_names": [], "chunk_count": 1,
+    })
+    library.upsert_book("solo", "Solo", "http://site/1", "B1", 1)
+    # Engellenen bölümün metnini gerçek URL'ye yapıştır.
+    ch = synthetic.stage_url_chapter("solo", "Solo", "B2", "raw two", "http://site/2")
+    assert ch["url"] == "http://site/2" and ch["chapter_no"] == 2
+    staged = cache.get_staged("http://site/2")
+    assert staged["raw_source"] == "raw two" and staged["translation"] is None
+    assert staged["prev_url"] == "http://site/1"  # pointer (next_url) üzerinden bağlandı
+
+    # Okuma yolu: fetch'e İNMEDEN raw_source'tan çevir.
+    def fail_fetch(*a, **k):
+        raise AssertionError("yapıştırılmış URL fetch'e inmemeli")
+
+    monkeypatch.setattr(pipeline, "fetch_chapter", fail_fetch)
+    seen = []
+
+    def fake_translate(text, api_key=None, glossary=None):
+        seen.append(text)
+        return {"translation": "çeviri2", "source": None,
+                "detected_names": [], "chunk_count": 1}
+
+    monkeypatch.setattr(pipeline, "translate_chapter", fake_translate)
+    out = pipeline.get_or_translate("http://site/2", "anahtar")
+    assert seen == ["raw two"] and out["translation"] == "çeviri2"
+
+
+def test_paste_url_refill_updates_raw_and_renulls_translation():
+    """Aynı URL yeniden yapıştırılırsa raw_source güncellenir, translation NULL'lanır."""
+    synthetic.stage_url_chapter("solo", "Solo", "B2", "ilk", "http://s/2")
+    cache.save_chapter("http://s/2", {  # çevrilmiş gibi işaretle
+        "book_slug": "solo", "book_title": "Solo", "title": "B2", "chapter_no": 1,
+        "translation": "eski", "next_url": None, "prev_url": None,
+        "detected_names": [], "chunk_count": 1,
+    })
+    synthetic.stage_url_chapter("solo", "Solo", "B2", "yeni metin", "http://s/2")
+    staged = cache.get_staged("http://s/2")
+    assert staged["raw_source"] == "yeni metin" and staged["translation"] is None
+
+
+def test_paste_url_endpoint_stages_and_validates(monkeypatch):
+    from core import jobs
+
+    monkeypatch.setattr(jobs, "_start_thread", lambda job_id, api_key: True)
+    library.upsert_book("webk", "Web Kitap", "http://s/1", "B1", 1)
+    res = _client().post("/api/import/paste-url", json={
+        "url": "http://s/2", "slug": "webk", "text": "hello two", "title": "B2",
+    })
+    assert res.status_code == 200
+    assert res.json()["url"] == "http://s/2" and res.json()["slug"] == "webk"
+    assert cache.get_staged("http://s/2")["raw_source"] == "hello two"
+    # Sentetik URL reddedilir (web kitabı gerekiyor).
+    assert _client().post("/api/import/paste-url", json={
+        "url": "paste://x/1", "slug": "webk", "text": "x"}).status_code == 400
+    # Boş metin reddedilir.
+    assert _client().post("/api/import/paste-url", json={
+        "url": "http://s/3", "slug": "webk", "text": " "}).status_code == 400
+    # Bilinmeyen kitap → 404.
+    assert _client().post("/api/import/paste-url", json={
+        "url": "http://s/9", "slug": "yok", "text": "x"}).status_code == 404
+
+
+def test_fetch_into_book_links_and_keeps_web_next(monkeypatch):
+    """B: URL kitaba sonraki bölüm olarak çekilir; sayfanın gerçek next'i korunur
+    (web'den devam), kuyruk buna bağlanır, book_slug hedefe ZORLANIR."""
+    synthetic.append_chapter("paste-k", "K", "B1", "one")
+    library.upsert_book("paste-k", "K", "paste://paste-k/1", "B1", 1)
+
+    def fake_fetch(url, **k):
+        return {"book_slug": "host-turevli", "book_title": "Host", "title": "Web B2",
+                "chapter_no": 999, "text": "web two",
+                "next_url": "http://site/3", "prev_url": None}
+
+    monkeypatch.setattr(pipeline, "fetch_chapter", fake_fetch)
+    monkeypatch.setattr(pipeline, "translate_chapter",
+                        lambda t, api_key=None, glossary=None: {
+                            "translation": "çeviri2", "source": None,
+                            "detected_names": [], "chunk_count": 1})
+    out = pipeline.fetch_into_book("http://site/2", "paste-k", "anahtar")
+    assert out["book_slug"] == "paste-k"       # slug hedefe zorlandı
+    assert out["chapter_no"] == 2              # kuyruk + 1
+    assert out["next_url"] == "http://site/3"  # sayfanın gerçek next'i korunur
+
+    saved = cache.get_chapter("http://site/2")
+    assert saved["book_slug"] == "paste-k" and saved["prev_url"] == "paste://paste-k/1"
+    assert cache.get_staged("paste://paste-k/1")["next_url"] == "http://site/2"
+    assert {c["url"] for c in cache.list_chapters("paste-k")} == {
+        "paste://paste-k/1", "http://site/2"}
+
+
+def test_fetch_next_endpoint_validates(monkeypatch):
+    library.upsert_book("wk", "WK", "http://s/1", "B1", 1)
+    monkeypatch.setattr(pipeline, "fetch_chapter", lambda url, **k: {
+        "book_slug": "h", "book_title": "H", "title": "B2", "chapter_no": 5,
+        "text": "t", "next_url": "http://s/3", "prev_url": None})
+    monkeypatch.setattr(pipeline, "translate_chapter",
+                        lambda t, api_key=None, glossary=None: {
+                            "translation": "ç", "source": None,
+                            "detected_names": [], "chunk_count": 1})
+    res = _client().post("/api/book/wk/fetch-next", json={"url": "http://s/2"})
+    assert res.status_code == 200 and res.json()["url"] == "http://s/2"
+    # sentetik url reddedilir, bilinmeyen kitap 404.
+    assert _client().post("/api/book/wk/fetch-next",
+                          json={"url": "paste://x/1"}).status_code == 400
+    assert _client().post("/api/book/yok/fetch-next",
+                          json={"url": "http://s/9"}).status_code == 404
+
+
+def test_refresh_nav_synthetic_no_fetch(monkeypatch):
+    """C: sentetik bölümde refresh-nav fetch'e inmez, sahneli next'i döndürür."""
+    a = synthetic.append_chapter("paste-k", "K", "B1", "one")
+    b = synthetic.append_chapter("paste-k", "K", "B2", "two")
+
+    def fail_fetch(*a, **k):
+        raise AssertionError("sentetik refresh-nav fetch'e inmemeli")
+
+    monkeypatch.setattr(pipeline, "fetch_chapter", fail_fetch)
+    res = _client().post("/api/chapter/refresh-nav", json={"url": a["url"]})
+    assert res.status_code == 200 and res.json()["next_url"] == b["url"]
+
+
+def test_refresh_nav_http_updates_cache(monkeypatch):
+    """C: yapıştırılan/eski http bölümün next'i web'den öğrenilip cache'e yazılır."""
+    cache.save_chapter("http://s/1", {
+        "book_slug": "b", "book_title": "B", "title": "B1", "chapter_no": 1,
+        "translation": "ç1", "next_url": None, "prev_url": None,
+        "detected_names": [], "chunk_count": 1})
+    monkeypatch.setattr(pipeline, "fetch_chapter", lambda url, **k: {
+        "title": "B1", "text": "t", "next_url": "http://s/2", "prev_url": None,
+        "book_slug": "b", "book_title": "B", "chapter_no": 1})
+    res = _client().post("/api/chapter/refresh-nav", json={"url": "http://s/1"})
+    assert res.status_code == 200 and res.json()["next_url"] == "http://s/2"
+    assert cache.get_chapter("http://s/1")["next_url"] == "http://s/2"

@@ -55,3 +55,30 @@ def test_merge_into_alias_follows_to_canonical():
 def test_merge_noop_on_same_or_empty():
     assert library.merge_books("x", "x") == "x"
     assert library.merge_books("", "y") == "y"
+
+
+def test_delete_book_removes_chapters_glossary_and_row():
+    _seed_book("gid", "uGid")
+    glossary.set_term("gid", "Sky", "Gökyüzü")
+    assert library.delete_book("gid") is True
+    assert library.get_book("gid") is None
+    assert cache.list_chapters("gid") == []
+    assert glossary.get_glossary("gid") == {}
+
+
+def test_delete_empty_book_and_unknown():
+    # Bölümü olmayan kitap (mükerrer içe aktarım kalıntısı) da silinebilir.
+    library.upsert_book("bos", "Boş", "uBos", "B1", 1)
+    assert library.delete_book("bos") is True
+    assert library.get_book("bos") is None
+    # Bilinmeyen kitap → False (endpoint bunu 404'e çevirir).
+    assert library.delete_book("yok-boyle-kitap") is False
+
+
+def test_delete_book_clears_alias():
+    _seed_book("s1", "uS1")
+    _seed_book("s2", "uS2")
+    library.merge_books("s1", "s2")  # s1 -> s2 alias
+    library.delete_book("s2")
+    # Kanonik gidince alias da kalkar; s1 artık kendine çözülür (sarkık alias yok).
+    assert library.resolve_slug("s1") == "s1"

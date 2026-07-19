@@ -249,6 +249,41 @@ def set_status(slug: str, status: str) -> bool:
         conn.close()
 
 
+def delete_book(slug: str) -> bool:
+    """Kitabı ve ona bağlı HER ŞEYİ kalıcı sil: bölümler, sözlük, okuma günlüğü,
+    alias'lar, books satırı. Bölümü olmayan (mükerrer içe aktarım kalıntısı) kitap
+    da silinir. Herhangi bir satır silindiyse True. Geri alınamaz.
+
+    Sentetik kitaplar merge'e sokulmaz (E-8) ama SİLİNEBİLİR — zincir tümüyle
+    kalkar, kalan bir referans olmaz."""
+    slug = (slug or "").strip()
+    if not slug:
+        return False
+    conn = _connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        deleted = conn.execute("DELETE FROM books WHERE slug = ?", (slug,)).rowcount
+        # chapters/glossary/reading_log/aliases tembel oluşturulur — henüz yoksa
+        # OperationalError'ı yut (taze DB'de tablo olmayabilir, merge_books ile aynı desen).
+        for stmt, params in (
+            ("DELETE FROM chapters WHERE book_slug = ?", (slug,)),
+            ("DELETE FROM glossary WHERE book_slug = ?", (slug,)),
+            ("DELETE FROM reading_log WHERE slug = ?", (slug,)),
+            ("DELETE FROM aliases WHERE alias = ? OR canonical = ?", (slug, slug)),
+        ):
+            try:
+                deleted += conn.execute(stmt, params).rowcount
+            except sqlite3.OperationalError:
+                pass
+        conn.commit()
+        return deleted > 0
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def list_books() -> list[dict]:
     conn = _connect()
     try:

@@ -46,6 +46,24 @@ def resume_bulk_jobs() -> None:
     jobs.resume_running(API_KEY)
 
 
+def _pipeline_http_error(exc: BaseException) -> HTTPException:
+    """Pipeline istisnasını tipli HTTP hatasına çevir (error_class ile). Frontend
+    kırılgan string yerine sınıfa göre dallanır (hata kartı, 'metni yapıştır')."""
+    if isinstance(exc, ImportedChapterMissing):
+        return HTTPException(404, {"message": str(exc), "error_class": "ImportedChapterMissing"})
+    if isinstance(exc, CloudflareChallenge):
+        return HTTPException(502, {"message": str(exc), "error_class": "CloudflareChallenge"})
+    if isinstance(exc, FetchError):
+        from core.fetch import CF_ORIGIN_ERRORS
+        ec = "OriginError" if any(f"HTTP {e}" in str(exc) for e in CF_ORIGIN_ERRORS) else "FetchError"
+        return HTTPException(502, {"message": str(exc), "error_class": ec})
+    if isinstance(exc, TranslateError):
+        if not API_KEY:
+            return HTTPException(500, "GEMINI_API_KEY ayarlı değil.")
+        return HTTPException(503, {"message": str(exc), "error_class": "TranslateError"})
+    raise exc  # bilinmeyen → olduğu gibi yukarı
+
+
 @app.get("/api/chapter")
 def get_chapter(
     url: str = Query(..., description="novelbin bölüm URL'i"),
@@ -59,41 +77,8 @@ def get_chapter(
     """
     try:
         return pipeline.get_or_translate(url, API_KEY, refresh, want_source=source)
-    except ImportedChapterMissing as exc:
-        raise HTTPException(
-            status_code=404,
-            detail={"message": str(exc), "error_class": "ImportedChapterMissing"},
-        )
-    except CloudflareChallenge as exc:
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "message": str(exc),
-                "error_class": "CloudflareChallenge"
-            }
-        )
-    except FetchError as exc:
-        from core.fetch import CF_ORIGIN_ERRORS
-        error_class = "FetchError"
-        if any(f"HTTP {err}" in str(exc) for err in CF_ORIGIN_ERRORS):
-            error_class = "OriginError"
-        raise HTTPException(
-            status_code=502,
-            detail={
-                "message": str(exc),
-                "error_class": error_class
-            }
-        )
-    except TranslateError as exc:
-        if not API_KEY:
-            raise HTTPException(status_code=500, detail="GEMINI_API_KEY ayarlı değil.")
-        raise HTTPException(
-            status_code=503,
-            detail={
-                "message": str(exc),
-                "error_class": "TranslateError"
-            }
-        )
+    except (ImportedChapterMissing, CloudflareChallenge, FetchError, TranslateError) as exc:
+        raise _pipeline_http_error(exc)
 
 
 @app.delete("/api/chapter")
@@ -159,6 +144,23 @@ class PasteImportRequest(BaseModel):
     chapter_no: int | None = None  # elle geçersiz kılma (varsayılan: max+1)
 
 
+class PasteUrlImportRequest(BaseModel):
+    url: str  # takılan bölümün GERÇEK http(s) adresi
+    slug: str  # ait olduğu (web) kitabın slug'ı
+    text: str  # yapıştırılan İngilizce ham metin
+    title: str | None = None  # bölüm başlığı (yoksa "Bölüm N")
+    chapter_no: int | None = None
+
+
+class FetchNextRequest(BaseModel):
+    url: str  # bu kitaba sonraki bölüm olarak çekilecek web adresi
+    chapter_no: int | None = None
+
+
+class RefreshNavRequest(BaseModel):
+    url: str  # gezinmesi (next/prev) web'den tazelenecek bölüm
+
+
 @app.post("/api/book/{slug}/merge-into")
 def merge_book(slug: str, req: MergeRequest) -> dict:
     """`slug` kitabını `target` kitabıyla birleştir (aynı kitap, farklı slug)."""
@@ -167,6 +169,15 @@ def merge_book(slug: str, req: MergeRequest) -> dict:
     except ValueError as exc:  # E-8: sentetik kitap birleştirilemez
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "canonical": canonical}
+
+
+@app.delete("/api/book/{slug}")
+def remove_book(slug: str) -> dict:
+    """Kitabı + tüm bölümlerini/sözlüğünü kalıcı sil (boş/mükerrer kitap temizliği)."""
+    ok = library.delete_book(library.resolve_slug(slug))
+    if not ok:
+        raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
+    return {"ok": True}
 
 
 @app.post("/api/import/paste")
@@ -192,7 +203,12 @@ def import_paste(req: PasteImportRequest) -> dict:
         book_title = book["title"]
     else:
         book_title = (req.book_title or title or "İçe Aktarılan").strip()
-        slug = synthetic.allocate_slug(book_title)
+        # "Aynı isim = aynı kitap": aynı başlık zaten içe aktarılmışsa YENİ bir
+        # -2 kitabı açma, mevcut paste-kitabına bölüm ekle (mükerrer raf kaydını
+        # önler — kullanıcı başlığı tekrar yazınca doğal davranış budur). Başlık
+        # ilk kezse tahsis et (boş/simge başlık paste-<rastgele> alır, çakışmaz).
+        base = synthetic.slugify_title(book_title)
+        slug = base if library.get_book(base) is not None else synthetic.allocate_slug(book_title)
     ch = synthetic.append_chapter(
         slug, book_title, title or f"Bölüm", text, req.chapter_no
     )
@@ -205,6 +221,78 @@ def import_paste(req: PasteImportRequest) -> dict:
         "ok": True, "slug": slug, "url": ch["url"],
         "chapter_no": ch["chapter_no"], "job_id": job_id,
     }
+
+
+@app.post("/api/import/paste-url")
+def import_paste_url(req: PasteUrlImportRequest) -> dict:
+    """Takılan bir web bölümünün metnini GERÇEK URL'sine yapıştır (site engelli/çevrimdışı).
+
+    Bölüm o http URL'nin altına sahnelenir (raw_source E-18); kitap web-yerli kalır
+    (`paste://` üretilmez, merge sorunu yok). Çeviri paste-import işi olarak arka
+    planda koşar. Pipeline raw_source-öncelikli routing ile web'e inmeden çevirir."""
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Yapıştırılan metin boş.")
+    url = (req.url or "").strip()
+    if not url.startswith(("http://", "https://")) or synthetic.is_synthetic_url(url):
+        raise HTTPException(status_code=400, detail="Geçerli bir web (http) adresi gerekli.")
+    slug = library.resolve_slug(req.slug)
+    if synthetic.is_synthetic_slug(slug):
+        raise HTTPException(
+            status_code=400,
+            detail="Sentetik kitaba web bölümü doldurulamaz; METİN sekmesini kullanın.",
+        )
+    book = library.get_book(slug)
+    if book is None:
+        raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
+    title = (req.title or "").strip()
+    ch = synthetic.stage_url_chapter(
+        slug, book["title"], title or "Bölüm", text, url, req.chapter_no
+    )
+    # Konum İLERLETİLMEZ (arka plan kuralı); kitap zaten rafta.
+    library.upsert_book(
+        slug, book["title"], ch["url"], title, ch["chapter_no"], update_position=False
+    )
+    job_id = jobs.start_bulk(slug, ch["url"], 1, API_KEY, job_type="paste-import")
+    return {
+        "ok": True, "slug": slug, "url": ch["url"],
+        "chapter_no": ch["chapter_no"], "job_id": job_id,
+    }
+
+
+@app.post("/api/book/{slug}/fetch-next")
+def fetch_next(slug: str, req: FetchNextRequest) -> dict:
+    """Verilen web URL'sini bu kitaba 'sonraki bölüm' olarak çek+çevir+bağla (B).
+
+    Paste ya da web kitabında "web'den devam": sayfanın gerçek next'i korunur, sonraki
+    bölümler siteden gelmeye devam eder. Çekme senkron (Playwright thread havuzunda);
+    hata tipli döner → hata kartı 'metni yapıştır' önerebilir."""
+    url = (req.url or "").strip()
+    if not url.startswith(("http://", "https://")) or synthetic.is_synthetic_url(url):
+        raise HTTPException(status_code=400, detail="Geçerli bir web (http) adresi gerekli.")
+    canon = library.resolve_slug(slug)
+    if library.get_book(canon) is None:
+        raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
+    try:
+        payload = pipeline.fetch_into_book(url, canon, API_KEY, req.chapter_no)
+    except (CloudflareChallenge, FetchError, TranslateError) as exc:
+        raise _pipeline_http_error(exc)
+    return {"ok": True, "slug": canon, "url": url, "chapter_no": payload["chapter_no"]}
+
+
+@app.post("/api/chapter/refresh-nav")
+def refresh_nav(req: RefreshNavRequest) -> dict:
+    """Bölümün gezinmesini (next/prev) web'den tazele (E-3, çeviri yakmaz).
+
+    "Sonrakini web'den getir": yapıştırılan/eski bir bölümün sayfasını çekip next'ini
+    öğrenir, cache'i günceller → okuyucu web'den devam edebilir. Site engelliyse tipli
+    hata. Sentetik URL için fetch'e inmez, sahneli nav'ı döndürür."""
+    url = (req.url or "").strip()
+    try:
+        nav = pipeline.refresh_metadata(url)
+    except (CloudflareChallenge, FetchError) as exc:
+        raise _pipeline_http_error(exc)
+    return {"ok": True, **nav}
 
 
 @app.post("/api/reading-log")
