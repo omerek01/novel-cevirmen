@@ -208,6 +208,7 @@
       <div class="segmented add-tabs" role="group" aria-label="Ekleme türü">
         <button class="seg" data-add-tab="url" aria-pressed="true">URL</button>
         <button class="seg" data-add-tab="paste" aria-pressed="false">METİN</button>
+        <button class="seg" data-add-tab="dosya" aria-pressed="false">DOSYA</button>
       </div>
       <div id="addTabUrl">
         <p class="modal-hint">novelbin'den seriye ait herhangi bir bölüm linkini yapıştır.</p>
@@ -230,6 +231,22 @@
                inputmode="numeric" placeholder="Bölüm no (boş = otomatik sıradaki)" />
         <textarea id="pasteText" class="paste-field paste-text" rows="7"
                   placeholder="İngilizce metni buraya yapıştır…"></textarea>
+      </div>
+      <div id="addTabDosya" hidden>
+        <p class="modal-hint">
+          EPUB veya PDF dosyası seç: bölümler ayıklanıp rafa eklenir. Çeviri, bölümü
+          okudukça (ya da TOPLU ÇEVİR ile) yapılır — kotan tek dosyayla tükenmez.
+        </p>
+        <input id="fileInput" class="paste-field" type="file"
+               accept=".epub,.pdf,application/epub+zip,application/pdf" />
+        <div id="pdfPagesRow" class="file-opt" hidden>
+          <label for="pdfPages">Kaç sayfa = 1 bölüm</label>
+          <input id="pdfPages" type="number" min="1" max="200" value="10" inputmode="numeric" />
+        </div>
+        <div id="uploadProgress" class="upload-progress" hidden>
+          <div class="upload-bar"><span></span></div>
+          <p id="uploadStatus" class="modal-hint" aria-live="polite"></p>
+        </div>
       </div>
       <div class="modal-actions">
         <button id="addCancel" class="pill">Vazgeç</button>

@@ -611,6 +611,42 @@ html, body {
 .paste-field { display: block; margin-bottom: 0.6rem; }
 .paste-text { resize: vertical; min-height: 7.5rem; }
 
+/* Dosya (EPUB/PDF) içe aktarım */
+.file-opt {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.6rem;
+  margin-bottom: 0.6rem;
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+.file-opt input {
+  width: 5rem;
+  padding: 0.5rem;
+  font-size: 1rem;
+  color: var(--ink);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+}
+.upload-progress { margin: 0.4rem 0 0.2rem; }
+.upload-bar {
+  height: 8px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.upload-bar > span {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width 0.15s linear;
+}
+.upload-progress .modal-hint { margin: 0.4rem 0 0; }
+
 #addUrlInput,
 .paste-field,
 #bulkCount {

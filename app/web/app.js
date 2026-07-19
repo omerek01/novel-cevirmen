@@ -848,6 +848,76 @@ function setAddTab(tab) {
   markSegment("addtab", tab, "data-add-tab");
   el("addTabUrl").hidden = tab !== "url";
   el("addTabPaste").hidden = tab !== "paste";
+  el("addTabDosya").hidden = tab !== "dosya";
+  el("addConfirm").textContent = tab === "dosya" ? "Yükle ve Oku" : "Ekle ve Oku";
+}
+
+// EPUB/PDF dosyasını içe aktar: ham gövde + XHR (yükleme yüzdesi). Başarıda ilk bölüme
+// gider (reader bölümü on-demand çevirir). Çeviri YAPILMAZ, yalnız sahnelenir → kota
+// tek dosyayla tükenmez.
+function onFilePick() {
+  const f = el("fileInput").files[0] || null;
+  el("pdfPagesRow").hidden = !(f && /\.pdf$/i.test(f.name));
+}
+
+function uploadFile() {
+  const f = el("fileInput").files[0] || null;
+  if (!f) return el("fileInput").focus();
+  const isPdf = /\.pdf$/i.test(f.name);
+  const isEpub = /\.epub$/i.test(f.name);
+  if (!isPdf && !isEpub) return alert("Yalnız EPUB veya PDF dosyası seçilebilir.");
+  if (f.size > 50 * 1024 * 1024) return alert("Dosya 50MB sınırını aşıyor.");
+  const pages = Math.max(1, Math.min(200, parseInt(el("pdfPages").value, 10) || 10));
+  const endpoint =
+    (isPdf ? "/api/import/pdf" : "/api/import/epub") +
+    `?filename=${encodeURIComponent(f.name)}` +
+    (isPdf ? `&pages_per_chapter=${pages}` : "");
+
+  const prog = el("uploadProgress");
+  const bar = prog.querySelector(".upload-bar span");
+  const status = el("uploadStatus");
+  const btn = el("addConfirm");
+  prog.hidden = false;
+  bar.style.width = "0%";
+  status.textContent = "Yükleniyor…";
+  btn.disabled = true;
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", endpoint);
+  xhr.upload.onprogress = (e) => {
+    if (e.lengthComputable) bar.style.width = Math.round((e.loaded / e.total) * 100) + "%";
+  };
+  xhr.upload.onload = () => {
+    bar.style.width = "100%";
+    status.textContent = "İşleniyor… (bölümler ayıklanıyor)";
+  };
+  xhr.onload = () => {
+    btn.disabled = false;
+    if (xhr.status >= 200 && xhr.status < 300) {
+      let data;
+      try {
+        data = JSON.parse(xhr.responseText);
+      } catch {
+        status.textContent = "Geçersiz sunucu yanıtı.";
+        return;
+      }
+      status.textContent = `${data.chapter_count} bölüm eklendi.`;
+      el("fileInput").value = "";
+      closeAddModal();
+      navigate({ view: "reader", url: data.first_url });
+    } else {
+      let msg = `Hata (${xhr.status})`;
+      try {
+        msg = JSON.parse(xhr.responseText).detail || msg;
+      } catch {}
+      status.textContent = "Yüklenemedi: " + msg;
+    }
+  };
+  xhr.onerror = () => {
+    btn.disabled = false;
+    status.textContent = "Yüklenemedi: ağ hatası.";
+  };
+  xhr.send(f);
 }
 
 function savePasteDraft() {
@@ -887,6 +957,11 @@ async function fillPasteBookSelect() {
 async function openAddModal() {
   el("addUrlInput").value = "";
   restorePasteDraft();
+  // Dosya sekmesini sıfırla (önceki hata/ilerleme kalmasın).
+  el("fileInput").value = "";
+  el("pdfPagesRow").hidden = true;
+  el("uploadProgress").hidden = true;
+  el("uploadStatus").textContent = "";
   setAddTab(addTab);
   el("addModal").hidden = false;
   fillPasteBookSelect();
@@ -1103,7 +1178,13 @@ function resetStream() {
 }
 
 function isSyntheticSlug(slug) {
-  return !!slug && (slug.startsWith("paste-") || slug.startsWith("pdf-") || slug.startsWith("manga-"));
+  return (
+    !!slug &&
+    (slug.startsWith("paste-") ||
+      slug.startsWith("pdf-") ||
+      slug.startsWith("manga-") ||
+      slug.startsWith("epub-"))
+  );
 }
 
 // Bölüm listesinden (openBook doldurur) bir önceki bölümün url'i — server prev_url
@@ -2165,12 +2246,17 @@ el("addConfirm").addEventListener("click", () => {
     submitPaste();
     return;
   }
+  if (addTab === "dosya") {
+    uploadFile();
+    return;
+  }
   const url = el("addUrlInput").value.trim();
   if (url) {
     closeAddModal();
     navigate({ view: "reader", url });
   }
 });
+el("fileInput")?.addEventListener("change", onFilePick);
 el("addUrlInput").addEventListener("keydown", (e) => {
   if (e.key === "Enter") el("addConfirm").click();
 });
