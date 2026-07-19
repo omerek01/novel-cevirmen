@@ -47,10 +47,22 @@ elenir). Reader: **kesintisiz** (webtoon, ayraçsız).
 
 **Gerçek e2e (Swordmaster 15000px webtoon) GÖRSEL doğrulandı:** orijinal İngilizce temiz inpaint,
 Türkçe balona düzgün dizildi ("TEMEL KILIÇ USTALIĞI TEORİSİ Mİ?") — sanki baştan Türkçe basılmış.
-**Süre: ~49s/sayfa** (CPU, model yükleme dahil; prefetch ile okurken sonraki hazırlanır).
-- **Sınırlar/sonraya:** CPU'da sayfa başına ~40-50s (subprocess her seferinde model yükler — server-
-  modu hızlandırır); SFX çevrilmez (doğru); bazı uzun kelime satır sonu; motor kurulu değilse
-  Gemini-vision yedeğine düşer.
+
+**Hız (2. tur — "çok yavaş yüklüyor" geri bildirimi):** iki kaldıraç.
+1. **Tüm bölüm TEK batch (`translate_chapter_engine`):** bölümün tüm sayfaları TEK subprocess'te
+   çevrilir → modeller **bir kez** yüklenir (sayfa başına ~49s → steady-state düşer). Her sayfa
+   bittikçe cache'e yazılır; okuyucu "çevriliyor N/total" gösterip poll eder, hazır olan akarak gelir.
+2. **Uzun şerit dilimleme (`_expand_tall_pages`, import'ta):** asurascans bölümü ~15000px devasa
+   şeritler verir; motor bunu CPU'da ~26s'de çevirir. Şeridi **boşluk/gutter satırında** (saf-PIL
+   satır-düzlüğü; app venv'de numpy yok) ~3600px parçalara böleriz → parça başına **~6-11s** ve
+   içerik okuyucuya **her ~9s'de bir** akar (tam şeridi 26s beklemek yerine). Kesim yüksek-kontrast
+   balonlardan kaçınır → konuşma balonu bölünmez (görsel doğrulandı). Kısa görsel (CBZ/normal manga)
+   dokunulmaz.
+- **Config ayarı:** motorun "çeviri orijinaliyle aynı" post-check retry'ı SFX'te (URK.../PFFT!) yanlış
+  tetikleniyordu → sayfa başına 4 gereksiz Gemini çağrısı; `enable_post_translation_check:false` ile kapatıldı.
+- **Sınırlar/sonraya:** CPU-only makine (GPU yok — en büyük kaldıraç kapalı); ilk sayfa model yükleme
+  nedeniyle ~25-35s bekler (sonrası akar); SFX çevrilmez (doğru); motor kurulu değilse Gemini-vision
+  yedeğine düşer. Daha da hızlı için "server modu" (modeller kalıcı yüklü) ileride.
 
 ## Bilinçle ertelenenler (ihtiyaç olunca)
 - Okuma geçmişi listesi ekranı · Ayarlar'da "sistem" bloğu (son kontrol, bekleyen iş, cache boyutu)
