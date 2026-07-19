@@ -35,22 +35,20 @@ def _tr_font() -> str | None:
     return None
 
 
-def _insert_fit(page, rect, text, fontfile, fontname):
-    """Metni kutuya sığana dek fontu küçülterek yerleştir (insert_textbox<0 = sığmadı)."""
-    import fitz
+def _insert_flow(page, rect, text, fontfile, fontname, size=11.0):
+    """Metni rect'e yerleştir (rect ALTA kadar uzun tutulur); KULLANILAN yüksekliği döndür.
 
-    # Türkçe İngilizce'den uzun → kutuyu aşağı doğru biraz genişlet (satır taşması için).
-    grow = fitz.Rect(rect.x0, rect.y0, rect.x1, rect.y1 + rect.height * 1.5 + 30)
-    size = 11.0
+    Türkçe İngilizce'den uzun → sabit kutuya sığdırıp taşırmak yerine, blok gerektiği
+    kadar satır kullanır ve bir sonraki blok bunun ALTINDAN başlar (üst üste binme yok).
+    insert_textbox pozitif artan boşluk döndürür → used = rect.height - artan. Sayfa
+    sonuna sığmazsa font küçültülür."""
     while size >= _MIN_FONT:
-        rc = page.insert_textbox(
-            grow, text, fontfile=fontfile, fontname=fontname, fontsize=size, align=0
-        )
-        if rc >= 0:
-            return
+        leftover = page.insert_textbox(rect, text, fontfile=fontfile, fontname=fontname, fontsize=size)
+        if leftover >= 0:
+            return rect.height - leftover  # kullanılan dikey yükseklik
         size -= 0.5
-    # Yine sığmadı → en küçük puntoyla yaz (kırpılabilir; hiç yoktan iyidir).
-    page.insert_textbox(grow, text, fontfile=fontfile, fontname=fontname, fontsize=_MIN_FONT)
+    page.insert_textbox(rect, text, fontfile=fontfile, fontname=fontname, fontsize=_MIN_FONT)
+    return rect.height  # sığmadı → tüm alanı kullandı say (nadir, çok yoğun sayfa)
 
 
 def translate_pdf_page(slug: str, page_no: int, api_key: str) -> str:
@@ -85,30 +83,48 @@ def translate_pdf_page(slug: str, page_no: int, api_key: str) -> str:
             for bbox in bboxes:
                 page.add_redact_annot(bbox)
             page.apply_redactions()
-            # 2) Türkçe'yi yerine yaz. Hizalama tuttuysa blok-blok; tutmadıysa tüm
-            #    çeviriyi sayfanın metin bölgesine tek blok koy.
+            # 2) Türkçe'yi yaz — DİKEY AKIŞ (Y-takibi): her blok bir öncekinin altından
+            #    başlar, orijinal X (sütun) konumu korunur → uzun Türkçe üst üste binmez.
+            page_bottom = page.rect.height - 12
             if len(tr_blocks) == len(texts):
-                for bbox, tr in zip(bboxes, tr_blocks):
-                    if tr:
-                        _insert_fit(page, bbox, tr, fontfile, fontname)
+                order = sorted(range(len(bboxes)), key=lambda i: (round(bboxes[i].y0, 1), bboxes[i].x0))
+                cursor = 0.0
+                for i in order:
+                    tr = tr_blocks[i]
+                    if not tr:
+                        continue
+                    bbox = bboxes[i]
+                    top = max(bbox.y0, cursor)
+                    if top >= page_bottom:
+                        break  # sayfa doldu (nadir; çok yoğun sayfa)
+                    rect = fitz.Rect(bbox.x0, top, bbox.x1, page_bottom)
+                    used = _insert_flow(page, rect, tr, fontfile, fontname)
+                    cursor = top + used + 4  # sonraki blok bunun altından
             else:
                 area = fitz.Rect(
                     min(b.x0 for b in bboxes), min(b.y0 for b in bboxes),
-                    max(b.x1 for b in bboxes), max(b.y1 for b in bboxes),
+                    max(b.x1 for b in bboxes), page_bottom,
                 )
-                _insert_fit(page, area, result["translation"] or "", fontfile, fontname)
+                _insert_flow(page, area, result["translation"] or "", fontfile, fontname)
 
-        png = page.get_pixmap(dpi=RENDER_DPI).tobytes("png")
+        pixmap = page.get_pixmap(dpi=RENDER_DPI)
+        png = pixmap.tobytes("png")
+        w, h = pixmap.width, pixmap.height
     finally:
         doc.close()
     rel = media.write_bytes(slug, f"page-{page_no}.png", png)
-    return page_image_html(rel, page_no)
+    return page_image_html(rel, page_no, w, h)
 
 
-def page_image_html(media_rel: str, page_no: int) -> str:
-    """Sayfa PNG'sini gösteren güvenli <img> HTML'i (okuyucu innerHTML olarak basar)."""
+def page_image_html(media_rel: str, page_no: int, w: int | None = None, h: int | None = None) -> str:
+    """Sayfa PNG'sini gösteren güvenli <img> HTML'i (okuyucu innerHTML olarak basar).
+
+    width/height verilir → tarayıcı görselin yerini yüklemeden ÖNCE (en-boy oranıyla)
+    ayırır. Kritik: sonsuz kaydırma sentinel geometrisi doğru olur, kısa PDF sayfalarında
+    akış takılmaz (aksi halde lazy görsel 0 yükseklikte → sentinel kaymaz)."""
+    dims = f' width="{w}" height="{h}"' if w and h else ""
     return (
-        f'<img class="page-img" src="/media/{_html.escape(media_rel, quote=True)}" '
+        f'<img class="page-img" src="/media/{_html.escape(media_rel, quote=True)}"{dims} '
         f'alt="Sayfa {page_no}" loading="lazy">'
     )
 
