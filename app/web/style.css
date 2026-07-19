@@ -460,6 +460,21 @@ html, body {
 .reader-body .html-content h2,
 .reader-body .html-content h3 { line-height: 1.25; margin: 1.2em 0 0.5em; }
 
+/* Manga (webtoon): KESİNTİSİZ — sayfa görselleri boşluksuz üst üste, kenardan kenara. */
+.reader-body.manga-mode { padding-left: 0; padding-right: 0; padding-top: 0; }
+.reader-body .chapter-manga { margin: 0; }
+.reader-body .chapter-manga .html-content { line-height: 0; margin: 0; }
+.reader-body .chapter-manga .page-img {
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  display: block;
+  width: 100%;
+}
+/* Akış sonu/başı kartları manga'da da ortalı kalsın (kenardan kenara gövdede). */
+.reader-body.manga-mode .stream-end,
+.reader-body.manga-mode .stream-top { padding-left: 1rem; padding-right: 1rem; }
+
 /* ---------- sonsuz okuma v2: bölüm akışı ---------- */
 .reader-body article.chapter { margin: 0; }
 /* Dikiş ayracı "— Bölüm N —": bölümler arası sessiz ritüel işaret. İlk bölümde

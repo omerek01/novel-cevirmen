@@ -1120,6 +1120,7 @@ async function loadChapter(url, opts = {}) {
     const entry = buildChapterEntry(url, data);
     stream.push(entry);
     const body = el("readerBody");
+    body.classList.toggle("manga-mode", entry.isManga); // webtoon kenardan kenara + kesintisiz
     body.replaceChildren(entry.el);
     body.hidden = false;
     ensureTopCard();
@@ -1216,19 +1217,26 @@ function buildChapterEntry(url, data) {
     loaded: false,
     empty: false,
   };
+  // Manga (webtoon) KESİNTİSİZ akar: sayfa görselleri ayraçsız + boşluksuz üst üste
+  // dizilir (kullanıcı: "sayfa sayfa bölme"). PDF/EPUB/metin ayraçlı kalır.
+  const isManga = url.startsWith("manga://");
+  entry.isManga = isManga;
   const art = document.createElement("article");
-  art.className = "chapter" + (isHtml ? " chapter-html" : "");
+  art.className =
+    "chapter" + (isHtml ? " chapter-html" : "") + (isManga ? " chapter-manga" : "");
   art.dataset.url = url;
   if (entry.no != null) art.dataset.no = entry.no;
-  const sep = document.createElement("div");
-  sep.className = "chapter-sep";
-  // Görsel içerikte ayraç başlığı gösterir ("Sayfa 32"); metin bölümde "Bölüm N".
-  sep.textContent = isHtml
-    ? `— ${entry.title || (entry.no != null ? "Bölüm " + entry.no : "Bölüm")} —`
-    : entry.no != null
-      ? `— Bölüm ${entry.no} —`
-      : `— ${entry.title || "Bölüm"} —`;
-  art.appendChild(sep);
+  if (!isManga) {
+    const sep = document.createElement("div");
+    sep.className = "chapter-sep";
+    // Görsel içerikte ayraç başlığı gösterir ("Sayfa 32"); metin bölümde "Bölüm N".
+    sep.textContent = isHtml
+      ? `— ${entry.title || (entry.no != null ? "Bölüm " + entry.no : "Bölüm")} —`
+      : entry.no != null
+        ? `— Bölüm ${entry.no} —`
+        : `— ${entry.title || "Bölüm"} —`;
+    art.appendChild(sep);
+  }
   entry.el = art; // renderParagraphs/renderHtml entry.el'e yazar → sep'ten ÖNCE atanmalı
   if (isHtml) {
     entry.loaded = true;
