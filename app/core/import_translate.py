@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import html as _html
 import os
+import re
 
 from . import media, translate
 
@@ -248,6 +249,7 @@ def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
     regions = _manga_regions(buf.getvalue(), api_key)
 
     W, H = img.size
+    orig = img.copy()  # renk örneklemesi orijinalden (çizilen kutular bulaşmasın)
     draw = ImageDraw.Draw(img)
     fontfile = _tr_font()
     for r in regions:
@@ -260,7 +262,8 @@ def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
         x1, y1 = xmax / 1000 * W, ymax / 1000 * H
         if x1 <= x0 or y1 <= y0:
             continue
-        _draw_translated_bubble(draw, (x0, y0, x1, y1), tr, fontfile)
+        fill, ink = _bubble_colors(orig, (x0, y0, x1, y1))
+        _draw_translated_bubble(draw, (x0, y0, x1, y1), tr, fontfile, fill, ink)
 
     out = io.BytesIO()
     img.save(out, "PNG")
@@ -268,12 +271,33 @@ def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
     return page_image_html(rel, page_no, W, H)
 
 
-def _draw_translated_bubble(draw, box, text, fontfile):
-    """Balonu beyazla kapat + Türkçe'yi kutuya sığdırarak yaz (satır sar, font küçült)."""
+def _bubble_colors(img, box):
+    """Balon arka plan rengini KÖŞELERDEN örnekle (merkez metindir) + kontrastlı yazı
+    rengi seç. Beyaz balon→beyaz dolgu/siyah yazı; koyu zemin→koyu dolgu/beyaz yazı."""
+    from PIL import ImageStat
+
+    x0, y0, x1, y1 = (int(v) for v in box)
+    w, h = x1 - x0, y1 - y0
+    if w < 8 or h < 8:
+        return (255, 255, 255), (0, 0, 0)
+    s = max(2, min(w, h) // 8)
+    corners = [(x0, y0, x0 + s, y0 + s), (x1 - s, y0, x1, y0 + s),
+               (x0, y1 - s, x0 + s, y1), (x1 - s, y1 - s, x1, y1)]
+    rr = gg = bb = 0.0
+    for c in corners:
+        m = ImageStat.Stat(img.crop(c)).mean
+        rr += m[0]; gg += m[1]; bb += m[2]
+    rr, gg, bb = rr / 4, gg / 4, bb / 4
+    lum = 0.299 * rr + 0.587 * gg + 0.114 * bb
+    return (int(rr), int(gg), int(bb)), ((0, 0, 0) if lum > 140 else (255, 255, 255))
+
+
+def _draw_translated_bubble(draw, box, text, fontfile, fill=(255, 255, 255), ink=(0, 0, 0)):
+    """Balonu arka plan rengiyle kapat + Türkçe'yi kontrastlı renkte kutuya sığdır."""
     from PIL import ImageFont
 
     x0, y0, x1, y1 = box
-    draw.rectangle((x0, y0, x1, y1), fill=(255, 255, 255))
+    draw.rectangle((x0, y0, x1, y1), fill=fill)
     bw, bh = x1 - x0 - 8, y1 - y0 - 6
     size = 22
     while size >= 9:
@@ -293,5 +317,5 @@ def _draw_translated_bubble(draw, box, text, fontfile):
         size -= 1
     yy = y0 + 3
     for ln in lines:
-        draw.text((x0 + 4, yy), ln, fill=(0, 0, 0), font=font)
+        draw.text((x0 + 4, yy), ln, fill=ink, font=font)
         yy += size + 3
