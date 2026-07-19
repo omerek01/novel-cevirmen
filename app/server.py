@@ -23,12 +23,13 @@ mimetypes.add_type("image/svg+xml", ".svg")
 
 from dotenv import load_dotenv  # noqa: E402
 from fastapi import FastAPI, HTTPException, Query, Request, Response  # noqa: E402
+from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import cache, epub_export, glossary, import_book, jobs, library, pipeline, reading_log, synthetic  # noqa: E402
+from core import cache, epub_export, glossary, import_book, jobs, library, media, pipeline, reading_log, synthetic  # noqa: E402
 from core.synthetic import ImportedChapterMissing  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
 from core.translate import TranslateError  # noqa: E402
@@ -245,6 +246,17 @@ async def _read_upload(request: Request) -> bytes:
     if len(body) > MAX_UPLOAD:
         raise HTTPException(status_code=413, detail="Dosya 50MB sınırını aşıyor.")
     return body
+
+
+@app.get("/media/{rel:path}")
+def serve_media(rel: str) -> FileResponse:
+    """İçe aktarılan kitapların medyası (render'lı sayfa PNG'leri, EPUB resimleri).
+    Yalnız media kökü altındaki dosyalar (path traversal reddedilir). API'den SONRA,
+    `/` catch-all'dan ÖNCE tanımlı (E-6)."""
+    p = media.resolve(rel)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Bulunamadı.")
+    return FileResponse(str(p))
 
 
 @app.post("/api/import/epub")

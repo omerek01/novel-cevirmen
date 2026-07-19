@@ -67,15 +67,17 @@ def append_chapter(
     raw_text: str,
     chapter_no: int | None = None,
     scheme: str = "paste://",
+    content_type: str | None = None,
 ) -> dict:
     """Kitabın zincirine sahneli bölüm ekle — TEK transaction (E-23).
 
     Numara tahsisi (max+1, elle geçersiz kılınabilir) + INSERT (çakışmada hata,
     REPLACE değil) + önceki kuyruk bölümünün next_url bağlaması atomiktir.
     scheme: paste:// (metin) / epub:// / pdf:// — sahneli URL'nin şeması.
+    content_type: "html" (PDF sayfa / EPUB) → okuyucu görsel içerik render eder.
     Döner: {"url", "chapter_no", "prev_url"}.
     """
-    cache._connect().close()  # chapters şeması + raw_source sütunu garanti
+    cache._connect().close()  # chapters şeması + raw_source/content_type sütunu garanti
     conn = db.connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -89,9 +91,9 @@ def append_chapter(
         url = chapter_url(slug, no, scheme)
         conn.execute(
             "INSERT INTO chapters (url, book_slug, book_title, title, chapter_no, "
-            "translation, next_url, prev_url, raw_source, created_at) "
-            "VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?)",
-            (url, slug, book_title, chapter_title, no, prev_url, raw_text, time.time()),
+            "translation, next_url, prev_url, raw_source, created_at, content_type) "
+            "VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?)",
+            (url, slug, book_title, chapter_title, no, prev_url, raw_text, time.time(), content_type),
         )
         if prev_url:  # önceki kuyruğun next'i yeni bölüme bağlanır (n±1 zinciri)
             conn.execute(

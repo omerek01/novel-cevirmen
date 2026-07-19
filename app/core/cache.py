@@ -40,6 +40,11 @@ def _connect() -> sqlite3.Connection:
     # iki-dilli metindir ve hizalama tutmayınca bilerek NULL olur — ikisi
     # birbirinin yerine geçemez. Sentetik refresh/¶-yeniden-çevir buradan okur.
     db.ensure_column(conn, "chapters", "raw_source", "raw_source TEXT")
+    # content_type (E-10): NULL/"text" = düz metin bölüm (web/paste). "html" = görsel
+    # içerik (PDF çevrilmiş sayfa <img> / EPUB yerinde-çevrili HTML) — okuyucu
+    # translation'ı paragraf yerine innerHTML olarak render eder; iki-dilli/¶-yeniden-
+    # çevir/arama devre dışı.
+    db.ensure_column(conn, "chapters", "content_type", "content_type TEXT")
     return conn
 
 
@@ -53,7 +58,7 @@ def get_chapter(url: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT book_slug, book_title, title, chapter_no, translation, "
-            "next_url, detected_names, chunk_count, prev_url, source_text "
+            "next_url, detected_names, chunk_count, prev_url, source_text, content_type "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -72,6 +77,7 @@ def get_chapter(url: str) -> dict | None:
         "chunk_count": row[7],
         "prev_url": row[8],
         "source": row[9],
+        "content_type": row[10] or "text",
         "cached": True,
     }
 
@@ -154,7 +160,7 @@ def get_staged(url: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT book_slug, book_title, title, chapter_no, translation, "
-            "next_url, prev_url, raw_source FROM chapters WHERE url = ?",
+            "next_url, prev_url, raw_source, content_type FROM chapters WHERE url = ?",
             (url,),
         ).fetchone()
     finally:
@@ -164,7 +170,7 @@ def get_staged(url: str) -> dict | None:
     return {
         "book_slug": row[0], "book_title": row[1], "title": row[2],
         "chapter_no": row[3], "translation": row[4], "next_url": row[5],
-        "prev_url": row[6], "raw_source": row[7],
+        "prev_url": row[6], "raw_source": row[7], "content_type": row[8] or "text",
     }
 
 
@@ -180,15 +186,16 @@ def save_chapter(url: str, data: dict) -> None:
             INSERT INTO chapters
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
-                 prev_url, source_text)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 prev_url, source_text, content_type)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
                 translation = excluded.translation, next_url = excluded.next_url,
                 detected_names = excluded.detected_names,
                 chunk_count = excluded.chunk_count, created_at = excluded.created_at,
-                prev_url = excluded.prev_url, source_text = excluded.source_text
+                prev_url = excluded.prev_url, source_text = excluded.source_text,
+                content_type = excluded.content_type
             """,
             (
                 url,
@@ -203,6 +210,7 @@ def save_chapter(url: str, data: dict) -> None:
                 time.time(),
                 data.get("prev_url"),
                 data.get("source"),
+                data.get("content_type"),
             ),
         )
         conn.commit()
