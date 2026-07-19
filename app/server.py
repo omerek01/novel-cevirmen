@@ -26,7 +26,8 @@ from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import cache, epub_export, glossary, jobs, library, pipeline, reading_log  # noqa: E402
+from core import cache, epub_export, glossary, jobs, library, pipeline, reading_log, synthetic  # noqa: E402
+from core.synthetic import ImportedChapterMissing  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
 from core.translate import TranslateError  # noqa: E402
 
@@ -58,6 +59,11 @@ def get_chapter(
     """
     try:
         return pipeline.get_or_translate(url, API_KEY, refresh, want_source=source)
+    except ImportedChapterMissing as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"message": str(exc), "error_class": "ImportedChapterMissing"},
+        )
     except CloudflareChallenge as exc:
         raise HTTPException(
             status_code=502,
@@ -145,11 +151,60 @@ class StatusRequest(BaseModel):
     status: str  # okunuyor | beklemede | bitti
 
 
+class PasteImportRequest(BaseModel):
+    title: str  # bölüm başlığı
+    text: str  # yapıştırılan İngilizce ham metin
+    book_title: str | None = None  # yeni kitap adı (slug verilmediyse)
+    slug: str | None = None  # mevcut paste-kitabına bölüm ekleme
+    chapter_no: int | None = None  # elle geçersiz kılma (varsayılan: max+1)
+
+
 @app.post("/api/book/{slug}/merge-into")
 def merge_book(slug: str, req: MergeRequest) -> dict:
     """`slug` kitabını `target` kitabıyla birleştir (aynı kitap, farklı slug)."""
-    canonical = library.merge_books(slug, req.target)
+    try:
+        canonical = library.merge_books(slug, req.target)
+    except ValueError as exc:  # E-8: sentetik kitap birleştirilemez
+        raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "canonical": canonical}
+
+
+@app.post("/api/import/paste")
+def import_paste(req: PasteImportRequest) -> dict:
+    """Yapıştırılan İngilizce metni sahneli bölüm olarak ekle + çeviri işini başlat.
+
+    Bölüm `paste://` şemasıyla zincire eklenir (E-23, atomik); ham metin
+    raw_source'ta kalıcıdır (E-18). Çeviri paste-import işi olarak arka planda
+    koşar — rozet/ilerleme/checkpoint bulk ile aynıdır."""
+    text = (req.text or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="Yapıştırılan metin boş.")
+    title = (req.title or "").strip()
+    if req.slug:
+        slug = req.slug
+        if not synthetic.is_synthetic_slug(slug):
+            raise HTTPException(
+                status_code=400, detail="Yalnız içe aktarılan kitaba bölüm eklenebilir."
+            )
+        book = library.get_book(slug)
+        if book is None:
+            raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
+        book_title = book["title"]
+    else:
+        book_title = (req.book_title or title or "İçe Aktarılan").strip()
+        slug = synthetic.allocate_slug(book_title)
+    ch = synthetic.append_chapter(
+        slug, book_title, title or f"Bölüm", text, req.chapter_no
+    )
+    # Kitap rafta görünsün; okuma konumu İLERLETİLMEZ (arka plan kuralı).
+    library.upsert_book(
+        slug, book_title, ch["url"], title, ch["chapter_no"], update_position=False
+    )
+    job_id = jobs.start_bulk(slug, ch["url"], 1, API_KEY, job_type="paste-import")
+    return {
+        "ok": True, "slug": slug, "url": ch["url"],
+        "chapter_no": ch["chapter_no"], "job_id": job_id,
+    }
 
 
 @app.post("/api/reading-log")

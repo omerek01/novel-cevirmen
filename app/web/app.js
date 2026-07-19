@@ -745,13 +745,104 @@ function renderGlossary(terms) {
 }
 
 /* ---------- kitap ekle ---------- */
-function openAddModal() {
+/* Kitap Ekle: URL · METİN sekmeleri (D-B4/5/8v2). Paste taslağı localStorage'da
+   yaşar — modal kapansa da kaybolmaz; başarılı gönderimde temizlenir. */
+const LS_PASTE_DRAFT = "novellink:pasteDraft";
+let addTab = "url";
+
+function setAddTab(tab) {
+  addTab = tab;
+  markSegment("addtab", tab, "data-add-tab");
+  el("addTabUrl").hidden = tab !== "url";
+  el("addTabPaste").hidden = tab !== "paste";
+}
+
+function savePasteDraft() {
+  try {
+    localStorage.setItem(LS_PASTE_DRAFT, JSON.stringify({
+      book: el("pasteBookTitle").value,
+      title: el("pasteChapterTitle").value,
+      no: el("pasteChapterNo").value,
+      text: el("pasteText").value,
+    }));
+  } catch {}
+}
+
+function restorePasteDraft() {
+  try {
+    const d = JSON.parse(localStorage.getItem(LS_PASTE_DRAFT)) || {};
+    el("pasteBookTitle").value = d.book || "";
+    el("pasteChapterTitle").value = d.title || "";
+    el("pasteChapterNo").value = d.no || "";
+    el("pasteText").value = d.text || "";
+  } catch {}
+}
+
+async function fillPasteBookSelect() {
+  const sel = el("pasteBookSelect");
+  while (sel.options.length > 1) sel.remove(1);
+  const books = (await fetchBooks()) || [];
+  for (const b of books) {
+    if (!b.slug.startsWith("paste-")) continue; // yalnız içe aktarılan kitaplara eklenebilir
+    const opt = document.createElement("option");
+    opt.value = b.slug;
+    opt.textContent = b.title || b.slug;
+    sel.appendChild(opt);
+  }
+}
+
+async function openAddModal() {
   el("addUrlInput").value = "";
+  restorePasteDraft();
+  setAddTab(addTab);
   el("addModal").hidden = false;
-  el("addUrlInput").focus();
+  fillPasteBookSelect();
+  if (addTab === "url") el("addUrlInput").focus();
 }
 function closeAddModal() {
+  savePasteDraft(); // taslak kaybolmasın
   el("addModal").hidden = true;
+}
+
+async function submitPaste() {
+  const btn = el("addConfirm");
+  const text = el("pasteText").value.trim();
+  const title = el("pasteChapterTitle").value.trim();
+  if (!text) {
+    el("pasteText").focus();
+    return;
+  }
+  const slug = el("pasteBookSelect").value || null;
+  const no = parseInt(el("pasteChapterNo").value, 10);
+  btn.disabled = true;
+  try {
+    const res = await fetch("/api/import/paste", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        title,
+        text,
+        book_title: el("pasteBookTitle").value.trim() || null,
+        slug,
+        chapter_no: Number.isFinite(no) && no > 0 ? no : null,
+      }),
+    });
+    if (!res.ok) throw new Error();
+    const data = await res.json();
+    try {
+      localStorage.removeItem(LS_PASTE_DRAFT);
+    } catch {}
+    ["pasteBookTitle", "pasteChapterTitle", "pasteChapterNo", "pasteText"].forEach(
+      (id) => (el(id).value = "")
+    );
+    el("addModal").hidden = true;
+    // Kitap görünümüne git: koşan paste-import işi ilerleme ekranını kendisi açar.
+    navigate({ view: "book", slug: data.slug });
+  } catch {
+    alert("İçe aktarma başarısız — sunucuya ulaşılamadı veya metin reddedildi.");
+  } finally {
+    btn.disabled = false;
+  }
 }
 
 /* ---------- okuyucu ---------- */
@@ -1695,7 +1786,21 @@ el("epubDownload").addEventListener("click", () => {
 
 /* ---------- kitap ekle olayları ---------- */
 el("addCancel").addEventListener("click", closeAddModal);
+document.querySelectorAll("[data-add-tab]").forEach((b) =>
+  b.addEventListener("click", () => setAddTab(b.getAttribute("data-add-tab")))
+);
+["pasteBookTitle", "pasteChapterTitle", "pasteChapterNo", "pasteText"].forEach((id) =>
+  el(id).addEventListener("input", savePasteDraft)
+);
+el("pasteBookSelect").addEventListener("change", () => {
+  // Mevcut kitaba eklerken kitap adı alanı anlamsız — gizle.
+  el("pasteBookTitle").hidden = !!el("pasteBookSelect").value;
+});
 el("addConfirm").addEventListener("click", () => {
+  if (addTab === "paste") {
+    submitPaste();
+    return;
+  }
   const url = el("addUrlInput").value.trim();
   if (url) {
     closeAddModal();

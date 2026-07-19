@@ -206,9 +206,33 @@
   <div id="addModal" class="modal" hidden>
     <div class="modal-card">
       <h3 class="modal-title">KİTAP EKLE</h3>
-      <p class="modal-hint">novelbin'den seriye ait herhangi bir bölüm linkini yapıştır.</p>
-      <input id="addUrlInput" type="url" inputmode="url" autocomplete="off"
-             placeholder="https://novelbin.com/b/.../chapter-1" />
+      <!-- D-B4/5/8v2: tek giriş, açık sekmeler (DOSYA sekmesi EPUB/PDF dilimiyle gelir). -->
+      <div class="segmented add-tabs" role="group" aria-label="Ekleme türü">
+        <button class="seg" data-add-tab="url" aria-pressed="true">URL</button>
+        <button class="seg" data-add-tab="paste" aria-pressed="false">METİN</button>
+      </div>
+      <div id="addTabUrl">
+        <p class="modal-hint">novelbin'den seriye ait herhangi bir bölüm linkini yapıştır.</p>
+        <input id="addUrlInput" type="url" inputmode="url" autocomplete="off"
+               placeholder="https://novelbin.com/b/.../chapter-1" />
+      </div>
+      <div id="addTabPaste" hidden>
+        <p class="modal-hint">
+          İngilizce bölüm metnini yapıştır: arka planda çevrilir, rafa eklenir.
+          Taslağın kapansa da kaybolmaz.
+        </p>
+        <select id="pasteBookSelect" class="paste-field" aria-label="Hedef kitap">
+          <option value="">— Yeni kitap —</option>
+        </select>
+        <input id="pasteBookTitle" class="paste-field" type="text"
+               autocomplete="off" placeholder="Kitap adı" />
+        <input id="pasteChapterTitle" class="paste-field" type="text"
+               autocomplete="off" placeholder="Bölüm başlığı (örn. Chapter 12)" />
+        <input id="pasteChapterNo" class="paste-field" type="number" min="1"
+               inputmode="numeric" placeholder="Bölüm no (boş = otomatik sıradaki)" />
+        <textarea id="pasteText" class="paste-field paste-text" rows="7"
+                  placeholder="İngilizce metni buraya yapıştır…"></textarea>
+      </div>
       <div class="modal-actions">
         <button id="addCancel" class="pill">Vazgeç</button>
         <button id="addConfirm" class="next-btn">Ekle ve Oku</button>

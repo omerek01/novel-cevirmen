@@ -526,7 +526,12 @@ html, body {
   font-size: 1.4rem;
 }
 .modal-hint { margin: 0 0 0.9rem; color: var(--ink-soft); font-size: 0.92rem; }
+.add-tabs { margin-bottom: 0.9rem; }
+.paste-field { display: block; margin-bottom: 0.6rem; }
+.paste-text { resize: vertical; min-height: 7.5rem; }
+
 #addUrlInput,
+.paste-field,
 #bulkCount {
   width: 100%;
   padding: 0.8rem 0.9rem;
@@ -538,6 +543,7 @@ html, body {
   border-radius: 5px;
 }
 #addUrlInput:focus,
+.paste-field:focus,
 #bulkCount:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 .modal-actions {
   display: flex;
