@@ -31,6 +31,59 @@ def _natural_key(name: str):
     return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", name)]
 
 
+def _row_flatness(im):
+    """Her satırın 'düzlüğü' (0 = tekdüze/gutter, yüksek = içerik/kenar). Saf PIL
+    (app venv'de numpy YOK): 16-geniş BOX küçültme → satır başına 16 örnek; yatay
+    yayılım (max-min) düşükse satır tekdüzedir (boşluk şeridi) → güvenli kesim yeri."""
+    from PIL import Image
+
+    small = im.convert("L").resize((16, im.height), Image.BOX)
+    px = list(small.getdata())
+    return [max(px[i * 16:i * 16 + 16]) - min(px[i * 16:i * 16 + 16]) for i in range(im.height)]
+
+
+def _expand_tall_pages(images, target=3600, max_h=4600, search=450):
+    """Uzun webtoon şeritlerini (>max_h px) ~target px parçalara böl; kesimi en 'düz'
+    (gutter/boşluk) satıra hizala → konuşma balonu ortadan bölünmez.
+
+    Neden: asurascans tarzı siteler bölümü ~15000px devasa şeritler olarak verir.
+    Motor tam şeridi CPU'da ~26s'de çevirir; ~3700px parçayı ~6-10s'de. Parçalayınca
+    içerik OKUYUCUYA AKARAK gelir (her ~7s'de yeni parça) ve ilk içerik çok daha erken
+    belirir — toplam süre ~aynı ama algılanan hız 4x. Kısa görsel (CBZ/normal manga
+    sayfası) dokunulmadan geçer."""
+    import io
+
+    from PIL import Image
+
+    out: list[bytes] = []
+    for raw in images:
+        try:
+            im = Image.open(io.BytesIO(raw)).convert("RGB")
+        except Exception:
+            out.append(raw)  # açılamıyorsa olduğu gibi bırak
+            continue
+        w, h = im.size
+        if h <= max_h:
+            out.append(raw)  # kısa → parçalama yok, orijinal formatı koru
+            continue
+        flat = _row_flatness(im)
+        cuts = [0]
+        while h - cuts[-1] > max_h:  # kalan hâlâ uzunsa böl (son parça <= max_h)
+            y = cuts[-1] + target
+            lo = max(cuts[-1] + 1200, y - search)
+            hi = min(h - 1200, y + search)
+            cut = min(range(lo, hi), key=lambda r: flat[r]) if hi > lo else min(y, h)
+            cuts.append(cut)
+        cuts.append(h)
+        for a, b in zip(cuts, cuts[1:]):
+            if b - a < 300:
+                continue  # aşırı ince artık → atla
+            buf = io.BytesIO()
+            im.crop((0, a, w, b)).save(buf, "JPEG", quality=90)  # hızlı kodlama, OCR'a yeter
+            out.append(buf.getvalue())
+    return out
+
+
 def import_manga(data: bytes, filename: str = "") -> dict:
     """Manga'yı içe aktar: CBZ/ZIP (sayfa görselleri) ya da tek görsel. Kaynak sayfalar
     media'ya saklanır, HER SAYFA = 1 bölüm (manga://slug/N, content_type="html").
@@ -73,6 +126,7 @@ def _stage_manga(book_title: str, images: list[bytes]) -> dict:
     """Manga sayfa görsellerini (CBZ ya da web) media'ya + manga:// bölümlere sahnele."""
     if not images:
         raise BookImportError("Manga: sayfa (görsel) bulunamadı.")
+    images = _expand_tall_pages(images)  # uzun şeritleri ~3600px parçalara böl (akan çeviri)
     if len(images) > MAX_CHAPTERS:
         images = images[:MAX_CHAPTERS]
     slug = synthetic.allocate_slug(book_title, "manga")

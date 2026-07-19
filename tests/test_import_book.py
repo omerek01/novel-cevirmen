@@ -307,6 +307,26 @@ def test_pick_page_images_excludes_cover_and_sorts():
     assert picked[0].endswith("001.webp") and picked[-1].endswith("010.webp")  # doğal sıra
 
 
+def test_expand_tall_pages_slices_webtoon():
+    import io
+
+    from PIL import Image
+
+    # Kısa görsel (normal manga sayfası) → dokunulmaz, tek parça kalır.
+    short = io.BytesIO()
+    Image.new("RGB", (760, 1500), (250, 250, 250)).save(short, "PNG")
+    out = import_book._expand_tall_pages([short.getvalue()])
+    assert len(out) == 1
+
+    # Uzun webtoon şeridi (15000px) → ~3600px parçalara bölünür, her parça max_h altında.
+    tall = io.BytesIO()
+    Image.new("RGB", (760, 15000), (250, 250, 250)).save(tall, "PNG")
+    out2 = import_book._expand_tall_pages([tall.getvalue()])
+    assert len(out2) >= 3
+    for seg in out2:
+        assert Image.open(io.BytesIO(seg)).height <= 4600
+
+
 def test_manga_engine_triggers_batch(monkeypatch):
     from core import manga_batch, manga_engine, pipeline
     from core.synthetic import MangaTranslating
