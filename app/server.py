@@ -287,6 +287,22 @@ async def import_pdf_endpoint(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+class MangaUrlRequest(BaseModel):
+    url: str  # manga bölüm URL'si (asurascans vb.)
+
+
+@app.post("/api/import/manga-url")
+def import_manga_url_endpoint(req: MangaUrlRequest) -> dict:
+    """Manga bölümünü WEB'den çek (URL) → sayfaları sahnele. Sync def: Playwright thread
+    havuzunda. Döner: {slug, title, chapter_count, first_url}."""
+    try:
+        return import_book.import_manga_url(req.url)
+    except (CloudflareChallenge, FetchError) as exc:
+        raise _pipeline_http_error(exc)
+    except import_book.BookImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.post("/api/import/manga")
 async def import_manga_endpoint(request: Request, filename: str = Query("")) -> dict:
     """Manga'yı (CBZ/ZIP ya da tek görsel, ham gövde) sahneli kitaba çevir. Çeviri

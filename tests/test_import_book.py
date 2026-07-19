@@ -264,6 +264,49 @@ def test_manga_non_image_rejected():
         import_book.import_manga(b"not an image or zip", "x.cbz")
 
 
+def test_manga_url_import_stages_pages(monkeypatch):
+    import io
+
+    from PIL import Image
+
+    from core import manga_fetch
+
+    def fake_fetch(url, priority="interactive", ticket=None):
+        imgs = []
+        for _ in range(4):
+            b = io.BytesIO()
+            Image.new("RGB", (400, 600), (60, 60, 60)).save(b, "PNG")
+            imgs.append(b.getvalue())
+        return {"title": "Solo Leveling Chapter 1", "images": imgs}
+
+    monkeypatch.setattr(manga_fetch, "fetch_manga_chapter", fake_fetch)
+    res = import_book.import_manga_url("https://asurascans.com/comics/x/chapter/1")
+    assert res["chapter_count"] == 4 and res["slug"].startswith("manga-")
+    assert cache.get_staged(res["first_url"])["content_type"] == "html"
+
+
+def test_is_manga_url():
+    from core import manga_fetch
+
+    assert manga_fetch.is_manga_url("https://asurascans.com/comics/x/chapter/1")
+    assert not manga_fetch.is_manga_url("https://novelbin.com/b/x/chapter-1")
+
+
+def test_pick_page_images_excludes_cover_and_sorts():
+    from core import manga_fetch
+
+    imgs = [
+        {"u": "https://s/covers/series.webp", "w": 400, "h": 600},  # kapak (ayrı dizin)
+        {"u": "https://s/ch/5/010.webp", "w": 720, "h": 4000},
+        {"u": "https://s/ch/5/001.webp", "w": 720, "h": 4000},
+        {"u": "https://s/ch/5/002.webp", "w": 720, "h": 4000},
+        {"u": "https://s/ui/icon.png", "w": 40, "h": 40},  # küçük → atla
+    ]
+    picked = manga_fetch._pick_page_images(imgs)
+    assert len(picked) == 3  # yalnız en kalabalık dizin (/ch/5/), kapak+ikon hariç
+    assert picked[0].endswith("001.webp") and picked[-1].endswith("010.webp")  # doğal sıra
+
+
 def test_manga_page_renders_translated_image(monkeypatch):
     import re
 

@@ -58,11 +58,23 @@ def import_manga(data: bytes, filename: str = "") -> dict:
             images = [data]
         except Exception as exc:
             raise BookImportError("Manga: CBZ/ZIP ya da görsel dosyası bekleniyor.") from exc
+    return _stage_manga(book_title, images)
+
+
+def import_manga_url(url: str) -> dict:
+    """Manga bölümünü WEB'den çek (asurascans vb.) → sayfaları sahnele. Çeviri okudukça."""
+    from . import manga_fetch
+
+    r = manga_fetch.fetch_manga_chapter(url)
+    return _stage_manga(r["title"], r["images"])
+
+
+def _stage_manga(book_title: str, images: list[bytes]) -> dict:
+    """Manga sayfa görsellerini (CBZ ya da web) media'ya + manga:// bölümlere sahnele."""
     if not images:
-        raise BookImportError("Manga dosyasında sayfa (görsel) bulunamadı.")
+        raise BookImportError("Manga: sayfa (görsel) bulunamadı.")
     if len(images) > MAX_CHAPTERS:
         images = images[:MAX_CHAPTERS]
-
     slug = synthetic.allocate_slug(book_title, "manga")
     for i, raw in enumerate(images, start=1):
         media.write_bytes(slug, f"src-{i}", raw)  # kaynak sayfa (PIL içerikten algılar)
