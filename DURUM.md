@@ -30,12 +30,20 @@ okuyabilmek + okuma deneyimini (yaşayan raf, sonsuz okuma) güçlendirmek.
 ## Son eklenen: Manga çevirisi (dal `dilim-8-manga`, telefon QA bekliyor)
 Yaklaşım (kullanıcı seçimi): comic-translate gibi ağır ML araçları yerine **mevcut Gemini'nin
 görü (multimodal) yeteneği**. Akış: manga sayfasını Gemini'ye gönder → balon metinleri + konumları
-+ Türkçe çevirileri al → PIL ile orijinali kapat, Türkçe'yi kutuya sığdırarak yaz → PNG.
-- İçe aktarım: **CBZ/ZIP** (sayfa görselleri) ya da tek görsel → `manga://slug/N`, her sayfa=1 bölüm.
-- Çeviri okudukça (on-demand); Dilim 7'nin görsel-içerik altyapısını aynen kullanır.
-- Prototip + gerçek Gemini e2e ile görsel doğrulandı (3 balon doğru bulundu/çevrildi, glifler tam).
-- **Bilinen sınır:** balon beyaz kutuyla kapatılıyor (çoğu balon beyaz → doğal); renkli balon/SFX/
-  sanat üstü yazıda kutu göze batabilir. İyileştirme (bg-renk örnekleme, yuvarlak balon) sonraya.
++ Türkçe çevirileri al → PIL ile orijinali kapat (arka plan rengini örnekleyip), Türkçe'yi kutuya
+sığdırarak yaz → PNG. Çeviri okudukça; Dilim 7'nin görsel-içerik altyapısını aynen kullanır.
+
+**İki giriş yolu:**
+- **DOSYA sekmesi:** CBZ/ZIP (sayfa görselleri) ya da tek görsel → `manga://slug/N`.
+- **URL sekmesi:** manga bölüm linki (asurascans vb.) yapıştır → siteden sayfa görselleri çekilir
+  (Playwright, CF-bypass; sayfa dizini sayı-adlı görselden bulunur → reklam/öneri gridleri elenir;
+  referer ile indirilir). Roman linkleri eski metin akışına gider.
+
+Gerçek asurascans (Solo Leveling) e2e doğrulandı: 22 gerçek sayfa (reklam elendi), balonlar doğal
+Türkçe, sanat korundu, akıllı kutu koyu zeminde batmıyor.
+- **Bilinen sınırlar:** bazı SFX ("SIGH", "WELL") İngilizce kalır; sayfa arasına sayı-adlı reklam
+  girerse (nadir) elenmez (kullanıcı o sayfayı silebilir); çok-sütun/sağdan-sola manga sırası
+  test edilmedi. İyileştirme sonraya.
 
 ## Bilinçle ertelenenler (ihtiyaç olunca)
 - Okuma geçmişi listesi ekranı · Ayarlar'da "sistem" bloğu (son kontrol, bekleyen iş, cache boyutu)
