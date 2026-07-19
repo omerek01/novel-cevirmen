@@ -11,6 +11,7 @@ E-13 hijyeni: geçici yükleme dosyası iş sonunda silinir; boş slugify → <p
 from __future__ import annotations
 
 import os
+import re
 import tempfile
 
 from . import library, media, synthetic
@@ -21,6 +22,58 @@ _MIN_CHARS = 20  # bundan kısa "bölümler" (kapak, nav, boş sayfa) atlanır
 
 class BookImportError(Exception):
     """İçe aktarım başarısız: bozuk/desteklenmeyen dosya ya da çevrilebilir bölüm yok."""
+
+
+_IMG_EXT = (".jpg", ".jpeg", ".png", ".webp", ".gif", ".bmp")
+
+
+def _natural_key(name: str):
+    return [int(t) if t.isdigit() else t.lower() for t in re.split(r"(\d+)", name)]
+
+
+def import_manga(data: bytes, filename: str = "") -> dict:
+    """Manga'yı içe aktar: CBZ/ZIP (sayfa görselleri) ya da tek görsel. Kaynak sayfalar
+    media'ya saklanır, HER SAYFA = 1 bölüm (manga://slug/N, content_type="html").
+
+    Çeviri YAPILMAZ — sayfa OKUNUNCA (on-demand) Gemini-vision ile balon metni okunup
+    Türkçe'ye çevrilir, orijinal kapatılıp Türkçe yazılır (import_translate)."""
+    import io
+    import zipfile
+
+    from PIL import Image
+
+    book_title = (os.path.splitext(os.path.basename(filename or ""))[0] or "").strip() or "İçe Aktarılan Manga"
+    images: list[bytes] = []
+    if zipfile.is_zipfile(io.BytesIO(data)):
+        with zipfile.ZipFile(io.BytesIO(data)) as z:
+            names = sorted(
+                (n for n in z.namelist()
+                 if n.lower().endswith(_IMG_EXT) and not n.endswith("/")),
+                key=_natural_key,
+            )
+            images = [z.read(n) for n in names]
+    else:  # tek görsel dosyası?
+        try:
+            Image.open(io.BytesIO(data)).verify()
+            images = [data]
+        except Exception as exc:
+            raise BookImportError("Manga: CBZ/ZIP ya da görsel dosyası bekleniyor.") from exc
+    if not images:
+        raise BookImportError("Manga dosyasında sayfa (görsel) bulunamadı.")
+    if len(images) > MAX_CHAPTERS:
+        images = images[:MAX_CHAPTERS]
+
+    slug = synthetic.allocate_slug(book_title, "manga")
+    for i, raw in enumerate(images, start=1):
+        media.write_bytes(slug, f"src-{i}", raw)  # kaynak sayfa (PIL içerikten algılar)
+    first_url = synthetic.chapter_url(slug, 1, "manga://")
+    library.upsert_book(slug, book_title, first_url, "Sayfa 1", 1)
+    for i in range(1, len(images) + 1):
+        synthetic.append_chapter(
+            slug, book_title, f"Sayfa {i}", "(manga sayfası)",
+            chapter_no=i, scheme="manga://", content_type="html",
+        )
+    return {"slug": slug, "title": book_title, "chapter_count": len(images), "first_url": first_url}
 
 
 def _epub_html_docs(path: str) -> tuple[str, list[tuple[str, str, list[str]]]]:

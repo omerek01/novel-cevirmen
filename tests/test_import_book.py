@@ -219,3 +219,66 @@ def test_pdf_import_api_endpoint():
     body = res.json()
     assert body["chapter_count"] == 3  # 3 sayfa → 3 bölüm (sayfa modu)
     assert body["slug"].startswith("pdf-")
+
+
+def _make_cbz(n):
+    import io
+    import zipfile
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as z:
+        for i in range(1, n + 1):
+            b = io.BytesIO()
+            Image.new("RGB", (400, 600), (210, 210, 210)).save(b, "PNG")
+            z.writestr(f"page-{i:03}.png", b.getvalue())
+    return buf.getvalue()
+
+
+def test_manga_cbz_stages_pages():
+    from core import media
+
+    res = import_book.import_manga(_make_cbz(3), "seri.cbz")
+    assert res["chapter_count"] == 3
+    assert res["slug"].startswith("manga-")
+    assert res["first_url"] == synthetic.chapter_url(res["slug"], 1, "manga://")
+    assert (media.book_dir(res["slug"]) / "src-1").is_file()  # kaynak sayfa saklandı
+    staged = cache.get_staged(res["first_url"])
+    assert staged["content_type"] == "html"
+    assert cache.get_chapter(res["first_url"]) is None  # sahneli, henüz çevrilmedi
+
+
+def test_manga_single_image():
+    import io
+    from PIL import Image
+
+    b = io.BytesIO()
+    Image.new("RGB", (300, 400), (120, 120, 120)).save(b, "PNG")
+    res = import_book.import_manga(b.getvalue(), "tek.png")
+    assert res["chapter_count"] == 1 and res["slug"].startswith("manga-")
+
+
+def test_manga_non_image_rejected():
+    with pytest.raises(import_book.BookImportError):
+        import_book.import_manga(b"not an image or zip", "x.cbz")
+
+
+def test_manga_page_renders_translated_image(monkeypatch):
+    import re
+
+    from core import import_translate, media, pipeline
+
+    # Gemini-vision yerine sabit bölge (gerçek çağrı yok)
+    monkeypatch.setattr(
+        import_translate, "_manga_regions",
+        lambda img, key: [{"box_2d": [120, 100, 320, 700], "text": "Hello!", "tr": "Merhaba dünya!"}],
+    )
+    res = import_book.import_manga(_make_cbz(2), "m.cbz")
+    payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert payload["content_type"] == "html"
+    assert '<img class="page-img"' in payload["translation"]
+    m = re.search(r'src="/media/([^"]+)"', payload["translation"])
+    assert m and media.resolve(m.group(1)) is not None  # çevrilmiş sayfa PNG'si var
+    # tekrar aç → cache isabeti (yeniden vision çağrısı yok)
+    assert pipeline.get_or_translate(res["first_url"], api_key="test-key")["cached"] is True

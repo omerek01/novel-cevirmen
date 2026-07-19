@@ -213,6 +213,8 @@ def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
         html = import_translate.translate_pdf_page(media_slug, staged["chapter_no"], api_key)
     elif url.startswith("epub://"):
         html = import_translate.translate_epub_html(staged["raw_source"], media_slug, api_key)
+    elif url.startswith("manga://"):
+        html = import_translate.translate_manga_page(media_slug, staged["chapter_no"], api_key)
     else:
         raise TranslateError("Bilinmeyen görsel içerik türü.")
     payload = {

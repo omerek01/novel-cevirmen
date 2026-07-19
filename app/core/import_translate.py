@@ -176,3 +176,122 @@ def translate_epub_html(raw_html: str, slug: str, api_key: str) -> str:
                 el.append(t)
         # hizalama tutmadıysa orijinali bırak (nadir; bozuk göstermekten iyi)
     return str(soup)
+
+
+# --- Manga: Gemini-vision ile balon OCR + çeviri + görsele geri yazma ---
+
+_MANGA_PROMPT = (
+    "Bu bir manga/çizgi roman sayfası. İçindeki TÜM okunabilir metinleri bul: konuşma "
+    "balonları, anlatı/düşünce kutuları, önemli tabelalar. Her metin için kutu "
+    "koordinatını [ymin,xmin,ymax,xmax] biçiminde 0-1000 aralığında NORMALİZE ver ve "
+    "İngilizce'den (veya kaynağı ne ise) akıcı Türkçe'ye çevir. Çeviri kısa ve doğal "
+    "olsun (balona sığacak). Ses efektlerini (SFX) ATLA. SADECE şu JSON dizisini "
+    'döndür, başka hiçbir şey yazma: '
+    '[{"box_2d":[ymin,xmin,ymax,xmax],"text":"orijinal","tr":"türkçe"}]'
+)
+
+
+def _manga_regions(image_bytes: str, api_key: str) -> list[dict]:
+    """Gemini-vision: manga sayfasından [{box_2d, text, tr}] döndür (model yedekli)."""
+    import json
+
+    from google import genai
+    from google.genai import types
+
+    from .translate import DEFAULT_MODELS, SAFETY_SETTINGS, _Retryable, genai_errors
+
+    client = genai.Client(api_key=api_key)
+    part = types.Part.from_bytes(data=image_bytes, mime_type="image/png")
+    last: Exception | None = None
+    for model in DEFAULT_MODELS:
+        try:
+            resp = client.models.generate_content(
+                model=model,
+                contents=[part, _MANGA_PROMPT],
+                config=types.GenerateContentConfig(
+                    response_mime_type="application/json", temperature=0.2,
+                    safety_settings=SAFETY_SETTINGS,
+                ),
+            )
+        except genai_errors.APIError as exc:
+            last = exc
+            continue  # kota/erişim → sıradaki model
+        raw = (resp.text or "").strip()
+        if not raw:
+            last = _Retryable()
+            continue
+        try:
+            data = json.loads(raw)
+        except Exception:
+            m = re.search(r"\[.*\]", raw, re.S)
+            data = json.loads(m.group(0)) if m else []
+        return [d for d in data if isinstance(d, dict)]
+    if last:
+        raise translate.TranslateError(f"Manga çeviri hatası: {last}")
+    return []
+
+
+def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
+    """Manga sayfasını çevir: Gemini-vision balon OCR+çeviri → orijinali kapat, Türkçe'yi
+    üstüne yaz → PNG render → media'ya kaydet → <img> HTML döndür."""
+    from PIL import Image, ImageDraw, ImageFont
+
+    src = media.book_dir(slug) / f"src-{page_no}"
+    if not src.is_file():
+        raise translate.TranslateError("Manga sayfası bulunamadı (yeniden içe aktarın).")
+    img = Image.open(str(src)).convert("RGB")  # PIL formatı içerikten algılar (jpg/png/webp)
+    # Gemini'ye PNG olarak gönder
+    import io
+
+    buf = io.BytesIO()
+    img.save(buf, "PNG")
+    regions = _manga_regions(buf.getvalue(), api_key)
+
+    W, H = img.size
+    draw = ImageDraw.Draw(img)
+    fontfile = _tr_font()
+    for r in regions:
+        box = r.get("box_2d") or r.get("bbox")
+        tr = (r.get("tr") or r.get("translation") or "").strip()
+        if not box or len(box) != 4 or not tr:
+            continue
+        ymin, xmin, ymax, xmax = box
+        x0, y0 = xmin / 1000 * W, ymin / 1000 * H
+        x1, y1 = xmax / 1000 * W, ymax / 1000 * H
+        if x1 <= x0 or y1 <= y0:
+            continue
+        _draw_translated_bubble(draw, (x0, y0, x1, y1), tr, fontfile)
+
+    out = io.BytesIO()
+    img.save(out, "PNG")
+    rel = media.write_bytes(slug, f"page-{page_no}.png", out.getvalue())
+    return page_image_html(rel, page_no, W, H)
+
+
+def _draw_translated_bubble(draw, box, text, fontfile):
+    """Balonu beyazla kapat + Türkçe'yi kutuya sığdırarak yaz (satır sar, font küçült)."""
+    from PIL import ImageFont
+
+    x0, y0, x1, y1 = box
+    draw.rectangle((x0, y0, x1, y1), fill=(255, 255, 255))
+    bw, bh = x1 - x0 - 8, y1 - y0 - 6
+    size = 22
+    while size >= 9:
+        font = ImageFont.truetype(fontfile, size) if fontfile else ImageFont.load_default()
+        lines, line = [], ""
+        for w in text.split():
+            t = (line + " " + w).strip()
+            if draw.textlength(t, font=font) > bw and line:
+                lines.append(line)
+                line = w
+            else:
+                line = t
+        if line:
+            lines.append(line)
+        if len(lines) * (size + 3) <= bh or size == 9:
+            break
+        size -= 1
+    yy = y0 + 3
+    for ln in lines:
+        draw.text((x0 + 4, yy), ln, fill=(0, 0, 0), font=font)
+        yy += size + 3

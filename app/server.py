@@ -287,6 +287,18 @@ async def import_pdf_endpoint(
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@app.post("/api/import/manga")
+async def import_manga_endpoint(request: Request, filename: str = Query("")) -> dict:
+    """Manga'yı (CBZ/ZIP ya da tek görsel, ham gövde) sahneli kitaba çevir. Çeviri
+    YAPMAZ — sayfa okununca Gemini-vision ile balonlar çevrilir. Döner: {slug, title,
+    chapter_count, first_url}."""
+    body = await _read_upload(request)
+    try:
+        return await run_in_threadpool(import_book.import_manga, body, filename)
+    except import_book.BookImportError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
 @app.post("/api/import/paste")
 def import_paste(req: PasteImportRequest) -> dict:
     """Yapıştırılan İngilizce metni sahneli bölüm olarak ekle + çeviri işini başlat.
