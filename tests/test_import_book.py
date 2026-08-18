@@ -182,6 +182,7 @@ def _stub_translate(monkeypatch):
         return {
             "translation": "\n\n".join("Çeviri: " + b for b in blocks),
             "source": None, "detected_names": [], "chunk_count": 1,
+            "model": "gemini-3.7-flash",
         }
 
     monkeypatch.setattr(import_translate.translate, "translate_chapter", fake)
@@ -417,7 +418,10 @@ def test_manga_page_renders_translated_image(monkeypatch):
     # Gemini-vision yerine sabit bölge (gerçek çağrı yok)
     monkeypatch.setattr(
         import_translate, "_manga_regions",
-        lambda img, key: [{"box_2d": [120, 100, 320, 700], "text": "Hello!", "tr": "Merhaba dünya!"}],
+        lambda img, key: (
+            [{"box_2d": [120, 100, 320, 700], "text": "Hello!", "tr": "Merhaba dünya!"}],
+            "gemini-3.7-flash",
+        ),
     )
     res = import_book.import_manga(_make_cbz(2), "m.cbz")
     payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
@@ -428,3 +432,91 @@ def test_manga_page_renders_translated_image(monkeypatch):
     # tekrar aç → cache isabeti (yeniden vision çağrısı yok)
     assert pipeline.get_or_translate(res["first_url"], api_key="test-key")["cached"] is True
 
+
+# ---------- görsel içeriğin KÜNYESİ (hangi model çevirdi) ----------
+# Görsel bölümler de Gemini ile çevriliyor ama payload künye taşımıyordu → okuyucuda
+# rozet hiç çizilmiyordu (metin bölümlerinde çiziliyor). Rozet bu üç yolu da göstermeli.
+
+
+def test_pdf_sayfasi_kunye_tasir(monkeypatch):
+    from core import pipeline
+
+    _stub_translate(monkeypatch)
+    res = import_book.import_pdf(_make_pdf(["Page 1: the old man opened his eyes."]),
+                                 filename="roman.pdf")
+    payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert payload["engine"] == "gemini"
+    assert payload["model"] == "gemini-3.7-flash"
+    # İkinci açılış önbellekten gelir; künye DB'den okunmalı (yoksa kaybolurdu).
+    tekrar = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert tekrar["cached"] is True and tekrar["model"] == "gemini-3.7-flash"
+
+
+def test_epub_sayfasi_kunye_tasir(monkeypatch):
+    from core import pipeline
+
+    _stub_translate(monkeypatch)
+    res = import_book.import_epub(
+        _make_epub("Roman", [("Bir", ["The old man spoke softly to the boy."])]), "roman.epub"
+    )
+    payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert payload["engine"] == "gemini"
+    assert payload["model"] == "gemini-3.7-flash"
+
+
+def test_manga_vision_sayfasi_kunye_tasir(monkeypatch):
+    from core import import_translate, manga_engine, pipeline
+
+    monkeypatch.setattr(manga_engine, "available", lambda: False)  # vision yedeği
+    monkeypatch.setattr(
+        import_translate, "_manga_regions",
+        lambda img, key: (
+            [{"box_2d": [120, 100, 320, 700], "text": "Hello!", "tr": "Merhaba!"}],
+            "gemini-3.6-flash",
+        ),
+    )
+    res = import_book.import_manga(_make_cbz(2), "m.cbz")
+    payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert payload["engine"] == "gemini"
+    assert payload["model"] == "gemini-3.6-flash"
+
+
+def test_metinsiz_sayfaya_kunye_yazilmaz(monkeypatch):
+    """Saf sanat sayfasında çeviri YAPILMAZ → "GEMINI ile çevrildi" demek yanlış olur."""
+    from core import import_translate, manga_engine, pipeline
+
+    monkeypatch.setattr(manga_engine, "available", lambda: False)
+    monkeypatch.setattr(import_translate, "_manga_regions", lambda img, key: ([], None))
+    res = import_book.import_manga(_make_cbz(2), "m.cbz")
+    payload = pipeline.get_or_translate(res["first_url"], api_key="test-key")
+    assert payload["engine"] is None and payload["model"] is None
+
+
+def test_yerel_motor_sayfasi_kunye_tasir():
+    """Yerel motor cache'e KENDİ yazar (batch yolu) → künyeyi orada da yazmalı."""
+    import io as _io
+
+    from PIL import Image
+
+    from core import manga_engine
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (40, 60), "white").save(buf, "PNG")
+    manga_engine._save_engine_page("manga-x", 1, buf.getvalue(), "gemini-3.1-flash-lite")
+    row = cache.get_chapter("manga://manga-x/1")
+    assert row["engine"] == "gemini" and row["model"] == "gemini-3.1-flash-lite"
+
+
+def test_yerel_motor_metinsiz_sayfaya_kunye_yazmaz():
+    """Motor çıktı üretmeyen sayfada orijinal saklanır — çeviri olmadı, künye de olmaz."""
+    import io as _io
+
+    from PIL import Image
+
+    from core import manga_engine
+
+    buf = _io.BytesIO()
+    Image.new("RGB", (40, 60), "white").save(buf, "PNG")
+    manga_engine._save_engine_page("manga-y", 1, buf.getvalue())
+    row = cache.get_chapter("manga://manga-y/1")
+    assert row["engine"] is None and row["model"] is None

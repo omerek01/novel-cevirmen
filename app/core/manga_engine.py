@@ -53,17 +53,30 @@ def _font() -> str:
     return ""
 
 
+def _engine_model() -> str:
+    """Motorun METİN çevirisinde kullandığı Gemini modeli — künyeye bu yazılır.
+
+    Motor yerel olan yalnız algılama/OCR/inpaint/dizgi kısmıdır; çeviriyi Gemini
+    yapar (`manga_engine_config.json`: translator=gemini) ve model ADINI env'den
+    okur — aşağıdaki iki çağrı da env'e AYNI değeri koyar, künye bu yüzden doğru.
+    """
+    return os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite")
+
+
 def available() -> bool:
     """Motor kullanılabilir mi (venv python + config var)."""
     return engine_python().is_file() and _CONFIG.is_file()
 
 
-def translate_manga_page_engine(slug: str, page_no: int, api_key: str) -> str:
+def translate_manga_page_engine(slug: str, page_no: int, api_key: str) -> tuple[str, str]:
     """Sayfayı yerel motorla çevir → çevrilmiş PNG media'ya + <img> HTML döndür.
 
     Motor içeride algılama+OCR+inpaint+dizgi yapar (yerel), metni Gemini'ye çevirtir.
     Orijinal yazı TEMİZCE silinir (inpaint) ve Türkçe balona düzgün dizilir — kutu
-    bindirme yok."""
+    bindirme yok.
+
+    Döner: (<img> HTML, çeviriyi yapan Gemini modeli) — ikincisi künye rozetine girer.
+    """
     from PIL import Image
 
     from .translate import TranslateError
@@ -83,7 +96,7 @@ def translate_manga_page_engine(slug: str, page_no: int, api_key: str) -> str:
         if api_key:
             env["GEMINI_API_KEY"] = api_key
         # Motor GEMINI_MODEL'i API model listesinde arar; proje modeliyle hizala.
-        env.setdefault("GEMINI_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"))
+        env.setdefault("GEMINI_MODEL", _engine_model())
         cmd = [
             str(engine_python()), "-m", "manga_translator", "local",
             "-i", str(inp_dir), "-o", str(out_dir),
@@ -127,7 +140,7 @@ def translate_manga_page_engine(slug: str, page_no: int, api_key: str) -> str:
     rel = media.write_bytes(slug, f"page-{page_no}.png", data)
     from .import_translate import page_image_html
 
-    return page_image_html(rel, page_no, w, h)
+    return page_image_html(rel, page_no, w, h), _engine_model()
 
 
 def translate_chapter_engine(slug: str, api_key: str, on_page=None) -> None:
@@ -160,7 +173,7 @@ def translate_chapter_engine(slug: str, api_key: str, on_page=None) -> None:
         env = dict(os.environ)
         if api_key:
             env["GEMINI_API_KEY"] = api_key
-        env.setdefault("GEMINI_MODEL", os.getenv("GEMINI_MODEL", "gemini-3.1-flash-lite"))
+        env.setdefault("GEMINI_MODEL", _engine_model())
         cmd = [
             str(engine_python()), "-m", "manga_translator", "local",
             "-i", str(inp), "-o", str(out), "--config-file", str(_CONFIG), "--overwrite",
@@ -186,7 +199,7 @@ def translate_chapter_engine(slug: str, api_key: str, on_page=None) -> None:
                         data = op.read_bytes()
                     except Exception:
                         continue  # yazım sürüyor → sonraki turda
-                    _save_engine_page(slug, n, data)
+                    _save_engine_page(slug, n, data, _engine_model())
                     saved.add(n)
                     if on_page:
                         on_page(n, len(saved), total)
@@ -218,8 +231,12 @@ def _find_out_page(out: Path, n: int):
     return None
 
 
-def _save_engine_page(slug: str, n: int, data: bytes) -> None:
-    """Çevrilmiş sayfayı media + cache'e yaz (reader anında bulur)."""
+def _save_engine_page(slug: str, n: int, data: bytes, model: str | None = None) -> None:
+    """Çevrilmiş sayfayı media + cache'e yaz (reader anında bulur).
+
+    model=None → sayfada çevrilecek metin bulunmadı (orijinal saklanıyor): künye
+    YAZILMAZ, yoksa çevrilmemiş sayfa "GEMINI ile çevrildi" diye etiketlenirdi.
+    """
     import io
 
     from PIL import Image
@@ -244,4 +261,6 @@ def _save_engine_page(slug: str, n: int, data: bytes) -> None:
         "next_url": staged.get("next_url"), "prev_url": staged.get("prev_url"),
         "book_slug": slug, "book_title": staged.get("book_title") or "Manga",
         "chapter_no": n, "content_type": "html",
+        # Künye: metin bölümleriyle AYNI rozet (motor + fiilen çeviren model).
+        "engine": "gemini" if model else None, "model": model,
     })

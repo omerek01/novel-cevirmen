@@ -281,9 +281,13 @@ def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
     book = library.get_book(book_slug)
     book_title = (book and book.get("title")) or staged["book_title"]
     if url.startswith("pdf://"):
-        html = import_translate.translate_pdf_page(media_slug, staged["chapter_no"], api_key)
+        html, model = import_translate.translate_pdf_page(
+            media_slug, staged["chapter_no"], api_key
+        )
     elif url.startswith("epub://"):
-        html = import_translate.translate_epub_html(staged["raw_source"], media_slug, api_key)
+        html, model = import_translate.translate_epub_html(
+            staged["raw_source"], media_slug, api_key
+        )
     elif url.startswith("manga://"):
         from . import manga_engine
 
@@ -294,7 +298,9 @@ def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
 
             st = manga_batch.ensure_started(media_slug, api_key)
             raise synthetic.MangaTranslating(st.get("done", 0), st.get("total", 0))
-        html = import_translate.translate_manga_page(media_slug, staged["chapter_no"], api_key)
+        html, model = import_translate.translate_manga_page(
+            media_slug, staged["chapter_no"], api_key
+        )
     else:
         raise TranslateError("Bilinmeyen görsel içerik türü.")
     payload = {
@@ -309,6 +315,12 @@ def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
         "book_title": book_title,
         "chapter_no": staged["chapter_no"],
         "content_type": "html",
+        # KÜNYE: görsel içerik de Gemini ile çevrilir (PDF/EPUB metin blokları,
+        # manga balonları) → rozet metin bölümlerindekiyle aynı bilgiyi verir.
+        # Sayfada çevrilecek metin yoksa model None → o sayfaya künye yazılmaz
+        # ("çevrildi" demek yanlış olurdu).
+        "engine": "gemini" if model else None,
+        "model": model,
         "cached": False,
     }
     cache.save_chapter(url, payload)
@@ -359,6 +371,10 @@ def fetch_into_book(
         "book_title": book_title,
         "chapter_no": no,
         "engine": result.get("engine"),
+        # Zincirin FİİLEN çeviren halkası — `_fetch_translate_save` ile AYNI künye.
+        # Eksikti: "web'den devam" ile eklenen bölüm modelini kaybediyordu (rozet
+        # "GEMINI ile çevrildi" der, hangi halka olduğunu söylemezdi).
+        "model": result.get("model"),
         "added_terms": eklenen,
         "cached": False,
     }

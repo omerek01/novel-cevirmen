@@ -52,8 +52,13 @@ def _insert_flow(page, rect, text, fontfile, fontname, size=11.0):
     return rect.height  # sığmadı → tüm alanı kullandı say (nadir, çok yoğun sayfa)
 
 
-def translate_pdf_page(slug: str, page_no: int, api_key: str) -> str:
-    """slug kitabının page_no sayfasını çevirip render et → media-göreli PNG yolu için <img> HTML."""
+def translate_pdf_page(slug: str, page_no: int, api_key: str) -> tuple[str, str | None]:
+    """slug kitabının page_no sayfasını çevirip render et.
+
+    Döner: (media-göreli PNG için <img> HTML, sayfayı FİİLEN çeviren model). Model
+    künyeye girer (metin bölümleriyle aynı rozet); sayfada çevrilecek metin yoksa
+    None — o sayfaya "çevrildi" künyesi yazılmaz.
+    """
     import fitz
 
     src = media.book_dir(slug) / "source.pdf"
@@ -73,10 +78,12 @@ def translate_pdf_page(slug: str, page_no: int, api_key: str) -> str:
                 texts.append(txt)
                 bboxes.append(fitz.Rect(b["bbox"]))
 
+        model = None
         if texts:
             joined = "\n\n".join(texts)
             result = translate.translate_chapter(joined, api_key=api_key)
             tr_blocks = [t.strip() for t in (result["translation"] or "").split("\n\n")]
+            model = result.get("model")  # künye: sayfayı fiilen çeviren halka
             fontfile = _tr_font()
             fontname = "trf" if fontfile else "helv"
             # 1) orijinal metni sil (redaction). Resimler/çizimler metin bbox'ları
@@ -114,7 +121,7 @@ def translate_pdf_page(slug: str, page_no: int, api_key: str) -> str:
     finally:
         doc.close()
     rel = media.write_bytes(slug, f"page-{page_no}.png", png)
-    return page_image_html(rel, page_no, w, h)
+    return page_image_html(rel, page_no, w, h), model
 
 
 def page_image_html(media_rel: str, page_no: int, w: int | None = None, h: int | None = None) -> str:
@@ -155,9 +162,12 @@ def _sanitize(soup) -> None:
             del tag["src"]  # yalnız yerel medya / data-uri görselleri
 
 
-def translate_epub_html(raw_html: str, slug: str, api_key: str) -> str:
+def translate_epub_html(raw_html: str, slug: str, api_key: str) -> tuple[str, str | None]:
     """EPUB bölümünün HTML'ini YERİNDE çevir: blok metinleri Türkçe'yle değiştir,
-    resimleri/yapıyı koru, temizlenmiş HTML döndür."""
+    resimleri/yapıyı koru.
+
+    Döner: (temizlenmiş HTML, çeviren model). Model künyeye girer; metin yoksa None.
+    """
     from bs4 import BeautifulSoup
 
     soup = BeautifulSoup(raw_html or "", "html.parser")
@@ -168,15 +178,17 @@ def translate_epub_html(raw_html: str, slug: str, api_key: str) -> str:
         if t:
             blocks.append(el)
             texts.append(t)
+    model = None
     if texts:
         result = translate.translate_chapter("\n\n".join(texts), api_key=api_key)
         tr = [t.strip() for t in (result["translation"] or "").split("\n\n")]
+        model = result.get("model")  # künye: bölümü fiilen çeviren halka
         if len(tr) == len(blocks):  # hizalama tuttu → blok-blok değiştir
             for el, t in zip(blocks, tr):
                 el.clear()
                 el.append(t)
         # hizalama tutmadıysa orijinali bırak (nadir; bozuk göstermekten iyi)
-    return str(soup)
+    return str(soup), model
 
 
 # --- Manga: Gemini-vision ile balon OCR + çeviri + görsele geri yazma ---
@@ -192,8 +204,11 @@ _MANGA_PROMPT = (
 )
 
 
-def _manga_regions(image_bytes: str, api_key: str) -> list[dict]:
-    """Gemini-vision: manga sayfasından [{box_2d, text, tr}] döndür (model yedekli)."""
+def _manga_regions(image_bytes: str, api_key: str) -> tuple[list[dict], str | None]:
+    """Gemini-vision: manga sayfasından ([{box_2d, text, tr}], model) döndür.
+
+    İkinci öğe künye içindir: bölgeleri FİİLEN okuyan/çeviren zincir halkası.
+    """
     import json
 
     from google import genai
@@ -226,10 +241,10 @@ def _manga_regions(image_bytes: str, api_key: str) -> list[dict]:
         except Exception:
             m = re.search(r"\[.*\]", raw, re.S)
             data = json.loads(m.group(0)) if m else []
-        return [d for d in data if isinstance(d, dict)]
+        return [d for d in data if isinstance(d, dict)], model
     if last:
         raise translate.TranslateError(f"Manga çeviri hatası: {last}")
-    return []
+    return [], None
 
 
 _SEG_HEIGHT = 3600  # Gemini bu boyda görselde balonları doğru okur/konumlar. Uzun webtoon
@@ -285,8 +300,14 @@ def _manga_regions_all(img, api_key):
     koordinatlar tam görsele eşlenir → örtüşen kopyalar temizlenir."""
     W, H = img.size
     raw = []
+    # Künye: dilimler AYRI çağrılardır ve farklı halkalara düşebilir → hepsi
+    # yazılır (sıra korunur, tekrar elenir), tıpkı metin bölümünün parçaları gibi.
+    used: dict[str, None] = {}
     if H <= _SEG_HEIGHT:
-        for r in _manga_regions(_png_bytes(img), api_key):
+        regs, model = _manga_regions(_png_bytes(img), api_key)
+        if model:
+            used[model] = None
+        for r in regs:
             px = _region_px(r, W, H, 0)
             if px:
                 raw.append(px)
@@ -295,20 +316,26 @@ def _manga_regions_all(img, api_key):
         while y < H:
             y1 = min(y + _SEG_HEIGHT, H)
             seg = img.crop((0, y, W, y1))
-            for r in _manga_regions(_png_bytes(seg), api_key):
+            regs, model = _manga_regions(_png_bytes(seg), api_key)
+            if model:
+                used[model] = None
+            for r in regs:
                 px = _region_px(r, W, y1 - y, y)
                 if px:
                     raw.append(px)
             if y1 >= H:
                 break
             y = y1 - _SEG_OVERLAP  # örtüşme: sınırdaki balon en az bir dilimde tam
-    return _dedupe_regions(raw)
+    return _dedupe_regions(raw), (" + ".join(used) or None)
 
 
-def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
+def translate_manga_page(slug: str, page_no: int, api_key: str) -> tuple[str, str | None]:
     """Manga sayfasını çevir. ÖNCELİK: yerel motor (manga-image-translator) — kotasız,
     orijinali temizce siler (inpaint) + düzgün dizer. Motor kurulu değilse YEDEK:
-    Gemini-vision (uzun şerit dilimlenir → balon OCR/çeviri → orijinali kapat, üstüne yaz)."""
+    Gemini-vision (uzun şerit dilimlenir → balon OCR/çeviri → orijinali kapat, üstüne yaz).
+
+    Döner: (<img> HTML, çeviren model) — ikincisi künye rozetine girer.
+    """
     from . import manga_engine
 
     if manga_engine.available():
@@ -321,7 +348,7 @@ def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
         raise translate.TranslateError("Manga sayfası bulunamadı (yeniden içe aktarın).")
     img = Image.open(str(src)).convert("RGB")  # PIL formatı içerikten algılar (jpg/png/webp)
     W, H = img.size
-    regions = _manga_regions_all(img, api_key)
+    regions, model = _manga_regions_all(img, api_key)
 
     orig = img.copy()  # renk örneklemesi orijinalden (çizilen kutular bulaşmasın)
     draw = ImageDraw.Draw(img)
@@ -331,7 +358,7 @@ def translate_manga_page(slug: str, page_no: int, api_key: str) -> str:
         _draw_translated_bubble(draw, (x0, y0, x1, y1), tr, fontfile, fill, ink)
 
     rel = media.write_bytes(slug, f"page-{page_no}.png", _png_bytes(img))
-    return page_image_html(rel, page_no, W, H)
+    return page_image_html(rel, page_no, W, H), model
 
 
 def _bubble_colors(img, box):
