@@ -105,14 +105,32 @@
       <p class="gloss-hint">
         Bu terimler her yeni çevrilen bölümde aynı kalır. Karakter isimleri otomatik
         eklenir; kendi terimini de ekle (örn. "Aspect" → karşılığı boş bırak = İngilizce
-        kalsın). Değişiklik yeni bölümlerde geçerli; eski bölüm için okuyucuda
-        "Yeniden çevir".
+        kalsın). Karşılığı kök hâliyle yaz: cümlede gereken eki çeviri kendisi getirir
+        ("Kademe" → "Kademesi", "Kademeye"). Sunucu kapalıyken de ekleyebilirsin;
+        bağlanınca kaydedilir. Değişiklik yeni bölümlerde geçerli; eski bölüm için
+        okuyucuda "Yeniden çevir".
       </p>
+      <!-- ÜSLUP NOTU: sözlük terim eşler, bu ise kitabın SESİNİ sabitler. Aynı kural
+           geçerli — yeni çevrilen bölümlerde etkili olur. -->
+      <details id="styleBox" class="style-box">
+        <summary class="style-summary">ÜSLUP NOTU <span id="styleBadge" class="style-badge" hidden>yazılı</span></summary>
+        <p class="gloss-hint">
+          Kitabın sesi: anlatım kişisi, hitap düzeyi, ton. Sözlük terimleri eşler, bu
+          notu üslubu sabitler — yoksa üslup bölümden bölüme kayar. Kısa ve net yaz.
+        </p>
+        <textarea id="styleNote" class="style-note" rows="3" maxlength="600"
+                  placeholder="Örn. Birinci şahıs, geçmiş zaman. Kahramanın iç sesi alaycı ve kısa cümleli. Diyaloglarda samimi konuşma dili, anlatımda düzgün Türkçe."></textarea>
+        <div class="style-actions">
+          <button id="styleSaveBtn" class="pill">Üslubu kaydet</button>
+          <span id="styleState" class="style-state" aria-live="polite"></span>
+        </div>
+      </details>
       <div class="gloss-add">
         <input id="glossSource" type="text" placeholder="Kaynak (örn. Aspect)" />
         <input id="glossTarget" type="text" placeholder="Karşılık (boş = aynı kalsın)" />
         <button id="glossAddBtn" class="pill">Ekle</button>
       </div>
+      <p id="glossPending" class="gloss-pending-note" hidden></p>
       <div id="glossList" class="gloss-list"></div>
     </div>
   </section>
@@ -176,6 +194,13 @@
           <button class="seg" data-mg="dar">Dar</button>
           <button class="seg" data-mg="normal">Normal</button>
           <button class="seg" data-mg="genis">Geniş</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span>Sonsuz okuma</span>
+        <div class="segmented" role="group" aria-label="Sonsuz okuma">
+          <button class="seg" data-inf="1">Açık</button>
+          <button class="seg" data-inf="0">Kapalı</button>
         </div>
       </div>
       <div class="setting-row">
@@ -361,6 +386,27 @@
       <div class="modal-actions">
         <button id="epubCancel" class="pill">Vazgeç</button>
         <button id="epubDownload" class="next-btn">İndir</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SEÇİMDEN SÖZLÜĞE: okurken metin seçilince beliren kısayol -->
+  <button id="selGlossBtn" class="sel-gloss-btn" hidden>+ SÖZLÜĞE EKLE</button>
+
+  <div id="glossQuickModal" class="modal" hidden>
+    <div class="modal-card">
+      <h3 class="modal-title">SÖZLÜĞE EKLE</h3>
+      <p id="glossQuickHint" class="modal-hint"></p>
+      <div class="gloss-add gloss-add-stack">
+        <input id="glossQuickSource" type="text" placeholder="Kaynak (İngilizce)"
+               autocapitalize="words" autocomplete="off" />
+        <input id="glossQuickTarget" type="text" placeholder="Karşılık (boş = aynen kalsın)"
+               autocomplete="off" />
+      </div>
+      <p id="glossQuickState" class="modal-hint" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button id="glossQuickCancel" class="pill">Vazgeç</button>
+        <button id="glossQuickSave" class="next-btn">Kaydet</button>
       </div>
     </div>
   </div>

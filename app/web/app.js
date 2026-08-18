@@ -10,6 +10,10 @@ const DEFAULT_SETTINGS = {
   font: "serif",
   lineHeight: "normal",
   margin: "normal",
+  // Sonsuz okuma: bölüm sonuna gelince sonrakini akışa kendiliğinden ekle. Kapalıyken
+  // akış tek bölümdür ve devam elle ("SONRAKİ BÖLÜM →") olur — manga'nın site'den
+  // sonraki bölümü çekmesi de aynı anahtara bağlıdır.
+  infinite: true,
 };
 const THEMES = ["light", "sepia", "dark"];
 // SVG ikonlar (emoji yerine — temiz çizgi ikon, currentColor). skill kuralı: emoji ikon yok.
@@ -320,6 +324,7 @@ function updateSettingsUI() {
   markSegment("theme", settings.theme, "data-theme-opt");
   markSegment("lh", settings.lineHeight, "data-lh");
   markSegment("mg", settings.margin, "data-mg");
+  markSegment("inf", settings.infinite ? "1" : "0", "data-inf");
 }
 function setTheme(name) {
   if (!THEMES.includes(name)) return;
@@ -825,28 +830,177 @@ async function deleteChapter(ch) {
 }
 
 /* ---------- sözlük ---------- */
-async function fetchGlossary(slug) {
-  const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary`);
-  const data = await res.json();
-  return data.terms || {};
+/* Çevrimdışı düzenleme: her ekleme/değiştirme/silme ÖNCE localStorage kuyruğuna
+   yazılır, sonra sunucuya gönderilmeye çalışılır. Sunucu (PC) kapalıyken kayıt
+   telefonda durur ve bağlantı dönünce kendiliğinden gider. Çevrimiçiyken de aynı
+   yol işler — tek kod yolu, "ağ var mı" dallanması yok.
+   Biçim: { [slug]: { [source]: string | null } }   null = silinecek. */
+const LS_GLOSS_QUEUE = "novellink:glossQueue";
+
+function loadGlossQueue() {
+  try {
+    return JSON.parse(localStorage.getItem(LS_GLOSS_QUEUE)) || {};
+  } catch {
+    return {};
+  }
 }
-async function saveTerm(slug, source, target) {
-  await fetch(`/api/book/${encodeURIComponent(slug)}/glossary`, {
+function saveGlossQueue(queue) {
+  try {
+    localStorage.setItem(LS_GLOSS_QUEUE, JSON.stringify(queue));
+  } catch {}
+}
+function queueGlossChange(slug, source, target) {
+  const queue = loadGlossQueue();
+  if (!queue[slug]) queue[slug] = {};
+  queue[slug][source] = target; // null = silme
+  saveGlossQueue(queue);
+}
+function dropGlossChange(slug, source) {
+  const queue = loadGlossQueue();
+  if (!queue[slug]) return;
+  delete queue[slug][source];
+  if (Object.keys(queue[slug]).length === 0) delete queue[slug];
+  saveGlossQueue(queue);
+}
+function pendingGloss(slug) {
+  return loadGlossQueue()[slug] || {};
+}
+function pendingGlossCount() {
+  return Object.values(loadGlossQueue()).reduce(
+    (n, terms) => n + Object.keys(terms).length,
+    0
+  );
+}
+// Sunucudan (ya da service worker önbelleğinden) gelen listeye bekleyen değişiklikleri
+// bindir → ekranda daima son hâl görünür, gönderilmiş gibi.
+function overlayGloss(slug, terms) {
+  const merged = { ...terms };
+  for (const [source, target] of Object.entries(pendingGloss(slug))) {
+    if (target === null) delete merged[source];
+    else merged[source] = target;
+  }
+  return Object.fromEntries(
+    Object.entries(merged).sort((a, b) =>
+      a[0].localeCompare(b[0], "tr", { sensitivity: "base" })
+    )
+  );
+}
+
+/* Yazma istekleri service worker'dan GEÇMEZ (yalnız GET yakalanır) → oradaki zaman
+   aşımı korumasından yararlanamazlar. Tailscale kapalıyken ts.net adresi hata
+   vermek yerine dakikalarca askıda kalır (kara delik); kendi süremizi koyuyoruz. */
+const GLOSS_WRITE_TIMEOUT = 8000;
+
+async function fetchWithTimeout(url, options, timeoutMs = GLOSS_WRITE_TIMEOUT) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function postTermNow(slug, source, target) {
+  const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/glossary`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ source, target }),
   });
+  return res.status;
 }
-async function deleteTerm(slug, source) {
-  await fetch(
+async function deleteTermNow(slug, source) {
+  const res = await fetchWithTimeout(
     `/api/book/${encodeURIComponent(slug)}/glossary?source=${encodeURIComponent(source)}`,
     { method: "DELETE" }
   );
+  return res.status;
+}
+
+let glossFlushing = false;
+/* Kuyruğu sunucuya boşalt. Her başarılı istekten SONRA kuyruktan düşer: akış
+   ortasında bağlantı giderse gönderilenler tekrar gönderilmez. Ağ hatası =
+   sıradakiler beklesin (dur). 4xx = istek bozuk, tekrar denemek düzeltmez → düş.
+   Döner: ekranın tazelenmesi gerekip gerekmediği. */
+async function flushGlossQueue() {
+  if (glossFlushing) return false;
+  glossFlushing = true;
+  let sent = false;
+  try {
+    // Kuyruk her turda TAZE okunur: gönderim sürerken eklenen kayıt da aynı turda
+    // gider (yoksa bir sonraki tetiklemeye kadar beklerdi). Her tur ya kuyruğu
+    // küçültür ya da çıkar → döngü kilitlenmez.
+    for (;;) {
+      const queue = loadGlossQueue();
+      const slug = Object.keys(queue)[0];
+      if (!slug) break;
+      const source = Object.keys(queue[slug])[0];
+      if (source === undefined) {
+        delete queue[slug];
+        saveGlossQueue(queue);
+        continue;
+      }
+      const target = queue[slug][source];
+      let status;
+      try {
+        status =
+          target === null
+            ? await deleteTermNow(slug, source)
+            : await postTermNow(slug, source, target);
+      } catch {
+        break; // sunucuya ulaşılamadı → kalanı bir sonraki denemeye bırak
+      }
+      if (status >= 500) break; // sunucu ayakta ama hasta → bekletmeye devam
+      dropGlossChange(slug, source);
+      sent = true;
+    }
+  } finally {
+    glossFlushing = false;
+  }
+  return sent;
+}
+
+async function fetchGlossary(slug) {
+  let terms = {};
+  try {
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary`);
+    const data = await res.json();
+    terms = data.terms || {};
+  } catch {
+    terms = {}; // çevrimdışı + hiç önbellek yok: yalnız bekleyen kayıtlar görünsün
+  }
+  return overlayGloss(slug, terms);
+}
+/* Kayıt ANINDA yereldir; gönderim arka planda. Sunucuyu beklemek, PC kapalıyken
+   "Ekle" düğmesini saniyelerce dondururdu — kayıt zaten kuyrukta güvende. */
+function saveTerm(slug, source, target) {
+  queueGlossChange(slug, source, target);
+  updateGlossPendingNote();
+  flushGlossQueue().then(refreshGlossPendingUi);
+}
+function deleteTerm(slug, source) {
+  queueGlossChange(slug, source, null);
+  updateGlossPendingNote();
+  flushGlossQueue().then(refreshGlossPendingUi);
+}
+
+// Gönderim bitince satır rozetlerini + bekleyen sayısını yerinde tazele (tam yeniden
+// çizim yok: kullanıcı bir alanı düzenliyor olabilir).
+function refreshGlossPendingUi() {
+  updateGlossPendingNote();
+  const pending = pendingGloss(currentBookSlug);
+  for (const row of document.querySelectorAll("#glossList .gloss-row")) {
+    const src = row.querySelector(".gloss-source");
+    if (src) row.classList.toggle("gloss-row-pending", src.textContent in pending);
+  }
 }
 
 async function openGlossary(slug) {
   currentBookSlug = slug;
-  const book = (await fetchBooks()).find((b) => b.slug === slug) || null;
+  // fetchBooks() sunucuya ulaşamazsa null döner — sözlük çevrimdışı da açılmalı,
+  // başlık slug'a düşer.
+  const books = (await fetchBooks()) || [];
+  const book = books.find((b) => b.slug === slug) || null;
   el("glossaryTitle").textContent = "SÖZLÜK — " + (book ? book.title : slug);
 
   const list = el("glossList");
@@ -858,20 +1012,96 @@ async function openGlossary(slug) {
   showView("glossary");
   window.scrollTo(0, 0);
 
+  loadStyleNote(slug);
+  // Liste ÖNCE çizilir (bekleyen kayıtlar overlay'den gelir), gönderim arka planda:
+  // sunucu kapalıyken flush'ın zaman aşımını beklemek ekranı boş bırakırdı.
+  renderGlossary(await fetchGlossary(slug));
+  flushGlossQueue().then(async (sent) => {
+    if (!sent) return;
+    // Kuyruk boşaldı: listeyi sunucudan tazele, yoksa gönderim sırasında alınmış
+    // eski yanıt yeni terimi eksik gösterebilir.
+    if (currentBookSlug === slug && !views.glossary.hidden) {
+      renderGlossary(await fetchGlossary(slug));
+    } else {
+      refreshGlossPendingUi();
+    }
+  });
+}
+
+/* ---------- üslup notu (kitabın sesi) ----------
+   Sözlükten farkı: tek bir serbest metin, çevrimdışı kuyruğu YOK. Sunucu kapalıyken
+   kaydetmek yerine dürüstçe söyler — sözlük kuyruğu terim başına küçük kayıtlar için
+   var, burada çakışan iki uzun notu birleştirmenin makul bir yolu yok. */
+function setStyleState(text) {
+  const node = el("styleState");
+  if (node) node.textContent = text || "";
+}
+
+function markStyleBadge(note) {
+  const badge = el("styleBadge");
+  if (badge) badge.hidden = !(note || "").trim();
+}
+
+async function loadStyleNote(slug) {
+  const box = el("styleNote");
+  if (!box) return;
+  box.value = "";
+  setStyleState("");
+  markStyleBadge("");
   try {
-    renderGlossary(await fetchGlossary(slug));
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/style`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (currentBookSlug !== slug) return; // kullanıcı bu arada başka kitaba geçti
+    box.value = data.note || "";
+    markStyleBadge(data.note);
   } catch {
-    list.replaceChildren();
-    const err = document.createElement("p");
-    err.className = "loading-row";
-    err.textContent = "Sözlük yüklenemedi.";
-    list.appendChild(err);
+    setStyleState("Sunucuya ulaşılamadı — üslup notu okunamadı.");
   }
+}
+
+async function saveStyleNote() {
+  const slug = currentBookSlug;
+  const box = el("styleNote");
+  if (!slug || !box) return;
+  const btn = el("styleSaveBtn");
+  btn.disabled = true;
+  setStyleState("Kaydediliyor…");
+  try {
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/style`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note: box.value }),
+    });
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    const data = await res.json();
+    box.value = data.note || "";
+    markStyleBadge(data.note);
+    setStyleState("Kaydedildi — yeni çevrilen bölümlerde geçerli.");
+  } catch (err) {
+    setStyleState("Kaydedilemedi (" + err.message + ") — sunucu açıkken tekrar dene.");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Bekleyen (henüz sunucuya gitmemiş) düzenlemeleri sözlük ekranının başında duyur.
+function updateGlossPendingNote() {
+  const note = el("glossPending");
+  if (!note) return;
+  const count = pendingGlossCount();
+  note.hidden = count === 0;
+  note.textContent =
+    count === 0
+      ? ""
+      : `${count} değişiklik telefonda bekliyor — sunucuya bağlanınca kendiliğinden kaydedilecek.`;
 }
 
 function renderGlossary(terms) {
   const list = el("glossList");
   list.replaceChildren();
+  updateGlossPendingNote();
+  const pending = pendingGloss(currentBookSlug);
   const entries = Object.entries(terms);
   if (entries.length === 0) {
     const p = document.createElement("p");
@@ -883,6 +1113,7 @@ function renderGlossary(terms) {
   for (const [source, target] of entries) {
     const row = document.createElement("div");
     row.className = "gloss-row";
+    if (source in pending) row.classList.add("gloss-row-pending");
 
     const src = document.createElement("span");
     src.className = "gloss-source";
@@ -899,6 +1130,7 @@ function renderGlossary(terms) {
     tgt.setAttribute("aria-label", source + " karşılığı");
     tgt.addEventListener("change", () => {
       saveTerm(currentBookSlug, source, tgt.value.trim() || source);
+      row.classList.add("gloss-row-pending"); // gönderim bitince kendiliğinden kalkar
     });
 
     const del = document.createElement("button");
@@ -906,8 +1138,8 @@ function renderGlossary(terms) {
     del.textContent = "×";
     del.setAttribute("aria-label", source + " sil");
     del.addEventListener("click", () => {
-      deleteTerm(currentBookSlug, source);
       row.remove();
+      deleteTerm(currentBookSlug, source);
     });
 
     row.append(src, arrow, tgt, del);
@@ -1207,6 +1439,10 @@ async function loadChapter(url, opts = {}) {
     const ratio = restoreRatio != null ? restoreRatio : getScrollLocal(url);
     scrollToChapterRatio(entry, ratio || 0);
     prefetchNext(entry);
+    // Bölüm listesini ısıt: akış devamının zincir KOPTUĞUNDA (kitap ikinci bir
+    // siteden sürüyor / çevrimdışı) düşeceği kaynak budur; çevrimiçiyken çekilirse
+    // SW önbelleğine girer ve telefon çevrimdışıyken de indirilmiş bölümlere devam eder.
+    ensureChapterList(entry.bookSlug);
   } catch (err) {
     isNavigating = false;
     isRestoring = false;
@@ -1270,6 +1506,49 @@ function chapterListPrev(url) {
   return null;
 }
 
+/* ---------- akış devamı: zincir (next_url) + kitabın bölüm listesi ----------
+   Zincir TEK kaynak DEĞİLDİR. Aynı kitabı iki ayrı siteden çevirmiş olabilirsin:
+   o zaman bölüm 100'ün next_url'ü A sitesinin HİÇ ÇEVRİLMEMİŞ 101'ini gösterir,
+   fiilen indirilmiş 101 ise B sitesinden gelmiştir. Zincirin peşine düşmek
+   çevrimdışıyken (ya da site engelliyken) akışı öldürüyordu — indirilmiş bölümler
+   dururken okuma bölüm listesinden elle devam ettirilmek zorunda kalıyordu.
+   Liste bölüm numarasına göre sıralı gelir (cache.list_chapters). */
+let streamChapters = { slug: null, list: [] }; // akıştaki kitabın bölüm listesi
+
+function chapterListFor(slug) {
+  if (!slug) return [];
+  if (slug === currentBookSlug && currentChapters.length) return currentChapters;
+  return streamChapters.slug === slug ? streamChapters.list : [];
+}
+
+// Listeyi hazırla (yoksa çek). GET olduğu için SW çevrimdışıyken son kaydı verir;
+// hiç kaydı yoksa boş liste → davranış eskisi gibi zincire düşer.
+async function ensureChapterList(slug) {
+  const yerel = chapterListFor(slug);
+  if (yerel.length || !slug) return yerel;
+  try {
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/chapters`);
+    const data = await res.json();
+    streamChapters = { slug, list: data.chapters || [] };
+  } catch {
+    streamChapters = { slug, list: [] };
+  }
+  return streamChapters.list;
+}
+
+// Akışta sıradaki bölümün url'i: zincirin next'i bu kitapta ÇEVRİLMEMİŞSE ve listede
+// indirilmiş bir sonraki bölüm varsa LİSTE kazanır. Zincir listedeyse (normal akış)
+// ya da liste yoksa zincir kazanır — web'den ilerleyen okumada davranış değişmez.
+function pickNextTarget(last) {
+  if (!last) return null;
+  const list = chapterListFor(last.bookSlug);
+  const idx = list.findIndex((c) => c.url === last.url);
+  const listNext = idx >= 0 && idx + 1 < list.length ? list[idx + 1].url : null;
+  if (!last.nextUrl) return listNext;
+  if (listNext && !list.some((c) => c.url === last.nextUrl)) return listNext;
+  return last.nextUrl;
+}
+
 // Bir bölüm için akış girdisi + <article data-url> öğesini kur. Ayraç "— Bölüm N —"
 // (ritüel dikiş); boş/kısa çeviri → bölüm-yerel "Bölüm Boş" kartı. Render etmez,
 // sadece kurar (çağıran DOM'a ekler).
@@ -1292,6 +1571,11 @@ function buildChapterEntry(url, data) {
     prevUrl: data.prev_url || chapterListPrev(url),
     bookSlug: data.book_slug || null,
     bookTitle: data.book_title || "",
+    // KÜNYE: hangi motor çevirdi + bu bölümde sözlüğe eklenenler. Eski önbellekteki
+    // bölümlerde bu alanlar YOK (sütunlar sonradan eklendi) → rozet hiç çizilmez.
+    engine: data.engine || null,
+    model: data.model || null, // zincirin fiilen çeviren halkası (eski bölümlerde yok)
+    addedTerms: data.added_terms || null,
     el: null,
     loaded: false,
     empty: false,
@@ -1387,6 +1671,7 @@ function renderHtmlContent(entry) {
   div.className = "html-content";
   div.innerHTML = entry.html || "";
   art.appendChild(div);
+  appendKunye(entry, art);
 }
 
 // Bölümün paragraflarını (arama sorgusu varsa vurgulu) article içine çiz — ayraç
@@ -1404,6 +1689,86 @@ function renderParagraphs(entry, query) {
     else p.textContent = para;
     art.appendChild(p);
   });
+  appendKunye(entry, art);
+}
+
+/* ---------- bölüm künyesi ----------
+   Bölümün SONUNA, dokununca açılan küçük bir rozet: hangi motor çevirdi ve bu
+   bölümde sözlüğe hangi terimler eklendi. Otomatik sözlük eklemesi sessiz çalışıyor
+   ve hatalı bir karşılığı kalıcı kılabiliyor (gerçek bulgu: "Ore Empire" →
+   "Ork İmparatorluğu"); okurken görülebilmesi gerekiyor.
+
+   NOT: kart `renderParagraphs`/`renderHtmlContent` SONUNDA çizilir, `buildChapterEntry`
+   içinde DEĞİL — iki render fonksiyonu da article'ı `.chapter-sep` dışında temizleyip
+   yeniden kuruyor ve bölüm içi arama `renderParagraphs`'ı tekrar çağırıyor. Yukarıda
+   eklenseydi ilk aramada sessizce kaybolurdu. */
+function appendKunye(entry, art) {
+  const kart = kunyeKarti(entry);
+  if (kart) art.appendChild(kart);
+}
+
+function kunyeKarti(entry) {
+  const motor = entry.engine;
+  const terimler = entry.addedTerms || {};
+  const adlar = Object.keys(terimler);
+  // Eski önbellekteki bölümde künye yok: "bilinmiyor" yazmak yanıltıcı olur, sessizce atla.
+  if (!motor && adlar.length === 0) return null;
+
+  const kutu = document.createElement("details");
+  kutu.className = "kunye";
+  const ozet = document.createElement("summary");
+  ozet.className = "kunye-ozet";
+  ozet.textContent = adlar.length
+    ? `Sözlüğe ${adlar.length} terim eklendi`
+    : "Çeviri bilgisi";
+  kutu.appendChild(ozet);
+
+  const govde = document.createElement("div");
+  govde.className = "kunye-govde";
+  if (motor) {
+    const rozet = document.createElement("span");
+    rozet.className = "style-badge";  // mevcut pill rozet dili
+    // "claude" dalı BİLİNÇLE duruyor: motorun kendisi kaldırıldı ama DB'de o
+    // denemeden kalma satırlar var; silinirse eski bölümler "GEMINI" diye yanlış
+    // etiketlenirdi. Yeni çeviriler daima "gemini" yazar.
+    rozet.textContent = motor === "claude" ? "CLAUDE" : "GEMINI";
+    const satir = document.createElement("p");
+    satir.className = "gloss-hint kunye-satir";
+    satir.append(rozet, document.createTextNode(" ile çevrildi"));
+    // Motorun İÇİNDEKİ model: zincir tökezleyince alt halkaya düşülüyor ve üslup
+    // farkı oradan geliyor. "gemini-" öneki kırpılır — rozet zaten motoru söylüyor.
+    // Parçalar farklı halkalara düştüyse sunucu " + " ile birleştirip gönderir.
+    if (entry.model) {
+      const kisa = entry.model
+        .split(" + ")
+        .map((m) => m.replace(/^gemini-/, ""))
+        .join(" + ");
+      satir.append(document.createTextNode(` · ${kisa}`));
+    }
+    govde.appendChild(satir);
+  }
+  if (adlar.length) {
+    const liste = document.createElement("ul");
+    liste.className = "kunye-liste";
+    for (const kaynak of adlar.sort()) {
+      const karsilik = terimler[kaynak];
+      const li = document.createElement("li");
+      // Kaynak = karşılık → terim İngilizce KORUNDU; ok göstermek kafa karıştırır.
+      li.textContent =
+        karsilik && karsilik !== kaynak
+          ? `${kaynak} → ${karsilik}`
+          : `${kaynak} (İngilizce korundu)`;
+      liste.appendChild(li);
+    }
+    govde.appendChild(liste);
+    const ipucu = document.createElement("p");
+    ipucu.className = "gloss-hint kunye-satir";
+    ipucu.textContent =
+      "Bu terimler sonraki bölümlerde de aynı kalır. Yanlışsa sözlükten düzelt.";
+    govde.appendChild(ipucu);
+  }
+  kutu.appendChild(govde);
+  return kutu;
 }
 
 function emptyChapterCard(entry) {
@@ -1450,6 +1815,10 @@ function ensureBottomSentinel() {
   el("readerBody").appendChild(s); // her zaman en sona
   updateEndCard();
   if (bottomObserver) bottomObserver.disconnect();
+  bottomObserver = null;
+  // Sonsuz okuma kapalıysa gözlemci HİÇ kurulmaz: bölüm sonunda akış büyümez,
+  // devam elle olur (updateEndCard "SONRAKİ BÖLÜM →" düğmesini çizer).
+  if (!settings.infinite) return;
   bottomObserver = new IntersectionObserver(
     (entries) => {
       if (entries.some((en) => en.isIntersecting)) maybeAppendNext();
@@ -1459,6 +1828,13 @@ function ensureBottomSentinel() {
   bottomObserver.observe(s);
 }
 
+// Ayar değişince (sonsuz okuma aç/kapa) akışın sonunu yeniden kur: gözlemci
+// kurulur/kaldırılır ve bitiş kartı doğru düğmeye döner.
+function refreshStreamEnd() {
+  if (views.reader.hidden || !stream.length) return;
+  ensureBottomSentinel();
+}
+
 // Akışın sonuna göre uygun kartı göster: next varsa "hazırlanıyor" ipucu (gözlemci
 // birazdan ekler); web bölümü ama next yok → "SONRAKINI WEB'DEN GETİR"; sentetik/son
 // → "— Son bölüm —".
@@ -1466,15 +1842,19 @@ function updateEndCard() {
   const s = el("streamEnd");
   if (!s || !stream.length) return;
   const last = stream[stream.length - 1];
+  // Hedef: zincirin next'i ya da (o kitapta çevrilmemişse) listedeki sıradaki bölüm.
+  const target = pickNextTarget(last);
+  const mangaContinue = !target && last.isManga && last.bookSlug && !mangaNextExhausted;
   s.replaceChildren();
   s.className = "stream-end";
-  if (last.nextUrl) {
-    const d = document.createElement("div");
-    d.className = "stream-hint";
-    d.textContent = "Sonraki bölüm hazırlanıyor…";
-    s.appendChild(d);
-  } else if (last.isManga && last.bookSlug && !mangaNextExhausted) {
-    // Manga zincir sonu ama site'de sonraki bölüm olabilir → gözlemci devam eder.
+  if (!settings.infinite && (target || mangaContinue)) {
+    // Sonsuz okuma KAPALI: bölüm sonu bir duraktır, devam elle.
+    const btn = document.createElement("button");
+    btn.className = "primary-btn stream-cta";
+    btn.textContent = "SONRAKİ BÖLÜM →";
+    btn.addEventListener("click", () => goNextManual(btn));
+    s.appendChild(btn);
+  } else if (target || mangaContinue) {
     const d = document.createElement("div");
     d.className = "stream-hint";
     d.textContent = "Sonraki bölüm hazırlanıyor…";
@@ -1494,22 +1874,25 @@ function updateEndCard() {
 }
 
 async function maybeAppendNext() {
-  if (streamBusy || !stream.length) return;
+  if (streamBusy || !stream.length || !settings.infinite) return;
   const last = stream[stream.length - 1];
   if (last.translating) return; // sayfa çevriliyorsa sıradakini bekle
-  // Manga zincir sonu (nextUrl yok) ama site'de sonraki bölüm olabilir → otomatik devam.
-  const mangaContinue = !last.nextUrl && last.isManga && last.bookSlug && !mangaNextExhausted;
-  if (!last.nextUrl && !mangaContinue) return;
   streamBusy = true;
   let ok = false;
   const s = el("streamEnd");
-  s.replaceChildren();
-  const load = document.createElement("div");
-  load.className = "stream-loading";
-  load.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Sonraki bölüm yükleniyor…`;
-  s.appendChild(load);
   try {
-    let targetUrl = last.nextUrl;
+    // Zincir + bölüm listesi (liste ilk kullanımda çekilir; çevrimdışıysa SW verir).
+    await ensureChapterList(last.bookSlug);
+    let targetUrl = pickNextTarget(last);
+    // Sıradaki bölüm yok ama manga'nın site'de devamı olabilir → otomatik devam.
+    const mangaContinue =
+      !targetUrl && last.isManga && last.bookSlug && !mangaNextExhausted;
+    if (!targetUrl && !mangaContinue) return; // finally streamBusy'yi bırakır
+    s.replaceChildren();
+    const load = document.createElement("div");
+    load.className = "stream-loading";
+    load.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Sonraki bölüm yükleniyor…`;
+    s.appendChild(load);
     if (mangaContinue) {
       // Site'den SONRAKİ bölümü çek + zincire ekle (novel sonsuz okumanın manga karşılığı).
       const cont = await fetch("/api/manga/continue", {
@@ -1569,6 +1952,41 @@ async function maybeAppendNext() {
   }
 }
 
+/* Sonsuz okuma KAPALIYKEN "SONRAKİ BÖLÜM →": bölümü akışa eklemek yerine TEMİZ bir
+   sayfa olarak açar (baştan başlar, bellek şişmez). history'ye replace ile yazılır —
+   geri tuşu bölüm bölüm geri sarmaz, okuyucudan çıkar (akış modundaki davranışın
+   aynısı). Manga zincir sonundaysa önce site'den sonraki bölümü çekmek gerekir. */
+async function goNextManual(btn) {
+  if (isNavigating || streamBusy) return;
+  const last = stream[stream.length - 1];
+  if (!last) return;
+  await ensureChapterList(last.bookSlug);
+  let target = pickNextTarget(last);
+  if (!target) {
+    if (!(last.isManga && last.bookSlug && !mangaNextExhausted)) return;
+    btn.disabled = true;
+    btn.textContent = "Sonraki bölüm getiriliyor…";
+    try {
+      const cont = await fetch("/api/manga/continue", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slug: last.bookSlug }),
+      }).then((r) => r.json());
+      if (!cont.available || !cont.first_url) {
+        mangaNextExhausted = true;
+        updateEndCard();
+        return;
+      }
+      target = cont.first_url;
+    } catch {
+      btn.disabled = false;
+      btn.textContent = "SONRAKİ BÖLÜM →";
+      return;
+    }
+  }
+  navigate({ view: "reader", url: target }, true);
+}
+
 // "Sonrakini web'den getir": son bölümün sayfasını çekip next'ini öğrenir (çeviri
 // yakmaz, E-3); bulursa akışa ekler. Site engelliyse kullanıcıyı bilgilendirir.
 async function discoverNextForLast(btn) {
@@ -1588,7 +2006,9 @@ async function discoverNextForLast(btn) {
     if (data.next_url) {
       last.nextUrl = data.next_url;
       updateEndCard();
-      maybeAppendNext();
+      // Sonsuz okuma kapalıyken akış büyümez: kullanıcı düğmeye bastı, bölümü aç.
+      if (settings.infinite) maybeAppendNext();
+      else navigate({ view: "reader", url: data.next_url }, true);
     } else {
       btn.disabled = true;
       btn.textContent = "SON BÖLÜM";
@@ -1869,14 +2289,37 @@ el("openGlossaryBtn").addEventListener("click", () => {
   if (currentBookSlug) navigate({ view: "glossary", slug: currentBookSlug });
 });
 el("glossaryBackBtn").addEventListener("click", () => history.back());
-el("glossAddBtn").addEventListener("click", async () => {
+async function addGlossTerm() {
   const source = el("glossSource").value.trim();
-  if (!source) return;
+  if (!source) return el("glossSource").focus();
   const target = el("glossTarget").value.trim() || source;
-  await saveTerm(currentBookSlug, source, target);
+  saveTerm(currentBookSlug, source, target); // çevrimdışıysa kuyrukta bekler
   el("glossSource").value = "";
   el("glossTarget").value = "";
   renderGlossary(await fetchGlossary(currentBookSlug));
+  el("glossSource").focus();
+}
+el("glossAddBtn").addEventListener("click", addGlossTerm);
+el("styleSaveBtn")?.addEventListener("click", saveStyleNote);
+// Telefonda klavyeden çıkmadan ekleme: iki alanda da Enter = Ekle.
+for (const id of ["glossSource", "glossTarget"]) {
+  el(id).addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addGlossTerm();
+    }
+  });
+}
+
+// Bağlantı dönünce bekleyen sözlük düzenlemeleri kendiliğinden gitsin; sözlük
+// ekranı açıksa liste tazelensin.
+window.addEventListener("online", async () => {
+  if (!(await flushGlossQueue())) return;
+  if (currentBookSlug && !views.glossary.hidden) {
+    renderGlossary(await fetchGlossary(currentBookSlug));
+  } else {
+    updateGlossPendingNote();
+  }
 });
 
 el("chapterSearch").addEventListener("input", applyChapterFilter);
@@ -1899,6 +2342,17 @@ document.querySelectorAll("[data-mg]").forEach((b) =>
     saveSettings();
     applySettings();
     updateSettingsUI();
+  })
+);
+// Sonsuz okuma aç/kapa: açıkken bölüm sonunda sonraki kendiliğinden eklenir, kapalıyken
+// akış tek bölümde durur ve "SONRAKİ BÖLÜM →" düğmesiyle devam edilir. Anahtar okuyucu
+// açıkken de çevrilebilir → akışın sonu (gözlemci + bitiş kartı) hemen yeniden kurulur.
+document.querySelectorAll("[data-inf]").forEach((b) =>
+  b.addEventListener("click", () => {
+    settings.infinite = b.getAttribute("data-inf") === "1";
+    saveSettings();
+    updateSettingsUI();
+    refreshStreamEnd();
   })
 );
 el("settingsBtn").addEventListener("click", () => {
@@ -2036,6 +2490,7 @@ el("bulkBtn").addEventListener("click", async () => {
 el("bulkCancel").addEventListener("click", () => {
   el("bulkModal").hidden = true;
 });
+
 el("bulkStart").addEventListener("click", () => {
   const n = Math.max(1, Math.min(500, parseInt(el("bulkCount").value, 10) || 0));
   el("bulkModal").hidden = true;
@@ -2518,6 +2973,184 @@ el("offlineAllBtn").innerHTML = ICONS.download + " HEPSİNİ ÇEVRİMDIŞI İND�
 
 renderLibrary();
 showView("library");
+
+/* ---------- seçimden sözlüğe ekleme ----------
+   Okurken bir özel adı seçip doğrudan sözlüğe atmak için. Android'in KENDİ seçim
+   menüsüne (Çevir/Kopyala/Paylaş) kendi eylemimizi EKLEYEMEYİZ — o tarayıcının
+   menüsü, sayfaya kapalı. Bunun yerine seçim yapılınca kendi kayan düğmemizi
+   gösteririz; native menü seçimin üstünde durduğu için düğme ALTA konumlanır. */
+
+// Cümle seçilince düğme çıkmasın: sözlük TERİM eşlemesidir, cümle çevirisi değil.
+const SEL_GLOSS_MAX_WORDS = 8;
+let selGlossData = null; // aktif seçim (düğme görünürken)
+// Düğmeye basılınca kullanılacak SON geçerli seçim. Ayrı tutulur: dokunma anında
+// tarayıcı seçimi temizleyip `selectionchange` yayabiliyor, tek değişken olsaydı
+// tıklama işlenmeden önce null'lanıp düğme sessizce hiçbir şey yapmazdı.
+let selGlossLast = null;
+let selGlossTimer = null;
+
+/* `glossary.normalize_source`'un hafif JS eşi: çevresel noktalama kırpılır, İngilizce
+   iyelik eki KORUNUR (kullanıcı ne eklediğini görsün, sunucu zaten köke indiriyor).
+   Sunucudaki `set_term` normalize ETMEZ — kırpma burada olmazsa sözlükte
+   "Silverwing Town." gibi noktalı anahtarlar birikir. */
+function trimSecim(text) {
+  return (text || "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .replace(/^[^\p{L}\p{N}]+/u, "")
+    .replace(/[^\p{L}\p{N}'’]+$/u, "");
+}
+
+function hideSelGloss() {
+  selGlossData = null;
+  const btn = el("selGlossBtn");
+  if (btn) btn.hidden = true;
+}
+
+function updateSelGloss() {
+  const btn = el("selGlossBtn");
+  if (!btn || views.reader.hidden) return hideSelGloss();
+  const sel = window.getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return hideSelGloss();
+  const range = sel.getRangeAt(0);
+  const node = range.commonAncestorContainer;
+  const host = node.nodeType === 1 ? node : node.parentElement;
+  if (!host || !host.closest("#readerBody")) return hideSelGloss();
+
+  const terim = trimSecim(sel.toString());
+  if (!terim || terim.split(" ").length > SEL_GLOSS_MAX_WORDS) return hideSelGloss();
+
+  // Sözlük eşlemesi kaynak(İngilizce) → karşılık(Türkçe). Seçimin İngilizce orijinal
+  // bloğundan (`.source-line`) mı yoksa Türkçe paragraftan mı geldiği, modalda hangi
+  // alanın dolacağını belirler.
+  // Bağlam cümlesi öneriye gider: aynı sözcük bir kitapta kişi adı, başkasında yer
+  // adı olabilir ("Rain"), sınıfı ancak cümle belli eder.
+  selGlossData = {
+    terim,
+    kaynaktan: !!host.closest(".source-line"),
+    baglam: (host.closest(".source-line, p") || host).textContent.slice(0, 600),
+  };
+  selGlossLast = selGlossData;
+
+  btn.hidden = false; // ölçüden ÖNCE görünür olmalı, yoksa offset* 0 döner
+  const yariGenislik = btn.offsetWidth / 2 || 60;
+  const r = range.getBoundingClientRect();
+  const x = Math.min(
+    Math.max(r.left + r.width / 2, yariGenislik + 8),
+    window.innerWidth - yariGenislik - 8
+  );
+  const altta = r.bottom + 8;
+  const y =
+    altta + btn.offsetHeight + 8 < window.innerHeight
+      ? altta
+      : r.top - btn.offsetHeight - 8; // ekranın dibinde seçim: üste al
+  btn.style.left = x + "px";
+  btn.style.top = Math.max(8, y) + "px";
+}
+
+function openGlossQuick() {
+  const secim = selGlossLast;
+  if (!secim) return;
+  const { terim, kaynaktan } = secim;
+  el("glossQuickSource").value = kaynaktan ? terim : "";
+  el("glossQuickTarget").value = kaynaktan ? "" : terim;
+  el("glossQuickHint").textContent = kaynaktan
+    ? "Karakter adıysa İngilizce kalır, değilse Türkçe karşılığı yazılır. Sözlük YALNIZ bundan sonra çevrilecek bölümlerde geçerlidir."
+    : "Türkçe metinden seçtin: bunu KARŞILIK alanına koydum, kaynak İngilizce terimi sen yaz. Sözlük yalnız bundan sonra çevrilecek bölümlerde geçerlidir.";
+  el("glossQuickState").textContent = "";
+  el("glossQuickModal").hidden = false;
+  hideSelGloss();
+  window.getSelection()?.removeAllRanges();
+  (kaynaktan ? el("glossQuickTarget") : el("glossQuickSource")).focus();
+  if (kaynaktan) doldurOneri(secim);
+}
+
+/* Karşılığı kullanıcı yerine SİSTEM belirler: karakter adı İngilizce kalır, başka
+   her özel ad Türkçe karşılığıyla girer — `pipeline._sozluge_isle`'ın otomatik
+   davranışıyla aynı kural. Öneri yine de ONAYA sunulur: sözlük prompt'ta KURALdır,
+   yanlış bir karşılık kitap boyunca birebir uygulanırdı. */
+async function doldurOneri(secim) {
+  const { terim, baglam } = secim;
+  if (!currentBookSlug) return;
+  // Zaten kayıtlıysa öneri istemeye gerek yok (kayıt INSERT OR REPLACE: kullanıcı
+  // üzerine yazdığını bilerek yazsın). Çevrimdışıysa boş döner, akış sürer.
+  const terms = await fetchGlossary(currentBookSlug);
+  if (el("glossQuickModal").hidden) return; // kullanıcı bu arada kapattı
+  if (terms[terim] !== undefined) {
+    if (!el("glossQuickTarget").value.trim()) el("glossQuickTarget").value = terms[terim];
+    el("glossQuickState").textContent =
+      `Zaten kayıtlı: ${terim} → ${terms[terim]} · kaydedersen değişir`;
+    return;
+  }
+  el("glossQuickState").textContent = "Karşılık öneriliyor…";
+  try {
+    const res = await fetchWithTimeout(
+      `/api/book/${encodeURIComponent(currentBookSlug)}/glossary/suggest`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ source: terim, context: baglam || "" }),
+      },
+      25000 // model çağrısı: sözlük yazımından uzun sürebilir
+    );
+    if (!res.ok) throw new Error("öneri alınamadı");
+    const data = await res.json();
+    if (el("glossQuickModal").hidden) return;
+    if (!el("glossQuickTarget").value.trim()) el("glossQuickTarget").value = data.target || terim;
+    el("glossQuickState").textContent = data.is_character
+      ? "Karakter adı → İngilizce kalacak. Yanlışsa karşılığı sen yaz."
+      : "Önerilen karşılık dolduruldu; istersen değiştir.";
+  } catch {
+    if (el("glossQuickModal").hidden) return;
+    el("glossQuickState").textContent =
+      "Öneri alınamadı (sunucu kapalı ya da kota dolu olabilir) — karşılığı elle yaz.";
+  }
+}
+
+function saveGlossQuick() {
+  const source = trimSecim(el("glossQuickSource").value);
+  if (!source) {
+    el("glossQuickState").textContent = "Kaynak terim gerekli.";
+    el("glossQuickSource").focus();
+    return;
+  }
+  if (!currentBookSlug) {
+    el("glossQuickState").textContent = "Kitap bilinmiyor — sözlük ekranından ekle.";
+    return;
+  }
+  const target = el("glossQuickTarget").value.trim() || source;
+  saveTerm(currentBookSlug, source, target); // çevrimdışıysa kuyrukta bekler
+  el("glossQuickState").textContent = `Eklendi: ${source} → ${target}`;
+  selGlossLast = null;
+  setTimeout(() => (el("glossQuickModal").hidden = true), 700);
+}
+
+document.addEventListener("selectionchange", () => {
+  clearTimeout(selGlossTimer);
+  // Seçim tutamacı sürüklenirken her karede yeniden konumlandırma.
+  selGlossTimer = setTimeout(updateSelGloss, 180);
+});
+// Seçim ekranda kayınca düğme onunla birlikte gitsin (gizlemek yerine yeniden konumla:
+// kaydırıp sonra eklemek isteyen kullanıcı düğmeyi kaybetmemeli).
+window.addEventListener("scroll", () => selGlossData && updateSelGloss(), { passive: true });
+
+el("selGlossBtn")?.addEventListener("click", openGlossQuick);
+el("glossQuickSave")?.addEventListener("click", saveGlossQuick);
+el("glossQuickCancel")?.addEventListener("click", () => (el("glossQuickModal").hidden = true));
+el("glossQuickModal")?.addEventListener("click", (e) => {
+  if (e.target === el("glossQuickModal")) el("glossQuickModal").hidden = true;
+});
+for (const id of ["glossQuickSource", "glossQuickTarget"]) {
+  el(id)?.addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    saveGlossQuick();
+  });
+}
+
+// Açılışta bekleyen sözlük düzenlemelerini gönder (çevrimdışı eklenip telefonda
+// kalmış olabilir); sunucu hâlâ kapalıysa kuyrukta bekler.
+flushGlossQueue();
 
 if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});

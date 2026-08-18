@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v55"; // tür-bazlı raflar (Noveller/Mangalar/Kitaplar) + SVG ikon + focus/hover cilası
+const SHELL_CACHE = "novellink-shell-v66"; // sonsuz okuma anahtarı + liste-tabanlı devam
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
