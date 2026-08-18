@@ -17,7 +17,11 @@ def test_parse_fenced_json():
 
 def test_parse_empty_returns_blank():
     out = translate._parse_response("")
-    assert out == {"translation": "", "detected_names": []}
+    assert out == {
+        "translation": "",
+        "detected_names": [],
+        "detected_terms": {},
+    }
 
 
 def test_parse_broken_json_recovers_translation():
@@ -87,9 +91,10 @@ class _FakeClient:
 def test_fallback_on_blocked_empty_response():
     # m1 boş/engellenmiş döner (PROHIBITED_CONTENT gibi) → m2'ye düşülür.
     client = _FakeClient({"m1": "", "m2": '{"translation":"Çeviri","detected_names":[]}'})
-    resp = translate._generate_with_fallback(client, ("m1", "m2"), "user")
+    resp, model = translate._generate_with_fallback(client, ("m1", "m2"), "user")
     assert "Çeviri" in resp.text
     assert client.models.calls == ["m1", "m2"]  # m1 denendi, m2'ye geçildi
+    assert model == "m2"  # künye FİİLEN çeviren halkayı göstermeli, zincirin ilkini değil
 
 
 def test_all_blocked_raises_content_filter_error():

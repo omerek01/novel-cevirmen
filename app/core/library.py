@@ -46,6 +46,10 @@ def _connect() -> sqlite3.Connection:
     # sonsuz okumanın manga karşılığı). Yalnız web'den çekilen manga'da dolu.
     db.ensure_column(conn, "books", "manga_source_url", "manga_source_url TEXT")
     db.ensure_column(conn, "books", "manga_next_url", "manga_next_url TEXT")
+    # Kitap başına serbest ÜSLUP NOTU (anlatım kişisi, hitap düzeyi, ton). Sözlük
+    # yalnız terim eşler; üslup ondan bağımsız ve bölümden bölüme kayabiliyordu.
+    # Her çeviri prompt'una enjekte edilir (translate.translate_chapter).
+    db.ensure_column(conn, "books", "style_note", "style_note TEXT")
     return conn
 
 
@@ -283,6 +287,28 @@ def set_status(slug: str, status: str) -> bool:
         conn.close()
 
 
+STYLE_NOTE_MAX = 600
+
+
+def set_style_note(slug: str, note: str | None) -> bool:
+    """Kitabın üslup notunu yaz (boş = notu kaldır). Bilinmeyen kitap → False.
+
+    Not prompt'a girdiği için sınırlı: uzun bir not sözlüğün ve metnin önüne geçer
+    ve modelin dikkatini asıl işten (çeviri) çalar."""
+    if not slug:
+        return False
+    temiz = (note or "").strip()[:STYLE_NOTE_MAX]
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "UPDATE books SET style_note = ? WHERE slug = ?", (temiz or None, slug)
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def set_manga_source(slug: str, source_url: str | None, next_url: str | None) -> None:
     """Manga kitabının son çekilen bölüm URL'i + sonraki bölüm URL'ini kaydet.
 
@@ -367,7 +393,8 @@ def get_book(slug: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
-            "updated_at, status, manga_source_url, manga_next_url FROM books WHERE slug = ?",
+            "updated_at, status, manga_source_url, manga_next_url, style_note "
+            "FROM books WHERE slug = ?",
             (slug,),
         ).fetchone()
     finally:
@@ -385,6 +412,7 @@ def get_book(slug: str) -> dict | None:
         "status": row[7] or "okunuyor",
         "manga_source_url": row[8],
         "manga_next_url": row[9],
+        "style_note": row[10] or "",
     }
 
 

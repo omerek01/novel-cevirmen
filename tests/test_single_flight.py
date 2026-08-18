@@ -32,7 +32,7 @@ def test_concurrent_same_url_single_fetch_and_translate(monkeypatch):
         assert joined.wait(5)  # ikinci çağrı uçuşa katılana dek ilkini beklet
         return _mk_chapter(url)
 
-    def fake_translate(text, api_key=None, glossary=None):
+    def fake_translate(text, api_key=None, glossary=None, **kw):
         translate_calls.append(text)
         return _mk_translation()
 

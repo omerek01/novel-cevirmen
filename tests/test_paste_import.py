@@ -52,7 +52,7 @@ def test_translate_from_raw_source_and_immutability(monkeypatch):
     ch = synthetic.append_chapter("paste-k", "K", "B1", "hello raw")
     seen = []
 
-    def fake_translate(text, api_key=None, glossary=None):
+    def fake_translate(text, api_key=None, glossary=None, **kw):
         seen.append(text)
         return {"translation": "çeviri", "source": None,
                 "detected_names": [], "chunk_count": 1}
@@ -105,7 +105,7 @@ def test_fetch_into_book_aliases_host_slug_no_split(monkeypatch):
 
     monkeypatch.setattr(pipeline, "fetch_chapter", fake_fetch2)
     monkeypatch.setattr(pipeline, "translate_chapter",
-                        lambda t, api_key=None, glossary=None: {
+                        lambda t, api_key=None, glossary=None, **kw: {
                             "translation": "ç", "source": None,
                             "detected_names": [], "chunk_count": 1})
     pipeline.fetch_into_book("http://site/ch2", "paste-k", "anahtar")
@@ -205,7 +205,7 @@ def test_paste_url_fills_blocked_web_chapter(monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_chapter", fail_fetch)
     seen = []
 
-    def fake_translate(text, api_key=None, glossary=None):
+    def fake_translate(text, api_key=None, glossary=None, **kw):
         seen.append(text)
         return {"translation": "çeviri2", "source": None,
                 "detected_names": [], "chunk_count": 1}
@@ -263,7 +263,7 @@ def test_fetch_into_book_links_and_keeps_web_next(monkeypatch):
 
     monkeypatch.setattr(pipeline, "fetch_chapter", fake_fetch)
     monkeypatch.setattr(pipeline, "translate_chapter",
-                        lambda t, api_key=None, glossary=None: {
+                        lambda t, api_key=None, glossary=None, **kw: {
                             "translation": "çeviri2", "source": None,
                             "detected_names": [], "chunk_count": 1})
     out = pipeline.fetch_into_book("http://site/2", "paste-k", "anahtar")
@@ -284,7 +284,7 @@ def test_fetch_next_endpoint_validates(monkeypatch):
         "book_slug": "h", "book_title": "H", "title": "B2", "chapter_no": 5,
         "text": "t", "next_url": "http://s/3", "prev_url": None})
     monkeypatch.setattr(pipeline, "translate_chapter",
-                        lambda t, api_key=None, glossary=None: {
+                        lambda t, api_key=None, glossary=None, **kw: {
                             "translation": "ç", "source": None,
                             "detected_names": [], "chunk_count": 1})
     res = _client().post("/api/book/wk/fetch-next", json={"url": "http://s/2"})

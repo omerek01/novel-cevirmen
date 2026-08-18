@@ -45,6 +45,19 @@ def _connect() -> sqlite3.Connection:
     # translation'ı paragraf yerine innerHTML olarak render eder; iki-dilli/¶-yeniden-
     # çevir/arama devre dışı.
     db.ensure_column(conn, "chapters", "content_type", "content_type TEXT")
+    # KÜNYE (okuyucudaki rozet): bu bölümü hangi motor çevirdi ve o çeviride sözlüğe
+    # hangi terimler EKLENDİ. Sözlüğe otomatik ekleme sessiz çalışıyor ve hatalı bir
+    # karşılığı kalıcılaştırabiliyor (gerçek bulgu: kaynak sitenin yazım hatası
+    # "Ore Empire" sözlüğe "Maden İmparatorluğu" diye girmişti — doğrusu ork ırkı,
+    # "Ork İmparatorluğu"); görünür olması gerekiyor. Cache'te saklanır, yoksa ikinci açılışta
+    # (önbellek isabeti) künyesini kaybederdi.
+    db.ensure_column(conn, "chapters", "engine", "engine TEXT")
+    db.ensure_column(conn, "chapters", "added_terms", "added_terms TEXT")  # JSON eşleme
+    # Motorun İÇİNDEKİ model: `engine` yalnız "gemini" der, oysa zincirin hangi halkası
+    # çevirdi (3.7 mi flash-lite mı) kalite sorularının cevabı orada. Bu bilgi daha önce
+    # yalnız çalışma zamanında vardı ve kayboluyordu → "bunu hangi model çevirdi"
+    # tahminle cevaplanıyordu. Eski satırlarda NULL; rozet yalnız motoru gösterir.
+    db.ensure_column(conn, "chapters", "model", "model TEXT")
     return conn
 
 
@@ -58,7 +71,8 @@ def get_chapter(url: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT book_slug, book_title, title, chapter_no, translation, "
-            "next_url, detected_names, chunk_count, prev_url, source_text, content_type "
+            "next_url, detected_names, chunk_count, prev_url, source_text, content_type, "
+            "engine, added_terms, model "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -78,6 +92,10 @@ def get_chapter(url: str) -> dict | None:
         "prev_url": row[8],
         "source": row[9],
         "content_type": row[10] or "text",
+        # Künye: eski satırlarda NULL (sütun sonradan eklendi) → okuyucu rozeti çizmez.
+        "engine": row[11],
+        "added_terms": json.loads(row[12] or "{}"),
+        "model": row[13],
         "cached": True,
     }
 
@@ -94,6 +112,36 @@ def list_chapters(book_slug: str) -> list[dict]:
     finally:
         conn.close()
     return [{"url": r[0], "title": r[1], "chapter_no": r[2]} for r in rows]
+
+
+def prev_translation(
+    book_slug: str, prev_url: str | None, chapter_no: int | None
+) -> str:
+    """Bir önceki bölümün Türkçe metni — yeni bölümün çeviri bağlamı için.
+
+    Önce `prev_url` denenir (zincir doğrudan bağlıysa kesin sonuç); yoksa aynı
+    kitapta bu bölümden KÜÇÜK en büyük numaralı bölüme düşülür (elle eklenen ya da
+    zinciri kopuk bölümlerde de bağlam bulunsun). Görsel bölümler (`content_type`
+    "html") atlanır: içlerinde çeviri bağlamı olarak kullanılabilecek düz metin yok.
+    Bulunamazsa boş string.
+    """
+    if prev_url:
+        row = get_chapter(prev_url)
+        if row and row.get("content_type") != "html" and (row.get("translation") or "").strip():
+            return row["translation"]
+    if not book_slug or chapter_no is None:
+        return ""
+    conn = _connect()
+    try:
+        row = conn.execute(
+            "SELECT translation FROM chapters WHERE book_slug = ? AND chapter_no < ? "
+            "AND translation IS NOT NULL AND IFNULL(content_type, 'text') != 'html' "
+            "ORDER BY chapter_no DESC LIMIT 1",
+            (book_slug, chapter_no),
+        ).fetchone()
+    finally:
+        conn.close()
+    return (row[0] or "") if row else ""
 
 
 def delete_chapter(url: str) -> bool:
@@ -178,7 +226,11 @@ def save_chapter(url: str, data: dict) -> None:
     """Çevrilen bölümü önbelleğe yaz (varsa üzerine).
 
     E-16: ON CONFLICT (REPLACE değil) — adı geçmeyen raw_source her çeviri
-    yazımında sessizce silinmesin (içe aktarımın ham kaynağı değişmezdir)."""
+    yazımında sessizce silinmesin (içe aktarımın ham kaynağı değişmezdir).
+
+    Künye alanları (engine/added_terms/model) COALESCE ile yazılır: bu alanları TAŞIMAYAN
+    bir payload (örn. `_render_import_page`) aynı satırı güncellediğinde mevcut künye
+    NULL'a düşmesin. Aynı E-16 sınıfı hata, farklı sütunlar."""
     conn = _connect()
     try:
         conn.execute(
@@ -186,8 +238,8 @@ def save_chapter(url: str, data: dict) -> None:
             INSERT INTO chapters
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
-                 prev_url, source_text, content_type)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 prev_url, source_text, content_type, engine, added_terms, model)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -195,7 +247,10 @@ def save_chapter(url: str, data: dict) -> None:
                 detected_names = excluded.detected_names,
                 chunk_count = excluded.chunk_count, created_at = excluded.created_at,
                 prev_url = excluded.prev_url, source_text = excluded.source_text,
-                content_type = excluded.content_type
+                content_type = excluded.content_type,
+                engine = COALESCE(excluded.engine, engine),
+                added_terms = COALESCE(excluded.added_terms, added_terms),
+                model = COALESCE(excluded.model, model)
             """,
             (
                 url,
@@ -211,6 +266,13 @@ def save_chapter(url: str, data: dict) -> None:
                 data.get("prev_url"),
                 data.get("source"),
                 data.get("content_type"),
+                data.get("engine"),
+                # None bırakılır (boş dict DEĞİL): COALESCE'in eski künyeyi koruyabilmesi
+                # için "bilgi yok" ile "bu bölümde hiçbir şey eklenmedi" ayrışmalı.
+                json.dumps(data["added_terms"], ensure_ascii=False)
+                if data.get("added_terms") is not None
+                else None,
+                data.get("model"),
             ),
         )
         conn.commit()

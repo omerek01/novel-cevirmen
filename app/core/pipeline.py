@@ -11,7 +11,7 @@ import threading
 from . import budget, cache, glossary, library, synthetic
 from . import fetch as _fetch_mod
 from .fetch import fetch_chapter
-from .translate import TranslateError, translate_chapter
+from .translate import TranslateError, ayikla_karakter_adlari, translate_chapter
 
 # ---- URL-başına tek-uçuş (single-flight) — prefetch'in ön koşulu ----
 # Aynı URL için ikinci çağrı ilkinin sonucunu bekler; aynı bölüm asla iki kez
@@ -40,7 +40,15 @@ def _finalize_cached(cached: dict, url: str, advance_position: bool = True) -> d
         merged = library.get_book(canon)
         if merged and merged.get("title"):
             cached["book_title"] = merged["title"]
-    glossary.merge_names(cached["book_slug"], cached.get("detected_names"))
+    # Önbellekteki `detected_names` HAM olabilir (süzgeçten önce yazılmış eski satır):
+    # aynı süzgeçten geçmeden merge_names'e verilirse eski bölümü her açışta sözlüğe
+    # yeniden İngilizce kayıt çakar. Cache'te `detected_terms` yok → boş eşleme.
+    glossary.merge_names(
+        cached["book_slug"],
+        ayikla_karakter_adlari(
+            cached.get("detected_names") or [], {}, cached.get("translation") or ""
+        ),
+    )
     library.upsert_book(
         cached["book_slug"], cached["book_title"], url,
         cached["title"], cached["chapter_no"],
@@ -59,7 +67,8 @@ def get_or_translate(
 ) -> dict:
     """Bölümü önbellekten döndür ya da çek+çevir+önbelleğe yaz.
 
-    refresh=True önbelleği yok sayar. Önbellek isabetinde API anahtarı gerekmez.
+    refresh=True önbelleği yok sayar (model zinciri her yolda AYNI: kalite öncelikli
+    `translate.DEFAULT_MODELS`). Önbellek isabetinde API anahtarı gerekmez.
     want_source=True ve önbellekteki bölümde hizalı İngilizce kaynak yoksa (eski
     bölüm) ve anahtar varsa, bölüm bir kez yeniden çevrilip kaynak eklenir (iki-dilli
     okuma için). FetchError / TranslateError fırlatabilir.
@@ -73,6 +82,7 @@ def get_or_translate(
     AKTİF (okunan) bölümün position POST'u belirler; aksi halde önden-ekleme konumu
     okunmamış bölüme kaydırıp aktif-POST ile yarışır (gerçek bulgu: current_url 7'de
     takılırken cache'te bölüm 8 oluşuyordu).
+
     """
     adv = (not background) if advance_position is None else advance_position
     if not refresh:
@@ -86,17 +96,49 @@ def get_or_translate(
     if not api_key:
         raise TranslateError("GEMINI_API_KEY ayarlı değil.")
 
+    # Sözlüğe işleme ARTIK uçuşun içinde (`_do_fetch_translate_save`): eklenen
+    # terimler künyenin parçası ve cache'e onunla birlikte yazılıyor. Burada tekrar
+    # çağrılsaydı ikinci çağıran hep boş liste görürdü (ilk çağıran zaten eklemiş olur).
     payload = _fetch_translate_save(url, api_key, background)
 
     # E-2: yan etkiler çağıranın KENDİ bayrağıyla — prefetch uçuşuna katılan
     # okuyucunun "kaldığın yer"i ilerler, salt-prefetch ilerletmez.
-    glossary.merge_names(payload["book_slug"], payload["detected_names"])
     library.upsert_book(
         payload["book_slug"], payload["book_title"], url,
         payload["title"], payload["chapter_no"],
         update_position=adv,
     )
     return payload
+
+
+def _sozluge_isle(slug: str, veri: dict) -> dict[str, str]:
+    """Bölümden algılanan özel adları kitabın sözlüğüne işle.
+
+    Sözlüğe giren şey TÜM özel adlardır, iki davranışla:
+      * karakter (`detected_names`) → İngilizce KALIR (`X -> X`); İngilizce kalan
+        TEK sınıf budur
+      * karakter dışı her özel ad (`detected_terms`: yer, lonca, EŞYA, BECERİ,
+        unvan, ırk, adlandırılmış canavar, sistem terimi…) → modelin çeviride
+        kullandığı TÜRKÇE karşılıkla sabitlenir
+
+    Amaç tutarlılık: bu adlar sözlükte olmadığı sürece model her bölümde yeniden
+    karar veriyordu ve aynı şehir bölümden bölüme başka türlü çıkabiliyordu
+    (gerçek bulgu: "Lightshadow City" için uydurma "Işıkölge"). Kullanıcının elle
+    yazdığı kayıt her hâlükârda üstündür (`INSERT OR IGNORE`).
+
+    Döner: FİİLEN eklenen terimler (kaynak -> karşılık) — bölüm künyesine yazılır,
+    okuyucu rozetinde gösterilir. Otomatik ekleme hatalı bir karşılığı kalıcı
+    kılabildiği için görünür olması şart (gerçek bulgu: kaynak sitenin yazım hatası
+    "Ore Empire" sözlüğe "Maden İmparatorluğu" diye girmişti; doğrusu "Ork İmparatorluğu").
+    """
+    # SIRA LOAD-BEARING: önce Türkçe karşılıklar, sonra İngilizce-koru adları. İki
+    # kutu aynı adı taşıyabiliyor (model sızdırıyor) ve `merge_*` INSERT OR IGNORE
+    # olduğundan İLK yazan kazanır — names önce koşarken "Blackwater Guild -> Blackwater
+    # Guild" kaydı, aynı yanıttaki "Blackwater Guild -> Karasu Loncası"nı bastırıyordu.
+    eklenen: dict[str, str] = {}
+    eklenen.update(glossary.merge_terms(slug, veri.get("detected_terms")))
+    eklenen.update(glossary.merge_names(slug, veri.get("detected_names")))
+    return eklenen
 
 
 def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
@@ -115,7 +157,9 @@ def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
             raise flight.exc
         return dict(flight.result)
     try:
-        flight.result = _do_fetch_translate_save(url, api_key, background, flight.ticket)
+        flight.result = _do_fetch_translate_save(
+            url, api_key, background, flight.ticket
+        )
         return dict(flight.result)
     except BaseException as exc:
         # E-14: uçuş ölürse girdi silinir + hata bekleyenlere yayılır; sonraki
@@ -128,9 +172,7 @@ def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
         flight.event.set()
 
 
-def _do_fetch_translate_save(
-    url: str, api_key: str, background: bool, ticket
-) -> dict:
+def _do_fetch_translate_save(url: str, api_key: str, background: bool, ticket) -> dict:
     staged = cache.get_staged(url)
     # GÖRSEL İÇERİK (PDF çevrilmiş sayfa / EPUB yerinde-çevrili HTML): raw_source
     # metin yolundan ÖNCE — bu bölümler paragraf-çeviri değil, sayfa render / HTML üretir.
@@ -172,13 +214,35 @@ def _do_fetch_translate_save(
             book_title = merged["title"]
 
     book_glossary = glossary.get_glossary(book_slug)
+    book = library.get_book(book_slug)
+    style_note = (book or {}).get("style_note") or ""
+    # Bölüm sınırında bağlam sıfırlanmasın: önceki bölümün son Türkçe satırları
+    # ilk parçaya bağlam olur (sahne ortasında biten bölümün devamı için).
+    prev_context = cache.prev_translation(
+        book_slug, chapter.get("prev_url"), chapter.get("chapter_no")
+    )
+    # Model zinciri TEK ve kalite öncelikli (`translate.DEFAULT_MODELS`): okuma,
+    # prefetch, toplu çeviri ve "yeniden çevir" aynı sırayı kullanır. Yola göre ayrı
+    # zincir DENENDİ ve kaldırıldı (2026-08-17, kullanıcı kararı) — okumanın gövdesi
+    # prefetch'ten geldiği için ucuz zincir pratikte çevirinin ÇOĞUNU belirliyordu.
     if background:
         # Karar #13 / E-12: aynı anda en fazla 1 arka plan çevirisi — kapı yalnız
         # çekimi serileştiriyordu; çeviri aşaması da Gemini kotasını korur.
         with budget.BG_TRANSLATE_SEM:
-            result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
+            result = translate_chapter(
+                chapter["text"], api_key=api_key, glossary=book_glossary,
+                prev_context=prev_context, style_note=style_note,
+            )
     else:
-        result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
+        result = translate_chapter(
+            chapter["text"], api_key=api_key, glossary=book_glossary,
+            prev_context=prev_context, style_note=style_note,
+        )
+
+    # Sözlüğe işleme uçuşun İÇİNDE: eklenen terimler künyenin parçası ve bölümle
+    # birlikte cache'e yazılıyor, böylece bölüm ikinci açılışta (önbellek isabeti)
+    # künyesini kaybetmiyor.
+    eklenen = _sozluge_isle(book_slug, result)
 
     payload = {
         "title": chapter["title"],
@@ -191,6 +255,13 @@ def _do_fetch_translate_save(
         "book_slug": book_slug,
         "book_title": book_title,
         "chapter_no": chapter["chapter_no"],
+        # KÜNYE: hangi motor çevirdi (düşüş olduysa fiilen kullanılan) + bu bölümde
+        # sözlüğe eklenenler. Okuyucu bölüm sonundaki rozette gösterir.
+        "engine": result.get("engine"),
+        # Zincirin FİİLEN çeviren halkası (3.7 mi flash-lite mı). `engine` yalnız
+        # "gemini" der; kalite sorularının cevabı bu alanda.
+        "model": result.get("model"),
+        "added_terms": eklenen,
         "cached": False,
     }
     cache.save_chapter(url, payload)
@@ -265,12 +336,17 @@ def fetch_into_book(
     if host_slug and host_slug != target_slug:
         library.set_alias(host_slug, target_slug)
     book_glossary = glossary.get_glossary(target_slug)
-    result = translate_chapter(chapter["text"], api_key=api_key, glossary=book_glossary)
     tail = cache.tail_chapter(target_slug)
     no = chapter_no if chapter_no is not None else ((tail["chapter_no"] or 0) + 1 if tail else 1)
     prev_url = tail["url"] if tail else None
     book = library.get_book(target_slug)
+    result = translate_chapter(
+        chapter["text"], api_key=api_key, glossary=book_glossary,
+        prev_context=cache.prev_translation(target_slug, prev_url, no),
+        style_note=(book or {}).get("style_note") or "",
+    )
     book_title = (book and book.get("title")) or chapter["book_title"]
+    eklenen = _sozluge_isle(target_slug, result)  # künyeye girecek, kayıttan ÖNCE
     payload = {
         "title": chapter["title"],
         "translation": result["translation"],
@@ -282,12 +358,13 @@ def fetch_into_book(
         "book_slug": target_slug,
         "book_title": book_title,
         "chapter_no": no,
+        "engine": result.get("engine"),
+        "added_terms": eklenen,
         "cached": False,
     }
     cache.save_chapter(url, payload)
     if prev_url:
         cache.set_next(prev_url, url)  # kuyruğun next'ini yeni bölüme bağla (zincir)
-    glossary.merge_names(target_slug, result["detected_names"])
     library.upsert_book(
         target_slug, book_title, url, chapter["title"], no, update_position=False
     )

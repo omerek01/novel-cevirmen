@@ -32,7 +32,7 @@ from pydantic import BaseModel  # noqa: E402
 from core import cache, epub_export, glossary, import_book, jobs, library, media, pipeline, reading_log, synthetic  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
-from core.translate import TranslateError  # noqa: E402
+from core.translate import TranslateError, suggest_term  # noqa: E402
 
 load_dotenv(APP_DIR.parent / ".env")  # tek kaynak: novel-cevirmen/.env
 API_KEY = os.getenv("GEMINI_API_KEY")
@@ -186,6 +186,11 @@ class GlossaryTerm(BaseModel):
     target: str | None = None
 
 
+class GlossarySuggestRequest(BaseModel):
+    source: str
+    context: str | None = None  # terimin geçtiği cümle: kişi mi yer mi, bağlam belirler
+
+
 class MergeRequest(BaseModel):
     target: str
 
@@ -208,6 +213,10 @@ class ReadingLogRequest(BaseModel):
 
 class StatusRequest(BaseModel):
     status: str  # okunuyor | beklemede | bitti
+
+
+class StyleNoteRequest(BaseModel):
+    note: str | None = None  # boş/None = notu kaldır
 
 
 class PasteImportRequest(BaseModel):
@@ -575,6 +584,36 @@ def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
 def delete_book_glossary(slug: str, source: str = Query(...)) -> dict:
     glossary.delete_term(slug, source)
     return {"terms": glossary.get_glossary(slug)}
+
+
+@app.post("/api/book/{slug}/glossary/suggest")
+def suggest_book_glossary(slug: str, req: GlossarySuggestRequest) -> dict:
+    """Okurken seçilen özel ad için karşılık öner (kaydetmez, yalnız önerir).
+
+    Otomatik algılamayla AYNI kural: karakter adı İngilizce kalır, başka her özel ad
+    Türkçe karşılığıyla girer. Kaydı kullanıcı onaylar — öneri yanlışsa sözlüğe
+    yanlış bir KURAL yazılmış olurdu (model sözlüğü birebir uygular).
+    """
+    try:
+        return suggest_term(req.source, req.context or "", API_KEY)
+    except TranslateError as exc:
+        raise _pipeline_http_error(exc) from exc
+
+
+@app.get("/api/book/{slug}/style")
+def get_book_style(slug: str) -> dict:
+    """Kitabın üslup notu (anlatım kişisi, hitap, ton) — her çeviriye enjekte edilir."""
+    book = library.get_book(library.resolve_slug(slug))
+    return {"note": (book or {}).get("style_note") or ""}
+
+
+@app.post("/api/book/{slug}/style")
+def set_book_style(slug: str, req: StyleNoteRequest) -> dict:
+    """Üslup notunu kaydet. Sözlük gibi: YENİ çevrilen bölümlerde geçerli olur."""
+    canonical = library.resolve_slug(slug)
+    if not library.set_style_note(canonical, req.note):
+        raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
+    return {"note": (library.get_book(canonical) or {}).get("style_note") or ""}
 
 
 @app.get("/api/book/{slug}/epub")

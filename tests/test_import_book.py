@@ -177,7 +177,7 @@ def test_pdf_import_page_mode():
 def _stub_translate(monkeypatch):
     from core import import_translate
 
-    def fake(text, api_key, glossary=None, models=("x",)):
+    def fake(text, api_key, glossary=None, models=("x",), **kw):
         blocks = text.split("\n\n")
         return {
             "translation": "\n\n".join("Çeviri: " + b for b in blocks),
@@ -427,3 +427,4 @@ def test_manga_page_renders_translated_image(monkeypatch):
     assert m and media.resolve(m.group(1)) is not None  # çevrilmiş sayfa PNG'si var
     # tekrar aç → cache isabeti (yeniden vision çağrısı yok)
     assert pipeline.get_or_translate(res["first_url"], api_key="test-key")["cached"] is True
+
