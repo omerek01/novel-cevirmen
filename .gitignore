@@ -6,3 +6,6 @@ __pycache__/
 .gstack/*
 !.gstack/qa-reports/
 .claude/
+
+# sunucu log dosyalari (Start-Process ile baslatildiginda)
+sunucu-son*.log
