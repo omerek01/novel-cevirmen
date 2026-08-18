@@ -81,13 +81,29 @@ geçer; geri-çekilme uykuları kapı DIŞINDA tutulur. Tipli hatalar:
 (üstel geri-çekilmeyle yeniden dener).
 
 **`app/core/translate.py`** — Gemini EN→TR, isim-koruyan. Paragrafları
-`MAX_WORDS_PER_CHUNK` sınırında parçalar, parçalar arası son cümleleri bağlam olarak
-taşır, glossary'i prompt'a enjekte eder. **`[[n]]` işaretçileri** Türkçe↔İngilizce
-paragrafları hizalar (iki-dilli okuma; hizalama tutmazsa o parça tek blok, `source`
-None). **Model yedek zinciri** (`DEFAULT_MODELS`): 500/503 → aynı modelde geri-çekilmeli
-tekrar, 404/429 → beklemeden sıradaki modele geç, boş/engellenmiş yanıt (safety) →
-sıradaki model. `SAFETY_SETTINGS` = `BLOCK_NONE`. Çıktı JSON
+`MAX_WORDS_PER_CHUNK` (2800 kelime) sınırında parçalar, parçalar arası son cümleleri
+bağlam olarak taşır, glossary'i prompt'a enjekte eder. **`[[n]]` işaretçileri**
+Türkçe↔İngilizce paragrafları hizalar (iki-dilli okuma; hizalama tutmazsa o parça tek
+blok, `source` None). **TEK model yedek zinciri, KALİTE öncelikli** (2026-08-17, kullanıcı
+kararı): `DEFAULT_MODELS` = `gemini-3.7-flash` → `gemini-3.6-flash` → `gemini-3.5-flash`
+→ `gemini-3.5-flash-lite`. Bu sıra HER YERDE geçerlidir — okuma, prefetch, toplu çeviri,
+"yeniden çevir", içe aktarılan sayfa çevirisi (`import_translate`) ve sözlük terim önerisi
+(`suggest_term`) aynı sabiti kullanır; `refresh` artık YALNIZ önbelleği yok sayar, model
+sırasına karışmaz. Yola göre AYRI zincir (ucuz okuma / kaliteli refresh) denendi ve aynı
+gün kaldırıldı: okumanın gövdesi prefetch'ten geldiği için ucuz zincir pratikte çevirinin
+çoğunu belirliyordu. Düşme kuralı: 500/503 → aynı modelde geri-çekilmeli tekrar, 404/429
+(kota dolu) → beklemeden sıradaki modele geç, boş/engellenmiş yanıt (safety) → sıradaki
+model. Ölçüm (2026-08-16): 3.6 en akıcı ama ücretsiz kotası ~25 istek/gün, 3.5-flash orta
+halka (503'e meyilli), flash-lite en hızlı/en dayanıklı (o yüzden zincirin SON halkası),
+3.7 o gün ısrarla 503 verdi (kalitesi ölçülemedi; tökezlerse zincir 3.6'ya iner).
+Zincirin alt halkaları süsleme değil, günün çoğunda ASIL taşıyıcıdır — üst halkaların
+ücretsiz kotası dar. Fiilen hangi halkanın çevirdiği künyeye yazılır (`chapters.model`).
+`SAFETY_SETTINGS` = `BLOCK_NONE`, `max_output_tokens` açıkça verilir
+(sessiz kesilme → bozuk JSON → hizalama kaybı). Çıktı JSON
 `{translation, detected_names}`; bozuk/yarım JSON için kurtarma ayrıştırıcısı.
+**İki bağlam kaynağı** prompt'a girer: `prev_context` (önceki BÖLÜMÜN son ~160 kelimelik
+Türkçesi — `cache.prev_translation`) ve `style_note` (kitap başına üslup notu —
+`books.style_note`).
 
 **`app/core/cache.py`** — `chapters` tablosu: çevrilmiş bölümlerin URL-anahtarlı
 kalıcı önbelleği. Cache isabeti = API çağrısı yok, anahtar gerekmez.
@@ -97,9 +113,41 @@ kalıcı önbelleği. Cache isabeti = API çağrısı yok, anahtar gerekmez.
 görür. `merge_books`/`resolve_slug`: aynı kitabın farklı sitelerdeki slug'larını tek
 **kanonik slug**'a bağlar (bölüm + glossary tek kitapta toplanır).
 
-**`app/core/glossary.py`** — Kitap-başına terim eşlemesi (kaynak→karşılık); algılanan
-karakter isimleri otomatik eklenir (`merge_names`, mevcut düzenlemeyi bozmaz), kullanıcı
-düzenler.
+**`app/core/glossary.py`** — Kitap-başına terim eşlemesi (kaynak→karşılık). Özel adlar
+çeviri sırasında OTOMATİK eklenir (`pipeline._sozluge_isle`), **iki sınıf iki davranış**:
+**karakter** (`detected_names`) → İngilizce kalır (`merge_names`, `X -> X`) ve İngilizce
+kalan TEK sınıf budur; **karakter dışı HER özel ad** (`detected_terms`: yer, lonca, eşya,
+beceri/büyü, unvan, ırk, adlandırılmış canavar, sistem terimi…) → modelin çeviride
+kullandığı Türkçe karşılıkla sabitlenir (`merge_terms`). Kutu eskiden yalnız lonca+yer
+idi; eşya/beceri adları hiçbir sınıfa girmediği için sessizce kaydedilmiyordu (gerçek
+bulgu: Shadow Slave 30. bölüm, `Puppeteer's Shroud`) — 2026-08-17'de tek genel kutuya
+çevrildi, **sınıf listesini yeniden daraltma**. Lonca eskiden İngilizce korunuyordu,
+2026-08-16'da kullanıcı kararıyla Türkçe'ye alındı — geri döndürmeden önce sor.
+`_parse_response` eski `detected_guilds`/`detected_places` alanlarını da okur (model
+arada eski şemayı üretiyor; düşürmek terimi kaybettirirdi). **`detected_names` kutusu
+SÜZGEÇTEN geçer** (`translate.ayikla_karakter_adlari`, 2026-08-18): model karakter
+olmayan adları bu kutuya sızdırıyordu ve oraya düşen her ad sözlüğe İngilizce çakılıp
+(prompt'ta KURAL) bir daha Türkçeleşmiyordu — ölçüm: bir kitapta 201 kaydın 173'ü
+`X -> X`, içlerinde `Blackwater Guild`, `Star-Moon Kingdom`. Üç eleme: ad
+`detected_terms`'te de varsa Türkçe kazanır · Türkçe harf içeren ad İngilizce sayılmaz ·
+ad ÇEVİRİ metninde aynen geçmiyorsa (model onu Türkçeleştirmiş) kaydedilmez. Süzgeç
+`_finalize_cached`'de de koşar (eski cache satırları her açılışta yeniden kirletiyordu).
+Sözlüğe yazma SIRASI da load-bearing: `_sozluge_isle` önce `merge_terms`, sonra
+`merge_names` — INSERT OR IGNORE'da ilk yazan kazanır. Kitaplara ÇAKILMIŞ eski kayıtlar
+ileriye dönük süzgeçle temizlenmez; `scripts/sozluk_gozden_gecir.py` onları
+`translate.classify_terms` ile toplu gözden geçirir (varsayılan KURU çalıştırma,
+`--uygula` ile yazar). Amaç tutarlılık: bu adlar
+sözlükte olmadıkça model her bölümde yeniden karar veriyor ve aynı şehir bölümden bölüme
+başka çıkabiliyordu. İkisi de `INSERT OR IGNORE` — kullanıcının elle yazdığı karşılık ASLA
+ezilmez, otomatik algılama yalnız boşluğu doldurur. Terim **okurken de eklenebilir**: okuyucuda
+metin seçilince kayan "+ SÖZLÜĞE EKLE" düğmesi çıkar (Android'in kendi seçim menüsüne eylem
+eklenemez — o tarayıcının menüsü, sayfaya kapalı), modal açılır ve karşılığı
+`POST /api/book/{slug}/glossary/suggest` → `translate.suggest_term` ÖNERİR: aynı kural
+(karakter → İngilizce kalır, başka her özel ad → Türkçe). Öneri onaya sunulur, doğrudan
+yazılmaz; sözlük prompt'ta KURALdır, yanlış karşılık kitap boyunca birebir uygulanırdı.
+Terimi sözlük eşler, **üslubu** ise `books.style_note` sabitler (aynı ekranda,
+`/api/book/{slug}/style`): anlatım kişisi/hitap/ton kitap boyunca kaymasın diye her
+çeviri prompt'una girer. İkisi de YALNIZ yeni çevrilen bölümde etkilidir.
 
 **`app/core/jobs.py`** — **Bellek-içi** arka plan toplu çeviri (sekme kapansa da sürer;
 sunucu yeniden başlarsa iş kaybolur — bölümler cache'te kaldığı için sorun değil).
@@ -154,6 +202,96 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 - **Tipli hata → `error_class`**: `server.py` hata yanıtlarında `error_class` döndürür
   (`CloudflareChallenge`/`OriginError`/`FetchError`/`TranslateError`); frontend kırılgan
   string-eşleştirmesi yerine sınıfa göre dallanır.
+- **Seslendirme (TTS) bilinçle KALDIRILDI**: çevrimdışı indirmeyi bölüm başına dakikalara
+  çıkarıyordu (her bölüm için ses üretimi). Geri eklenecekse indirme akışından TAMAMEN ayrı
+  tutulmalı — "çevrimdışı indir" hiçbir koşulda ses üretimini beklememeli.
+- **Bölüm künyesi cache'te saklanır** (`chapters.engine`, `chapters.model`,
+  `chapters.added_terms`): hangi motor + zincirin hangi HALKASI çevirdi ve o çeviride
+  sözlüğe ne eklendi. Okuyucuda bölüm sonundaki açılır rozet bunu gösterir.
+  `engine` bugün hep `gemini` yazar ama sütun DURUYOR: DB'de ikinci-motor
+  denemesinden kalma `claude` satırları var, rozet onları da doğru göstermeli.
+  `model` (2026-08-17) fiilen çeviren model adıdır — `_generate_with_fallback` artık
+  `(response, model)` döndürüp bunu yukarı taşır; parçalar farklı halkalara düştüyse
+  `" + "` ile birleşir. Eklenme sebebi somut: bir deyim hatası tartışılırken "bunu hangi
+  model çevirdi" sorusu tahminle cevaplanmak zorunda kaldı. Eski satırlarda NULL.
+  DB'de saklanmasının sebebi önbellek isabeti: bölüm ikinci açılışta
+  `merge_*` boş döner (her şey zaten kayıtlı), künye DB'den okunmazsa kaybolurdu.
+  Künye alanları `save_chapter`'da **`COALESCE(excluded.x, x)`** ile yazılır — künye
+  TAŞIMAYAN bir payload (ör. çevrilecek metni olmayan görsel sayfa) aynı satırı
+  güncelleyince mevcut künye NULL'a düşmesin (E-16 sınıfı hata, farklı sütunlar).
+  **Künyeyi üreten DÖRT nokta var** — `_fetch_translate_save` (okuma/prefetch/toplu),
+  `fetch_into_book` ("web'den devam": kitaba URL ile bölüm ekleme), `_render_import_page`
+  (PDF/EPUB/manga sayfası) ve `manga_engine._save_engine_page` (yerel motor batch'i
+  cache'e KENDİ yazar). Künyeye yeni alan eklerken DÖRDÜNE de ekle: `model` bir süre
+  yalnız ilkindeydi, URL ile eklenen bölüm "GEMINI ile çevrildi" deyip hangi halkanın
+  çevirdiğini söylemiyordu, görsel bölümde ise rozet hiç çizilmiyordu. Görsel yolda
+  künye taşımak için üç çeviri fonksiyonu `(html, model)` döndürür
+  (`translate_pdf_page` · `translate_epub_html` · `translate_manga_page`) — modeli
+  atan tek satır rozeti sessizce söndürür. Sayfada çevrilecek metin YOKSA model None
+  ve künye hiç yazılmaz: "çevrildi" demek yanlış olurdu.
+- **Künye rozeti `renderParagraphs`/`renderHtmlContent` SONUNDA çizilir**, `buildChapterEntry`
+  içinde değil: iki render fonksiyonu da article'ı `.chapter-sep` dışında temizleyip yeniden
+  kuruyor ve bölüm içi arama `renderParagraphs`'ı tekrar çağırıyor — yukarıda eklenseydi ilk
+  aramada sessizce kaybolurdu.
+- **Tek çeviri motoru var: Gemini.** İkinci motor (Claude CLI köprüsü) 2026-08-16'da
+  DENENDİ ve KALDIRILDI — geri eklemeden önce ölçümü oku. Aynı 4200 kelimelik metin:
+  Claude sonnet 82,1 sn · Claude haiku 75,5 sn · gemini-3.6-flash 32,5 sn ·
+  gemini-3.5-flash-lite 18,5 sn. Yani Claude flash'ın ~2,5 katı yavaştı ve MODEL
+  DEĞİŞTİRMEK KURTARMIYORDU (haiku ile sonnet pratikte aynı). Üstüne parça başına ~3 sn
+  süreç doğumu ve `Semaphore(1)` — tüm Claude çağrıları tek sıradan geçtiği için
+  prefetch okuyucunun canlı isteğini bekletiyordu (Gemini yolunda böyle bir kapı yok).
+  Kalite farkı bu gecikmeyi karşılamadı.
+- **Okunan bölümü çeviren şey prefetch'tir, okuma isteği değil**: bölüm açılınca
+  `app.js:prefetchNext` → `POST /api/prefetch` → `get_or_translate(background=True)`
+  bir SONRAKİ bölümü ısıtır. Kaydırıp oraya geçtiğinde artık önbellek isabetidir.
+  Motor/politika değiştirirken bunu unutma: "okuma yoluna" uygulanan bir kural pratikte
+  yalnız SOĞUK açılışa uygular, akışın gövdesi prefetch'ten gelir (Claude denemesinin
+  ilk günü tam olarak buna takıldı — künyede beklenen motor bir türlü görünmedi).
+- **`MAX_WORDS_PER_CHUNK` çalışma zamanında monkeypatch'lenemez**: `_split_paragraphs`'ın
+  varsayılan argümanı modül yüklenirken bağlanır. Testte parça sayısını değiştirmek için
+  `_split_paragraphs`'ı sahtele.
+- **Sözlük prompt'ta İKİ kez geçer; sıra load-bearing**: liste başta, kısa bir "SON
+  HATIRLATMA" çevrilecek METNİN ARDINDAN. Ölçülen sorun: 1500 kelimelik bölümde model
+  baştaki sözlüğü unutup korunması gereken 26 adın 23'ünü Türkçeleştiriyordu (uydurma
+  "Işıkölge" böyle çıktı); hatırlatma sona eklenince ihlal 4 turda da 0'a indi. Prompt'u
+  yeniden düzenlerken hatırlatmayı metnin ÖNÜNE çekme — etki yakınlıktan geliyor.
+- **Sözlük karşılığı prompt'ta KURALDIR, öneri değil**: model onu birebir uygular. Garip
+  bir Türkçe çıktı gördüğünde ÖNCE `glossary` tablosuna bak — otomatik eklenen kayıtlar
+  daima `X -> X` (İngilizce korunur, `merge_names`), farklı bir karşılık gören her satır
+  ELLE eklenmiştir. Gerçek bulgu: "Lightshadow City"nin "ışık gölge şehri" çıkmasının
+  sebebi model değil, `lightshadow city -> ışık gölge şehri` kaydıydı.
+- **Deyimler prompt'ta AYRI ve ÖRNEKLİ madde ister**: "akıcı, birebir değil" genel
+  maddesi kalıpları tutmuyor. Gerçek bulgu (bölüm 1862): `turn the tables on them` →
+  "masaları onlara karşı çevirecekti". Kural artık örnekli ve modele bir ÖLÇÜT veriyor
+  ("bağlamı bilmeyen biri 'bu ne demek şimdi' diyorsa birebir çevirmişsindir").
+  Örnekleri silme — etki genel ifadeden değil, somut yanlış/doğru çiftlerinden geliyor.
+- **Terim eşleştirme YAZIM VARYANTINA toleranslı olmalı** (`translate._term_regex`,
+  `glossary.fold_term`): aynı özel ad metinde `Ore Empire` · `OreEmpire` · `Ore-Empire`
+  diye ve — ölçülen gerçek vaka — bir bölümde düz `'`, ötekinde kıvrık `’` kesme
+  işaretiyle geçiyor. Desen kelime PARÇALARINDAN kurulur, aralarına esnek ayırıcı
+  (`[\s\-_'’]*`) girer; tek parçalı kayıt CamelCase'den bölünür (`OreEmpire` → `Ore`
+  + `Empire`), ama bölme kayıpsız değilse ad bozulmasın diye bölünmez. Süzmenin ucuz
+  ön elemesi de `fold_term` üzerinden yapılır — düz `term.lower() in text.lower()`
+  kontrolü terimi regex'e VARMADAN eliyordu, yani sözlükte kayıtlı ad prompt'a hiç
+  girmiyordu. `merge_terms` "zaten kayıtlı mı" kararını da `fold_term` ile verir
+  (varyant ikinci satır açmaz, karşılıklar ayrışmaz). **Ayırıcı listesini daraltma.**
+- **Türkçe ek kuralı prompt'ta TEK ve GENEL madde olmalı**: kural bir zamanlar yalnız
+  SÖZLÜK maddesinin altındaydı, `CORE_TERM_HINTS` ile gelen sistem terimlerini
+  (level→seviye) kapsamıyordu — "farklı bir seviyeindeydi" (doğrusu: seviyesindeydi)
+  oradan çıktı. Yeni kural ekleyeceksen ek/kaynaştırma maddesinin kapsamını daraltma.
+- **Sonsuz okuma bir AYARDIR** (`settings.infinite`, ayarlar panelinde Açık/Kapalı):
+  kapalıyken alt gözlemci HİÇ kurulmaz, bölüm sonunda "SONRAKİ BÖLÜM →" düğmesi çıkar ve
+  bölüm akışa eklenmek yerine temiz sayfa olarak açılır. Manga'nın site'den sonraki bölümü
+  çekmesi de aynı anahtara bağlı. Anahtar okuyucu açıkken çevrilebildiği için
+  `refreshStreamEnd()` gözlemciyi + bitiş kartını yerinde yeniden kurar.
+- **Akış devamı zincire (next_url) MAHKÛM DEĞİL**: aynı kitap iki siteden çevrilmiş
+  olabilir — bölüm 100'ün next'i A sitesinin HİÇ çevrilmemiş 101'ini gösterirken fiilen
+  indirilmiş 101 B sitesinden gelmiş olur; çevrimdışıyken zincir ölür, liste yaşar (gerçek
+  bulgu: telefonda akış durdu, bölüm listesinden elle geçildi). `app.js:pickNextTarget`
+  zincirin next'i o kitapta çevrilmemişse ve listede sıradaki varsa LİSTEYİ seçer; liste
+  `ensureChapterList` ile çekilir ve `loadChapter` sonunda ısıtılır (SW önbelleğine girsin
+  diye — çevrimdışı devamın ön koşulu bu). Kuralı tersine çevirme: zincir listedeyse yine
+  zincir kazanır, yoksa web'den ilerleyen okuma bozulur.
 - **slug her şeyin anahtarı**, URL'den türetilir; pipeline cache/glossary'den önce daima
   `resolve_slug` ile kanonikleştirir. Yeni endpoint yazarken bu adımı atlama.
 - Durum dökümanları: `PLAN-dayaniklilik.md` (Faz 5, kısmen sevk edildi — bulk kalıcılığı
@@ -163,7 +301,7 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 
 | Değişken | Zorunlu | Ne işe yarar |
 |---|---|---|
-| `GEMINI_API_KEY` | Çeviri için evet | Gemini anahtarı (cache isabeti gerektirmez) |
+| `GEMINI_API_KEY` | Evet | Gemini anahtarı (yalnız yeni çeviri için; cache isabeti gerektirmez) |
 | `FETCH_CDP_URL` | Hayır | Örn. `http://127.0.0.1:9222` → sert CF için gerçek Chrome'a bağlan |
 | `FETCH_HEADLESS` | Hayır | `0` → görünür pencere (CF'i bir kez elle çözmek için) |
 | `NOVEL_DB_PATH` | Hayır | Test/CI'da DB'yi geçici dosyaya yönlendirir |
