@@ -1,30 +1,91 @@
+/* ---------------------------------------------------------------------------
+   NOCTURNE EDITORIAL — Stitch "NovelLink Web Novel Reader" tasarim sistemi
+   ---------------------------------------------------------------------------
+   Iki font ailesi: Literata editoryal agirligi (kitap adi, bolum basligi, OKUMA
+   GOVDESI) ve Inter arayuz islerini (gezinme, kontrol, kunye) tasir. Ikisi de
+   `fonts/` altina YERELLESTIRILDI — PWA cevrimdisi calisiyor ve Google Fonts'a
+   giden bir @import cevrimdisiyken yaziyi sistem fontuna dusururdu.
+
+   AMBER UC TEMADA AYNI HEX DEGILDIR ve bu OLCULEREK boyle kaldi. Stitch'in
+   #F5A524 amber'i koyu zeminde 9.18:1 verirken acik temada 1.82:1, sepyada
+   1.65:1 kaliyor — yani metin/ikon rengi olarak AA'nin COK altinda. Ton ailesi
+   korunup acik/sepya icin koyulastirildi; her tonun olculen orani yaninda yazili.
+   --------------------------------------------------------------------------- */
 :root {
   --bg: #f5f2ea;
   --surface: #ffffff;
+  /* Kart katmani (Stitch "Level 2"): acik temada zeminden ayrilmak icin hafif
+     kirilir, koyu temada yukselir. */
+  --surface-2: #fbf9f4;
   --ink: #16130f;
   --ink-soft: #6a6258;
+  /* Kasitli SOLUK metin (okunmus bolum, pasif meta). AA metin esigini
+     KARSILAMAZ ve karsilamasi beklenmez — bilgi tasiyan hicbir yerde tek basina
+     durmaz, daima ikinci bir isaretin (konum, ikon) yaninda kullanilir. */
+  --ink-dim: #9a9287;
   --line: #16130f;
-  --accent: #e5482d;
-  /* D-A11y: accent zemin üstü metin rengi — tema başına AA (4.5:1) doğrulandı.
-     Beyaz bu kırmızıda 3.96:1 kalıyordu (AA altı); koyu mürekkep 4.65:1. */
-  --on-accent: #16130f;
+  /* Ince kenarlik: `--line`dan AYRI tutulur. `--line` metin rengiyle ayni kalin
+     editoryal cizgi, `--border` ise Stitch'in 1px "ghost boundary" hatti. */
+  --border: #e2ddd2;
+  /* Amber acik zemin icin koyulastirildi: 5.04:1 (AA 4.5 esigine pay birakir —
+     projenin mevcut disiplini sinira yapismamak). */
+  --accent: #8c5e15;
+  --on-accent: #ffffff; /* bu tonda beyaz 5.63:1 */
+  /* Amber tonal zemin: rozet/cip arkaligi, accent'i bogmadan tasir. */
+  --accent-soft: #f6ecd8;
+  /* Uyarı (yazım hatası olabilecek terim çifti) — accent'ten AYRI olmalı: accent
+     "bekleyen kayıt" anlamında kullanılıyor, ikisi karışırsa rozet bilgi vermez.
+     Tema başına kontrast doğrulandı (AA 4.5:1): açık 5.30:1. */
+  --warn: #8a5a00;
   --shelf: #3a2c22;
   --reading: 19px;
-  --reading-font: Georgia, "Times New Roman", serif;
+  --reading-font: Literata, Georgia, "Times New Roman", serif;
   --reading-line-height: 1.75;
   --reading-margin: 1.3rem;
-  --sans: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --sans: Inter, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --max: 44rem;
+
+  /* Kose yaricapi (Stitch "Shapes"): kapak 12, kart 16, alan 14, cip tam pill. */
+  --r-sm: 0.25rem;
+  --r: 0.5rem;
+  --r-md: 0.75rem;
+  --r-lg: 1rem;
+  --r-xl: 1.5rem;
+  --r-full: 9999px;
+
+  /* 4px ritim (Stitch "Layout & Spacing"). Mevcut kod rem/px karisik kullaniyor;
+     bundan sonra yazilan her bilesen bu olcegi kullanir. */
+  --s-xs: 0.25rem;
+  --s-sm: 0.5rem;
+  --s-md: 0.75rem;
+  --s-base: 1rem;
+  --s-lg: 1.25rem;
+  --s-xl: 1.5rem;
+  --s-2xl: 2rem;
+  --s-3xl: 2.5rem;
+
+  /* Dokunma hedefi tabani: Stitch her etkilesimli satir icin en az 48px istiyor. */
+  --tap: 48px;
+  /* Alt gezinme yuksekligi: sheet'in ve govde boslugunun dayanagi. */
+  --nav-h: 58px;
 }
 
 [data-theme="dark"] {
-  --bg: #121110;
-  --surface: #1c1a18;
-  --ink: #f1ece3;
-  --ink-soft: #9a9183;
-  --line: #f1ece3;
-  --accent: #ff5a3c;
-  --on-accent: #16130f; /* beyaz 3.10:1 kalıyordu; koyu 5.9:1 */
+  /* Stitch "Surface Hierarchy": mutlak siyah (#000) BILEREK yok — OLED'de sert
+     kontrast sicramasi ve gece okumasinda goz yorgunlugu yapiyor. */
+  --bg: #121212;
+  --surface: #1a1a1a;
+  --surface-2: #222222;
+  --ink: #ededed;      /* 16.00:1 */
+  --ink-soft: #9e9e9e; /* 6.99:1 */
+  --ink-dim: #6c6c6c;  /* 3.57:1 — kasitli soluk, bkz. :root notu */
+  --line: #ededed;
+  --border: #2c2c2c;
+  /* Stitch amber'i KOYU temada oldugu gibi kullanilir: 9.18:1. */
+  --accent: #f5a524;
+  --on-accent: #121212; /* amber uzerinde koyu 9.18:1 (beyaz 2.04:1 kalirdi) */
+  --accent-soft: #2b2113; /* uzerinde amber metin 7.74:1 */
+  --warn: #e0a63c; /* koyu zeminde 8.70:1 */
   --shelf: #0a0908;
 }
 
@@ -32,11 +93,17 @@
 [data-theme="sepia"] {
   --bg: #efe6d3;
   --surface: #f6efe0;
+  --surface-2: #f2e9d8;
   --ink: #3a2f21;
   --ink-soft: #6f6047;
+  --ink-dim: #96876c;
   --line: #3a2f21;
-  --accent: #b4521f;
-  --on-accent: #ffffff; /* bu turuncuda beyaz 5.0:1 — geçer */
+  --border: #ddd0b6;
+  /* Amber sepyada koyulastirildi: 5.02:1 (ham #F5A524 burada 1.65:1 kalirdi). */
+  --accent: #835813;
+  --on-accent: #ffffff; /* bu tonda beyaz 6.23:1 */
+  --accent-soft: #e6d8bb;
+  --warn: #8a5410; /* sepyada 5.04:1 */
   --shelf: #5a4a35;
 }
 
@@ -63,7 +130,12 @@ html, body {
 .wm-accent { color: var(--accent); }
 
 .section-label {
-  margin: 0.1em 0 0.5em;
+  /* Ust bosluk 0.1em degil: `line-height: 0.92` BILINCLI olarak sikidir (D-B1)
+     ve Inter'in ascender'i system-ui'den uzun oldugu icin buyuk harfli Turkce
+     baslik (KUTUPHANE'nin U noktalari) yukari tasip sticky basligin ARKASINDA
+     kaliyordu. Satir yuksekligini acmak dikey alani buyutup devam fisini ilk
+     viewport'tan atardi; dogru telafi ust bosluktur. */
+  margin: 0.26em 0 0.5em;
   padding: 0 1rem;
   font-weight: 900;
   text-transform: uppercase;
@@ -172,7 +244,11 @@ html, body {
 .shelf-wrap { padding: 0 1rem; }
 .shelf {
   display: flex;
-  align-items: flex-end;
+  /* Poster kartlari UST hizali: sirt metaforunda dip hizasi (flex-end) dogruydu
+     — kitaplar rafa oturuyordu — ama kart yuksekligi artik basligin 1 mi 2 mi
+     satir oldugu ile degisiyor ve dipten hizalayinca kapaklar birbirine gore
+     asagi yukari kayiyordu. */
+  align-items: flex-start;
   gap: 12px;
   overflow-x: auto;
   padding: 1.2rem 0.2rem 0;
@@ -192,92 +268,109 @@ html, body {
   box-shadow: 0 9px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
 }
 
+/* KAPAK KARTI (Stitch "Novel Card"). Sirt metaforu 2:3 postere donustu, ama
+   kart BOYUTU kapaktan BAGIMSIZ sabittir: kitaplarin ancak bir kismi kapak
+   veriyor (kaynak sitesi kapanmis ya da og:image'i olmayanlar) ve boyutu
+   kapaga gore degistirmek rafi disli gosterirdi. Kapaksiz kitap ayni kutuda
+   renkli zemin + monogramla durur. */
 .spine {
-  position: relative; /* .spine-job overlay'i için referans */
+  position: relative;
   flex: 0 0 auto;
-  width: 78px;
-  height: 248px;
-  background: var(--spine, #555);
-  color: #fff; /* hep beyaz — zemin, AA kontrasta ulaşacak kadar koyulaştırılır (spineColor) */
+  width: 112px;
+  background: transparent;
+  color: var(--ink);
   border: 0;
-  border-left: 4px solid rgba(0, 0, 0, 0.28);
-  border-radius: 3px 7px 7px 3px;
+  padding: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  /* Alta demirli: başlık + BÖL. etiketi dipte oturur, boşluk ÜSTTE kalır
-     (gerçek kitap sırtı gibi; QA bulgusu — yazı alttan başlasın). */
-  justify-content: flex-end;
-  gap: 10px;
-  padding: 14px 6px;
+  align-items: stretch;
+  gap: var(--s-sm);
+  text-align: left;
   cursor: pointer;
-  box-shadow: 2px 5px 12px rgba(0, 0, 0, 0.35);
-  transition: transform 140ms ease, box-shadow 140ms ease;
+  transition: transform 140ms ease;
+}
+
+.spine-art {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 2 / 3;
+  background: var(--spine, #555);
+  border-radius: var(--r-md);
+  /* Stitch: koyu zeminde kapak kenari kaybolmasin diye 1px ic hat. */
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
+}
+.spine-cover {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+/* Kapaksiz kitabin monogrami: kitap adinin ilk iki bas harfi. Zemin `spineColor`
+   ile AA kontrasta ulasacak kadar koyulastirildigi icin metin hep beyaz. */
+.spine-mono {
+  font-family: var(--reading-font);
+  font-weight: 600;
+  font-size: 2.3rem;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.92);
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
 }
 .spine:active { transform: translateY(2px); }
 
+/* Baslik artik kapagin ALTINDA ve YATAY. Dikey sirt yazisi (writing-mode +
+   180 donus) kapak gorseliyle birlikte okunamaz hale geliyordu; poster
+   duzeninde ad kapagin disina cikar. */
 .spine-title {
-  /* Avrupa kitap sırtı: her sıra AŞAĞIDAN YUKARI okunur (harfler sola yatık),
-     uzun başlık sarınca sıralar SOLDAN SAĞA ilerler. vertical-rl tersine
-     dizer (yukarıdan aşağı, sıralar sağdan sola) → 180° döndürünce ikisi
-     birden istenen yöne döner. `sideways-lr` bunun yerli karşılığı ama eski
-     tarayıcılarda yok; bu ikili her yerde çalışır. */
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  /* Harf dönüşünü tarayıcının script-algısına bırakma. */
-  text-orientation: sideways;
-  direction: ltr;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  font-size: 0.82rem;
-  line-height: 1.2;
-  max-height: 196px;
-  max-width: 62px; /* en fazla ~3 dikey sıra; fazlası kırpılır */
+  font-weight: 600;
+  font-size: 0.78rem;
+  line-height: 1.25;
+  color: var(--ink);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   overflow: hidden;
-  /* nowrap YOK: uzun başlık ikinci (gerekirse üçüncü) dikey sıraya sarar. */
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
 }
 /* Yerli alttan-yukarı yazım destekleyen tarayıcılarda (Chrome 130+/Firefox)
    döndürme hilesine gerek yok: sideways-lr ilk harfi ALTTAN başlatır, sıralar
    soldan sağa ilerler — transform kaynaklı hizalama sürprizleri biter. */
 @supports (writing-mode: sideways-lr) {
-  .spine-title,
+  /* `.spine-title` BILEREK cikarildi: kitap adi artik kapagin altinda YATAY
+     duruyor. Burada kalinca poster duzenindeki basligi dikey ceviriyor ve
+     kartlar birbirinden farkli yukseklige ulasip raf disli goruniyordu. */
   .spine-addlabel {
     writing-mode: sideways-lr;
     transform: none;
     text-orientation: initial;
   }
 }
-/* Rozet görünürken başlığı rozet bölgesinin üstünde bitir (çakışma olmasın).
-   Sınıfı JS ekler (rozeti gösteren kod) — :has() seçicisine bağlı kalmadan
-   her tarayıcıda çalışır. */
-.spine.has-job .spine-title {
-  max-height: 160px;
-}
-
 .spine-tag {
-  font-size: 0.6rem;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  opacity: 0.92;
+  font-size: 0.62rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
 }
+/* Is rozeti kapagin SAG UST kosesinde (Stitch "progress badge"): kapak
+   gorseli varken ortada duran rozet resmi ortuyordu. */
 .spine-job {
-  /* Overlay: akışa girmez → space-between düzeninde başlığı itip kırpmaz.
-     (Rozet üçüncü flex öğesi olunca sırt yazısının yerleşimi bozuluyordu.) */
   position: absolute;
-  left: 50%;
-  top: 14px; /* başlık artık alta demirli — boş kalan ÜST bölgeye taşındı */
-  transform: translateX(-50%);
+  top: 6px;
+  right: 6px;
+  left: auto;
+  transform: none;
   pointer-events: none;
-  max-width: 68px;
-  padding: 0.18rem 0.28rem;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff; /* rozet zemini hep koyu — sırt mürekkebinden bağımsız */
-  font-size: 0.6rem; /* D-B2v2: 0.48rem okunmuyordu */
-  font-weight: 800;
-  letter-spacing: 0.04em;
+  max-width: 92px;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--r-full);
+  background: var(--accent);
+  color: var(--on-accent);
+  font-size: 0.58rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -285,9 +378,16 @@ html, body {
 .spine-job[data-state="error"] { background: rgba(126, 30, 30, 0.82); }
 
 .spine-add {
+  /* Kart olcusune uyar: `.spine` artik yuksekligini `.spine-art`tan aliyor ve
+     ekle sirtinda art yok — kendi orani verilmezse dumduz cokerdi. */
+  aspect-ratio: 2 / 3;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s-xs);
   background: transparent;
   color: var(--accent);
   border: 2px dashed var(--accent);
+  border-radius: var(--r-md);
   box-shadow: none;
 }
 .spine-plus { font-size: 2.2rem; font-weight: 800; line-height: 1; }
@@ -369,23 +469,30 @@ html, body {
   overflow-x: auto; /* D-Resp: dar ekranda yatay kaydırma */
   scrollbar-width: none;
 }
+/* Stitch "Chips & Filter Pills": pasif cip GERI CEKILIR (ince hat + soluk metin),
+   aktif cip amber DOLGU degil amber TONAL zemindir. Dolgulu aktif hal raf
+   ustunde ikinci bir birincil-eylem gibi okunuyordu; asil birincil eylem devam
+   fisindeki "kaldigin yerden" dugmesi. Yukseklik Stitch'te 32px, burada 44px
+   KALIYOR: proje D-A11y dokunma hedefi ve onu kucultmek erisilebilirlik
+   gerilemesi olurdu. */
 .chip {
   flex: 0 0 auto;
-  border: 2px solid var(--line);
-  background: var(--bg);
-  color: var(--ink);
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink-soft);
   font-family: var(--sans);
-  font-weight: 800;
+  font-weight: 700;
   font-size: 0.72rem;
   letter-spacing: 0.08em;
-  padding: 0.4rem 0.85rem;
+  padding: 0.4rem 0.9rem;
   min-height: 44px; /* D-A11y */
-  border-radius: 999px;
+  border-radius: var(--r-full);
   cursor: pointer;
 }
 .chip[aria-pressed="true"] {
-  background: var(--ink);
-  color: var(--bg);
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent);
 }
 
 /* ---------- Raf altı yüzeyler ---------- */
@@ -422,6 +529,10 @@ html, body {
 }
 
 /* ---------- Okuyucu ---------- */
+/* OKUYUCU HUD'u (Stitch "Floating HUD" + "Level 1 docked container").
+   Kalin editoryal kural (3px --line) yerine 1px hayalet hat: okuma ekraninda
+   kalin cizgi metni ikiye boluyordu. Zemin --bg degil --surface, cunku HUD
+   metnin UZERINDE duran bir katman, sayfanin kendisi degil. */
 .reader-bar {
   position: sticky;
   top: 0;
@@ -431,8 +542,16 @@ html, body {
   gap: 0.5rem;
   padding: 0.5rem 0.6rem;
   padding-top: max(0.5rem, env(safe-area-inset-top));
-  background: var(--bg);
-  border-bottom: 3px solid var(--line);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  transition: transform 220ms ease;
+}
+/* Asagi kaydirirken cekilir. Yalnizca DONUSTURULUR: yerlesim (ve
+   `scrollToChapterRatio`nun okudugu bar yuksekligi) degismeden kalir. */
+.reader-bar.hud-gizli { transform: translateY(-100%); }
+/* Hareketi azalt tercihi: cubuk kayarak degil aninda gizlenir. */
+@media (prefers-reduced-motion: reduce) {
+  .reader-bar { transition: none; }
 }
 .reader-titles { flex: 1; min-width: 0; text-align: center; }
 .reader-book {
@@ -453,16 +572,65 @@ html, body {
   text-overflow: ellipsis;
 }
 
+/* AYARLAR: alttan acilan sheet (Stitch "Level 3 / bottom sheet").
+   Eskiden `position: sticky` ile okuyucu cubuguna asiliydi VE `readerView`in
+   cocuguydu — yani yalniz okurken erisilebiliyordu, oysa icindeki ayarlarin
+   hepsi GLOBAL (tema, ceviri modeli, sonsuz okuma, harcama gostergesi). Alt
+   gezinmeden acilabilmesi icin body seviyesine tasindi ve sabitlendi. */
 .settings-panel {
-  position: sticky;
-  top: calc(3.1rem + env(safe-area-inset-top));
-  z-index: 9;
-  border-bottom: 3px solid var(--line);
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom));
+  z-index: 40;
   background: var(--surface);
-  padding: 0.4rem 1rem 0.8rem;
+  border-top: 1px solid var(--border);
+  border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding: var(--s-base) var(--s-base) var(--s-lg);
   max-width: var(--max);
   margin: 0 auto;
+  /* Stitch: sert golge YOK, yumusak ortam golgesi — koyu zeminde sert golge
+     gri hale yapiyor. */
+  box-shadow: 0 -12px 32px -4px rgba(0, 0, 0, 0.55);
 }
+
+/* ---------- Alt gezinme (Stitch "Level 1 docked container") ---------- */
+.bottom-nav {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 50;
+  display: flex;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  /* Telefon cene cubugu: sekmeler parmak altinda kalmasin. */
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.navtab {
+  flex: 1 1 0;
+  min-height: var(--nav-h);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: 0;
+  background: transparent;
+  color: var(--ink-soft);
+  font-family: var(--sans);
+  font-size: 0.63rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+.navtab[aria-current="page"] { color: var(--accent); }
+.navtab:active { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+.navtab-icon svg { display: block; width: 22px; height: 22px; }
+
+/* Alt cubuk sabit: sayfanin son satiri onun ALTINDA kalmasin. */
+body { padding-bottom: calc(var(--nav-h) + env(safe-area-inset-bottom)); }
+/* Okurken alt cubuk gizlenir (okuma alani korunur) -> bosluk da kalkmali. */
+body.reading { padding-bottom: 0; }
 .setting-row {
   display: flex;
   align-items: center;
@@ -474,6 +642,32 @@ html, body {
   font-size: 0.85rem;
 }
 .setting-row + .setting-row { border-top: 1px solid color-mix(in oklab, var(--ink) 12%, transparent); }
+
+/* Dört seçenekli model kutusu tek satıra sığmıyor (telefonda taşıyordu): etiket
+   üstte, seçenekler ve ölçüm notu altta. */
+.setting-row-dikey {
+  display: block;
+}
+.setting-row-dikey .segmented { margin-top: 0.5rem; display: flex; width: 100%; }
+.setting-row-dikey .seg { flex: 1; padding: 0.35rem 0.35rem; }
+/* Ucretli model secilince not gorsel olarak da ayrilir: sadece metinde "ÜCRETLİ"
+   yazmak, panelde hizlica goz gezdiren kullanicida kaybolur. */
+.model-ucretli { color: var(--accent); font-weight: 700; }
+.model-harcama {
+  margin: 0.3rem 0 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 600;
+}
+/* Otomatik cevrimdisi tarama satiri: istatistik satiriyla ayni dil ama vurgulu —
+   "bir sey oluyor" demeli, dikkat calmadan. */
+.auto-offline { color: var(--accent); }
+.model-notu {
+  margin: 0.45rem 0 0;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 500;
+}
 
 .pill {
   border: 2px solid var(--line);
@@ -489,7 +683,7 @@ html, body {
 }
 .pill:active { background: var(--accent); color: var(--on-accent, #fff); border-color: var(--accent); }
 
-.shell-ver { color: var(--ink-soft); font-size: 0.82rem; font-weight: 700; }
+.shell-ver { color: var(--ink-soft); font-size: 0.82rem; font-weight: 700; }\n/* Bayat ya da karışık kabuk: sıfırlamanın gerektiği tek durum — göze girsin. */\n.shell-ver-stale { color: var(--warn); }
 
 .stepper { display: flex; align-items: center; gap: 0.6rem; }
 .stepper-val { min-width: 2ch; text-align: center; font-weight: 800; }
@@ -509,6 +703,26 @@ html, body {
   padding: 0 1px;
 }
 .reader-body mark.find-active { outline: 2px solid var(--ink); }
+
+/* KÖKEN vurgusu (sözlükten "BÖLÜM N" ile gelince). Arama vurgusundan AYRI ve
+   daha yumuşak: arama tek kelimeyi işaretler, köken bütün bir CÜMLEYİ kaplar ve
+   dolu amber zemin o uzunlukta metni okunmaz hale getiriyordu. */
+.reader-body mark.koken-vurgu {
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: inset 3px 0 0 var(--accent);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+  padding: 0.05em 0.25em;
+}
+/* Vurgulanan cümlenin İÇİNDE aranan terim: aynı cümleden birden çok kayıt
+   çıkabiliyor (nitelik listeleri), o yüzden terimin kendisi ayrıca belirir. */
+.reader-body mark.koken-vurgu .koken-terim {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* İngilizce satırın içindeki vurgu da aynı dil. */
+.reader-body .source-line mark.koken-vurgu { font-style: normal; }
 /* touch-action: çift-dokunmada mobil zoom'u kapatır → çift-dokunma İngilizceyi açar. */
 .reader-body p { margin: 0 0 1.1em; text-align: justify; hyphens: auto; touch-action: manipulation; }
 
@@ -687,7 +901,9 @@ html, body {
   letter-spacing: 0.05em;
   font-size: 1.05rem;
   padding: 0.95rem 1rem;
-  border-radius: 4px;
+  /* Stitch: birincil eylem 12px yuvarlak, en az 48px yuksek. */
+  border-radius: var(--r-md);
+  min-height: var(--tap);
   cursor: pointer;
 }
 .next-btn:active { filter: brightness(0.92); }
@@ -787,11 +1003,13 @@ html, body {
   padding: 0;
   margin: 0 0 0.6rem;
 }
-.chapter-list { border-top: 3px solid var(--line); }
+/* Stitch: listeyi ACAN kalin kural yerine 1px hat — kalin cizgi listeyi
+   basliktan koparip ayri bir blok gibi gosteriyordu. */
+.chapter-list { border-top: 1px solid var(--border); }
 .chapter-item {
   display: flex;
   align-items: stretch;
-  border-bottom: 1px solid color-mix(in oklab, var(--ink) 14%, transparent);
+  border-bottom: 1px solid var(--border);
 }
 .chapter-item .chapter-row {
   flex: 1;
@@ -820,15 +1038,22 @@ html, body {
   border: 0;
   border-bottom: 1px solid color-mix(in oklab, var(--ink) 14%, transparent);
   padding: 0.85rem 0.4rem;
+  /* Stitch "Chapter List Items": 56px. Dokunma hedefi zaten karsilaniyordu;
+     56 satiri rahatlatir ve uzun listede satir atlamayi azaltir. */
+  min-height: 56px;
+  justify-content: center;
   cursor: pointer;
   color: var(--ink);
   font-family: var(--sans);
 }
 .chapter-row:active { background: color-mix(in oklab, var(--ink) 8%, transparent); }
+/* "Kaldigin bolum": Stitch'te 3px amber gosterge + YUKSELTILMIS yuzey. Amber
+   tintli zemin koyu temada amber bolum numarasiyla birlesip satiri bulaniklastiriyordu;
+   ayrim renk yerine KATMANLA kuruluyor. */
 .chapter-row.current {
-  border-left: 4px solid var(--accent);
-  padding-left: 0.7rem;
-  background: color-mix(in oklab, var(--accent) 10%, transparent);
+  border-left: 3px solid var(--accent);
+  padding-left: 0.75rem;
+  background: var(--surface-2);
 }
 .chapter-no {
   font-size: 0.68rem;
@@ -845,11 +1070,13 @@ html, body {
 }
 
 /* ---------- Sözlük ---------- */
+/* Stitch "Secondary Action": yuzey zemin + 1px hayalet hat. Kalin 2px cerceve
+   ikincil eylemi birincil kadar bagirtiyordu. */
 .ghost-line-btn {
   width: 100%;
   margin-bottom: 1.6rem;
-  border: 2px solid var(--line);
-  background: transparent;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
   color: var(--ink);
   font-family: var(--sans);
   font-weight: 800;
@@ -857,7 +1084,8 @@ html, body {
   letter-spacing: 0.05em;
   font-size: 0.82rem;
   padding: 0.7rem 1rem;
-  border-radius: 4px;
+  border-radius: var(--r-md);
+  min-height: var(--tap);
   cursor: pointer;
 }
 .ghost-line-btn:active { background: color-mix(in oklab, var(--ink) 8%, transparent); }
@@ -969,6 +1197,82 @@ html, body {
 }
 .gloss-add input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 
+/* ARAMA + SÜZGEÇ: 267 satırlık sözlükte terim bulmak parmakla kaydırmaya kalmasın. */
+.gloss-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 0.7rem;
+}
+.gloss-tools input[type="search"] {
+  flex: 1 1 9rem;
+  min-width: 0;
+  padding: 0.5rem 0.65rem;
+  font-size: 0.9rem;
+  font-family: var(--sans);
+  color: var(--ink);
+  background: var(--surface);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+}
+.gloss-tools input[type="search"]:focus {
+  outline: 2px solid var(--accent);
+  border-color: var(--accent);
+}
+.gloss-filters .seg {
+  padding: 0.4rem 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.03em;
+}
+.gloss-count { margin: 0 0 0.5rem; font-size: 0.78rem; }
+
+.gloss-io-actions { flex-wrap: wrap; gap: 0.5rem; }
+.gloss-io-strateji {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+a.pill { text-decoration: none; text-align: center; cursor: pointer; }
+/* Terim düzeltildikten SONRA beliren "N çevrilmiş bölümde geçiyor" satırı. */
+.gloss-impact {
+  margin: 0.1rem 0 0.5rem;
+  padding-left: 0.2rem;
+  font-family: var(--sans);
+  font-size: 0.76rem;
+  color: var(--ink-soft);
+}
+
+/* Yazım hatası olabilecek çiftler. Otomatik birleştirme YOK — tek harf farkı
+   gerçek bir anlam farkı olabilir (`ore` maden damarı / `orc` ırk). */
+.gloss-warn-note {
+  margin: 0 0 0.7rem;
+  padding: 0.55rem 0.7rem;
+  font-size: 0.82rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  border-left: 3px solid var(--warn);
+  background: color-mix(in oklab, var(--warn) 10%, transparent);
+  border-radius: 0 5px 5px 0;
+}
+.gloss-warn-chip {
+  display: inline-grid;
+  place-items: center;
+  width: 1.05rem;
+  height: 1.05rem;
+  margin-left: 0.35rem;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--warn);
+  border: 1.5px solid var(--warn);
+  border-radius: 50%;
+  vertical-align: middle;
+  cursor: help;
+}
+
 /* Çevrimdışı eklenip henüz sunucuya gitmemiş kayıtlar. */
 .gloss-pending-note {
   margin: 0 0 1rem;
@@ -985,6 +1289,9 @@ html, body {
 .gloss-row {
   display: flex;
   align-items: center;
+  /* Kosul satiri ikinci siraya dussun (flex-basis:100%); sarma olmadan
+     satiri yatayda ezip karsilik kutusunu okunmaz hale getirirdi. */
+  flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0.55rem 0.2rem;
   border-bottom: 1px solid color-mix(in oklab, var(--ink) 14%, transparent);
@@ -995,6 +1302,55 @@ html, body {
   padding-left: 0.55rem;
 }
 .gloss-row-pending .gloss-source { color: var(--accent); }
+
+/* Sozluk kaydinin KOSULU: karsiligin hangi baglamda gecerli oldugu.
+   Satirin altina tam genislikte duser, sonuk ve kucuk - uyari degil, kunye. */
+/* KÖKEN satırı: kaydın çıktığı bölüm + cümle. `.gloss-kosul` ile aynı dil —
+   ikisi de satırın altına düşen künye bilgisi, uyarı değil. */
+.gloss-koken {
+  flex: 0 0 100%;
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+  padding-left: 0.1rem;
+}
+.gloss-koken-git {
+  flex: 0 0 auto;
+  border: 1px solid var(--accent);
+  background: transparent;
+  color: var(--accent);
+  font-family: var(--sans);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--r-full);
+  cursor: pointer;
+}
+.gloss-koken-git:active { background: var(--accent-soft); }
+.gloss-koken-cumle {
+  flex: 1 1 12rem;
+  min-width: 0;
+  font-size: 0.76rem;
+  line-height: 1.4;
+  color: var(--ink-soft);
+  font-style: italic;
+  /* Uzun cümle satırı şişirmesin: iki satırda kesilir, tamamı `title`da değil —
+     köken bir künyedir, alıntı değil. */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.gloss-kosul {
+  flex: 0 0 100%;
+  font-size: 0.78rem;
+  line-height: 1.35;
+  color: var(--ink-soft);
+  padding-left: 0.1rem;
+}
 
 .gloss-source {
   font-weight: 700;
@@ -1067,6 +1423,32 @@ html, body {
 }
 .kunye-liste li { margin-bottom: 0.15rem; }
 
+/* Künyedeki terim satırı düzenlenebilir → madde imi yerine sözlük satırı düzeni.
+   `.gloss-source` / `.gloss-arrow` / `.gloss-target` / `.gloss-del` sınıfları
+   sözlük ekranıyla ORTAK: iki yerde iki görünüm, aynı işlemi iki farklı şey gibi
+   gösterirdi. */
+.kunye-liste:has(.kunye-terim) { padding-left: 0; list-style: none; }
+.kunye-terim {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.3rem 0.2rem;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 12%, transparent);
+}
+.kunye-terim .gloss-target { font-size: 0.84rem; padding: 0.35rem 0.45rem; }
+.kunye-terim.gloss-row-pending {
+  box-shadow: inset 3px 0 0 var(--accent);
+  padding-left: 0.5rem;
+}
+
+/* Sözlük uyum uyarısı: karşılığı KAYITLI olduğu hâlde İngilizce bırakılan terimler.
+   Uyarı özete de çıkar (rozet kapalıyken de görünsün) — bayrağın tek işi sessiz
+   kalan bir bozukluğu görünür kılmak. Renk `--accent`'ten AYRI: bu bir eylem değil,
+   bir kusur bildirimi. */
+.kunye-uyarili { border-top-color: color-mix(in oklab, var(--warn) 45%, transparent); }
+.kunye-uyarili > .kunye-ozet { color: var(--warn); }
+.kunye-ihlal { color: var(--warn); display: block; }
+
 /* ---------- ePub alanları ---------- */
 .epub-fields {
   display: grid;
@@ -1102,10 +1484,12 @@ html, body {
 .settings-panel { max-height: 70vh; overflow-y: auto; }
 
 /* Segmented control (tema / satır aralığı / kenar boşluğu) */
+/* Stitch: segment kutusu da cipler gibi ince hayalet hat. Kalin 2px --line
+   cerceve, yeni ince hatli butonlarin yaninda ayri bir tasarim dili gibi duruyordu. */
 .segmented {
   display: inline-flex;
-  border: 2px solid var(--line);
-  border-radius: 999px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-full);
   overflow: hidden;
 }
 .seg {
@@ -1129,7 +1513,9 @@ html, body {
   right: 0;
   bottom: -3px;
   height: 3px;
-  background: transparent;
+  /* Stitch: dolu kisim amber, TRACK gorunur bir ray — seffaf birakilinca
+     ilerlemenin ne kadarinin kaldigi okunmuyordu. */
+  background: var(--surface-2);
 }
 .read-progress > span {
   display: block;
@@ -1143,16 +1529,23 @@ html, body {
 
 /* Footer: önceki (ikincil) + sonraki (birincil). prev gizliyse next tüm genişlik. */
 /* Bölüm arama kutusu (iOS zoom önlemek için font-size: 1rem = 16px) */
+/* Stitch "Input Fields": yuzey zemin, 1px hat, 12px kose; odakta hat amber olur. */
 .chapter-search {
   width: 100%;
   margin-bottom: 0.8rem;
   padding: 0.7rem 0.9rem;
+  min-height: var(--tap);
   font-size: 1rem;
   font-family: var(--sans);
   color: var(--ink);
-  background: var(--surface);
-  border: 2px solid var(--line);
-  border-radius: 5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+}
+.chapter-search:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
 }
 .chapter-search:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
 

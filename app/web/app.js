@@ -31,6 +31,9 @@ const ICONS = {
     '<path d="M4 8h11M19 8h1M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2"/><circle cx="9" cy="16" r="2"/>'
   ),
   download: SVG('<path d="M12 3v11M8 11l4 4 4-4M5 20h14"/>', 18),
+  // Alt gezinme "Kütüphane" sekmesi: rafta duran iki kitap sırtı + eğik üçüncü —
+  // uygulamanın kendi raf metaforunu tekrarlar.
+  shelf: SVG('<path d="M4 5h4v14H4zM10 5h4v14h-4zM16.6 5.8l3.4.9-3.1 12.5-3.4-.9z"/>', 18),
 };
 const THEME_ICON = { light: ICONS.moon, sepia: ICONS.sun, dark: ICONS.sun };
 const LINE_HEIGHTS = { sik: "1.5", normal: "1.75", seyrek: "2.1" };
@@ -267,9 +270,48 @@ function updateProgress() {
   bar.firstElementChild.style.transform = `scaleX(${ratio})`;
   bar.setAttribute("aria-valuenow", Math.round(ratio * 100));
 }
+/* OKUYUCU HUD'u (Stitch "Floating HUD: auto-hides on reader scroll").
+   Sonsuz okuma akışında ekranın üstü de metindir; sabit duran çubuk hem alan
+   yer hem uzun okumada dikkat çeker. Aşağı kaydırırken çekilir, yukarı
+   kaydırırken geri gelir.
+
+   Kendi `scroll` dinleyicisini AÇMAZ: okuyucunun zaten tek bir kaydırma girişi
+   var (`onReaderScroll`) ve ikinci bir dinleyici aynı olayda iki ayrı yerde iş
+   yapardı — bu projede aynı kuralın iki yere yazılması defalarca ayrışmayla
+   sonuçlandı. */
+let hudSonY = 0;
+
+function hudGuncelle() {
+  const bar = readerBar();
+  if (!bar) return;
+  // Ayar sheet'i ya da arama çubuğu açıkken HUD kaçmaz: kullanıcı o an onlarla
+  // uğraşıyor ve dayanak aldığı çubuğun kayması yön kaybettirir.
+  if (!el("settingsPanel").hidden || !el("findBar").hidden) {
+    bar.classList.remove("hud-gizli");
+    return;
+  }
+  const y = Math.max(0, window.scrollY);
+  const fark = y - hudSonY;
+  // Titreşim eşiği: parmak titremesi ve lastik-bant sıçraması HUD'u açıp
+  // kapatmasın (eşiksiz sürümde çubuk okurken titriyordu).
+  if (Math.abs(fark) < 10) return;
+  // Sayfanın TEPESİNDE daima görünür: kullanıcı oraya geri dönmek için gelir,
+  // orada gizli bir çubuk aramaz.
+  if (y < 80) bar.classList.remove("hud-gizli");
+  else bar.classList.toggle("hud-gizli", fark > 0);
+  hudSonY = y;
+}
+
+function hudGoster() {
+  const bar = readerBar();
+  if (bar) bar.classList.remove("hud-gizli");
+  hudSonY = Math.max(0, window.scrollY);
+}
+
 function onReaderScroll() {
   updateActiveChapter();
   updateProgress();
+  hudGuncelle();
   if (isRestoring) return;
   if (scrollSaveTimer) return;
   scrollSaveTimer = setTimeout(() => {
@@ -341,6 +383,36 @@ function cycleTheme() {
 /* ---------- görünüm ---------- */
 function showView(name) {
   for (const [key, node] of Object.entries(views)) node.hidden = key !== name;
+  // Alt gezinme OKURKEN gizlenir: sonsuz okuma akışında ekranın altı metindir ve
+  // sabit bir çubuk hem alanı yer hem parmağın altında kalır. `body.reading`
+  // gövdenin alt boşluğunu da kaldırır (çubuk yokken boşluk anlamsız).
+  const nav = el("bottomNav");
+  if (nav) {
+    nav.hidden = name === "reader";
+    document.body.classList.toggle("reading", name === "reader");
+  }
+  // Okuyucuya her girişte HUD AÇIK başlar: bir önceki bölümden gizli devralınsa
+  // kullanıcı başlıksız bir ekrana düşer ve nerede olduğunu göremez.
+  if (name === "reader") hudGoster();
+  // Okuyucudan çıkarken açık kalmış ayar sheet'i kapansın: body seviyesine
+  // taşındığı için artık görünüm değişince kendiliğinden gizlenmiyor.
+  if (name !== "reader") el("settingsPanel").hidden = true;
+  senkronlaSekme(name);
+}
+
+/* ---------- alt gezinme ----------
+   ÜÇ sekme: Stitch'in dördüncüsü ("Güncellemeler") bu projede bir ekrana
+   karşılık gelmiyor — check-updates yalnız arka plan iş tipi. Boş bir sekme
+   koymak, tasarımdan çıkarılan puan/yazar/özet alanlarıyla aynı türden bir boş
+   vaat olurdu. */
+function senkronlaSekme(name) {
+  const acik = !el("settingsPanel").hidden;
+  for (const t of document.querySelectorAll(".navtab")) {
+    const etkin = acik ? t.dataset.tab === "settings"
+                       : t.dataset.tab === "library" && name === "library";
+    if (etkin) t.setAttribute("aria-current", "page");
+    else t.removeAttribute("aria-current");
+  }
 }
 
 /* ---------- tarayıcı/telefon geri tuşu = uygulama-içi geri ----------
@@ -361,7 +433,20 @@ function applyNavState(state) {
       openGlossary(state.slug);
       break;
     case "reader":
-      loadChapter(state.url, { restoreRatio: state.ratio });
+      // Köken varken KAYITLI KONUM geri yüklenmez: kullanıcı "kaldığın yere"
+      // değil, terimin geçtiği cümleye gitmek istedi.
+      loadChapter(state.url, {
+        restoreRatio: state.ratio,
+        koken: state.koken,
+      }).then(() => {
+        if (!state.koken) return;
+        // Konum geri yükleme `requestAnimationFrame` içinde koşuyor; odaklama
+        // doğrudan çağrılırsa o kare kaydırmayı EZİYOR. İki kare beklemek,
+        // restore bitmiş olsun diye.
+        requestAnimationFrame(() =>
+          requestAnimationFrame(() => kokeneOdaklan(state.koken, state.url))
+        );
+      });
       break;
     default:
       renderLibrary();
@@ -533,10 +618,37 @@ function makeSpine(book, jobChecks) {
   // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
   const chNo = resolveResume(book, book.slug).chapterNo;
   const tag = chNo ? "BÖL. " + chNo : "OKU";
+  // KAPAK yalnız kütüphanede kullanılır (kullanıcı kararı 2026-09-10). Kitapların
+  // ancak bir kısmında kapak var (kaynak sitesi kapanmış ya da og:image vermeyen
+  // kitaplar) — bu yüzden kart BOYUTU her iki durumda da AYNI kalır ve kapaksız
+  // kitap renkli zemin + monogramla durur. Boyutu kapağa göre değiştirmek rafı
+  // dişli gösterirdi.
+  const kapak = (book.cover || "").trim();
+  const monogram = book.title.trim().split(/\s+/).slice(0, 2)
+    .map((w) => w[0] || "").join("").toUpperCase();
+  if (kapak) spine.classList.add("has-cover");
   spine.innerHTML =
+    '<span class="spine-art">' +
+      (kapak
+        // referrerpolicy: bazı kaynak siteler dış referrer'lı isteği reddediyor.
+        ? `<img class="spine-cover" alt="" loading="lazy" decoding="async"
+             referrerpolicy="no-referrer" src="${escapeHtml(kapak)}">`
+        : `<span class="spine-mono" aria-hidden="true">${escapeHtml(monogram)}</span>`) +
+      '<span class="spine-job" hidden></span>' +
+    '</span>' +
     `<span class="spine-title" lang="en">${escapeHtml(book.title)}</span>` +
-    '<span class="spine-job" hidden></span>' +
     `<span class="spine-tag">${tag}</span>`;
+  const img = spine.querySelector(".spine-cover");
+  if (img) {
+    // Kapak adresi kayıtlı ama görsel gelmiyorsa (site kaldırmış, hotlink
+    // engeli) KIRIK RESİM ikonu kalmasın: karta monogram görünümüne dön.
+    img.addEventListener("error", () => {
+      spine.classList.remove("has-cover");
+      img.replaceWith(Object.assign(document.createElement("span"), {
+        className: "spine-mono", textContent: monogram,
+      }));
+    });
+  }
   spine.addEventListener("click", () => navigate({ view: "book", slug: book.slug }));
   jobChecks.push(fetchBookJob(book.slug).then((job) => applyJobBadge(spine, job)));
   return spine;
@@ -602,6 +714,9 @@ async function renderLibrary() {
   el("shelfFilters").hidden = books.length === 0;
   renderResumeFiche(books);
   renderLibStats();
+  // Beklemeden: toplu ceviriyle SUNUCUDA hazirlanmis bolumler, "cevrimdisi indir"
+  // dugmesine basilmadan telefona insin. Uygulamayi acmak yeter.
+  otoIndirmeTur();
 
   const visible = books.filter(
     (b) => shelfFilter === "all" || (b.status || "okunuyor") === shelfFilter
@@ -724,6 +839,10 @@ async function openBook(slug) {
     const data = await res.json();
     currentChapters = data.chapters || [];
     applyChapterFilter();
+    // Beklemeden: toplu çeviriyle hazırlanmış bölümler de "çevrimdışı indir"
+    // düğmesine basılmadan telefona insin. Toplu iş bitince openBook zaten
+    // yeniden çağrılıyor, yani yeni bölümler o turda yakalanır.
+    otoCevrimdisiKaydet(slug, currentChapters);
   } catch {
     list.replaceChildren();
     const err = document.createElement("p");
@@ -802,6 +921,154 @@ async function purgeChapterFromSwCache(url) {
       }
     }
   } catch {} // best-effort temizlik: SW önbelleği yoksa/erişilemezse sessiz geç
+}
+
+/* ---------- otomatik çevrimdışı kayıt ---------- */
+/* SW yalnız GET /api/chapter yanıtlarını DATA_CACHE'e yazar (sw.js: "POST/DELETE →
+   asla önbelleğe alma"). Bu doğru bir kural — POST yanıtında saklanacak içerik yok —
+   ama iki yolu telefona hiç ulaştırmıyordu: prefetch (POST /api/prefetch) ve toplu
+   çeviri bölümü SUNUCUDA hazırlıyor, telefona tek bayt inmiyordu. Kullanıcı bu yüzden
+   "çevrimdışı indir" düğmesine basmak zorunda kalıyordu; o düğmenin yaptığı iş de
+   zaten eksikleri tek tek GET'lemekten ibaret.
+
+   Isıtma GET'i boşluğu kapatır. İki kural load-bearing:
+     * `track=0` — bölüm OKUNMADI; kitabın "kaldığın yer" işareti ilerlemesin, yoksa
+       ısıtma okunmamış bölüme konum yazıp aktif bölümün position POST'uyla yarışır.
+     * anahtar birliği — SW `track`i cache anahtarından siliyor (sw.js), yani ısıtma
+       GET'i okuma GET'iyle AYNI girdiye yazar. Silinmeseydi her bölüm önbellekte iki
+       kopya tutar ve çevrimdışı okuma yanlış kopyaya düşebilirdi. */
+
+// Önbellekte hâlihazırda duran bölüm url'leri. TÜM cache'ler gezilir (tek bir ada
+// bağlanmak yerine): DATA_CACHE adı sw.js'de tanımlı ve burada kopyalamak, ad
+// değişince sessizce boş küme döndüren bir hataya dönerdi. `purgeChapterFromSwCache`
+// da aynı deseni kullanıyor.
+async function cachedChapterUrls() {
+  if (!("caches" in window)) return null;
+  try {
+    const out = new Set();
+    for (const key of await caches.keys()) {
+      const c = await caches.open(key);
+      for (const req of await c.keys()) {
+        const u = new URL(req.url);
+        if (u.pathname !== "/api/chapter") continue;
+        const v = u.searchParams.get("url");
+        if (v) out.add(v);
+      }
+    }
+    return out;
+  } catch {
+    return null; // caches yoksa/erişilemezse: otomatik kayıt sessizce devre dışı
+  }
+}
+
+// Tek bölümü önbelleğe çek. Yanıt gövdesi okunmaz — tek amaç SW'nin girdiyi
+// yazması. Çevrimdışıysa/sunucu kapalıysa sessiz geç: ısıtma en iyi çabadır.
+async function warmOffline(url) {
+  try {
+    await fetch(`/api/chapter?url=${encodeURIComponent(url)}&track=0`);
+  } catch {}
+}
+
+// Kitabın ÇEVRİLMİŞ ama telefonda olmayan bölümlerini arka planda, sırayla indir.
+// Sıralı: paralel istek sunucudaki tek çekim kapısını (fetch._FETCH_GATE) ve
+// okuyucunun canlı isteğini bekletirdi. Liste `/api/book/{slug}/chapters`ten gelir
+// ve YALNIZ çevrilmiş bölümleri içerir (cache.list_chapters), yani bu GET'ler
+// önbellek isabetidir — hiçbiri yeni çeviri tetiklemez.
+async function otoCevrimdisiKaydet(slug, liste) {
+  const list = liste || chapterListFor(slug);
+  if (!list || !list.length) return;
+  const kayitli = await cachedChapterUrls();
+  if (!kayitli) return;
+  for (const ch of list) {
+    if (currentBookSlug !== slug) return; // başka kitaba geçildi: peşine düşme
+    if (!ch.url || ch.translated === false || kayitli.has(ch.url)) continue;
+    await warmOffline(ch.url);
+  }
+}
+
+/* ---------- otomatik çevrimdışı TARAMA (kütüphane düzeyinde) ---------- */
+/* `otoCevrimdisiKaydet` yalnız `openBook`'tan çağrılıyordu, yani ancak O kitabın
+   bölüm listesini AÇARSAN çalışıyordu. Toplu çeviri ise SUNUCUDA koşuyor ve telefona
+   tek bayt inmiyor; iş bittiğinde `pollBulk`'ün geri çağrısı da yalnız hâlâ o kitabın
+   sayfasındaysan `openBook` çağırıyor. Üç boşluk birden açık kalıyordu: iş sen başka
+   yerdeyken biterse, uygulamayı kapatırsan, ya da ertesi gün kütüphaneden açarsan
+   hiçbir şey inmiyordu — kullanıcı "çevrimdışı indir" düğmesine basmak zorundaydı
+   (gerçek şikâyet, 2026-09-03).
+
+   Tarama kütüphane çizildikçe koşar: uygulamayı açmak, ÇEVRİLMİŞ ama telefonda
+   olmayan her bölümü sessizce indirmeye yeter. Zaten önbellekte olanlar atlandığı
+   için tekrarlanan turlar ucuzdur — ilk tur dışında genelde hiç istek çıkmaz. */
+let otoIndirmeCalisiyor = false;
+
+function otoIndirmeDurum(metin) {
+  const satir = el("autoOffline");
+  if (!satir) return;
+  satir.textContent = metin || "";
+  satir.hidden = !metin;
+}
+
+async function otoIndirmeTur() {
+  // TEK UÇUŞ: kütüphane her yenilendiğinde (anket, filtre, geri dönüş) yeniden
+  // başlasaydı aynı bölümler üst üste indirilirdi.
+  if (otoIndirmeCalisiyor) return;
+  // Elle indirme açıksa karışma: ikisi aynı bölümleri çekip sunucuyu iki katına
+  // çıkarır ve ilerleme sayısı yanlış görünürdü.
+  if (!el("offlineProgress")?.hidden) return;
+  if (navigator.onLine === false) return;
+
+  // GÜVENLİ BAĞLAM ŞART ve bunu SÖYLEMEK de şart (2026-09-10).
+  // Service Worker ile Cache API yalnız `https://` ya da `http://localhost`
+  // üzerinde vardır. Telefon `http://100.x.x.x:8000` gibi DÜZ BİR IP ile
+  // bağlandığında ikisi de yoktur; tarama eskiden burada `caches` bulamayıp
+  // SESSİZCE çıkıyordu. Sonuç: kullanıcı toplu çeviriyi başlatıyor, bölümlerin
+  // telefona indiğini sanıyor, çevrimdışı kalınca hiçbirini bulamıyor ve arızayı
+  // toplu çeviriye yazıyordu — asıl sebep ADRESKEN. Sessiz devre dışı kalmak,
+  // çalışmayan bir özelliği çalışıyor göstermenin en pahalı biçimiydi.
+  if (!window.isSecureContext || !("caches" in window)) {
+    otoIndirmeDurum(
+      "Çevrimdışı kayıt bu adreste ÇALIŞMAZ: güvenli bağlantı (https) gerekiyor. " +
+      "Telefonda düz IP yerine https://…ts.net adresini kullan."
+    );
+    return; // uyarı KALICI: 4 sn'lik temizleyici bilerek çalıştırılmıyor
+  }
+
+  otoIndirmeCalisiyor = true;
+  try {
+    const books = await fetchBooks();
+    if (!books || !books.length) return;
+    const kayitli = await cachedChapterUrls();
+    if (!kayitli) return; // caches API yok: otomatik kayıt sessizce devre dışı
+
+    // ÖNCE eksikleri say, sonra indir: "3/48" diyebilmek için toplamı bilmek
+    // gerekiyor ve sayım, önbellek isabetleri olduğu için ucuz.
+    const eksikler = [];
+    for (const b of books) {
+      for (const ch of await chaptersOf(b.slug)) {
+        // `translated` LOAD-BEARING: cevirisi olmayan bolumu GET'lemek CEVIRI
+        // TETIKLER ve ucretli model seciliyken PARA harcar. Otomatik bir tarama
+        // bunu asla yapmamali — dugmenin adi da isin adi da "indir".
+        if (ch.url && ch.translated !== false && !kayitli.has(ch.url)) {
+          eksikler.push(ch.url);
+        }
+      }
+    }
+    if (!eksikler.length) return;
+
+    let indi = 0;
+    for (const url of eksikler) {
+      // Çevrimdışına düşülürse ya da kullanıcı elle indirmeyi başlatırsa BIRAK.
+      if (navigator.onLine === false || !el("offlineProgress")?.hidden) break;
+      otoIndirmeDurum(`${indi + 1}/${eksikler.length} bölüm çevrimdışına alınıyor…`);
+      await warmOffline(url);
+      indi++;
+    }
+    otoIndirmeDurum(indi ? `${indi} bölüm çevrimdışına alındı.` : "");
+    setTimeout(() => otoIndirmeDurum(""), 4000);
+  } catch {
+    otoIndirmeDurum(""); // en iyi çaba: sunucu kapalıysa sessiz geç
+  } finally {
+    otoIndirmeCalisiyor = false;
+  }
 }
 
 async function deleteChapter(ch) {
@@ -960,15 +1227,60 @@ async function flushGlossQueue() {
   return sent;
 }
 
+/* ---------- sözlük süzme + yakın terim uyarısı ----------
+   Sözlük 267 satıra çıkabiliyor; telefonda parmakla kaydırarak terim bulmak
+   pratik değil. Süzme TAMAMEN istemci tarafında: sunucuya ek istek yok, çevrimdışı
+   da çalışır (bekleyen kayıtlar `overlayGloss` ile listeye zaten karışıyor). */
+let glossFilter = "all";
+let glossQuery = "";
+let glossRows = {};       // kaynak -> {origin, created_at, first_chapter}
+let glossTermsSonHal = {}; // sunucudan gelen HAM eşleme (süzgeç yerelde yeniden çizer)
+let glossWarnPairs = [];  // [[a, b], …] yazım hatası olabilecek çiftler
+
+/* `glossary.fold_term`'ün hafif JS eşi: yazım varyantından bağımsız karşılaştırma
+   anahtarı. "İngilizce kalanlar" süzgeci sunucudaki tanımla AYNI olmalı — iki yerde
+   iki tanım, aynı kayıt için farklı karar demektir. */
+function foldTerim(t) {
+  return (t || "").trim().replace(/[\s\-_'’.·]+/g, "").toLocaleLowerCase("tr");
+}
+
+function glossIngilizceKorunan(source, target) {
+  return foldTerim(source) === foldTerim(target);
+}
+
+function glossUyaranlar() {
+  const kume = new Set();
+  for (const cift of glossWarnPairs) for (const ad of cift) kume.add(ad);
+  return kume;
+}
+
+function glossSatirGecer(source, target) {
+  if (glossQuery) {
+    const q = glossQuery.toLocaleLowerCase("tr");
+    const alanlar = source + " " + (target || "");
+    if (!alanlar.toLocaleLowerCase("tr").includes(q)) return false;
+  }
+  if (glossFilter === "en") return glossIngilizceKorunan(source, target);
+  if (glossFilter === "tr") return !glossIngilizceKorunan(source, target);
+  if (glossFilter === "manual") return (glossRows[source] || {}).origin === "manual";
+  return true;
+}
+
 async function fetchGlossary(slug) {
   let terms = {};
+  glossRows = {};
+  glossWarnPairs = [];
   try {
     const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary`);
     const data = await res.json();
     terms = data.terms || {};
+    for (const satir of data.rows || []) glossRows[satir.source] = satir;
+    glossWarnPairs = data.warnings || [];
   } catch {
     terms = {}; // çevrimdışı + hiç önbellek yok: yalnız bekleyen kayıtlar görünsün
   }
+  // Süzgeç yeniden çizerken sunucuya GİTMEZ; ham liste burada saklanır.
+  glossTermsSonHal = terms;
   return overlayGloss(slug, terms);
 }
 /* Kayıt ANINDA yereldir; gönderim arka planda. Sunucuyu beklemek, PC kapalıyken
@@ -997,6 +1309,14 @@ function refreshGlossPendingUi() {
 
 async function openGlossary(slug) {
   currentBookSlug = slug;
+  // Süzgeç kitapla birlikte sıfırlanır: başka kitaptan kalan bir süzgeç, bu kitabın
+  // listesini sebepsiz boş gösterirdi.
+  glossFilter = "all";
+  glossQuery = "";
+  if (el("glossSearch")) el("glossSearch").value = "";
+  markSegment("glossFilter", "all", "data-gloss-filter");
+  refreshGlossExportLink(slug);
+  setGlossIoState("");
   // fetchBooks() sunucuya ulaşamazsa null döner — sözlük çevrimdışı da açılmalı,
   // başlık slug'a düşer.
   const books = (await fetchBooks()) || [];
@@ -1012,7 +1332,6 @@ async function openGlossary(slug) {
   showView("glossary");
   window.scrollTo(0, 0);
 
-  loadStyleNote(slug);
   // Liste ÖNCE çizilir (bekleyen kayıtlar overlay'den gelir), gönderim arka planda:
   // sunucu kapalıyken flush'ın zaman aşımını beklemek ekranı boş bırakırdı.
   renderGlossary(await fetchGlossary(slug));
@@ -1028,63 +1347,6 @@ async function openGlossary(slug) {
   });
 }
 
-/* ---------- üslup notu (kitabın sesi) ----------
-   Sözlükten farkı: tek bir serbest metin, çevrimdışı kuyruğu YOK. Sunucu kapalıyken
-   kaydetmek yerine dürüstçe söyler — sözlük kuyruğu terim başına küçük kayıtlar için
-   var, burada çakışan iki uzun notu birleştirmenin makul bir yolu yok. */
-function setStyleState(text) {
-  const node = el("styleState");
-  if (node) node.textContent = text || "";
-}
-
-function markStyleBadge(note) {
-  const badge = el("styleBadge");
-  if (badge) badge.hidden = !(note || "").trim();
-}
-
-async function loadStyleNote(slug) {
-  const box = el("styleNote");
-  if (!box) return;
-  box.value = "";
-  setStyleState("");
-  markStyleBadge("");
-  try {
-    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/style`);
-    if (!res.ok) return;
-    const data = await res.json();
-    if (currentBookSlug !== slug) return; // kullanıcı bu arada başka kitaba geçti
-    box.value = data.note || "";
-    markStyleBadge(data.note);
-  } catch {
-    setStyleState("Sunucuya ulaşılamadı — üslup notu okunamadı.");
-  }
-}
-
-async function saveStyleNote() {
-  const slug = currentBookSlug;
-  const box = el("styleNote");
-  if (!slug || !box) return;
-  const btn = el("styleSaveBtn");
-  btn.disabled = true;
-  setStyleState("Kaydediliyor…");
-  try {
-    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/style`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ note: box.value }),
-    });
-    if (!res.ok) throw new Error(`sunucu ${res.status}`);
-    const data = await res.json();
-    box.value = data.note || "";
-    markStyleBadge(data.note);
-    setStyleState("Kaydedildi — yeni çevrilen bölümlerde geçerli.");
-  } catch (err) {
-    setStyleState("Kaydedilemedi (" + err.message + ") — sunucu açıkken tekrar dene.");
-  } finally {
-    btn.disabled = false;
-  }
-}
-
 // Bekleyen (henüz sunucuya gitmemiş) düzenlemeleri sözlük ekranının başında duyur.
 function updateGlossPendingNote() {
   const note = el("glossPending");
@@ -1097,16 +1359,54 @@ function updateGlossPendingNote() {
       : `${count} değişiklik telefonda bekliyor — sunucuya bağlanınca kendiliğinden kaydedilecek.`;
 }
 
+// Yazım hatası olabilecek çiftleri listenin başında duyur. Otomatik birleştirme
+// YOK: `ore` (maden damarı) / `orc` (ırk) örneği tek harf farkının gerçek bir anlam
+// farkı olabileceğini gösteriyor — karar kullanıcınındır.
+function updateGlossWarnNote() {
+  const note = el("glossWarnNote");
+  if (!note) return;
+  note.hidden = glossWarnPairs.length === 0;
+  if (note.hidden) return;
+  const ornek = glossWarnPairs
+    .slice(0, 3)
+    .map((c) => c.join(" / "))
+    .join(" · ");
+  note.textContent =
+    `${glossWarnPairs.length} terim çifti birbirine tek harf uzaklıkta — biri yazım ` +
+    `hatası olabilir: ${ornek}${glossWarnPairs.length > 3 ? " …" : ""}`;
+}
+
+function updateGlossCount(gosterilen, toplam) {
+  const note = el("glossCount");
+  if (!note) return;
+  const suzuluyor = gosterilen !== toplam;
+  note.hidden = toplam === 0;
+  note.textContent = suzuluyor
+    ? `${toplam} terimden ${gosterilen} tanesi gösteriliyor`
+    : `${toplam} terim`;
+}
+
 function renderGlossary(terms) {
   const list = el("glossList");
   list.replaceChildren();
   updateGlossPendingNote();
+  updateGlossWarnNote();
   const pending = pendingGloss(currentBookSlug);
-  const entries = Object.entries(terms);
-  if (entries.length === 0) {
+  const uyaranlar = glossUyaranlar();
+  const tumu = Object.entries(terms);
+  const entries = tumu.filter(([kaynak, karsilik]) => glossSatirGecer(kaynak, karsilik));
+  updateGlossCount(entries.length, tumu.length);
+  if (tumu.length === 0) {
     const p = document.createElement("p");
     p.className = "loading-row";
     p.textContent = "Henüz terim yok. Bölüm okudukça karakter isimleri buraya eklenir.";
+    list.appendChild(p);
+    return;
+  }
+  if (entries.length === 0) {
+    const p = document.createElement("p");
+    p.className = "loading-row";
+    p.textContent = "Bu süzgeçle eşleşen terim yok.";
     list.appendChild(p);
     return;
   }
@@ -1118,6 +1418,15 @@ function renderGlossary(terms) {
     const src = document.createElement("span");
     src.className = "gloss-source";
     src.textContent = source;
+    if (uyaranlar.has(source)) {
+      // Rozet satırın kendisinde: kullanıcı düzeltirken hangi kayda baktığını
+      // görmeli, listenin başındaki özet kaydırınca ekrandan çıkıyor.
+      const uyari = document.createElement("span");
+      uyari.className = "gloss-warn-chip";
+      uyari.textContent = "?";
+      uyari.title = "Sözlükte buna tek harf uzaklıkta başka bir terim var";
+      src.appendChild(uyari);
+    }
 
     const arrow = document.createElement("span");
     arrow.className = "gloss-arrow";
@@ -1131,6 +1440,7 @@ function renderGlossary(terms) {
     tgt.addEventListener("change", () => {
       saveTerm(currentBookSlug, source, tgt.value.trim() || source);
       row.classList.add("gloss-row-pending"); // gönderim bitince kendiliğinden kalkar
+      gosterTerimEtkisi(row, source);
     });
 
     const del = document.createElement("button");
@@ -1143,8 +1453,149 @@ function renderGlossary(terms) {
     });
 
     row.append(src, arrow, tgt, del);
+    // KOŞUL varsa ikinci satırda görünür. Görünmesi şart: koşul, karşılığın
+    // HANGİ BAĞLAMDA geçerli olduğunu belirleyen bir kural ve prompt'a çıkıyor —
+    // ekranda saklanırsa terim beklenmedik çevrildiğinde sebebi hiçbir yerde
+    // okunamaz. (Düzenleme uçtan yapılır; okuyucunun çevrimdışı kuyruğu yalnız
+    // karşılığı taşıyor ve koşulu ASLA silmiyor.)
+    const kosul = (glossRows[source] || {}).kosul;
+    if (kosul) {
+      const not = document.createElement("span");
+      not.className = "gloss-kosul";
+      not.textContent = "KOŞUL: " + kosul;
+      row.appendChild(not);
+    }
+    // KÖKEN: kayıt hangi bölümden, hangi cümleden çıktı. Sözlük karşılığı
+    // prompt'ta KURAL olarak uygulanıyor; garip bir çeviri görüldüğünde
+    // "bu nereden geldi" sorusu ancak kaydın çıktığı cümleyle cevaplanabiliyor.
+    const kok = glossRows[source] || {};
+    if (kok.first_chapter || kok.kaynak_cumle) {
+      const koken = document.createElement("div");
+      koken.className = "gloss-koken";
+      if (kok.first_chapter) {
+        const git = document.createElement("button");
+        git.className = "gloss-koken-git";
+        git.type = "button";
+        git.textContent = "BÖLÜM " + kok.first_chapter;
+        git.title = "Terimin ilk geçtiği bölümü aç";
+        git.addEventListener("click", () =>
+          kokeneGit(kok.first_chapter, kok.kaynak_cumle, source,
+                    (glossRows[source] || {}).target));
+        koken.appendChild(git);
+      }
+      if (kok.kaynak_cumle) {
+        const c = document.createElement("span");
+        c.className = "gloss-koken-cumle";
+        c.textContent = "“" + kok.kaynak_cumle + "”";
+        koken.appendChild(c);
+      }
+      row.appendChild(koken);
+    }
     list.appendChild(row);
   }
+}
+
+/* Sözlük kaydının çıktığı bölüme git. Ayrı bir URL sütunu TUTULMUYOR: bölüm
+   numarası önbellekteki bölüm listesiyle eşleşiyor ve ikinci bir kaynak, iki
+   kaydın zamanla ayrışması demekti (bu projede künye alanları tam böyle
+   ayrışmıştı). Bölüm henüz indirilmemişse SESSİZ kalınmaz — kullanıcı düğmeye
+   bastığında bir şey olmamasını arıza sanır. */
+async function kokeneGit(no, cumle, source, target) {
+  const slug = currentBookSlug;
+  if (!slug || !no) return;
+  let liste = chapterListFor(slug);
+  if (!liste || !liste.length) {
+    await ensureChapterList(slug);
+    liste = chapterListFor(slug);
+  }
+  const hedef = (liste || []).find((c) => Number(c.chapter_no) === Number(no));
+  if (!hedef || !hedef.url) {
+    window.alert(
+      `Bölüm ${no} bu kitabın indirilmiş bölümleri arasında yok.
+` +
+      "Terim o bölümde eklenmiş ama bölüm önbellekte değil."
+    );
+    return;
+  }
+  // Köken bilgisi state ile TAŞINIR: bölümün başına değil, terimin geçtiği
+  // CÜMLEYE gidilecek ve orada vurgulanacak.
+  navigate({ view: "reader", url: hedef.url, koken: { cumle, source, target } });
+}
+
+/* Sözlükten gelen KÖKEN odağı: cümleye kaydır, vurgula, İngilizce karşılığını aç.
+
+   Cümle `KOKEN_CUMLE_MAX` ile kırpılmış olabilir, o yüzden tam eşleşme aranmaz —
+   baştan bir parçası (`ARAMA_ONEK`) yeter. Türkçe tarafta KARŞILIK, İngilizce
+   tarafta KAYNAK terim vurgulanır: iki dil arasında cümle-düzeyi hizalama yok
+   (işaretçiler PARAGRAF hizalıyor), ama kullanıcı zaten bir TERİMİN kökenine
+   bakıyor ve aradığı şey o terimin iki dildeki geçişi. */
+const ARAMA_ONEK = 60;
+
+/* Cümle içinde ARANAN TERİMİ ayrıca işaretle.
+
+   Ölçülen gerçek vaka (shadow-slave bölüm 353): tek bölümde 16 terim var ve
+   bazıları AYNI cümleden geliyor (nitelik/anı listeleri). Yalnız cümleyi
+   vurgulamak o durumda hangi terime baktığını kaybettiriyordu. */
+function _terimIsaretle(parca, terim) {
+  if (!terim) return escapeHtml(parca);
+  const j = parca.toLowerCase().indexOf(String(terim).toLowerCase());
+  if (j < 0) return escapeHtml(parca);
+  return (
+    escapeHtml(parca.slice(0, j)) +
+    '<b class="koken-terim">' + escapeHtml(parca.slice(j, j + terim.length)) +
+    "</b>" + escapeHtml(parca.slice(j + terim.length))
+  );
+}
+
+function _vurgula(host, aranan, terim) {
+  const metin = host.textContent || "";
+  const i = aranan ? metin.indexOf(aranan) : -1;
+  if (i < 0) return false;
+  host.innerHTML =
+    escapeHtml(metin.slice(0, i)) +
+    '<mark class="koken-vurgu">' +
+    _terimIsaretle(metin.slice(i, i + aranan.length), terim) +
+    "</mark>" + escapeHtml(metin.slice(i + aranan.length));
+  return true;
+}
+
+// Terimi İÇEREN cümleyi bul (İngilizce tarafta kullanılır).
+function _terimliCumle(metin, terim) {
+  if (!terim) return null;
+  const t = terim.toLowerCase();
+  for (const c of (metin || "").split(/(?<=[.!?…])\s+/)) {
+    if (c.toLowerCase().includes(t)) return c.trim();
+  }
+  return null;
+}
+
+function kokeneOdaklan(koken, url) {
+  const { cumle, source, target } = koken || {};
+  const onek = (cumle || "").slice(0, ARAMA_ONEK);
+  const paragraflar = [...document.querySelectorAll("#readerBody p")];
+  let hedef = null;
+  let idx = -1;
+  paragraflar.forEach((p, i) => {
+    if (hedef) return;
+    const t = p.textContent || "";
+    if ((onek && t.includes(onek)) || (!onek && target && t.includes(target))) {
+      hedef = p;
+      idx = Number(p.dataset.idx != null ? p.dataset.idx : i);
+    }
+  });
+  if (!hedef) return; // bölüm yeniden çevrilmiş olabilir: sessizce bölüm başında kal
+  hedef.scrollIntoView({ block: "center" });
+  _vurgula(hedef, onek || target, target);
+  // İngilizce karşılığı AÇ (çift-tık ile aynı yol) ve orada kaynak terimin
+  // geçtiği cümleyi vurgula.
+  const sonra = hedef.nextElementSibling;
+  if (!(sonra && sonra.classList.contains("source-line"))) toggleSource(hedef, idx, url);
+  setTimeout(() => {
+    const kaynak = hedef.nextElementSibling;
+    if (kaynak && kaynak.classList.contains("source-line")) {
+      _vurgula(kaynak, _terimliCumle(kaynak.textContent, source) || source, source);
+    }
+  }, 260);
 }
 
 /* ---------- kitap ekle ---------- */
@@ -1410,7 +1861,7 @@ function renderError(err, url, refresh) {
 // ekle) ve üst "önceki" kartı kurulur, kaldığın orana kaydırılır ve next ısıtılır.
 async function loadChapter(url, opts = {}) {
   if (!url) return;
-  const { refresh = false, restoreRatio = null } = opts;
+  const { refresh = false, restoreRatio = null, koken = null } = opts;
   isNavigating = true;
   isRestoring = true;
   el("readerError").hidden = true;
@@ -1436,7 +1887,11 @@ async function loadChapter(url, opts = {}) {
     ensureTopCard();
     ensureBottomSentinel();
     setActiveChapter(entry);
-    const ratio = restoreRatio != null ? restoreRatio : getScrollLocal(url);
+    // KÖKEN varken kayıtlı konum HİÇ okunmaz. `restoreRatio: null` yetmiyordu:
+    // null "konum yok" değil "yerel kayıttan al" demek ve o kayıt genellikle
+    // bölümün SONU (orası okunmuş) — sözlükten gelen kullanıcı bölümün dibinde
+    // açılıyordu.
+    const ratio = koken ? 0 : (restoreRatio != null ? restoreRatio : getScrollLocal(url));
     scrollToChapterRatio(entry, ratio || 0);
     prefetchNext(entry);
     // Bölüm listesini ısıt: akış devamının zincir KOPTUĞUNDA (kitap ikinci bir
@@ -1456,11 +1911,15 @@ async function loadChapter(url, opts = {}) {
 // SUNUCUDA ilerletme; konumu yalnız aktif bölümün position POST'u belirlesin. Aksi
 // halde önden-ekleme okunmamış bölüme konum yazıp aktif-POST'la yarışır (gerçek
 // bulgu: current_url 7'de takılırken cache'te bölüm 8 oluşuyordu).
-function fetchChapterData(url, refresh, track = true) {
+// refetch=true: sunucuyu SİTEDEN indirmeye zorlar. Varsayılan false — önbellekte
+// hizalı İngilizce kaynak varsa "yeniden çevir" web'e hiç gitmez. Yalnız kaynağın
+// KENDİSİ bozuk geldiğinde ("Bölüm Boş" kartı) indirmek gerekir.
+function fetchChapterData(url, refresh, track = true, refetch = false) {
   const query =
     `/api/chapter?url=${encodeURIComponent(url)}` +
     (refresh ? "&refresh=1" : "") +
-    (track ? "" : "&track=0");
+    (track ? "" : "&track=0") +
+    (refetch ? "&refetch=1" : "");
   return fetch(query).then(async (res) => {
     if (!res.ok) {
       const e = await res.json().catch(() => ({}));
@@ -1576,6 +2035,15 @@ function buildChapterEntry(url, data) {
     engine: data.engine || null,
     model: data.model || null, // zincirin fiilen çeviren halkası (eski bölümlerde yok)
     addedTerms: data.added_terms || null,
+    // Sözlük uyum bayrağı: karşılığı KAYITLI olduğu hâlde İngilizce kalan terimler.
+    // Zincirin alt halkaları sözlük kuralına eşit uymuyor (ölçüm: flash-lite %24,
+    // 3.6-flash %0,7) ve çeviri kalıcı önbelleğe yazıldığı için sessizce kalıyordu.
+    glossaryLeaks: data.glossary_leaks || null,
+    // İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş paragraflar.
+    // Sözlük ihlalinden AYRI bir arıza sınıfı — o "terimi yanlış yazdın" der, bu
+    // "bu paragrafı hiç çevirmedin" der; ikisini tek sayaçta toplamak, okuyucunun
+    // hangisine baktığını belirsizleştirirdi.
+    ingilizceKalinti: data.ingilizce_kalinti || null,
     el: null,
     loaded: false,
     empty: false,
@@ -1711,16 +2179,40 @@ function kunyeKarti(entry) {
   const motor = entry.engine;
   const terimler = entry.addedTerms || {};
   const adlar = Object.keys(terimler);
+  // Sözlüğe UYULMAMIŞ terimler. Boş dict ("denetlendi, temiz") ile null ("hiç
+  // denetlenmedi", eski satır) arasında okuyucu için fark yok: ikisinde de uyarı yok.
+  const ihlaller = entry.glossaryLeaks || {};
+  const ihlalAdlari = Object.keys(ihlaller).sort();
+  // Çevrilmeden İngilizce kalan paragraflar (onarım turundan SONRA kalanlar).
+  const kalinti = entry.ingilizceKalinti || {};
+  const kalintiIndeksleri = Object.keys(kalinti);
   // Eski önbellekteki bölümde künye yok: "bilinmiyor" yazmak yanıltıcı olur, sessizce atla.
-  if (!motor && adlar.length === 0) return null;
+  if (
+    !motor &&
+    adlar.length === 0 &&
+    ihlalAdlari.length === 0 &&
+    kalintiIndeksleri.length === 0
+  )
+    return null;
 
+  const uyariVar = ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0;
   const kutu = document.createElement("details");
-  kutu.className = "kunye";
+  kutu.className = "kunye" + (uyariVar ? " kunye-uyarili" : "");
   const ozet = document.createElement("summary");
   ozet.className = "kunye-ozet";
-  ozet.textContent = adlar.length
-    ? `Sözlüğe ${adlar.length} terim eklendi`
-    : "Çeviri bilgisi";
+  // Uyarı özete ÇIKAR: rozet kapalı duruyor ve açılmazsa bayrak görünmezdi — tek
+  // işi zaten sessiz kalan bir bozukluğu görünür kılmak. İki arıza sınıfı AYRI
+  // sayılır: biri "terim yanlış", öteki "paragraf hiç çevrilmemiş".
+  const uyarilar = [];
+  if (kalintiIndeksleri.length)
+    uyarilar.push(`${kalintiIndeksleri.length} paragraf İngilizce kaldı`);
+  if (ihlalAdlari.length)
+    uyarilar.push(`${ihlalAdlari.length} terim sözlüğe uymadı`);
+  ozet.textContent = uyarilar.length
+    ? `⚠ ${uyarilar.join(" · ")}`
+    : adlar.length
+      ? `Sözlüğe ${adlar.length} terim eklendi`
+      : "Çeviri bilgisi";
   kutu.appendChild(ozet);
 
   const govde = document.createElement("div");
@@ -1728,10 +2220,17 @@ function kunyeKarti(entry) {
   if (motor) {
     const rozet = document.createElement("span");
     rozet.className = "style-badge";  // mevcut pill rozet dili
-    // "claude" dalı BİLİNÇLE duruyor: motorun kendisi kaldırıldı ama DB'de o
-    // denemeden kalma satırlar var; silinirse eski bölümler "GEMINI" diye yanlış
-    // etiketlenirdi. Yeni çeviriler daima "gemini" yazar.
-    rozet.textContent = motor === "claude" ? "CLAUDE" : "GEMINI";
+    /* Motor FİİLEN çeviren sağlayıcıdan geliyor. Bugün tek motor var ("gemini")
+       ama rozet SABİT YAZMAZ: bir dönem tam olarak öyle yapılmıştı ve ikinci bir
+       sağlayıcı zincire girince doğrudan yanlış bilgiye dönüştü — o sağlayıcının
+       çevirdiği bölüm "GEMINI ile çevrildi" diyordu. Ad olduğu gibi büyütülür,
+       böylece motor bir daha değişirse burada ayrıca bir dal açmak gerekmez.
+       DB'de kaldırılmış motorlardan kalma "mistral"/"claude" satırları duruyor ve
+       bu yolla doğru etiketlenmeye devam ederler. */
+    rozet.textContent = motor
+      .split(" + ")
+      .map((m) => m.trim().toUpperCase())
+      .join(" + ");
     const satir = document.createElement("p");
     satir.className = "gloss-hint kunye-satir";
     satir.append(rozet, document.createTextNode(" ile çevrildi"));
@@ -1739,37 +2238,132 @@ function kunyeKarti(entry) {
     // farkı oradan geliyor. "gemini-" öneki kırpılır — rozet zaten motoru söylüyor.
     // Parçalar farklı halkalara düştüyse sunucu " + " ile birleştirip gönderir.
     if (entry.model) {
+      // Sağlayıcı öneki kırpılır (`mistral:`, `openrouter:`, …). Bugünkü zincirde
+      // önekli ad ÜRETİLMİYOR (Gemini-tek) ama önbellekte o dönemden kalma satırlar
+      // var ve kırpma onlar için hâlâ gerekli: adı iki kez yazmak
+      // "mistral:mistral-medium-latest" gibi okunmaz bir satır üretiyordu.
+      // Model adının içindeki `/` korunur ("minimax/minimax-m3:free" gibi).
       const kisa = entry.model
         .split(" + ")
-        .map((m) => m.replace(/^gemini-/, ""))
+        .map((m) => m.replace(/^[a-z0-9]+:/, "").replace(/^gemini-/, ""))
         .join(" + ");
       satir.append(document.createTextNode(` · ${kisa}`));
     }
     govde.appendChild(satir);
   }
+  if (kalintiIndeksleri.length) {
+    const uyari = document.createElement("p");
+    uyari.className = "gloss-hint kunye-satir kunye-ihlal";
+    uyari.textContent =
+      "Bu paragraflar çevrilmeden İngilizce kaldı ve hedefli yeniden çeviri de " +
+      "düzeltemedi. “Yeniden Çevir” ile tekrar denenebilir (kaynak önbellekte, " +
+      "siteye yeniden inilmez).";
+    govde.appendChild(uyari);
+    const liste = document.createElement("ul");
+    liste.className = "kunye-liste kunye-ihlal-liste";
+    // Sıra SAYISAL olmalı: anahtarlar JSON'dan string geliyor ve düz sort()
+    // "10" < "9" der, yani paragraflar okuma sırasının dışında listelenirdi.
+    for (const i of kalintiIndeksleri.sort((a, b) => Number(a) - Number(b))) {
+      const li = document.createElement("li");
+      li.className = "kunye-ihlal-terim";
+      const metin = String(kalinti[i] || "");
+      li.textContent = metin.length > 120 ? `${metin.slice(0, 120)}…` : metin;
+      liste.appendChild(li);
+    }
+    govde.appendChild(liste);
+  }
+  if (ihlalAdlari.length) {
+    const uyari = document.createElement("p");
+    uyari.className = "gloss-hint kunye-satir kunye-ihlal";
+    uyari.textContent =
+      "Sözlükte karşılığı olduğu hâlde İngilizce bırakılan terimler. Bu genellikle " +
+      "zincirin alt halkası çevirdiğinde olur; “Yeniden Çevir” ile düzelir " +
+      "(kaynak önbellekte, siteye yeniden inilmez).";
+    govde.appendChild(uyari);
+    const liste = document.createElement("ul");
+    liste.className = "kunye-liste kunye-ihlal-liste";
+    for (const kaynak of ihlalAdlari) {
+      // `kunye-terim` DEĞİL: o sınıf sözlük ekranıyla ortak DÜZENLENEBİLİR satır
+      // düzenidir (`:has(.kunye-terim)` madde imini kaldırıp satır kenarlığı verir).
+      // İhlal satırı düzenlenmez, sade madde kalmalı.
+      const li = document.createElement("li");
+      li.className = "kunye-ihlal-terim";
+      li.textContent = `${kaynak} → ${ihlaller[kaynak]}`;
+      liste.appendChild(li);
+    }
+    govde.appendChild(liste);
+  }
   if (adlar.length) {
     const liste = document.createElement("ul");
     liste.className = "kunye-liste";
     for (const kaynak of adlar.sort()) {
-      const karsilik = terimler[kaynak];
-      const li = document.createElement("li");
-      // Kaynak = karşılık → terim İngilizce KORUNDU; ok göstermek kafa karıştırır.
-      li.textContent =
-        karsilik && karsilik !== kaynak
-          ? `${kaynak} → ${karsilik}`
-          : `${kaynak} (İngilizce korundu)`;
-      liste.appendChild(li);
+      liste.appendChild(kunyeTerimSatiri(entry, kaynak, terimler[kaynak]));
     }
     govde.appendChild(liste);
     const ipucu = document.createElement("p");
     ipucu.className = "gloss-hint kunye-satir";
     ipucu.textContent =
-      "Bu terimler sonraki bölümlerde de aynı kalır. Yanlışsa sözlükten düzelt.";
+      "Bu terimler sonraki bölümlerde de aynı kalır. Karşılığı burada düzeltebilir " +
+      "ya da × ile silebilirsin; değişiklik yeni çevrilen bölümlerde geçerli olur.";
     govde.appendChild(ipucu);
   }
   kutu.appendChild(govde);
   return kutu;
 }
+
+/* Künyedeki terim satırı DÜZENLENEBİLİR.
+
+   Neden: otomatik ekleme sessizce yanlış bir karşılığı KALICI kılabiliyor (gerçek
+   örnekler, DB'deki `added_terms` kayıtlarından: "Sleeper Center → Uyuyan Merkezi",
+   doğrusu "Uyuyanlar Merkezi"; "Star-Moon City → yıldız ay şehri", oysa kardeş
+   kayıt "Star-Moon Kingdom → Yıldız-Ay Krallığı"). Rozet eskiden yalnız SÖYLÜYORDU;
+   düzeltmek için okumayı bırakıp sözlük ekranında terimi aramak gerekiyordu — yani
+   onay anı okuma akışının dışındaydı ve pratikte hiç gelmiyordu.
+
+   Yazma yolu sözlük ekranıyla AYNI kuyruk (`saveTerm`/`deleteTerm`) → sunucu
+   kapalıyken de çalışır, bağlanınca gönderilir. */
+function kunyeTerimSatiri(entry, kaynak, karsilik) {
+  const slug = entry.bookSlug || currentBookSlug;
+  const korunuyor = !karsilik || karsilik === kaynak;
+  const li = document.createElement("li");
+  li.className = "kunye-terim";
+  li.title = korunuyor
+    ? `${kaynak} İngilizce korunuyor`
+    : `${kaynak} → ${karsilik}`;
+
+  const ad = document.createElement("span");
+  ad.className = "gloss-source";
+  ad.textContent = kaynak;
+
+  const ok = document.createElement("span");
+  ok.className = "gloss-arrow";
+  ok.textContent = "→";
+
+  const alan = document.createElement("input");
+  alan.className = "gloss-target";
+  alan.type = "text";
+  alan.value = karsilik || kaynak;
+  alan.setAttribute("aria-label", kaynak + " karşılığı");
+  alan.addEventListener("change", () => {
+    if (!slug) return;
+    saveTerm(slug, kaynak, alan.value.trim() || kaynak);
+    li.classList.add("gloss-row-pending"); // gönderim bitince kalkar
+  });
+
+  const sil = document.createElement("button");
+  sil.className = "gloss-del";
+  sil.textContent = "×";
+  sil.setAttribute("aria-label", kaynak + " terimini sözlükten sil");
+  sil.addEventListener("click", () => {
+    if (!slug) return;
+    li.remove();
+    deleteTerm(slug, kaynak);
+  });
+
+  li.append(ad, ok, alan, sil);
+  return li;
+}
+
 
 function emptyChapterCard(entry) {
   const card = document.createElement("div");
@@ -1785,23 +2379,51 @@ function emptyChapterCard(entry) {
   actions.className = "error-actions";
   const btn = document.createElement("button");
   btn.className = "primary-btn";
-  btn.textContent = "Yeniden Çevir";
-  btn.addEventListener("click", () => retranslateChapter(entry));
+  // Burada sorun ÇEVİRİ değil KAYNAK olabilir (site yarım/bozuk sayfa vermiş) →
+  // indirmeyi zorla. Etiket bunu söylüyor: bu yol siteye iner, yavaştır.
+  btn.textContent = "Siteden Yeniden Çek";
+  btn.addEventListener("click", () => retranslateChapter(entry, true));
   actions.appendChild(btn);
   card.append(title, desc, actions);
   return card;
 }
 
 /* ---------- prefetch: sonraki bölümü sessizce ısıt ---------- */
+const PREFETCH_YOKLAMA_MS = 5000;
+const PREFETCH_YOKLAMA_MAX = 12; // ~60 sn; ölçülen çeviri süresi 15-45 sn
+
 function prefetchNext(entry) {
   const u = entry && entry.nextUrl;
   if (!u || !/^https?:\/\//.test(u) || prefetched.has(u)) return;
   prefetched.add(u);
-  fetch("/api/prefetch", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ url: u }),
-  }).catch(() => {});
+  isitVeKaydet(u, PREFETCH_YOKLAMA_MAX);
+}
+
+// Isıtma POST'u bölümü sunucuda hazırlar ama telefona içerik göndermez; hazır olunca
+// bir GET atılır ve SW onu önbelleğe yazar. Sabit gecikme yerine YOKLAMA kullanılır:
+// çeviri süresi oynak (ölçüm 2026-08-31: aynı kitapta 45 sn ve 15,7 sn). Erken atılan
+// GET, prefetch'in bitmesini beklemek yerine ikinci bir çeviri tetikleyebilirdi.
+// Yoklama POST'u güvenle tekrarlanır: uç `_PREFETCH_INFLIGHT` ile aynı url için ikinci
+// işi başlatmaz, yalnız "hazır mı" der (DB araması).
+async function isitVeKaydet(url, kalanDeneme) {
+  let veri;
+  try {
+    const r = await fetch("/api/prefetch", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url }),
+    });
+    veri = await r.json();
+  } catch {
+    return; // çevrimdışı / sunucu kapalı: ısıtma en iyi çabadır
+  }
+  if (veri && veri.cached) {
+    await warmOffline(url);
+    return;
+  }
+  if (kalanDeneme > 0) {
+    setTimeout(() => isitVeKaydet(url, kalanDeneme - 1), PREFETCH_YOKLAMA_MS);
+  }
 }
 
 /* ---------- akış sonu: sonraki bölümü otomatik ekle (IntersectionObserver) ---------- */
@@ -2073,13 +2695,32 @@ async function prependPrev(btn) {
 }
 
 // Aktif bölümü yeniden çevir (Ayarlar → "Bu bölüm"). Ayraç korunur, gövde yeniden çizilir.
-async function retranslateChapter(entry) {
+/* Geçen süreyi SAYARAK göster. Sabit "Yükleniyor…" ile donmuş ekran ayırt
+   edilemiyordu: kullanıcı 1-2 dakikalık normal bir işi "takıldı" sandı. Sayaç
+   ilerledikçe iş yürüyor demektir — sunucudan ilerleme taşımadan (tek istek/yanıt)
+   verilebilecek en dürüst geri bildirim bu. */
+function sureliDugmeSayaci(btn, etiket) {
+  const bas = Date.now();
+  const ciz = () => {
+    const sn = Math.round((Date.now() - bas) / 1000);
+    btn.innerHTML =
+      `<span class="loading-spinner" aria-hidden="true"></span> ${etiket}` +
+      (sn >= 3 ? ` ${sn} sn` : "");
+  };
+  ciz();
+  const timer = setInterval(ciz, 1000);
+  return () => clearInterval(timer);
+}
+
+async function retranslateChapter(entry, refetch = false) {
   const btn = el("retranslate");
   const orig = btn.innerHTML;
-  btn.innerHTML = `<span class="loading-spinner" aria-hidden="true"></span> Yükleniyor…`;
+  const durdur = sureliDugmeSayaci(
+    btn, refetch ? "Siteden çekiliyor…" : "Çevriliyor…"
+  );
   btn.disabled = true;
   try {
-    const data = await fetchChapterData(entry.url, true);
+    const data = await fetchChapterData(entry.url, true, true, refetch);
     entry.nextUrl = data.next_url || entry.nextUrl;
     entry.title = data.title || entry.title;
     if (data.content_type === "html") {
@@ -2099,6 +2740,7 @@ async function retranslateChapter(entry) {
   } catch (err) {
     alert("Yeniden çevrilemedi: " + (err.message || err));
   } finally {
+    durdur();
     btn.innerHTML = orig;
     btn.disabled = false;
   }
@@ -2300,7 +2942,110 @@ async function addGlossTerm() {
   el("glossSource").focus();
 }
 el("glossAddBtn").addEventListener("click", addGlossTerm);
-el("styleSaveBtn")?.addEventListener("click", saveStyleNote);
+
+/* ---------- yedek / toplu düzenleme ----------
+   Sözlük tek bir PC'deki tek bir SQLite dosyasında yaşıyor; yedeği yoktu. Dışa
+   aktarma düz bir indirme bağlantısı (sunucu Content-Disposition ile gönderiyor),
+   içe aktarma dosyayı okuyup uca POST ediyor. */
+function setGlossIoState(text) {
+  const node = el("glossIoState");
+  if (node) node.textContent = text || "";
+}
+
+function refreshGlossExportLink(slug) {
+  const link = el("glossExportBtn");
+  if (!link) return;
+  link.href = `/api/book/${encodeURIComponent(slug)}/glossary/export`;
+}
+
+el("glossImportBtn")?.addEventListener("click", () => el("glossImportFile")?.click());
+
+el("glossImportFile")?.addEventListener("change", async (e) => {
+  const dosya = e.target.files && e.target.files[0];
+  e.target.value = ""; // aynı dosya ikinci kez seçilebilsin
+  if (!dosya || !currentBookSlug) return;
+  setGlossIoState("Okunuyor…");
+  let terms;
+  try {
+    const veri = JSON.parse(await dosya.text());
+    terms = veri && typeof veri === "object" ? veri.terms || veri : null;
+    if (!terms || typeof terms !== "object") throw new Error("terms alanı yok");
+  } catch (err) {
+    return setGlossIoState("Dosya okunamadı (" + err.message + ").");
+  }
+  const ezsin = !!el("glossImportOverwrite")?.checked;
+  setGlossIoState("Yükleniyor…");
+  try {
+    const res = await fetch(
+      `/api/book/${encodeURIComponent(currentBookSlug)}/glossary/import`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ terms, strateji: ezsin ? "dosya" : "mevcut" }),
+      }
+    );
+    if (!res.ok) throw new Error("sunucu " + res.status);
+    const veri = await res.json();
+    setGlossIoState(
+      `${veri.gelen} terimden ${veri.eklenen} tanesi yazıldı` +
+        (ezsin ? "." : " (mevcut kayıtlar korundu).")
+    );
+    renderGlossary(await fetchGlossary(currentBookSlug));
+  } catch (err) {
+    setGlossIoState("Yüklenemedi (" + err.message + ") — sunucu açıkken tekrar dene.");
+  }
+});
+
+/* Terim düzeltildikten SONRA: "bu terim çevrilmiş N bölümde geçiyor".
+   Ekranın ipucu satırı "eski bölüm için Yeniden çevir" diyordu ama HANGİ
+   bölümler olduğunu söylemiyordu; kullanıcı elle aramak zorundaydı. */
+async function gosterTerimEtkisi(row, source) {
+  if (!currentBookSlug) return;
+  let satir = row.nextElementSibling;
+  if (!satir || !satir.classList.contains("gloss-impact")) {
+    satir = document.createElement("p");
+    satir.className = "gloss-impact";
+    row.after(satir);
+  }
+  satir.textContent = "Etkilenen bölümler aranıyor…";
+  try {
+    const res = await fetch(
+      `/api/book/${encodeURIComponent(currentBookSlug)}/glossary/impact` +
+        `?source=${encodeURIComponent(source)}`
+    );
+    if (!res.ok) throw new Error("sunucu " + res.status);
+    const veri = await res.json();
+    const [kapsanan, toplam] = veri.kapsama || [0, 0];
+    satir.textContent = veri.count
+      ? `Bu terim çevrilmiş ${veri.count} bölümde geçiyor — düzeltmenin oralarda ` +
+        `görünmesi için o bölümlerde "Yeniden çevir" gerekir.`
+      : kapsanan < toplam
+        ? `Çevrilmiş bölümlerde bulunamadı (yalnız ${kapsanan}/${toplam} bölümün ` +
+          `kaynak metni saklı — kesin değil).`
+        : "Çevrilmiş hiçbir bölümde geçmiyor; yalnız yeni bölümleri etkiler.";
+  } catch {
+    satir.remove(); // sunucu kapalı: sessizce vazgeç, düzenleme zaten kuyrukta
+  }
+}
+
+/* Arama ve süzgeç YEREL: sunucuya istek atmaz, tazeleme yapmaz — yalnız hâlihazırda
+   çizili listeyi yeniden süzer. Sunucudan tazelemek çevrimdışıyken listeyi
+   boşaltırdı (bekleyen kayıtlar `overlayGloss` üzerinden geliyor). */
+function yenidenSuz() {
+  if (!currentBookSlug || views.glossary.hidden) return;
+  renderGlossary(overlayGloss(currentBookSlug, glossTermsSonHal));
+}
+el("glossSearch")?.addEventListener("input", (e) => {
+  glossQuery = e.target.value.trim();
+  yenidenSuz();
+});
+for (const btn of document.querySelectorAll("[data-gloss-filter]")) {
+  btn.addEventListener("click", () => {
+    glossFilter = btn.getAttribute("data-gloss-filter");
+    markSegment("glossFilter", glossFilter, "data-gloss-filter");
+    yenidenSuz();
+  });
+}
 // Telefonda klavyeden çıkmadan ekleme: iki alanda da Enter = Ekle.
 for (const id of ["glossSource", "glossTarget"]) {
   el(id).addEventListener("keydown", (e) => {
@@ -2355,35 +3100,259 @@ document.querySelectorAll("[data-inf]").forEach((b) =>
     refreshStreamEnd();
   })
 );
+/* ---------- çeviri modeli seçimi ---------- */
+/* Ayar SUNUCUDA durur (`/api/settings/model`), okuyucunun localStorage'ında değil.
+   Üç sebep: çeviriyi sunucu yapıyor · telefon ve PC aynı seçimi görmeli · okumanın
+   gövdesi PREFETCH'ten ve toplu çeviriden geliyor, onlar istemci olmadan koşuyor ve
+   istemci-taraflı bir ayarı okuyamazlardı. */
+let modelSecenekleri = [];
+
+function cizModelSecim(secili) {
+  const kutu = el("modelSecim");
+  if (!kutu) return;
+  kutu.innerHTML = "";
+  for (const m of modelSecenekleri) {
+    const b = document.createElement("button");
+    b.className = "seg";
+    b.dataset.model = m.ad;
+    b.textContent = m.etiket;
+    b.title = m.not || m.ad;
+    b.setAttribute("aria-pressed", m.ad === secili ? "true" : "false");
+    kutu.appendChild(b);
+  }
+  const notu = el("modelNotu");
+  if (notu) {
+    const bulunan = modelSecenekleri.find((m) => m.ad === secili);
+    /* Ölçüm notu görünür duruyor: kullanıcı seçerken neyin bedelini ödediğini
+       bilmeli (3.7/3.8 uzun bölümleri reddedip dakikalar yakabiliyor, Claude
+       halkaları ise PARA harcıyor). */
+    notu.textContent = bulunan ? bulunan.not : "";
+    notu.classList.toggle("model-ucretli", !!(bulunan && bulunan.ucretli));
+  }
+}
+
+/* Harcama GÖSTERGESİ — fren değil (kullanıcı kararı). Sürpriz harcamanın kaynağı
+   zaten yapısal olarak kapalı: ücretli model elle seçiliyor ve ücretsiz zincir asla
+   ücretliye inmiyor. Gösterge "bu gidişle ne olur" sorusunu cevaplamak için var,
+   o yüzden pencere AYLIK (fatura da öyle okunuyor). */
+function cizHarcama(harcama) {
+  const satir = el("modelHarcama");
+  if (!satir) return;
+  if (!harcama || !harcama.istek) {
+    satir.hidden = true;
+    return;
+  }
+  const dokum = harcama.modeller
+    .map((m) => `${m.model.replace(/^claude-/, "")} ${m.istek}`)
+    .join(" · ");
+  satir.hidden = false;
+  satir.textContent =
+    `Bu ay ücretli çeviri: ${harcama.istek} bölüm ≈ ` +
+    `$${harcama.maliyet.toFixed(2)} (${dokum})`;
+}
+
+async function loadModelSecim() {
+  const kutu = el("modelSecim");
+  if (!kutu) return;
+  try {
+    const res = await fetch("/api/settings/model");
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    const data = await res.json();
+    modelSecenekleri = data.secenekler || [];
+    cizModelSecim(data.secili);
+    cizHarcama(data.harcama);
+  } catch {
+    kutu.innerHTML = "";
+    const notu = el("modelNotu");
+    if (notu) notu.textContent = "Sunucuya ulaşılamadı — model seçimi okunamadı.";
+  }
+}
+
+el("modelSecim").addEventListener("click", async (ev) => {
+  const b = ev.target.closest("[data-model]");
+  if (!b || b.getAttribute("aria-pressed") === "true") return;
+  const onceki = modelSecenekleri.find(
+    (m) => el("modelSecim").querySelector(`[data-model="${m.ad}"]`)
+             ?.getAttribute("aria-pressed") === "true",
+  );
+  cizModelSecim(b.dataset.model); // iyimser: dokunuş anında geri bildirim
+  try {
+    const res = await fetch("/api/settings/model", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ model: b.dataset.model }),
+    });
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    const data = await res.json();
+    cizModelSecim(data.secili);
+    /* Sözlükle AYNI kural: yalnız yeni çevrilen bölümde geçerli.
+       Söylenmezse kullanıcı açık duran bölümün değişmesini bekler ve "çalışmadı"
+       sanır. */
+    setStatus("Model seçildi — yeni çevrilen bölümlerde geçerli.");
+  } catch {
+    if (onceki) cizModelSecim(onceki.ad); // yazılamadı: gerçeğe geri dön
+    setStatus("Model kaydedilemedi — sunucuya ulaşılamadı.");
+  }
+});
+
 el("settingsBtn").addEventListener("click", () => {
   el("settingsPanel").hidden = !el("settingsPanel").hidden;
-  if (!el("settingsPanel").hidden) showShellVersion();
+  if (!el("settingsPanel").hidden) {
+    showShellVersion();
+    loadModelSecim();
+  }
 });
 
 /* ---------- kabuk sürümü + sıfırlama (bayat kabuk kaçış kapısı) ---------- */
-// Panel her açılışta GERÇEK önbellek durumunu okur (JS'teki bir sabit değil):
-// telefonun fiilen hangi kabuğu servis ettiği görülür → "güncellendi mi?"
-// sorusu tahmin olmaktan çıkar.
+const KABUK_ONEK = "novellink-shell-";
+const VERI_ONBELLEK = "novellink-data";
+
+/* Sunucunun ŞU ANKİ kabuk sürümü — `sw.js` HTTP önbelleği ATLANARAK okunur ve
+   içindeki SHELL_CACHE çıkarılır.
+
+   Neden ikinci bir sürüm sabiti tutmuyoruz: app.js'e ayrı bir sabit koysaydık
+   sw.js ile birlikte bumplanmayı unutmak sürüm bilgisinin KENDİSİNİ bayatlatırdı
+   (yanlış "güncel" yazan bir gösterge, göstergesizlikten kötüdür). Tek kaynak
+   sw.js.
+
+   ZAMAN AŞIMI ŞART (ölçülen vaka, ts.net üzerinden telefon): Tailscale tökezlediğinde
+   bu adrese giden istek HATA VERMEZ, dakikalarca askıda kalır — `sw.js` içindeki
+   `fetchWithTimeout` de tam olarak bu "kara delik" yüzünden var. Zaman aşımı olmadan
+   aşağıdaki `await` hiç dönmüyor ve sürüm satırı BOŞ kalıyordu; kullanıcı da
+   sıfırlamanın işe yarayıp yaramadığını göremiyordu ("sıfırla düzgün çalışmıyor,
+   anlamadım"). Boş bir gösterge, göstergesizlikten kötüdür. */
+async function sunucuKabukSurumu(ms = 4000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  try {
+    const res = await fetch("/sw.js", { cache: "no-store", signal: ctrl.signal });
+    const m = (await res.text()).match(/SHELL_CACHE\s*=\s*"([^"]+)"/);
+    return m ? m[1] : null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/* Sunucuya ulaşmayı BİRDEN ÇOK KEZ dener; "ulaşıldı mı" ile "sürüm okunabildi mi"
+   sorularını AYIRIR.
+
+   Ölçülen kök neden (2026-09-06, kullanıcı bildirimi "sunucuya bağlanmıyor"):
+   sunucu, `tailscale serve` proxy'si ve tünelin üçü de SAĞLAMDI — PC'den
+   `https://<makine>.ts.net/api/books` 200 dönüyordu. Arıza telefonun ilk
+   isteğindeydi: Android'de Tailscale boştayken düşük güç durumuna geçiyor ve
+   tünel ilk pakette hazır olmuyor. Ölçüm: PC'den atılan `tailscale ping`in
+   İLKİ zaman aşımına uğradı, İKİNCİSİ 38 ms'de döndü (doğrudan LAN yolu).
+   Tek atışlık 4 sn'lik kontrol bu UYANMA ANINI "sunucu kapalı" diye okuyup
+   sıfırlamayı reddediyordu. Başarısız ilk istek tünelin uyanmasını ZATEN
+   tetiklediği için ikinci deneme çoğunlukla tutar.
+
+   İkinci bir arıza da burada kapanıyor: eski kontrol `sunucuKabukSurumu()`nün
+   `null` dönmesini "ulaşılamadı" sayıyordu, oysa `null` "sunucuya ULAŞILDI ama
+   sürüm deseni eşleşmedi" demek. Sunucu ayaktayken bile sıfırlamayı reddedecek
+   bir yoldu. Artık ağ hatası (throw) ile desen eşleşmemesi (null) ayrı. */
+async function sunucuyaUlas(denemeler = 3, ms = 4000) {
+  for (let i = 0; i < denemeler; i++) {
+    try {
+      return { ulasildi: true, surum: await sunucuKabukSurumu(ms) };
+    } catch {
+      // Son denemede bekleme: kullanıcıyı boşuna oyalamaz.
+      if (i < denemeler - 1) await new Promise((r) => setTimeout(r, 700));
+    }
+  }
+  return { ulasildi: false, surum: null };
+}
+
+/* Panel her açılışta GERÇEK durumu okur ve TELEFONDAKİ ile SUNUCUDAKİNİ KIYASLAR.
+   Eskiden yalnız telefondaki sürüm yazıyordu; "v68" görmek güncel mi bayat mı
+   olduğunu söylemiyordu, yani sıfırlamanın işe yarayıp yaramadığı doğrulanamıyordu
+   (kullanıcı bildirimi: "tam sıfırlamıyor gibi"). */
 async function showShellVersion() {
   const out = el("shellVersion");
   if (!out) return;
+  out.classList.remove("shell-ver-stale");
   if (!("caches" in window)) {
     out.textContent = "(önbellek yok — hep ağdan)";
     return;
   }
+  let telefonda;
   try {
-    const keys = await caches.keys();
-    const shell = keys.find((k) => k.startsWith("novellink-shell-"));
-    out.textContent = shell ? shell.replace("novellink-shell-", "") : "(kurulmadı)";
-  } catch {
-    out.textContent = "";
+    telefonda = (await caches.keys()).filter((k) => k.startsWith(KABUK_ONEK));
+  } catch (err) {
+    // Sessiz boşaltma YASAK: satırın boş kalması, kullanıcıya sıfırlamanın işe
+    // yarayıp yaramadığını göremediği bir ekran bırakıyordu ("anlamadım").
+    out.textContent = "(önbellek okunamadı: " + (err?.name || "hata") + ")";
+    out.classList.add("shell-ver-stale");
+    return;
   }
+  const kisa = (k) => k.replace(KABUK_ONEK, "");
+  if (!telefonda.length) {
+    out.textContent = "(kurulmadı)";
+    return;
+  }
+  // Birden çok kabuk önbelleği = önceki güncelleme YARIM kalmış. Tek başına bir
+  // bulgudur: activate'in temizliği koşmamış demektir.
+  if (telefonda.length > 1) {
+    out.textContent = telefonda.map(kisa).join(" + ") + " — karışık, sıfırla";
+    out.classList.add("shell-ver-stale");
+    return;
+  }
+  const bu = kisa(telefonda[0]);
+  // Yerel sürümü HEMEN yaz. Aşağıdaki sunucu kıyası askıda kalırsa (Tailscale kara
+  // deliği) bu satıra hiç dönülmüyordu ve gösterge BOŞ kalıyordu — asıl şikâyetin
+  // kaynağı buydu. Kıyas sonuçlanırsa üzerine yazılır.
+  out.textContent = bu;
+  // Gösterge için İKİ deneme yeter: burada bekleme kullanıcıyı oyalar ve panel
+  // zaten yeniden açılabilir. Sıfırlama düğmesi (yıkıcı işlem) üç deneme yapar.
+  const { ulasildi, surum: sunucuda } = await sunucuyaUlas(2);
+  if (!ulasildi) {
+    // "güncel" demek YANLIŞ olurdu; sürümü yaz ve ulaşılamadığını SÖYLE — sıfırlama
+    // bu hâldeyken kabuğu silip yerine yenisini indiremeyeceği için tehlikelidir.
+    out.textContent = bu + " · sunucuya ulaşılamıyor";
+    out.classList.add("shell-ver-stale");
+    return;
+  }
+  if (!sunucuda) {
+    out.textContent = bu;
+    return;
+  }
+  const o = kisa(sunucuda);
+  out.textContent = bu === o ? bu + " · güncel" : bu + " -> sunucuda " + o + ", sıfırla";
+  if (bu !== o) out.classList.add("shell-ver-stale");
 }
 
 el("shellReset")?.addEventListener("click", async () => {
   const btn = el("shellReset");
   btn.disabled = true;
   btn.textContent = "Sıfırlanıyor…";
+  /* SUNUCU ERİŞİMİ ÖN KOŞUL. Sıfırlama kabuk önbelleğini SİLİP service worker'ı
+     kaldırıyor; yerine yenisini ancak ağdan indirebilir. Sunucuya ulaşılamıyorken
+     basılırsa uygulama telefonda tümden açılmaz hâle gelir (indirilen bölümler
+     `novellink-data`da durur ama onlara ulaşacak kabuk kalmaz). Bu, kullanıcının
+     "bir şey çalışmıyor" diye bastığı anda tam olarak gerçekleşebilecek senaryodur —
+     Tailscale koptuğunda uygulama önbellekten açılmaya devam ettiği için ağın
+     gittiği fark edilmiyor. */
+  try {
+    // ÜÇ deneme: bu yıkıcı bir işlem ve yanlış bir "ulaşılamıyor" kullanıcıyı
+    // sunucu sapasağlamken kilitliyor (ölçülen vaka). Tünelin uyanması için
+    // birkaç saniye beklemek, hatalı reddin bedelinden ucuz.
+    btn.textContent = "Sunucu deneniyor…";
+    if (!(await sunucuyaUlas(3)).ulasildi) {
+      btn.textContent = "Sunucuya ulaşılamıyor";
+      alert(
+        "Sunucuya ulaşılamıyor, bu yüzden sıfırlama yapılmadı.\n\n" +
+        "Sıfırlama uygulama kabuğunu siler ve yerine yenisini sunucudan indirir; " +
+        "şu an indiremeyeceği için uygulama açılmaz hâle gelirdi.\n\n" +
+        "Üç kez denendi. Telefon uykudaysa Tailscale'in tüneli ilk isteklerde " +
+        "hazır olmayabilir: Tailscale uygulamasını bir açıp kapatın, sonra " +
+        "tekrar deneyin. PC'deki sunucunun da açık olduğundan emin olun."
+      );
+      setTimeout(() => {
+        btn.disabled = false;
+        btn.textContent = "Sıfırla";
+      }, 2500);
+      return;
+    }
+  } catch {}
   try {
     if ("serviceWorker" in navigator) {
       const regs = await navigator.serviceWorker.getRegistrations();
@@ -2393,11 +3362,16 @@ el("shellReset")?.addEventListener("click", async () => {
       const keys = await caches.keys();
       // İndirilen bölümler (novellink-data) KORUNUR; yalnız kabuk önbellekleri silinir.
       await Promise.all(
-        keys.filter((k) => k !== "novellink-data").map((k) => caches.delete(k))
+        keys.filter((k) => k !== VERI_ONBELLEK).map((k) => caches.delete(k))
       );
     }
   } catch {}
-  location.reload();
+  /* Düz `location.reload()` YETMİYOR: `unregister()` kaydı siler ama açık sayfa
+     UNLOAD olana kadar hâlâ eski service worker tarafından KONTROL EDİLİYOR, yani
+     reload navigasyonu onun fetch handler'ından geçebiliyor. Benzersiz sorgulu bir
+     navigasyon hem onu hem HTTP önbelleğini kesin olarak atlar. Parametre açılışta
+     temizlenir (adres çubuğunda kalmasın) — bkz. aşağıdaki temizleyici. */
+  location.replace(location.pathname + "?kabuk=" + Date.now());
 });
 el("fontMinus").addEventListener("click", () => {
   settings.fontPx = Math.max(14, settings.fontPx - 1);
@@ -2601,6 +3575,10 @@ function pollBulk(jobId) {
         if (jobSlug && jobSlug === currentBookSlug && !views.book.hidden) {
           openBook(jobSlug);
         }
+        // Ekrandan BAGIMSIZ: `openBook` yalnizca hala o kitabin sayfasindaysan
+        // calisiyor, oysa toplu is coguzaman kullanici baska yerdeyken bitiyor —
+        // tam da bolumlerin telefona hic inmedigi durum.
+        otoIndirmeTur();
       }, 2500);
     }
   };
@@ -2654,7 +3632,9 @@ async function runOfflineDownload(slugs) {
   const groups = [];
   let total = 0;
   for (const slug of slugs) {
-    const chs = await chaptersOf(slug);
+    // Cevirisi olmayan bolum ELENIR: "cevrimdisi indir" indirmedir, cevirtme
+    // degil — GET'lemek ceviri tetikler ve ucretli modelde para harcardi.
+    const chs = (await chaptersOf(slug)).filter((c) => c.translated !== false);
     groups.push(chs);
     total += chs.length;
   }
@@ -2969,6 +3949,33 @@ history.replaceState({ view: "library" }, ""); // kök kayıt: buradan geri = uy
 // Statik ikonları SVG ile doldur (emoji yerine; aria-label butonda zaten var).
 el("findBtn").innerHTML = ICONS.search;
 el("settingsBtn").innerHTML = ICONS.sliders;
+
+/* Alt gezinme: ikonlar + davranış. Sekmeler MEVCUT işlevleri çağırır, yenisini
+   uydurmaz — "Çevrimdışı" kütüphanedeki indirme akışının, "Ayarlar" ise
+   `settingsBtn`in ta kendisidir (aynı işi iki ayrı kod yolundan yapmak, bu
+   projede künye alanlarının ayrıştığı hatanın aynısı olurdu). */
+{
+  const IKON = { library: ICONS.shelf, offline: ICONS.download, settings: ICONS.sliders };
+  for (const tab of document.querySelectorAll(".navtab")) {
+    const ad = tab.dataset.tab;
+    tab.querySelector(".navtab-icon").innerHTML = IKON[ad] || "";
+    tab.addEventListener("click", () => {
+      if (ad === "library") {
+        el("settingsPanel").hidden = true;
+        navigate({ view: "library" });
+      } else if (ad === "offline") {
+        // İndirme kütüphane ekranının akışı: başka görünümdeysen önce oraya dön,
+        // yoksa ilerleme satırı görünmeyen bir ekranda akardı.
+        el("settingsPanel").hidden = true;
+        if (views.library.hidden) navigate({ view: "library" });
+        startOfflineDownloadAll();
+      } else if (ad === "settings") {
+        el("settingsBtn").click(); // TEK kaynak: panelin kendi aç/kapa mantığı
+      }
+      senkronlaSekme(views.library.hidden ? "" : "library");
+    });
+  }
+}
 el("offlineAllBtn").innerHTML = ICONS.download + " HEPSİNİ ÇEVRİMDIŞI İNDİR";
 
 renderLibrary();
@@ -3151,6 +4158,12 @@ for (const id of ["glossQuickSource", "glossQuickTarget"]) {
 // Açılışta bekleyen sözlük düzenlemelerini gönder (çevrimdışı eklenip telefonda
 // kalmış olabilir); sunucu hâlâ kapalıysa kuyrukta bekler.
 flushGlossQueue();
+
+// Sıfırlamanın önbellek-kırıcı parametresini adres çubuğundan temizle. Uygulamanın
+// kendi kök history kaydından (aşağıda) ÖNCE koşar; `history.state` korunur.
+if (location.search.includes("kabuk=")) {
+  history.replaceState(history.state, "", location.pathname);
+}
 
 if ("serviceWorker" in navigator && window.isSecureContext) {
   navigator.serviceWorker.register("/sw.js").catch(() => {});

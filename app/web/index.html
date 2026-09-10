@@ -11,6 +11,7 @@
   <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="NovelLink" />
+  <link rel="stylesheet" href="/fonts.css" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -52,6 +53,10 @@
     <div id="shelves" class="shelves"></div>
     <!-- D-B3/D-B11v2: istatistik fişte değil, rafın altında sessiz tek satır. -->
     <p id="libStats" class="lib-stats" hidden></p>
+    <!-- Otomatik cevrimdisi tarama: toplu ceviriyle SUNUCUDA hazirlanan bolumler
+         "indir" dugmesine basilmadan telefona iner. Sessiz satir, modal degil —
+         arka plan isi kullanicinin onunu kesmemeli. -->
+    <p id="autoOffline" class="lib-stats auto-offline" hidden></p>
     <div class="lib-actions">
       <button id="offlineAllBtn" class="ghost-line-btn">⤓ HEPSİNİ ÇEVRİMDIŞI İNDİR</button>
     </div>
@@ -110,20 +115,25 @@
         bağlanınca kaydedilir. Değişiklik yeni bölümlerde geçerli; eski bölüm için
         okuyucuda "Yeniden çevir".
       </p>
-      <!-- ÜSLUP NOTU: sözlük terim eşler, bu ise kitabın SESİNİ sabitler. Aynı kural
-           geçerli — yeni çevrilen bölümlerde etkili olur. -->
-      <details id="styleBox" class="style-box">
-        <summary class="style-summary">ÜSLUP NOTU <span id="styleBadge" class="style-badge" hidden>yazılı</span></summary>
+      <!-- YEDEK: sözlük tek bir PC'deki tek bir SQLite dosyasında yaşıyor; yedeği
+           yoktu ve telefonda 267 satırı elden geçirmek pratik değil. -->
+      <details id="glossIoBox" class="style-box">
+        <summary class="style-summary">YEDEK / TOPLU DÜZENLEME</summary>
         <p class="gloss-hint">
-          Kitabın sesi: anlatım kişisi, hitap düzeyi, ton. Sözlük terimleri eşler, bu
-          notu üslubu sabitler — yoksa üslup bölümden bölüme kayar. Kısa ve net yaz.
+          Sözlüğü JSON olarak indirip bilgisayarda toplu düzeltebilir, sonra geri
+          yükleyebilirsin. Geri yüklerken varsayılan davranış <b>kendi kayıtlarını
+          korumaktır</b>; yalnız eksikler eklenir.
         </p>
-        <textarea id="styleNote" class="style-note" rows="3" maxlength="600"
-                  placeholder="Örn. Birinci şahıs, geçmiş zaman. Kahramanın iç sesi alaycı ve kısa cümleli. Diyaloglarda samimi konuşma dili, anlatımda düzgün Türkçe."></textarea>
-        <div class="style-actions">
-          <button id="styleSaveBtn" class="pill">Üslubu kaydet</button>
-          <span id="styleState" class="style-state" aria-live="polite"></span>
+        <div class="style-actions gloss-io-actions">
+          <a id="glossExportBtn" class="pill" download>JSON indir</a>
+          <button id="glossImportBtn" class="pill">JSON yükle…</button>
+          <label class="gloss-io-strateji">
+            <input id="glossImportOverwrite" type="checkbox" />
+            dosyadaki karşılıklar mevcut kayıtları ezsin
+          </label>
+          <input id="glossImportFile" type="file" accept="application/json,.json" hidden />
         </div>
+        <span id="glossIoState" class="style-state" aria-live="polite"></span>
       </details>
       <div class="gloss-add">
         <input id="glossSource" type="text" placeholder="Kaynak (örn. Aspect)" />
@@ -131,6 +141,21 @@
         <button id="glossAddBtn" class="pill">Ekle</button>
       </div>
       <p id="glossPending" class="gloss-pending-note" hidden></p>
+      <!-- ARAMA + SÜZGEÇ: sözlük 267 satıra çıkabiliyor; telefonda parmakla
+           kaydırarak terim bulmak pratik değil. Süzme tamamen istemci tarafında. -->
+      <div class="gloss-tools">
+        <input id="glossSearch" type="search" placeholder="Terim ara…"
+               aria-label="Sözlükte ara" autocomplete="off" />
+        <div class="segmented gloss-filters" role="group" aria-label="Sözlük süzgeci">
+          <button class="seg" data-gloss-filter="all">Tümü</button>
+          <button class="seg" data-gloss-filter="en">İngilizce</button>
+          <button class="seg" data-gloss-filter="tr">Türkçe</button>
+          <button class="seg" data-gloss-filter="manual">Elle</button>
+        </div>
+      </div>
+      <!-- Yazım hatası olabilecek çiftler (Orc/Ore). Otomatik birleştirme YOK. -->
+      <p id="glossWarnNote" class="gloss-warn-note" hidden></p>
+      <p id="glossCount" class="gloss-hint gloss-count" hidden></p>
       <div id="glossList" class="gloss-list"></div>
     </div>
   </section>
@@ -159,63 +184,6 @@
       <button id="findClose" class="pill" aria-label="Aramayı kapat">×</button>
     </div>
 
-    <div id="settingsPanel" class="settings-panel" hidden>
-      <div class="setting-row">
-        <span>Tema</span>
-        <div class="segmented" role="group" aria-label="Tema">
-          <button class="seg" data-theme-opt="light">Açık</button>
-          <button class="seg" data-theme-opt="sepia">Sepya</button>
-          <button class="seg" data-theme-opt="dark">Koyu</button>
-        </div>
-      </div>
-      <div class="setting-row">
-        <span>Punto</span>
-        <div class="stepper">
-          <button id="fontMinus" class="pill" aria-label="Yazıyı küçült">A−</button>
-          <span id="fontValue" class="stepper-val">19</span>
-          <button id="fontPlus" class="pill" aria-label="Yazıyı büyüt">A+</button>
-        </div>
-      </div>
-      <div class="setting-row">
-        <span>Yazı tipi</span>
-        <button id="fontFamily" class="pill">Serif</button>
-      </div>
-      <div class="setting-row">
-        <span>Satır aralığı</span>
-        <div class="segmented" role="group" aria-label="Satır aralığı">
-          <button class="seg" data-lh="sik">Sık</button>
-          <button class="seg" data-lh="normal">Normal</button>
-          <button class="seg" data-lh="seyrek">Seyrek</button>
-        </div>
-      </div>
-      <div class="setting-row">
-        <span>Kenar boşluğu</span>
-        <div class="segmented" role="group" aria-label="Kenar boşluğu">
-          <button class="seg" data-mg="dar">Dar</button>
-          <button class="seg" data-mg="normal">Normal</button>
-          <button class="seg" data-mg="genis">Geniş</button>
-        </div>
-      </div>
-      <div class="setting-row">
-        <span>Sonsuz okuma</span>
-        <div class="segmented" role="group" aria-label="Sonsuz okuma">
-          <button class="seg" data-inf="1">Açık</button>
-          <button class="seg" data-inf="0">Kapalı</button>
-        </div>
-      </div>
-      <div class="setting-row">
-        <span>Bu bölüm</span>
-        <button id="retranslate" class="pill">Yeniden çevir</button>
-      </div>
-      <div class="setting-row">
-        <span>Cloudflare oturumu</span>
-        <button id="clearanceRefresh" class="pill">Yenile</button>
-      </div>
-      <div class="setting-row">
-        <span>Uygulama kabuğu <span id="shellVersion" class="shell-ver"></span></span>
-        <button id="shellReset" class="pill">Sıfırla</button>
-      </div>
-    </div>
 
     <p id="status" class="status" hidden></p>
     <!-- Sonsuz okuma v2: bölümler <article data-url> olarak buraya akar; gezinme
@@ -410,6 +378,98 @@
       </div>
     </div>
   </div>
+
+  <!-- Ayarlar: alttan açılan sheet. `readerView` içindeyken yalnız
+       okuyucuda erişilebiliyordu, oysa içindeki ayarların hepsi global. -->
+  <div id="settingsPanel" class="settings-panel" hidden>
+    <div class="setting-row">
+      <span>Tema</span>
+      <div class="segmented" role="group" aria-label="Tema">
+        <button class="seg" data-theme-opt="light">Açık</button>
+        <button class="seg" data-theme-opt="sepia">Sepya</button>
+        <button class="seg" data-theme-opt="dark">Koyu</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>Punto</span>
+      <div class="stepper">
+        <button id="fontMinus" class="pill" aria-label="Yazıyı küçült">A−</button>
+        <span id="fontValue" class="stepper-val">19</span>
+        <button id="fontPlus" class="pill" aria-label="Yazıyı büyüt">A+</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>Yazı tipi</span>
+      <button id="fontFamily" class="pill">Serif</button>
+    </div>
+    <div class="setting-row">
+      <span>Satır aralığı</span>
+      <div class="segmented" role="group" aria-label="Satır aralığı">
+        <button class="seg" data-lh="sik">Sık</button>
+        <button class="seg" data-lh="normal">Normal</button>
+        <button class="seg" data-lh="seyrek">Seyrek</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>Kenar boşluğu</span>
+      <div class="segmented" role="group" aria-label="Kenar boşluğu">
+        <button class="seg" data-mg="dar">Dar</button>
+        <button class="seg" data-mg="normal">Normal</button>
+        <button class="seg" data-mg="genis">Geniş</button>
+      </div>
+    </div>
+    <div class="setting-row">
+      <span>Sonsuz okuma</span>
+      <div class="segmented" role="group" aria-label="Sonsuz okuma">
+        <button class="seg" data-inf="1">Açık</button>
+        <button class="seg" data-inf="0">Kapalı</button>
+      </div>
+    </div>
+    <div class="setting-row setting-row-dikey">
+      <span>Çeviri modeli</span>
+      <!-- Seçenekler SUNUCUDAN doldurulur (/api/settings/model): burada sabit bir
+           liste tutulsaydı model eklendiğinde iki yerin ayrışması gerekirdi ve
+           okuyucu sunucunun tanımadığı bir ad gönderebilirdi. -->
+      <div id="modelSecim" class="segmented segmented-dort" role="group" aria-label="Çeviri modeli"></div>
+      <p id="modelNotu" class="gloss-hint model-notu"></p>
+      <!-- Harcama GOSTERGESI (fren degil): ucretli model elle seciliyor ve
+           ucretsiz zincir asla ucretliye inmiyor, yani surpriz harcamanin
+           kaynagi zaten kapali. Pencere AYLIK, cunku fatura da oyle okunuyor. -->
+      <p id="modelHarcama" class="gloss-hint model-harcama" hidden></p>
+    </div>
+    <div class="setting-row">
+      <span>Bu bölüm</span>
+      <button id="retranslate" class="pill">Yeniden çevir</button>
+    </div>
+    <div class="setting-row">
+      <span>Cloudflare oturumu</span>
+      <button id="clearanceRefresh" class="pill">Yenile</button>
+    </div>
+    <div class="setting-row">
+      <span>Uygulama kabuğu <span id="shellVersion" class="shell-ver"></span></span>
+      <button id="shellReset" class="pill">Sıfırla</button>
+    </div>
+  </div>
+
+  <!-- ALT GEZINME (Stitch "Level 1 docked container").
+       UC sekme, dordu degil: Stitch'in "Guncellemeler" sekmesinin bu projede
+       karsiligi yok (check-updates yalniz arka plan is tipi, ekrani yok) ve bos
+       bir sekme koymak, kaldirilan puan/yazar/ozet alanlariyla ayni turden bir
+       bos vaat olurdu. -->
+  <nav id="bottomNav" class="bottom-nav" aria-label="Ana gezinme">
+    <button class="navtab" data-tab="library" aria-current="page">
+      <span class="navtab-icon" aria-hidden="true"></span>
+      <span class="navtab-label">Kütüphane</span>
+    </button>
+    <button class="navtab" data-tab="offline">
+      <span class="navtab-icon" aria-hidden="true"></span>
+      <span class="navtab-label">Çevrimdışı</span>
+    </button>
+    <button class="navtab" data-tab="settings">
+      <span class="navtab-icon" aria-hidden="true"></span>
+      <span class="navtab-label">Ayarlar</span>
+    </button>
+  </nav>
 
   <script src="/app.js"></script>
 </body>

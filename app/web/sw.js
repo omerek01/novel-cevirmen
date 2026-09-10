@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v66"; // sonsuz okuma anahtarı + liste-tabanlı devam
+const SHELL_CACHE = "novellink-shell-v89"; // kökene git: cümle içinde terim de işaretlenir
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -12,6 +12,20 @@ const SHELL = [
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
+  // Yazi tipleri kabugun PARCASIDIR: `cacheFirst` SHELL disindaki bir statigi
+  // ASLA cache'e yazmaz, yani burada olmayan font cevrimdisiyken indirilemez ve
+  // tasarim sistem fontuna duserdi. ~700 KB, bir kez iner.
+  "/fonts.css",
+  "/fonts/inter-400-latin-ext.woff2",
+  "/fonts/inter-400-latin.woff2",
+  "/fonts/inter-500-latin-ext.woff2",
+  "/fonts/inter-500-latin.woff2",
+  "/fonts/inter-600-latin-ext.woff2",
+  "/fonts/inter-600-latin.woff2",
+  "/fonts/literata-400-latin-ext.woff2",
+  "/fonts/literata-400-latin.woff2",
+  "/fonts/literata-600-latin-ext.woff2",
+  "/fonts/literata-600-latin.woff2",
 ];
 
 self.addEventListener("install", (event) => {
