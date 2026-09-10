@@ -1,6 +1,10 @@
-"""Çeviri kalitesi eklentileri: bölümler arası bağlam + kitap başına üslup notu.
+"""Çeviri kalitesi eklentisi: bölümler arası bağlam taşıma.
 
-Ağa/Gemini'ye çıkmaz — bağlamın ve üslup notunun prompt'a KADAR taşındığını
+Kitap başına ÜSLUP NOTU 2026-09-02'de kaldırıldı (kullanıcı kararı): hiçbir kitapta
+yazılı değildi, yani her istekte prompt'a "(yok)" diye 36 token boşuna gidiyordu ve
+okuyucudaki kutu ölü bir özellikti.
+
+Ağa/Gemini'ye çıkmaz — bağlamın prompt'a KADAR taşındığını
 (pipeline -> translate_chapter) ve kaynaklarının (cache/library) doğru satırı
 bulduğunu sabitler. Çevirinin kalitesi ölçülmez; taşımanın kopmadığı ölçülür.
 """
@@ -50,39 +54,6 @@ def test_prev_translation_baska_kitaba_sizmaz():
     assert cache.prev_translation("kitap-b", None, 9) == ""
 
 
-# ---------- library.set_style_note ----------
-
-def test_style_note_yaz_oku():
-    library.upsert_book("k", "Kitap", "u1", "B1", 1)
-    assert library.set_style_note("k", "  Birinci şahıs, alaycı ton.  ") is True
-    assert library.get_book("k")["style_note"] == "Birinci şahıs, alaycı ton."
-
-
-def test_style_note_bos_yazmak_notu_kaldirir():
-    library.upsert_book("k", "Kitap", "u1", "B1", 1)
-    library.set_style_note("k", "bir not")
-    library.set_style_note("k", "   ")
-    assert library.get_book("k")["style_note"] == ""
-
-
-def test_style_note_uzunlugu_sinirlanir():
-    library.upsert_book("k", "Kitap", "u1", "B1", 1)
-    library.set_style_note("k", "x" * 5000)
-    assert len(library.get_book("k")["style_note"]) == library.STYLE_NOTE_MAX
-
-
-def test_style_note_bilinmeyen_kitap_false():
-    assert library.set_style_note("yok-boyle-kitap", "not") is False
-
-
-def test_style_note_upsert_ile_silinmez():
-    """Bölüm okundukça upsert_book çalışır; adı geçmeyen sütun sıfırlanmamalı (E-16)."""
-    library.upsert_book("k", "Kitap", "u1", "B1", 1)
-    library.set_style_note("k", "kalıcı not")
-    library.upsert_book("k", "Kitap", "u2", "B2", 2)
-    assert library.get_book("k")["style_note"] == "kalıcı not"
-
-
 # ---------- translate._tail_words ----------
 
 def test_tail_words_son_kelimeleri_alir():
@@ -95,9 +66,9 @@ def test_tail_words_metin_kisaysa_tamamini_verir():
     assert translate._tail_words(None, 5) == ""
 
 
-# ---------- uçtan uca: pipeline bağlamı VE üslup notunu translate'e geçirir ----------
+# ---------- uçtan uca: pipeline bağlamı translate'e geçirir ----------
 
-def test_pipeline_baglam_ve_uslubu_translate_e_gecirir(monkeypatch):
+def test_pipeline_baglami_translate_e_gecirir(monkeypatch):
     yakalanan = {}
 
     def sahte_translate(text, api_key=None, glossary=None, **kw):
@@ -112,18 +83,16 @@ def test_pipeline_baglam_ve_uslubu_translate_e_gecirir(monkeypatch):
 
     _bolum("u1", "k", 1, "Önceki bölümün Türkçe sonu.")
     library.upsert_book("k", "Kitap", "u1", "B1", 1)
-    library.set_style_note("k", "Ağır ve edebî anlatım.")
     monkeypatch.setattr(pipeline, "fetch_chapter", sahte_fetch)
     monkeypatch.setattr(pipeline, "translate_chapter", sahte_translate)
 
     pipeline.get_or_translate("u2", "anahtar")
 
-    assert yakalanan["style_note"] == "Ağır ve edebî anlatım."
     assert yakalanan["prev_context"] == "Önceki bölümün Türkçe sonu."
 
 
-def test_pipeline_uslup_notu_yokken_bos_gecer(monkeypatch):
-    """Not yazılmamış kitapta prompt'a boş string gider — None sızıp patlamaz."""
+def test_pipeline_onceki_bolum_yokken_bos_gecer(monkeypatch):
+    """İlk bölümde prompt'a boş string gider — None sızıp patlamaz."""
     yakalanan = {}
 
     def sahte_translate(text, api_key=None, glossary=None, **kw):
@@ -138,39 +107,4 @@ def test_pipeline_uslup_notu_yokken_bos_gecer(monkeypatch):
 
     pipeline.get_or_translate("y1", "anahtar")
 
-    assert yakalanan["style_note"] == ""
     assert yakalanan["prev_context"] == ""
-
-
-# ---------- API uçları ----------
-
-def test_style_api_yaz_oku(monkeypatch):
-    import server
-    from fastapi.testclient import TestClient
-
-    library.upsert_book("k", "Kitap", "u1", "B1", 1)
-    c = TestClient(server.app)
-    assert c.get("/api/book/k/style").json()["note"] == ""
-    r = c.post("/api/book/k/style", json={"note": "Kısa cümleler."})
-    assert r.status_code == 200 and r.json()["note"] == "Kısa cümleler."
-    assert c.get("/api/book/k/style").json()["note"] == "Kısa cümleler."
-
-
-def test_style_api_bilinmeyen_kitap_404():
-    import server
-    from fastapi.testclient import TestClient
-
-    r = TestClient(server.app).post("/api/book/yok/style", json={"note": "x"})
-    assert r.status_code == 404
-
-
-def test_style_api_alias_kanonige_yazar():
-    """Birleştirilmiş kitapta not kanonik slug'a yazılmalı (bölüm/sözlükle aynı kural)."""
-    import server
-    from fastapi.testclient import TestClient
-
-    library.upsert_book("kanonik", "Kitap", "u1", "B1", 1)
-    library.set_alias("eski-slug", "kanonik")
-    c = TestClient(server.app)
-    assert c.post("/api/book/eski-slug/style", json={"note": "Not."}).status_code == 200
-    assert library.get_book("kanonik")["style_note"] == "Not."

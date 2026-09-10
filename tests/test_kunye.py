@@ -186,3 +186,131 @@ def test_url_ile_eklenen_bolum_de_model_tasir(monkeypatch):
     assert payload["model"] == "gemini-3.7-flash"
     # Cache'e de yazılmalı: bölüm ikinci açılışta künyesini DB'den okur.
     assert cache.get_chapter("https://site/b1")["model"] == "gemini-3.7-flash"
+
+
+# ---------- sözlük uyum bayrağı ----------
+#
+# Zincir yalnız erişilebilirliğe bakarak iniyor; kaliteyi hiçbir yerde ölçmüyordu.
+# Ölçüm (2026-08-30, Shadow Slave 110 bölüm): sözlük ihlali 3.6-flash'ta 60 bölümde
+# 5, flash-lite'ta 4 bölümde 36. Lite'ın çevirisi sessizce kalıcı önbelleğe yazılıp
+# bir daha kontrol edilmiyordu. Bayrak künyenin parçası: rozet uyarıyı gösterir,
+# yeniden çeviriyi kullanıcı tetikler (otomatik tekrar YOK — kota zaten tükendiği
+# için lite'a düşülmüştü, hemen tekrar denemek çoğunlukla boşa giderdi).
+
+
+def test_ihlal_bayragi_roundtrip():
+    _kaydet("g1", glossary_leaks={"Saint": "Aziz"})
+    assert cache.get_chapter("g1")["glossary_leaks"] == {"Saint": "Aziz"}
+
+
+def test_bayraksiz_eski_satir_bos_doner():
+    """Sütun sonradan eklendi; eski satırlarda NULL → okuyucu uyarı çizmez."""
+    _kaydet("g2")
+    assert cache.get_chapter("g2")["glossary_leaks"] == {}
+
+
+def test_bayrak_tasimayan_yazim_mevcut_bayragi_silmez():
+    """E-16 sınıfı: künye taşımayan payload (görsel içerik yolu) bayrağı düşürmemeli."""
+    _kaydet("g3", glossary_leaks={"Saint": "Aziz"})
+    _kaydet("g3", translation="<img>", content_type="html")
+    assert cache.get_chapter("g3")["glossary_leaks"] == {"Saint": "Aziz"}
+
+
+def test_temiz_yeniden_ceviri_bayragi_dusurur():
+    """Bölüm daha iyi bir halkayla yeniden çevrilince bayrak DÜŞMELİ; aksi hâlde
+    düzelen bölüm sonsuza dek "ihlalli" görünürdü. Boş dict None DEĞİLDİR —
+    COALESCE yalnız None'ı korur."""
+    _kaydet("g4", glossary_leaks={"Saint": "Aziz"})
+    _kaydet("g4", glossary_leaks={})
+    assert cache.get_chapter("g4")["glossary_leaks"] == {}
+
+
+def test_payload_sozluk_ihlallerini_tasir(monkeypatch):
+    glossary.merge_terms("kitap", {"Saint": "Aziz"}, "manuel", 1)
+    _pipeline_kur(monkeypatch, {
+        "translation": "Saint elini kaldırdı.",
+        "source": "The Saint raised his hand.",
+        "chunk_count": 1, "engine": "gemini", "model": "gemini-3.5-flash-lite",
+        "detected_names": [], "detected_terms": {},
+    })
+    payload = pipeline.get_or_translate("g5", "anahtar")
+    assert payload["glossary_leaks"] == {"Saint": "Aziz"}
+    # Önbellek isabetinde de korunmalı: künye gibi DB'den okunur.
+    assert pipeline.get_or_translate("g5", "anahtar")["glossary_leaks"] == {"Saint": "Aziz"}
+
+
+def test_uyumlu_ceviride_bayrak_bos(monkeypatch):
+    glossary.merge_terms("kitap", {"Saint": "Aziz"}, "manuel", 1)
+    _pipeline_kur(monkeypatch, {
+        "translation": "Aziz elini kaldırdı.",
+        "source": "The Saint raised his hand.",
+        "chunk_count": 1, "engine": "gemini", "model": "gemini-3.6-flash",
+        "detected_names": [], "detected_terms": {},
+    })
+    assert pipeline.get_or_translate("g6", "anahtar")["glossary_leaks"] == {}
+
+
+def test_hizalanmamis_bolumde_denetim_olcum_yapmaz(monkeypatch):
+    """`source` None (hizalama tutmadı) → kıyaslanacak İngilizce metin yok. Denetim
+    ölçüm yapamaz; "ihlal yok" demek yanlış olmaz ama uydurmamalı: boş döner."""
+    glossary.merge_terms("kitap", {"Saint": "Aziz"}, "manuel", 1)
+    _pipeline_kur(monkeypatch, {
+        "translation": "Saint elini kaldırdı.", "source": None,
+        "chunk_count": 1, "engine": "gemini", "model": "gemini-3.5-flash-lite",
+        "detected_names": [], "detected_terms": {},
+    })
+    assert pipeline.get_or_translate("g7", "anahtar")["glossary_leaks"] == {}
+
+
+def test_denetim_bolumleri_yalniz_kaynakli_satirlari_verir():
+    """Geriye dönük denetimin girdisi: kaynağı DA çevirisi DE olan satırlar.
+    Kaynağı olmayan bölüm (hizalama tutmamış) ölçülemez, listeye girmemeli."""
+    _kaydet("d1", book_slug="kit", chapter_no=1, translation="TR",
+            source="EN", model="gemini-3.5-flash-lite")
+    _kaydet("d2", book_slug="kit", chapter_no=2, translation="TR")  # kaynak YOK
+    satirlar = cache.denetim_bolumleri("kit")
+    assert [s["chapter_no"] for s in satirlar] == [1]
+    assert satirlar[0]["source"] == "EN"
+    assert satirlar[0]["translation"] == "TR"
+    assert satirlar[0]["model"] == "gemini-3.5-flash-lite"
+
+
+def test_denetim_bolumleri_kitapsiz_cagride_hepsini_verir():
+    """Araç varsayılan olarak TÜM kitapları tarar; `--kitap` süzgeci isteğe bağlı."""
+    _kaydet("d3", book_slug="a", chapter_no=1, translation="TR", source="EN")
+    _kaydet("d4", book_slug="b", chapter_no=1, translation="TR", source="EN")
+    assert {s["book_slug"] for s in cache.denetim_bolumleri()} == {"a", "b"}
+
+
+def test_bayrak_tek_basina_guncellenebilir():
+    """Geriye dönük denetim (`scripts/uyum_denetle.py`) bölümün geri kalanına
+    DOKUNMADAN yalnız bayrağı yazar. `save_chapter` tam payload ister; oradan
+    geçmek çeviriyi/künyeyi yeniden yazma riski taşırdı."""
+    _kaydet("g8", engine="gemini", model="gemini-3.5-flash-lite", translation="ç")
+    cache.set_glossary_leaks("g8", {"Saint": "Aziz"})
+    row = cache.get_chapter("g8")
+    assert row["glossary_leaks"] == {"Saint": "Aziz"}
+    assert row["translation"] == "ç"
+    assert row["engine"] == "gemini" and row["model"] == "gemini-3.5-flash-lite"
+
+
+def test_bayrak_temizlemek_icin_bos_yazilabilir():
+    """Denetim temiz çıkarsa "{}" yazılır — NULL ("hiç denetlenmedi") ile ayrı."""
+    _kaydet("g9", translation="ç")
+    cache.set_glossary_leaks("g9", {})
+    assert cache.get_chapter("g9")["glossary_leaks"] == {}
+
+
+def test_url_ile_eklenen_bolum_de_denetlenir(monkeypatch):
+    """Künyeyi üreten DÖRT noktadan ikincisi ("web'den devam"). `model` bir süre
+    yalnız ilkinde vardı; aynı hatayı bayrakla tekrarlamayalım."""
+    glossary.merge_terms("kitap", {"Saint": "Aziz"}, "manuel", 1)
+    _pipeline_kur(monkeypatch, {
+        "translation": "Saint elini kaldırdı.",
+        "source": "The Saint raised his hand.",
+        "chunk_count": 1, "engine": "gemini", "model": "gemini-3.5-flash-lite",
+        "detected_names": [], "detected_terms": {},
+    })
+    payload = pipeline.fetch_into_book("https://site/b9", "kitap", "anahtar")
+    assert payload["glossary_leaks"] == {"Saint": "Aziz"}
+    assert cache.get_chapter("https://site/b9")["glossary_leaks"] == {"Saint": "Aziz"}

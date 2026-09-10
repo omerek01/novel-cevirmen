@@ -214,12 +214,16 @@ def _manga_regions(image_bytes: str, api_key: str) -> tuple[list[dict], str | No
     from google import genai
     from google.genai import types
 
-    from .translate import DEFAULT_MODELS, SAFETY_SETTINGS, _Retryable, genai_errors
+    from .translate import SAFETY_SETTINGS, _Retryable, genai_errors, secili_zincir
 
     client = genai.Client(api_key=api_key)
     part = types.Part.from_bytes(data=image_bytes, mime_type="image/png")
     last: Exception | None = None
-    for model in DEFAULT_MODELS:
+    # Zincir AYARDAN çözülür (`secili_zincir`), sabit listeden değil: manga görsel
+    # yolu da kullanıcının seçtiği modeli kullanmalı, yoksa aynı kurulumda iki
+    # farklı politika oluşur ve "modeli değiştirdim ama manga eskisiyle çevriliyor"
+    # denir.
+    for model in secili_zincir():
         try:
             resp = client.models.generate_content(
                 model=model,

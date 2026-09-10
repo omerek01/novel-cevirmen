@@ -125,10 +125,24 @@ def test_chapter_endpoint_maps_typed_errors_to_error_class(monkeypatch):
     assert res.status_code == 503
     assert res.json()["detail"]["error_class"] == "TranslateError"
 
-    # Anahtar yoksa TranslateError 500'e düşer (kurulum hatası, geçici değil).
+    # HİÇBİR anahtar yoksa TranslateError 500'e düşer (kurulum hatası, geçici değil).
+    # Ölçüt tek bir değişken DEĞİL, anahtar HAVUZU. Anahtar değişkenleri AÇIKÇA ve
+    # TÜRETİLEREK siliniyor: `server` importu `.env`i pytest sürecine yüklüyor, adları
+    # tek tek yazmak testi geliştiricinin makinesine bağımlı kılardı.
+    from core import translate as _t
+    for _ad in _t.anahtar_degiskenleri():
+        monkeypatch.delenv(_ad, raising=False)
     monkeypatch.setattr(server, "API_KEY", None)
     res = client.get("/api/chapter", params={"url": "u1"})
     assert res.status_code == 500
+
+    # Ortamda duran İKİNCİ anahtar da kurulumu tamamlar → 503 (geçici hata).
+    # `server.API_KEY` hâlâ None: kapı tek değişkene bakıyor olsaydı burada
+    # yanıltıcı bir 500 dönerdi.
+    monkeypatch.setenv("GEMINI2_API_KEY", "ikinci-anahtar")
+    res = client.get("/api/chapter", params={"url": "u1"})
+    assert res.status_code == 503
+    assert res.json()["detail"]["error_class"] == "TranslateError"
 
 
 def test_reading_log_endpoint_dedups_per_day():

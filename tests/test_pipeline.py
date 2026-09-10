@@ -136,6 +136,125 @@ def test_background_fetch_uses_bulk_priority(monkeypatch):
     pipeline.get_or_translate("u1", "anahtar", background=True)
     assert seen.get("priority") == "bulk"
 
+    # İlk çağrı bölümü önbelleğe KAYNAĞIYLA yazdı; sade `refresh` artık siteye
+    # inmiyor (aşağıdaki testler). Öncelik kuralını görmek için indirmeyi zorla.
     seen.clear()
-    pipeline.get_or_translate("u1", "anahtar", refresh=True)
+    pipeline.get_or_translate("u1", "anahtar", refresh=True, refetch=True)
     assert seen.get("priority") == "interactive"
+
+
+# ---------- "yeniden çevir" siteye inmiyor ----------
+# Ölçülen vaka: Shadow Slave 1. bölüm "yeniden çevir" 1-2 dakika sürdü. `refresh`
+# önbelleği atlayınca doğrudan Playwright + Cloudflare'e iniyordu; oysa kullanıcı
+# genellikle SÖZLÜĞÜ değiştirmiş oluyor ve İngilizce kaynak aynı kalıyor.
+
+
+def test_yeniden_cevir_onbellekteki_kaynaktan_cevirir(monkeypatch):
+    """Kaynak önbellekte varsa `refresh` web'e HİÇ gitmemeli."""
+    _cached(source="Cached source text")
+    monkeypatch.setattr(
+        pipeline, "fetch_chapter",
+        lambda url, **kw: (_ for _ in ()).throw(AssertionError("siteye inildi")),
+    )
+    gorulen = {}
+
+    def sahte_ceviri(text, **kw):
+        gorulen["text"] = text
+        return _translation()
+
+    monkeypatch.setattr(pipeline, "translate_chapter", sahte_ceviri)
+
+    sonuc = pipeline.get_or_translate("u1", "anahtar", refresh=True)
+
+    assert gorulen["text"] == "Cached source text"  # önbellekteki kaynak çevrildi
+    assert sonuc["translation"] == "Yeni çeviri"
+
+
+def test_refetch_siteye_inmeye_zorlar(monkeypatch):
+    """Kaynağın KENDİSİ bozuksa ("Bölüm Boş" kartı) indirme şart."""
+    _cached(source="Cached source text")
+    cagrildi = []
+    monkeypatch.setattr(
+        pipeline, "fetch_chapter", lambda url, **kw: cagrildi.append(url) or _chapter()
+    )
+    monkeypatch.setattr(pipeline, "translate_chapter", lambda *a, **k: _translation())
+
+    pipeline.get_or_translate("u1", "anahtar", refresh=True, refetch=True)
+
+    assert cagrildi == ["u1"]
+
+
+def test_hizalamasiz_onbellek_siteye_iner(monkeypatch):
+    """Hizalama tutmadıysa `source` NULL — çevrilecek kaynak yok, indirmek gerekir."""
+    _cached(source=None)
+    cagrildi = []
+    monkeypatch.setattr(
+        pipeline, "fetch_chapter", lambda url, **kw: cagrildi.append(url) or _chapter()
+    )
+    monkeypatch.setattr(pipeline, "translate_chapter", lambda *a, **k: _translation())
+
+    pipeline.get_or_translate("u1", "anahtar", refresh=True)
+
+    assert cagrildi == ["u1"]
+
+
+def test_onbellekte_olmayan_bolum_yine_indirilir(monkeypatch):
+    """Kendini seçen dal: kayıt yoksa `_onbellek_kaynagi` None döner, akış fetch'e düşer."""
+    cagrildi = []
+    monkeypatch.setattr(
+        pipeline, "fetch_chapter", lambda url, **kw: cagrildi.append(url) or _chapter()
+    )
+    monkeypatch.setattr(pipeline, "translate_chapter", lambda *a, **k: _translation())
+
+    pipeline.get_or_translate("yeni-url", "anahtar")
+
+    assert cagrildi == ["yeni-url"]
+
+
+def test_onbellek_yolu_gezinme_bilgisini_tasir(monkeypatch):
+    """Bu yol next/prev'i önbellekten TAŞIR, tazelemez — tazeleme `refresh_metadata`nın işi."""
+    _cached(source="Cached source text")
+    monkeypatch.setattr(
+        pipeline, "fetch_chapter",
+        lambda url, **kw: (_ for _ in ()).throw(AssertionError("siteye inildi")),
+    )
+    monkeypatch.setattr(pipeline, "translate_chapter", lambda *a, **k: _translation())
+
+    sonuc = pipeline.get_or_translate("u1", "anahtar", refresh=True)
+
+    assert sonuc["next_url"] == "u2"
+
+
+# ---------- uç sözleşmesi: refetch pipeline'a ULAŞIYOR mu ----------
+# Bayrak uçta düşerse davranış sessizce eski hâline döner ("yeniden çevir" yine
+# siteye iner) ve bunu yalnız süre farkından anlarız — o yüzden sabitleniyor.
+
+
+def _api(monkeypatch):
+    import pytest
+
+    pytest.importorskip("httpx")
+    import server
+
+    monkeypatch.setattr(server, "API_KEY", "test-key")
+    return server
+
+
+def test_uc_refetch_bayragini_gecirir(monkeypatch):
+    server = _api(monkeypatch)
+    from fastapi.testclient import TestClient
+
+    gorulen = {}
+    monkeypatch.setattr(
+        server.pipeline, "get_or_translate",
+        lambda *a, **k: gorulen.update(k) or {"translation": "ç"},
+    )
+    istemci = TestClient(server.app)
+
+    istemci.get("/api/chapter", params={"url": "u1", "refresh": 1})
+    assert gorulen["refetch"] is False       # varsayılan: önbellekteki kaynaktan
+
+    gorulen.clear()
+    istemci.get("/api/chapter", params={"url": "u1", "refresh": 1, "refetch": 1})
+    assert gorulen["refetch"] is True        # zorlanınca siteye iner
+

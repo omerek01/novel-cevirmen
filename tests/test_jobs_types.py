@@ -61,6 +61,27 @@ def test_get_book_job_attention_priority_error_over_done():
     assert got["id"] == err["id"]  # hata rozeti sökülmez
 
 
+def test_get_book_job_AYNI_TIPTE_yeni_basari_eski_hatayi_gizler():
+    """E-5 tip-farkındaydı ama AYNI tip içinde TARİH yok sayılıyordu.
+
+    Gerçek vaka (2026-09-10): shadow-slave'de bulk işi 09-09 23:20'de 2/15'te
+    hataya düştü; kullanıcı 09-10 06:43'te yeniden çalıştırdı ve 10/10 bitti —
+    ama rafta hâlâ "! HATA" rozeti duruyordu. Kullanıcı sorunu zaten çözmüşken
+    rozetin kalması yanlış bilgi: raf "ilgilenmen gereken bir şey var" diyordu,
+    oysa yoktu.
+
+    Kural artık şu: her TİP kendi EN SON kaydıyla temsil edilir, öncelik ancak
+    ondan sonra uygulanır. Böylece E-5 korunur (check-updates'in done'ı bulk
+    hatasını sökmez) ama aynı tipte daha yeni bir başarı eskisini geçersiz kılar.
+    """
+    err = _job(state="error", updated_at=time.time() - 100)
+    yeni = _job(state="done", updated_at=time.time())  # AYNI tip (bulk)
+    jobs._persist(err)
+    jobs._persist(yeni)
+    got = jobs.get_book_job("s")
+    assert got["id"] == yeni["id"]
+
+
 def test_start_bulk_dedup_is_type_aware(monkeypatch):
     """E-22: koşan check-updates işi bulk dedup'unu TETİKLEMEZ."""
     monkeypatch.setattr(jobs, "_start_thread", lambda job_id, api_key: True)

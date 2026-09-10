@@ -13,6 +13,7 @@ from pathlib import Path
 APP_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP_DIR))  # 'core' paketini CWD'den bağımsız import et
 
+import json  # noqa: E402
 import mimetypes  # noqa: E402
 import os  # noqa: E402
 
@@ -20,6 +21,9 @@ import os  # noqa: E402
 # kayıtlı olabilir. Yanlış Content-Type → Chrome PWA ikonunu/manifesti reddeder.
 mimetypes.add_type("application/manifest+json", ".webmanifest")
 mimetypes.add_type("image/svg+xml", ".svg")
+# .woff2 de ayni tuzakta: yanlis Content-Type ile gelen font sessizce YOK SAYILIR
+# ve yazi sistem fontuna duser — arizanin hicbir hata mesaji olmaz.
+mimetypes.add_type("font/woff2", ".woff2")
 
 from dotenv import load_dotenv  # noqa: E402
 from fastapi import FastAPI, HTTPException, Query, Request, Response  # noqa: E402
@@ -29,10 +33,16 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import cache, epub_export, glossary, import_book, jobs, library, media, pipeline, reading_log, synthetic  # noqa: E402
+from core import cache, epub_export, glossary, import_book, jobs, kullanim, library, media, pipeline, reading_log, settings, synthetic  # noqa: E402
+from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
-from core.translate import TranslateError, suggest_term  # noqa: E402
+from core.translate import (  # noqa: E402
+    ANAHTAR_YOK_MESAJI,
+    TranslateError,
+    ceviri_anahtari_var_mi,
+    suggest_term,
+)
 
 load_dotenv(APP_DIR.parent / ".env")  # tek kaynak: novel-cevirmen/.env
 API_KEY = os.getenv("GEMINI_API_KEY")
@@ -61,8 +71,12 @@ def _pipeline_http_error(exc: BaseException) -> HTTPException:
         ec = "OriginError" if any(f"HTTP {e}" in str(exc) for e in CF_ORIGIN_ERRORS) else "FetchError"
         return HTTPException(502, {"message": str(exc), "error_class": ec})
     if isinstance(exc, TranslateError):
-        if not API_KEY:
-            return HTTPException(500, "GEMINI_API_KEY ayarlı değil.")
+        # Ölçüt "API_KEY değişkeni dolu mu" DEĞİL: ikinci anahtar yalnız `.env`'de
+        # duruyor olabilir (`GEMINI2_API_KEY`) ve onu görmeyen bir kapı, pekâlâ
+        # çalışabilecek bir kurulumda 503 yerine yanıltıcı bir 500 "anahtar yok"
+        # döndürürdü. Kapı tek değişkene değil anahtar HAVUZUNA bakar.
+        if not ceviri_anahtari_var_mi(API_KEY):
+            return HTTPException(500, ANAHTAR_YOK_MESAJI)
         return HTTPException(503, {"message": str(exc), "error_class": "TranslateError"})
     raise exc  # bilinmeyen → olduğu gibi yukarı
 
@@ -74,6 +88,7 @@ def get_chapter(
     refresh: bool = Query(False, description="Önbelleği yok say, yeniden çevir"),
     source: bool = Query(False, description="İki-dilli: hizalı İngilizce kaynağı da getir"),
     track: bool = Query(True, description="Kitabın 'kaldığın yer' konumu bu bölüme ilerlesin mi"),
+    refetch: bool = Query(False, description="Siteden yeniden indir (kaynağın kendisi bozuksa)"),
 ) -> dict:
     """Bölümü çek + Türkçe'ye çevir. Önbellekte varsa anında döner.
 
@@ -82,10 +97,16 @@ def get_chapter(
 
     track=0: sonsuz okumada akışa ÖNDEN eklenen (henüz okunmamış) bölümler için —
     konumu ilerletme; konumu yalnız aktif bölümün position POST'u belirlesin.
+
+    refetch=1: refresh yolunu SİTEDEN indirmeye zorlar. Varsayılan 0 — önbellekte
+    hizalı İngilizce kaynak varsa "yeniden çevir" web'e hiç gitmez (Playwright +
+    Cloudflare, deneme başına 60 sn zaman aşımı). Kullanıcı "yeniden çevir" derken
+    genellikle sözlüğü/üslubu değiştirmiş oluyor; İngilizce kaynak aynı kalıyor.
     """
     try:
         return pipeline.get_or_translate(
-            url, API_KEY, refresh, want_source=source, advance_position=track
+            url, API_KEY, refresh, want_source=source, advance_position=track,
+            refetch=refetch,
         )
     except MangaTranslating as exc:
         # Manga bölümü arka planda çevriliyor → sayfa henüz hazır değil. Okuyucu
@@ -184,6 +205,19 @@ def book_chapters(slug: str) -> dict:
 class GlossaryTerm(BaseModel):
     source: str
     target: str | None = None
+    # KOSUL: karsiligin hangi baglamda gecerli oldugunu anlatan serbest metin.
+    # None = ALAN GONDERILMEDI (mevcut kosul KORUNUR); "" = temizle. Ayrim
+    # sart: okuyucunun cevrimdisi kuyrugu yalniz {source,target} gonderiyor ve
+    # None'i "sil" diye okumak, sıradan bir karsilik duzeltmesinin kurali
+    # sessizce yok etmesi demekti.
+    kosul: str | None = None
+
+
+class GlossaryImportRequest(BaseModel):
+    terms: dict[str, str]
+    # "dosya" = dosyadaki karşılık kazanır (INSERT OR REPLACE);
+    # "mevcut" = yalnız boşluğu doldur (INSERT OR IGNORE, kullanıcı kaydı korunur).
+    strateji: str = "mevcut"
 
 
 class GlossarySuggestRequest(BaseModel):
@@ -215,8 +249,8 @@ class StatusRequest(BaseModel):
     status: str  # okunuyor | beklemede | bitti
 
 
-class StyleNoteRequest(BaseModel):
-    note: str | None = None  # boş/None = notu kaldır
+class CeviriModeliRequest(BaseModel):
+    model: str
 
 
 class PasteImportRequest(BaseModel):
@@ -571,13 +605,35 @@ def clearance_refresh() -> dict:
 
 @app.get("/api/book/{slug}/glossary")
 def get_book_glossary(slug: str) -> dict:
-    return {"terms": glossary.get_glossary(slug)}
+    """Sözlük: sade eşleme (`terms`) + köken bilgili satırlar (`rows`).
+
+    `terms` GERİYE DÖNÜK uyum için duruyor — çevrimdışı kuyruğu olan okuyucu ve
+    eski önbelleğe alınmış istemci onu bekliyor. `rows` köken sütunlarını taşır
+    (ne zaman, hangi yoldan, hangi bölümde girdi); sözlük ekranındaki süzme ve
+    künye rozetindeki düzeltme bunu kullanır.
+    """
+    return {
+        "terms": glossary.get_glossary(slug),
+        "kosullar": glossary.get_kosullar(slug),
+        "rows": glossary.get_glossary_rows(slug),
+        # Yazım hatası olabilecek çiftler (`Orc`/`Ore`). Otomatik birleştirme YOK —
+        # tek harf farkı gerçek bir anlam farkı olabilir; karar kullanıcınındır.
+        "warnings": glossary.yakin_terimler(slug),
+    }
 
 
 @app.post("/api/book/{slug}/glossary")
 def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
     glossary.set_term(slug, term.source, term.target)
-    return {"terms": glossary.get_glossary(slug)}
+    # KOŞUL yalnız ALANI GÖNDERİLDİĞİNDE yazılır. Okuyucunun çevrimdışı kuyruğu
+    # {source, target} gönderiyor; `None` gelince koşulu silmek, kullanıcının
+    # sıradan bir karşılık düzeltmesinin kuralı sessizce yok etmesi demekti.
+    if term.kosul is not None:
+        glossary.set_kosul(slug, term.source, term.kosul)
+    return {
+        "terms": glossary.get_glossary(slug),
+        "kosullar": glossary.get_kosullar(slug),
+    }
 
 
 @app.delete("/api/book/{slug}/glossary")
@@ -600,20 +656,95 @@ def suggest_book_glossary(slug: str, req: GlossarySuggestRequest) -> dict:
         raise _pipeline_http_error(exc) from exc
 
 
-@app.get("/api/book/{slug}/style")
-def get_book_style(slug: str) -> dict:
-    """Kitabın üslup notu (anlatım kişisi, hitap, ton) — her çeviriye enjekte edilir."""
-    book = library.get_book(library.resolve_slug(slug))
-    return {"note": (book or {}).get("style_note") or ""}
+@app.get("/api/book/{slug}/glossary/export")
+def export_book_glossary(slug: str) -> Response:
+    """Sözlüğü JSON olarak indir (yedek + masaüstünde toplu düzenleme).
 
-
-@app.post("/api/book/{slug}/style")
-def set_book_style(slug: str, req: StyleNoteRequest) -> dict:
-    """Üslup notunu kaydet. Sözlük gibi: YENİ çevrilen bölümlerde geçerli olur."""
+    Sözlük tek bir PC'deki tek bir SQLite dosyasında yaşıyor; yedeği yoktu ve
+    telefon arayüzünde 267 satırı elden geçirmek pratik değil.
+    """
     canonical = library.resolve_slug(slug)
-    if not library.set_style_note(canonical, req.note):
-        raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
-    return {"note": (library.get_book(canonical) or {}).get("style_note") or ""}
+    govde = json.dumps(
+        {"book_slug": canonical, "terms": glossary.get_glossary(canonical)},
+        ensure_ascii=False,
+        indent=2,
+    )
+    return Response(
+        content=govde,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="sozluk-{canonical}.json"'
+        },
+    )
+
+
+@app.post("/api/book/{slug}/glossary/import")
+def import_book_glossary(slug: str, req: GlossaryImportRequest) -> dict:
+    """Dosyadan gelen terimleri birleştir.
+
+    Varsayılan strateji "mevcut": kullanıcının hâlihazırdaki kaydı EZİLMEZ, yalnız
+    eksikler eklenir (`merge_terms`, INSERT OR IGNORE). "dosya" stratejisi bilerek
+    üzerine yazar — masaüstünde toplu düzeltme yapıp geri yüklemenin yolu budur.
+    """
+    canonical = library.resolve_slug(slug)
+    gelen = {k: v for k, v in (req.terms or {}).items() if (k or "").strip()}
+    if req.strateji == "dosya":
+        for kaynak, hedef in gelen.items():
+            glossary.set_term(canonical, kaynak, hedef, "import")
+        eklenen = len(gelen)
+    else:
+        eklenen = len(glossary.merge_terms(canonical, gelen, "import"))
+    return {
+        "eklenen": eklenen,
+        "gelen": len(gelen),
+        "terms": glossary.get_glossary(canonical),
+    }
+
+
+@app.get("/api/book/{slug}/glossary/impact")
+def book_glossary_impact(slug: str, source: str = Query(...)) -> dict:
+    """Bu terim ÇEVRİLMİŞ kaç bölümde geçiyor (kaynak metne göre)?
+
+    Sözlük ipucu "eski bölüm için Yeniden çevir" diyordu ama hangileri olduğunu
+    söylemiyordu. `kapsama` alanı kaynak metni olan bölüm oranını taşır —
+    kapsama düşükken "0 bölüm" yanıltıcı okunmasın.
+    """
+    return pipeline.terim_etkisi(library.resolve_slug(slug), source)
+
+
+@app.get("/api/settings/model")
+def get_ceviri_modeli() -> dict:
+    """Seçili çeviri modeli + seçenekler (etiket ve ölçüm notlarıyla).
+
+    Seçenekleri SUNUCU veriyor, okuyucu sabit bir liste taşımıyor: iki yerde
+    yazılsalardı bir model eklendiğinde okuyucu güncellenmeyi unutulabilir ve
+    sunucunun tanımadığı bir ad gönderilirdi (sessizce yok sayılırdı).
+    """
+    return {
+        "secili": settings.get(translate_mod.MODEL_AYAR_ANAHTARI,
+                               translate_mod.VARSAYILAN_MODEL),
+        "secenekler": list(translate_mod.SECILEBILIR_MODELLER),
+        # Harcama GOSTERGESI (fren degil, kullanici karari): ucretli model elle
+        # seciliyor ve ucretli halkaya sessizce dusulmuyor, yani surpriz harcamanin
+        # kaynagi zaten kapali. Ayni istekte donuyor cunku okuyucu ikisini de ayni
+        # panelde gosteriyor - ikinci bir fetch bos yere gecikme olurdu.
+        "harcama": kullanim.ozet(),
+    }
+
+
+@app.post("/api/settings/model")
+def set_ceviri_modeli(req: CeviriModeliRequest) -> dict:
+    """Çeviri modelini seç. YALNIZ yeni çevrilen bölümlerde geçerlidir (sözlük ve
+    önbellekteki bölümler yeniden çevrilmedikçe değişmez.
+
+    Tanınmayan ad REDDEDİLİR: sessizce yok saymak, kullanıcıya "seçtim" dedirtip
+    hiçbir şey değiştirmezdi. Seçim zincirin başına geçer, yerini almaz — tercih
+    edilen model çeviremezse okuma alt halkalardan sürer.
+    """
+    if req.model not in translate_mod.SECILEBILIR_ADLAR:
+        raise HTTPException(status_code=400, detail="Bilinmeyen model.")
+    settings.set(translate_mod.MODEL_AYAR_ANAHTARI, req.model)
+    return {"secili": req.model, "zincir": list(translate_mod.zincir_kur(req.model))}
 
 
 @app.get("/api/book/{slug}/epub")

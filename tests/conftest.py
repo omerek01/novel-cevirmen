@@ -12,6 +12,13 @@ APP_DIR = Path(__file__).resolve().parent.parent / "app"
 if str(APP_DIR) not in sys.path:
     sys.path.insert(0, str(APP_DIR))
 
+# Bakım araçları da test edilebilsin: karar kuralları (hangi sapma BOZUKTUR) orada
+# yaşıyor ve elle doğrulanması pahalı — `bolum_sirasi_denetle` numara/zincir
+# ölçütlerini taşıyor ve yanlış bir gevşetme kullanıcının verisini bozar.
+SCRIPTS_DIR = Path(__file__).resolve().parent.parent / "scripts"
+if str(SCRIPTS_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS_DIR))
+
 
 @pytest.fixture(autouse=True)
 def temp_db(tmp_path, monkeypatch):

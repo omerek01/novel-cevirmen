@@ -16,10 +16,13 @@ class _GeminiYanit:
 
 
 def _gemini_kur(monkeypatch, promptlar=None):
-    def sahte(client, models, user, system=None, max_tokens=None):
+    def sahte(client_factory, models, user, system=None, max_tokens=None):
         if promptlar is not None:
             promptlar.append(user)
-        return _GeminiYanit(), models[0]  # (yanıt, fiilen çeviren model)
+        # Fiilen çeviren model AÇIKÇA gemini: `models[0]` döndürmek sahteyi zincirin
+        # ilk halkasına bağlıyordu ve o halka artık Mistral — yardımcının adı
+        # `_gemini_kur` olduğu hâlde künye "mistral" çıkıyordu.
+        return _GeminiYanit(), "gemini-3.6-flash"
 
     monkeypatch.setattr(translate, "_generate_with_fallback", sahte)
     monkeypatch.setattr(translate.genai, "Client", lambda api_key=None: object())
@@ -27,8 +30,8 @@ def _gemini_kur(monkeypatch, promptlar=None):
 
 # ---------- prompt bütünlüğü ----------
 
-def test_prompt_sozluk_uslup_ve_baglami_tasir(monkeypatch):
-    """Dördü de TEK prompt'ta buluşur; biri düşerse çevirinin karakteri değişir."""
+def test_prompt_sozluk_ve_baglami_tasir(monkeypatch):
+    """Üçü de TEK prompt'ta buluşur; biri düşerse çevirinin karakteri değişir."""
     promptlar = []
     _gemini_kur(monkeypatch, promptlar)
 
@@ -36,12 +39,10 @@ def test_prompt_sozluk_uslup_ve_baglami_tasir(monkeypatch):
         "Blackwater attacked.", api_key="k",
         glossary={"Blackwater": "Blackwater"},
         prev_context="Önceki bölümün sonu.",
-        style_note="Ağır üslup.",
     )
 
     p = promptlar[0]
     assert "Blackwater" in p
-    assert "Ağır üslup." in p
     assert "Önceki bölümün sonu." in p
 
 
@@ -74,14 +75,40 @@ def test_donus_kunyesi_gemini_der(monkeypatch):
 
 # ---------- anahtar kapısı ----------
 
-def test_anahtarsiz_ceviri_reddedilir(monkeypatch):
-    """Tek motor Gemini olduğundan anahtar artık koşulsuz zorunlu: pipeline fetch'e
-    inmeden erken hata verir (boşuna Cloudflare turu atılmasın)."""
+def _fetch_yasakla(monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_chapter", lambda url, **kw: (_ for _ in ()).throw(
         AssertionError("anahtarsız çağrı fetch'e indi")
     ))
+
+
+def test_hicbir_anahtar_yoksa_ceviri_reddedilir(monkeypatch):
+    """Kapı, fetch'e İNMEDEN erken hata verir (boşuna Cloudflare turu atılmasın).
+
+    Ölçüt tek bir değişken DEĞİL, anahtar HAVUZU: ikinci anahtar yalnız `.env`'de
+    duruyor olabilir. Anahtar değişkenleri `gemini_anahtar_degiskenleri` ile
+    TÜRETİLEREK siliniyor — adları tek tek yazmak, üçüncü bir anahtar eklendiğinde
+    testi sessizce geliştiricinin `.env`ine bağımlı kılardı (`server` importu onu
+    pytest sürecine yüklüyor)."""
+    for _ad in translate.anahtar_degiskenleri():
+        monkeypatch.delenv(_ad, raising=False)
+    _fetch_yasakla(monkeypatch)
     with pytest.raises(translate.TranslateError):
         pipeline.get_or_translate("u-anahtarsiz", None, background=False)
+
+
+def test_ortamdaki_ikinci_anahtar_da_kapiyi_acar(monkeypatch):
+    """`api_key` argümanı boş olsa bile ortamdaki ikinci anahtar çeviriyi mümkün kılar.
+
+    Kapı bir dönem yalnız çağrıdan gelen anahtara bakıyordu; ikinci anahtar
+    `GEMINI2_API_KEY` olarak eklenince bu, pekâlâ çalışabilecek bir kurulumu
+    kapıda reddederdi. Kapı geçilince fetch'e inilir; testte fetch yasak olduğu
+    için AssertionError'a çarpması BEKLENEN sonuçtur (yani kapı geçildi)."""
+    for _ad in translate.anahtar_degiskenleri():
+        monkeypatch.delenv(_ad, raising=False)
+    monkeypatch.setenv("GEMINI2_API_KEY", "ikinci-anahtar")
+    _fetch_yasakla(monkeypatch)
+    with pytest.raises(AssertionError, match="fetch'e indi"):
+        pipeline.get_or_translate("u-ikinci-anahtar", None, background=False)
 
 
 # ---------- model zinciri: TEK ve kalite öncelikli, HER yolda aynı ----------
@@ -105,10 +132,43 @@ def _zincir_yakala(monkeypatch):
 
 def test_zincir_kaliteden_ucuza_iner():
     """Kullanıcı kararı: en iyi modelden başla, kota/servis tökezledikçe bir alta in.
-    Son halka flash-lite — en dayanıklısı, zincir tükenmesin diye orada."""
+
+    2026-09-09: `gemini-3.5-flash-lite` ZİNCİRDEN ÇIKARILDI. Bir dönem son halka
+    olarak duruyordu ("en dayanıklısı, zincir tükenmesin diye") ama ölçüm bunun
+    bedelini gösterdi: sözlük kuralına uyumu zincirin en kötüsüydü (4 bölümde 30
+    ihlal; 3.6-flash 60 bölümde 5). Son halka olması durumu ağırlaştırıyordu —
+    üst halkalar elendiğinde okuma sessizce oraya iniyor ve çeviri kalıcı
+    önbelleğe yazılıyordu. Daralan kapasite anahtar tarafında telafi edildi:
+    503 artık sıradaki ANAHTARI deniyor ve istekler anahtarlara dönüşümlü
+    dağıtılıyor.
+
+    2026-09-02: zincir GEMINI-TEK oldu. Gemini dışı halkalar (minimax, mistral)
+    zincire KOTA gerekçesiyle girmişti, kaliteyle değil; ölçüldüklerinde ikisi de
+    metni kısaltıyordu (uzunluk oranı medyanı 0,949 ve 0,914; 3.6-flash 0,972).
+    Kotanın yerini ANAHTAR HAVUZU aldı: kota dolunca başka bir sağlayıcıya değil,
+    başka bir Gemini anahtarına geçilir — kaliteden ödün verilmeden.
+    Halka sırası ve gerekçesi `tests/test_gemini_anahtarlari.py` içinde."""
     assert translate.DEFAULT_MODELS == (
-        "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite",
+        "gemini-3.6-flash",
+        "gemini-3.5-flash",
     )
+
+
+def test_zincirde_gemini_disi_saglayici_yok():
+    """Gemini dışı sağlayıcılar kaldırıldı; `<sağlayıcı>:<model>` yönlendirmesi de.
+
+    Önekli bir ad artık HİÇBİR yere yönlenmez — Gemini ucuna olduğu gibi gider ve
+    404 alır, yani halka sessizce elenir. Tel tuzağı bu yüzden: zincire önekli bir
+    ad geri sızarsa arıza "model meşgul" kılığına girerdi."""
+    assert all(":" not in m for m in translate.DEFAULT_MODELS)
+    assert all(m.startswith("gemini-") for m in translate.DEFAULT_MODELS)
+
+
+def test_olculmemis_model_zincirin_basinda_durmaz():
+    """`gemini-3.7-flash` 2026-08-23'te çıkarıldı: kalitesi hiç ölçülemedi ama
+    reddettiğinde zincir bir alta inmeden önce 3 deneme + 6 sn uyku yakıyordu.
+    Geri eklenecekse ÖNCE kalitesi ölçülmeli — bu test kazara geri gelmesini tutar."""
+    assert "gemini-3.7-flash" not in translate.DEFAULT_MODELS
 
 
 def test_okuma_yolu_kaliteli_zincirle_acar(monkeypatch):
@@ -153,7 +213,7 @@ def test_kunye_fiilen_ceviren_modeli_yazar(monkeypatch):
 def test_parcalar_farkli_modele_duserse_hepsi_yazilir(monkeypatch):
     """Uzun bölümde ilk parça kotayı bitirip sonrakiler alt halkaya düşebiliyor;
     tek bir 'bölümün modeli' varsayımı yanlış olurdu."""
-    kullanilan = iter(["gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.6-flash"])
+    kullanilan = iter(["gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash"])
 
     def sahte(client, models, user, system=None, max_tokens=None):
         return _GeminiYanit(), next(kullanilan)
@@ -165,4 +225,4 @@ def test_parcalar_farkli_modele_duserse_hepsi_yazilir(monkeypatch):
     monkeypatch.setattr(translate, "_split_paragraphs", lambda t: ["p1", "p2", "p3"])
     sonuc = translate.translate_chapter("uzun metin", api_key="k")
     # Tekrar elenir, sıra korunur.
-    assert sonuc["model"] == "gemini-3.7-flash + gemini-3.6-flash"
+    assert sonuc["model"] == "gemini-3.6-flash + gemini-3.5-flash"

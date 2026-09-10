@@ -276,3 +276,227 @@ def test_sistem_talimati_deyimleri_ayri_kural_yapar():
     assert "turn the tables" in talimat
     assert "masaları çevirmek" in talimat  # yanlış biçim açıkça yasaklanıyor
     assert "ÖLÇÜT" in talimat              # modele kendini denetleme ölçütü verilir
+
+
+# ---------- İngilizce korunan ad: küçük harfli geçiş sıradan kelimedir ----------
+# Ölçüm (gerçek bölümlerde, İngilizce kaynak): `Dark` 113, `Blue` 53, `Sun` 5 kez
+# SIRADAN kelime olarak eşleşiyordu. Her eşleşme prompt'a "bu ad AYNEN İngilizce
+# kalacak" kuralını sokuyor; model o zaman sıradan bir sıfatı çevirmiyor.
+
+
+def test_ingilizce_korunan_ad_kucuk_harfli_gecisi_saymaz():
+    assert not translate._terim_metinde("Sun", "Sun", "The sun rose over the hill.")
+    assert translate._terim_metinde("Sun", "Sun", "Sun smiled at him.")
+
+
+def test_bagirma_yazimi_ingilizce_korunan_adi_elemez():
+    """Düz "büyük-küçük harf duyarlı arama" DEĞİL: tümü büyük harf de geçerli."""
+    assert translate._terim_metinde("Sunny", "Sunny", "SUNNY! he shouted.")
+
+
+def test_kucuk_harfli_kaynak_kucuk_harf_kuralindan_muaf():
+    """Gerçek kayıt: `tls123 -> tls123` (kullanıcı adı) — metinde hep küçük harfli.
+
+    Kuralı ona da uygulamak, kaydı hiç eşleşmez hâle getirir ve o ad "her bölümde
+    yeniden karar" durumuna düşerdi.
+    """
+    assert translate._terim_metinde("tls123", "tls123", "posted by tls123 online")
+
+
+def test_turkce_karsilikli_terim_kucuk_harfte_de_eslesir():
+    """Kural YALNIZ İngilizce korunan kayda uygulanır; kaybın yönü asimetrik.
+
+    Türkçe karşılığı olan kayıt küçük yazıma uygulanınca DOĞRU çeviri çıkar
+    (zararsız); İngilizce korunan kayıt uygulanınca sıradan kelime İngilizce
+    kalır (görünür bozukluk).
+    """
+    assert translate._terim_metinde(
+        "Ore Empire", "Ork İmparatorluğu", "the ore empire fell that winter"
+    )
+
+
+def test_relevant_glossary_siradan_kelimeyi_getirmez(monkeypatch):
+    monkeypatch.setattr(translate, "GLOSSARY_FILTER_MIN", 2)
+    terms = {"Dark": "Dark", "Blue": "Blue", "Ore Empire": "Ork İmparatorluğu"}
+    picked = translate._relevant_glossary(terms, "The dark blue sky over the ore empire.")
+    assert picked == {"Ore Empire": "Ork İmparatorluğu"}
+
+
+def test_ingilizce_korunan_varyant_kaydi_da_kural_kapsaminda():
+    """`Ore Empire -> OreEmpire` de fiilen "İngilizce korunuyor" demektir."""
+    assert translate._ingilizce_korunan("Ore Empire", "OreEmpire")
+    assert not translate._ingilizce_korunan("Ore Empire", "Ork İmparatorluğu")
+
+
+# ---------- zorlayıcı hatırlatma listesi DAİMA süzülür ----------
+
+
+def test_korunacak_listesi_bolumde_gecmeyen_adi_saymaz():
+    """Eşiğin ALTINDAKİ sözlükte de hatırlatma süzülmeli.
+
+    `_relevant_glossary` küçük sözlüğü hiç süzmüyor (`GLOSSARY_FILTER_MIN`), o
+    yüzden hatırlatma bölümde geçmeyen adları da dayatıyordu — ölçüm: 30 terimlik
+    bir kitapta HER bölümde 18 ad. Ana SÖZLÜK listesi olduğu gibi kalır; dar
+    tutulan yalnız ZORLAYICI kısımdır.
+    """
+    user = translate._build_user_prompt(
+        ["Nephis drew her blade."],
+        {"Nephis": "Nephis", "Sunny": "Sunny", "Zero Wing": "Sıfır Kanat"},
+        "",
+    )
+    bas, son = user.split("SON HATIRLATMA", 1)
+    assert "Nephis" in son          # bölümde geçiyor -> dayatılır
+    assert "Sunny" not in son       # geçmiyor -> dayatılmaz
+    assert "Sunny -> Sunny" in bas  # ama ana sözlük listesinden düşmez
+
+
+def test_korunacak_listesi_turkce_karsilikli_terimi_saymaz():
+    """Hatırlatma "AYNEN İngilizce kalacak" diyor; Türkçeleşen terim oraya girmez."""
+    user = translate._build_user_prompt(
+        ["The Zero Wing hall stood empty."], {"Zero Wing": "Sıfır Kanat"}, "",
+    )
+    assert "AYNEN kalacak" not in user.split("SON HATIRLATMA", 1)[1]
+
+
+# ---------- elle ekleme, otomatik eklemenin sertleştirmelerini uygular ----------
+
+
+def test_set_term_yazim_varyanti_ikinci_satir_acmaz():
+    glossary.set_term("kitap", "Ore Empire", "Ork İmparatorluğu")
+    glossary.set_term("kitap", "OreEmpire", "Ork İmparatorluğu")
+    assert glossary.get_glossary("kitap") == {"Ore Empire": "Ork İmparatorluğu"}
+
+
+def test_set_term_varyantla_gelen_duzeltmeyi_kayitli_satira_yazar():
+    """Kayıtlı YAZIM korunur, değişen yalnız karşılıktır."""
+    glossary.set_term("kitap", "Ore Empire", "Maden İmparatorluğu")
+    glossary.set_term("kitap", "ore-empire", "Ork İmparatorluğu")
+    assert glossary.get_glossary("kitap") == {"Ore Empire": "Ork İmparatorluğu"}
+
+
+def test_set_term_cekim_ekini_koke_indirir():
+    """Okuyucudaki hızlı ekleme "sunucu köke indiriyor" varsayımıyla yazılmıştı."""
+    glossary.set_term("kitap", "Sunny's", "Sunny")
+    assert list(glossary.get_glossary("kitap")) == ["Sunny"]
+
+
+def test_set_term_ucu_varyanti_teklestirir():
+    """Uç de aynı sertleştirmeyi almalı — API'ye doğrudan giden çağrı korumasız kalmasın."""
+    with TestClient(server.app) as client:
+        client.post("/api/book/kitap/glossary", json={"source": "Ore Empire", "target": "Ork"})
+        r = client.post("/api/book/kitap/glossary", json={"source": "OreEmpire", "target": "Ork"})
+        assert r.json()["terms"] == {"Ore Empire": "Ork"}
+
+
+# ---------- lakap: ad yerine geçen sözcük de kişi sınıfındadır ----------
+# Gerçek bulgu (Shadow Slave 6. bölüm, 2026-08-23): anlatıcı gerçek adını bilmediği
+# kişileri özelliklerine göre adlandırıyor (Scholar, Shifty, Hero). Kural "İngilizce
+# kalan TEK sınıf gerçek kişi adları, UNVAN çevrilir" derken model bunları harfiyen
+# unvan sayıp Türkçeleştirdi ve karşılık sözlüğe KURAL olarak yazıldı; 7. bölüm de
+# ona uydu. Model bunları `detected_names`e hiç önermedi — boşluk kuraldaydı.
+
+
+def test_sistem_talimati_lakabi_kisi_sinifina_alir():
+    metin = translate.SYSTEM_INSTRUCTION
+    assert "LAKAP ÖLÇÜTÜ" in metin
+    assert "Scholar" in metin and "Shifty" in metin
+
+
+def test_lakap_olcutu_kategori_terimlerini_disarida_birakir():
+    """Ölçüt DAR olmalı: belirteç alan ya da sınıf anlatan sözcük lakap DEĞİLDİR.
+
+    Gevşek bir kural `an Aspirant` / `the Awakened` gibi sistem terimlerini de
+    İngilizce'ye kaçırırdı — düzeltmeye çalıştığımız hatadan büyük bir zarar.
+    """
+    kural = translate.LAKAP_KURALI
+    assert "a/an/the" in kural            # belirteç ölçütü
+    assert "an Aspirant" in kural          # karşı örnek
+    assert "the Awakened" in kural         # karşı örnek
+
+
+def test_lakap_olcutu_uc_talimatta_da_ayni():
+    """Çeviri, öneri ve sınıflandırma AYNI metni kullanmalı.
+
+    Üçü ayrışırsa aynı kitapta iki farklı politika oluşur: okurken eklenen terim
+    ile çevirinin kendi kararı çelişir.
+    """
+    for talimat in (
+        translate.SYSTEM_INSTRUCTION,
+        translate.SUGGEST_INSTRUCTION,
+        translate.CLASSIFY_INSTRUCTION,
+    ):
+        assert translate.LAKAP_KURALI in talimat
+
+
+def test_detected_names_lakabi_kabul_eder():
+    """Kutu tanımı da genişlemeli: model lakabı bildirmezse sözlüğe hiç girmez ve
+    sonraki bölümde yeniden karar konusu olur."""
+    metin = translate.SYSTEM_INSTRUCTION
+    bas = metin.index("- detected_names:")
+    son = metin.index("- detected_terms:")
+    kutu = metin[bas:son]
+    assert "LAKAP ÖLÇÜTÜ" in kutu
+    assert "kategori unvanı" in kutu   # sade "unvan" lakapla çelişirdi
+
+
+# ---------- çoğul kaydedilmiş terim tekili de yakalar ----------
+# Kuyruk eki (`s?`) çoğulu EKLİYOR ama ÇIKARMIYORDU: çoğul kaydedilmiş bir terim
+# tekilini asla yakalayamıyordu ve kayıt sözlükte durduğu hâlde prompt'a hiç
+# girmiyordu. Ölçülen vaka: `tyrants -> Tiranlar` kaydı varken metinde `tyrant`
+# 22 kez tekil geçiyordu; model `the Tyrant`ı serbestçe "hükümdar" çevirdi.
+# Gerçek sözlükte ölçüldü: kapsanan geçiş 14 -> 59.
+
+
+def test_cogul_kayit_tekili_yakalar():
+    assert translate._terim_metinde("tyrants", "Tiranlar", "the Tyrant roared")
+    assert translate._terim_metinde("tyrants", "Tiranlar", "the tyrants roared")
+
+
+def test_cok_kelimeli_cogul_kayit_tekili_yakalar():
+    assert translate._terim_metinde(
+        "Evil Beasts", "Kötü Canavarlar", "an Evil Beast appeared"
+    )
+
+
+def test_cogul_esnekligi_ingilizce_korunan_adda_kapali():
+    """Risk sınıfı KİŞİ adlarıdır: `Nephis` esnetilirse `Nephi`ye bulaşır.
+
+    Kaybın yönü asimetrik — İngilizce korunan kayıtta yanlış eşleşme sıradan bir
+    sözcüğü İngilizce bıraktırır (görünür bozukluk); Türkçe karşılıklı kayıtta
+    doğru çeviri çıkar (zararsız).
+    """
+    assert not translate._terim_metinde("Nephis", "Nephis", "Nephi walked alone")
+    assert translate._terim_metinde("Nephis", "Nephis", "Nephis walked alone")
+
+
+def test_cogul_esnekligi_kisa_koku_bozmaz():
+    """`MIN_COGUL_KOK`: kısa kökte eşleşme sıradan harflere bulaşırdı."""
+    assert not translate._terim_metinde("Os", "Oz", "O ran away")
+
+
+def test_terim_anahtari_suzgeci_cogula_toleransli():
+    """Model `Evil Beasts` bildirip kaynak `Evil Beast` diyorsa kayıt ELENMEMELİ.
+
+    Meşru bir kaydı atmak, o adı her bölümde yeniden karar konusu yapar — sözlüğün
+    var oluş sebebinin tersi.
+    """
+    assert translate.ayikla_terim_anahtarlari(
+        {"Evil Beasts": "Kötü Canavarlar"}, "A single Evil Beast appeared."
+    ) == {"Evil Beasts": "Kötü Canavarlar"}
+
+
+# ---------- hiyerarşi basamağı küçük harfli de olsa terimdir ----------
+
+
+def test_sistem_talimati_hiyerarsi_basamagini_kapsar():
+    """Gerçek bulgu (Shadow Slave 4. bölüm): canavar rütbeleri kaynakta ÇOĞUNLUKLA
+    küçük harfli (`monsters` 13 küçük / 1 büyük) — büyük harf ölçütü onları kaçırdı
+    ve hiçbiri sözlüğe geçmedi."""
+    metin = translate.SYSTEM_INSTRUCTION
+    assert "HİYERARŞİ İSTİSNASI" in metin
+    bas = metin.index("HİYERARŞİ İSTİSNASI")
+    madde = metin[bas:bas + 600]
+    assert "KÜÇÜK harfle" in madde
+    # Ayırt edici ŞART: düzene bağlanmayan sıradan cins isim girmemeli.
+    assert "AYIRT EDİCİ" in madde
+

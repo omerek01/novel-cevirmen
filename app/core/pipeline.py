@@ -10,6 +10,10 @@ import threading
 
 from . import budget, cache, glossary, library, synthetic
 from . import fetch as _fetch_mod
+from . import translate as _translate_mod
+# `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
+# regex yazmak, iki yerin zamanla ayrışması demek olurdu.
+from .fetch import _chapter_no as _url_bolum_no
 from .fetch import fetch_chapter
 from .translate import TranslateError, ayikla_karakter_adlari, translate_chapter
 
@@ -43,11 +47,18 @@ def _finalize_cached(cached: dict, url: str, advance_position: bool = True) -> d
     # Önbellekteki `detected_names` HAM olabilir (süzgeçten önce yazılmış eski satır):
     # aynı süzgeçten geçmeden merge_names'e verilirse eski bölümü her açışta sözlüğe
     # yeniden İngilizce kayıt çakar. Cache'te `detected_terms` yok → boş eşleme.
+    # `source` (İngilizce kaynak metin) süzgecin 4. elemesini besler; eski satırlarda
+    # NULL olabilir ve o durumda eleme KOŞMAZ — doğrulanamayan kayıt atılmaz.
     glossary.merge_names(
         cached["book_slug"],
         ayikla_karakter_adlari(
-            cached.get("detected_names") or [], {}, cached.get("translation") or ""
+            cached.get("detected_names") or [],
+            {},
+            cached.get("translation") or "",
+            cached.get("source") or "",
         ),
+        "auto",
+        cached.get("chapter_no"),
     )
     library.upsert_book(
         cached["book_slug"], cached["book_title"], url,
@@ -64,6 +75,7 @@ def get_or_translate(
     want_source: bool = False,
     background: bool = False,
     advance_position: bool | None = None,
+    refetch: bool = False,
 ) -> dict:
     """Bölümü önbellekten döndür ya da çek+çevir+önbelleğe yaz.
 
@@ -75,6 +87,11 @@ def get_or_translate(
 
     background=True toplu çeviri işinden gelen çağrıları işaretler: çekim düşük
     öncelikle yapılır (okuyucu isteği kapıda öne geçer).
+
+    refetch=True bölümü SİTEDEN yeniden indirmeye zorlar. Varsayılan False:
+    önbellekte hizalı İngilizce kaynak varsa "yeniden çevir" web'e HİÇ gitmez
+    (bkz. `_onbellek_kaynagi`). refetch, kaynağın KENDİSİ bozuk geldiğinde
+    ("Bölüm Boş" kartı) gerekir.
 
     advance_position: kitabın "kaldığın yer" konumu bu bölüme ilerlesin mi. None ise
     `not background` (eski davranış). Sonsuz okumada okuyucu, akışa ÖNDEN eklenen
@@ -93,13 +110,13 @@ def get_or_translate(
             if not (want_source and not cached.get("source") and api_key):
                 return _finalize_cached(cached, url, advance_position=adv)
 
-    if not api_key:
-        raise TranslateError("GEMINI_API_KEY ayarlı değil.")
+    if not _translate_mod.ceviri_anahtari_var_mi(api_key):
+        raise TranslateError(_translate_mod.ANAHTAR_YOK_MESAJI)
 
     # Sözlüğe işleme ARTIK uçuşun içinde (`_do_fetch_translate_save`): eklenen
     # terimler künyenin parçası ve cache'e onunla birlikte yazılıyor. Burada tekrar
     # çağrılsaydı ikinci çağıran hep boş liste görürdü (ilk çağıran zaten eklemiş olur).
-    payload = _fetch_translate_save(url, api_key, background)
+    payload = _fetch_translate_save(url, api_key, background, refetch)
 
     # E-2: yan etkiler çağıranın KENDİ bayrağıyla — prefetch uçuşuna katılan
     # okuyucunun "kaldığın yer"i ilerler, salt-prefetch ilerletmez.
@@ -111,7 +128,9 @@ def get_or_translate(
     return payload
 
 
-def _sozluge_isle(slug: str, veri: dict) -> dict[str, str]:
+def _sozluge_isle(
+    slug: str, veri: dict, chapter_no: int | None = None
+) -> dict[str, str]:
     """Bölümden algılanan özel adları kitabın sözlüğüne işle.
 
     Sözlüğe giren şey TÜM özel adlardır, iki davranışla:
@@ -126,6 +145,9 @@ def _sozluge_isle(slug: str, veri: dict) -> dict[str, str]:
     (gerçek bulgu: "Lightshadow City" için uydurma "Işıkölge"). Kullanıcının elle
     yazdığı kayıt her hâlükârda üstündür (`INSERT OR IGNORE`).
 
+    `chapter_no` köken sütununa (`glossary.first_chapter`) yazılır: yanlış bir
+    otomatik karşılık görüldüğünde hangi bölümden geldiği izlenebilsin.
+
     Döner: FİİLEN eklenen terimler (kaynak -> karşılık) — bölüm künyesine yazılır,
     okuyucu rozetinde gösterilir. Otomatik ekleme hatalı bir karşılığı kalıcı
     kılabildiği için görünür olması şart (gerçek bulgu: kaynak sitenin yazım hatası
@@ -135,14 +157,70 @@ def _sozluge_isle(slug: str, veri: dict) -> dict[str, str]:
     # kutu aynı adı taşıyabiliyor (model sızdırıyor) ve `merge_*` INSERT OR IGNORE
     # olduğundan İLK yazan kazanır — names önce koşarken "Blackwater Guild -> Blackwater
     # Guild" kaydı, aynı yanıttaki "Blackwater Guild -> Karasu Loncası"nı bastırıyordu.
+    # KÖKEN CÜMLESİ: kaydın çıktığı cümle, TÜRKÇE çeviriden aranır — kullanıcı
+    # sözlüğü Türkçe okurken denetliyor ve karşılığın cümle içinde nasıl durduğunu
+    # görmek istiyor. Karakter adları İngilizce kaldığı için onlar da bu metinde
+    # aynen geçer. Arama `_term_regex` ölçütüyle yapılır (yazım varyantına
+    # toleranslı), yani sözlüğün her yerinde kullanılan AYNI kural.
+    metin = veri.get("translation") or ""
+    terimler = veri.get("detected_terms") or {}
+    adlar = veri.get("detected_names") or []
+    cumleler: dict[str, str] = {}
+    for kaynak, karsilik in terimler.items():
+        c = _translate_mod.cumle_bul(metin, karsilik or kaynak)
+        if c:
+            cumleler[kaynak] = c
+    for ad in adlar:
+        c = _translate_mod.cumle_bul(metin, ad)
+        if c:
+            cumleler.setdefault(ad, c)
+
     eklenen: dict[str, str] = {}
-    eklenen.update(glossary.merge_terms(slug, veri.get("detected_terms")))
-    eklenen.update(glossary.merge_names(slug, veri.get("detected_names")))
+    eklenen.update(
+        glossary.merge_terms(
+            slug, veri.get("detected_terms"), "auto", chapter_no, cumleler
+        )
+    )
+    eklenen.update(
+        glossary.merge_names(
+            slug, veri.get("detected_names"), "auto", chapter_no, cumleler
+        )
+    )
     return eklenen
 
 
-def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
-    """Tek-uçuş korumalı paylaşılan iş: çek + çevir + önbelleğe yaz."""
+def _uyum_denetimi(prompt_sozlugu: dict[str, str], veri: dict) -> dict[str, str]:
+    """Çeviri, prompt'ta KURAL olarak verilen sözlüğe fiilen uydu mu?
+
+    Ölçülen sebep (2026-08-30, Shadow Slave'in önbellekteki 110 bölümü): zincirin
+    halkaları sözlük kuralına eşit uymuyor — 3.6-flash 60 bölümde 5 ihlal,
+    flash-lite 4 bölümde 36. Zincir yalnız ERİŞİLEBİLİRLİĞE bakarak iniyor
+    (kota dolunca bir alt halka) ve kaliteyi hiçbir yerde ölçmüyordu; lite'ın
+    çevirisi sessizce kalıcı önbelleğe yazılıp bir daha kontrol edilmiyordu.
+
+    Denetim `_sozluge_isle`'den SONRA çağrılsa da ölçüt bilerek `book_glossary`,
+    yani bölüm çevrilirken prompt'ta DURAN sözlüktür — bu bölümde yeni algılanan
+    terimlerin karşılığını model kendi seçti, ona uymadı diye suçlamak dairesel
+    olurdu. Model yalnız kendisine KURAL olarak verilen karşılıktan sorumludur.
+
+    Otomatik yeniden deneme YOK (kullanıcı kararı): lite'a zaten kota tükendiği
+    için düşülmüştü, aynı anda tekrar denemek çoğunlukla boşa giderdi. Bayrak
+    künyeye yazılır, yeniden çeviriyi kullanıcı tetikler.
+    """
+    return _translate_mod.sozluk_ihlalleri(
+        prompt_sozlugu, veri.get("source"), veri.get("translation")
+    )
+
+
+def _fetch_translate_save(
+    url: str, api_key: str, background: bool, refetch: bool = False
+) -> dict:
+    """Tek-uçuş korumalı paylaşılan iş: çek + çevir + önbelleğe yaz.
+
+    `refetch` uçuşa KATILANLARA değil, uçuşu AÇANA göre uygulanır — `background`
+    ile aynı kural. İki çağıran aynı URL için farklı bayrakla gelirse ilkinin
+    davranışı geçerlidir; ikinci bir uçuş açmak aynı bölümü iki kez çevirirdi.
+    """
     with _FLIGHTS_LOCK:
         flight = _FLIGHTS.get(url)
         joined = flight is not None
@@ -158,7 +236,7 @@ def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
         return dict(flight.result)
     try:
         flight.result = _do_fetch_translate_save(
-            url, api_key, background, flight.ticket
+            url, api_key, background, flight.ticket, refetch
         )
         return dict(flight.result)
     except BaseException as exc:
@@ -172,7 +250,42 @@ def _fetch_translate_save(url: str, api_key: str, background: bool) -> dict:
         flight.event.set()
 
 
-def _do_fetch_translate_save(url: str, api_key: str, background: bool, ticket) -> dict:
+def _onbellek_kaynagi(url: str) -> dict | None:
+    """Önbellekte hizalı İngilizce kaynak varsa ondan çevrilebilir bir bölüm kur.
+
+    "Yeniden çevir" (`refresh=True`) eskiden önbelleği atlayınca doğrudan siteye
+    iniyordu: Playwright + Cloudflare, deneme başına 60 sn zaman aşımı, üstüne
+    kendi geri-çekilmeli tekrarı ve tek kalıcı profil yüzünden serileşme. Oysa
+    kullanıcı "yeniden çevir" derken genellikle SÖZLÜĞÜ
+    değiştirmiş oluyor — İNGİLİZCE KAYNAK aynı. Aynı metni yeniden indirmek
+    tamamen boşa harcanan süreydi (ölçülen vaka: Shadow Slave 1. bölüm 1-2 dakika).
+
+    Kod bu deseni zaten biliyordu: içe aktarılmış bölümler `raw_source` üzerinden
+    web'e hiç gitmiyor. Bu, aynı yönlendirmenin web-yerli bölümler için karşılığı.
+
+    None döner (→ siteye inilir) şu durumlarda: bölüm önbellekte yok; hizalama
+    tutmadığı için `source` NULL; kullanıcı `refetch` ile indirmeyi zorlamış.
+
+    NOT: bu yol `next_url`/`prev_url`'ü önbellekten TAŞIR, tazelemez. Zaten
+    tazeleme işi ayrı: `refresh_metadata` (check-updates) onu yapıyor.
+    """
+    satir = cache.get_chapter(url)
+    if satir is None or not (satir.get("source") or "").strip():
+        return None
+    return {
+        "book_slug": satir["book_slug"],
+        "book_title": satir["book_title"],
+        "title": satir["title"],
+        "chapter_no": satir["chapter_no"],
+        "text": satir["source"],
+        "next_url": satir["next_url"],
+        "prev_url": satir["prev_url"],
+    }
+
+
+def _do_fetch_translate_save(
+    url: str, api_key: str, background: bool, ticket, refetch: bool = False
+) -> dict:
     staged = cache.get_staged(url)
     # GÖRSEL İÇERİK (PDF çevrilmiş sayfa / EPUB yerinde-çevrili HTML): raw_source
     # metin yolundan ÖNCE — bu bölümler paragraf-çeviri değil, sayfa render / HTML üretir.
@@ -199,6 +312,11 @@ def _do_fetch_translate_save(url: str, api_key: str, background: bool, ticket) -
         raise synthetic.ImportedChapterMissing(
             "İçe aktarılan bölümün kaynağı bulunamadı; yeniden içe aktarın."
         )
+    elif not refetch and (onbellek := _onbellek_kaynagi(url)) is not None:
+        # "Yeniden çevir": İngilizce kaynak zaten önbellekte → siteye HİÇ inme.
+        # Kendini seçen bir daldır: bölüm önbellekte yoksa ya da kaynağı yoksa
+        # `_onbellek_kaynagi` None döner ve akış aşağıdaki fetch'e düşer.
+        chapter = onbellek
     else:
         # FetchError sızabilir. Toplu iş düşük öncelikli: okuyucu kapıda öne geçer.
         chapter = fetch_chapter(
@@ -207,6 +325,10 @@ def _do_fetch_translate_save(url: str, api_key: str, background: bool, ticket) -
 
     # Birleştirilmiş kitap: slug'ı kanonikleştir, böylece bölüm/sözlük tek kitapta toplanır.
     book_slug = library.resolve_slug(chapter["book_slug"])
+    # Kapak bu çekimden BEDAVAYA gelir (bölüm sayfasının og:image'ı) ve yalnız
+    # boşsa yazılır. `.get`: önbellek kaynağından gelen `chapter` bu alanı
+    # taşımaz — kapak yokluğu akışı bozmamalı, kapak süslemedir.
+    library.set_cover(book_slug, chapter.get("cover"))
     book_title = chapter["book_title"]
     if book_slug != chapter["book_slug"]:
         merged = library.get_book(book_slug)
@@ -214,8 +336,11 @@ def _do_fetch_translate_save(url: str, api_key: str, background: bool, ticket) -
             book_title = merged["title"]
 
     book_glossary = glossary.get_glossary(book_slug)
+    # KOŞULLU karşılıklar: aynı İngilizce sözcüğün bağlama göre farklı çevrildiği
+    # kayıtlar. Ayrı çekilir çünkü `get_glossary` sade eşlemeyi döndürmeye devam
+    # ediyor — sözleşmesini değiştirmek `translate_chapter`'a kadar sızardı.
+    book_kosullar = glossary.get_kosullar(book_slug)
     book = library.get_book(book_slug)
-    style_note = (book or {}).get("style_note") or ""
     # Bölüm sınırında bağlam sıfırlanmasın: önceki bölümün son Türkçe satırları
     # ilk parçaya bağlam olur (sahne ortasında biten bölümün devamı için).
     prev_context = cache.prev_translation(
@@ -231,18 +356,19 @@ def _do_fetch_translate_save(url: str, api_key: str, background: bool, ticket) -
         with budget.BG_TRANSLATE_SEM:
             result = translate_chapter(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
-                prev_context=prev_context, style_note=style_note,
+                prev_context=prev_context, kosullar=book_kosullar,
             )
     else:
         result = translate_chapter(
             chapter["text"], api_key=api_key, glossary=book_glossary,
-            prev_context=prev_context, style_note=style_note,
+            prev_context=prev_context, kosullar=book_kosullar,
         )
 
     # Sözlüğe işleme uçuşun İÇİNDE: eklenen terimler künyenin parçası ve bölümle
     # birlikte cache'e yazılıyor, böylece bölüm ikinci açılışta (önbellek isabeti)
     # künyesini kaybetmiyor.
-    eklenen = _sozluge_isle(book_slug, result)
+    eklenen = _sozluge_isle(book_slug, result, chapter.get("chapter_no"))
+    ihlaller = _uyum_denetimi(book_glossary, result)
 
     payload = {
         "title": chapter["title"],
@@ -258,10 +384,15 @@ def _do_fetch_translate_save(url: str, api_key: str, background: bool, ticket) -
         # KÜNYE: hangi motor çevirdi (düşüş olduysa fiilen kullanılan) + bu bölümde
         # sözlüğe eklenenler. Okuyucu bölüm sonundaki rozette gösterir.
         "engine": result.get("engine"),
-        # Zincirin FİİLEN çeviren halkası (3.7 mi flash-lite mı). `engine` yalnız
+        # Zincirin FİİLEN çeviren halkası (3.6 mı flash-lite mı). `engine` yalnız
         # "gemini" der; kalite sorularının cevabı bu alanda.
         "model": result.get("model"),
         "added_terms": eklenen,
+        # Sözlük uyum bayrağı: karşılığı KAYITLI olduğu hâlde İngilizce kalan terimler.
+        "glossary_leaks": ihlaller,
+        # İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş
+        # paragraflar. Boş = temiz.
+        "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
         "cached": False,
     }
     cache.save_chapter(url, payload)
@@ -274,8 +405,8 @@ def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
     render/çeviri yok). Medya, sahnelenen (pdf-/epub-) slug altında saklanır."""
     from . import import_translate
 
-    if not api_key:
-        raise TranslateError("GEMINI_API_KEY ayarlı değil.")
+    if not _translate_mod.ceviri_anahtari_var_mi(api_key):
+        raise TranslateError(_translate_mod.ANAHTAR_YOK_MESAJI)
     media_slug = staged["book_slug"]  # source.pdf / resimler bu slug altında
     book_slug = library.resolve_slug(media_slug)
     book = library.get_book(book_slug)
@@ -319,7 +450,7 @@ def _render_import_page(url: str, staged: dict, api_key: str) -> dict:
         # manga balonları) → rozet metin bölümlerindekiyle aynı bilgiyi verir.
         # Sayfada çevrilecek metin yoksa model None → o sayfaya künye yazılmaz
         # ("çevrildi" demek yanlış olurdu).
-        "engine": "gemini" if model else None,
+        "engine": _translate_mod.motor_adi(model),
         "model": model,
         "cached": False,
     }
@@ -338,8 +469,8 @@ def fetch_into_book(
     (host-türevli slug'a düşmez) — bölüm doğru kitapta toplanır, sentetik zincire de
     bağlanabilir. Konum İLERLETİLMEZ. FetchError / TranslateError sızabilir.
     """
-    if not api_key:
-        raise TranslateError("GEMINI_API_KEY ayarlı değil.")
+    if not _translate_mod.ceviri_anahtari_var_mi(api_key):
+        raise TranslateError(_translate_mod.ANAHTAR_YOK_MESAJI)
     chapter = fetch_chapter(url, priority="interactive")
     # Bölünme fix: bu web serisinin host-türevli slug'ını (örn. renegade-immortal)
     # hedef kitaba alias'la → kullanıcı SONRAKI BÖLÜM ile normal okuyucudan devam
@@ -348,17 +479,53 @@ def fetch_into_book(
     if host_slug and host_slug != target_slug:
         library.set_alias(host_slug, target_slug)
     book_glossary = glossary.get_glossary(target_slug)
+    # Koşullar `_fetch_translate_save` ile AYNI: sözlüğü okuyan her yol koşulları
+    # da okumalı, yoksa "web'den devam" ile eklenen bölüm kuralın dışında kalır —
+    # `model` künyesinde tam bu hata yaşandı.
+    book_kosullar = glossary.get_kosullar(target_slug)
     tail = cache.tail_chapter(target_slug)
-    no = chapter_no if chapter_no is not None else ((tail["chapter_no"] or 0) + 1 if tail else 1)
-    prev_url = tail["url"] if tail else None
+    # NUMARA ÖNCELİĞİ (2026-09-02'de düzeltildi). Eskiden yalnız `tail+1` vardı ve
+    # `fetch_chapter`'ın başlıktan/URL'den zaten çıkardığı numara yok sayılıyordu;
+    # ARADAN bir bölüm eklendiğinde numara uydurulmuş oluyordu. Ölçülen gerçek vaka
+    # (Shadow Slave): kuyruk 140'tayken eklenen `chapter-137` 141 numarasını, sonra
+    # eklenen `chapter-141` 142'yi aldı — okuyucuda bölüm sırası ve adı kaydı.
+    #
+    # Ama "sayfanın numarası HER ZAMAN kazanır" da YANLIŞ olurdu: bu fonksiyonun
+    # asıl işi PASTE-tabanlı bir kitabı web'e köprülemek ve orada web sayfasının
+    # numarası BAŞKA bir numaralandırma evreninden gelir (paste kitabın 2. bölümü,
+    # sitenin 1704. bölümü olabilir). Ölçüt bu yüzden kitabın KENDİ numaralandırması:
+    # kuyruğun URL'sindeki numara kuyruğun `chapter_no`'suna eşitse kitap zaten
+    # kaynağın numaralandırmasını izliyor demektir, sayfaya güvenilir. Paste
+    # kitabında kuyruk `paste://…` olduğu için bu koşul tutmaz ve eski davranış
+    # (tail+1) aynen korunur.
+    sayfa_no = chapter.get("chapter_no")
+    kuyruk_url_no = _url_bolum_no(tail["url"]) if tail else None
+    kitap_kaynak_numarali = (
+        tail is not None
+        and kuyruk_url_no is not None
+        and kuyruk_url_no == tail["chapter_no"]
+    )
+    if chapter_no is not None:
+        no = chapter_no  # kullanıcı açıkça verdi: en üstün kaynak
+    elif sayfa_no is not None and kitap_kaynak_numarali:
+        no = sayfa_no  # kitap zaten kaynağın numaralandırmasını izliyor
+    else:
+        no = (tail["chapter_no"] or 0) + 1 if tail else 1  # köprüleme: sıraya ekle
+
+    # ZİNCİR: yalnız gerçekten KUYRUĞA eklerken kuyruğa bağla. Köprülemede `prev`
+    # kuyruk OLMALI (sayfanın kendi prev'i bu kitapta bulunmayan bir web adresidir).
+    # ARAYA eklerken tersi geçerli: kuyruğun next'ini yeni bölüme çevirmek zinciri
+    # koparır — 140'ın next'i 137'ye dönmüştü.
+    kuyruga_ekleniyor = tail is None or no > (tail["chapter_no"] or 0)
+    prev_url = (tail["url"] if tail else None) if kuyruga_ekleniyor else chapter.get("prev_url")
     book = library.get_book(target_slug)
     result = translate_chapter(
         chapter["text"], api_key=api_key, glossary=book_glossary,
         prev_context=cache.prev_translation(target_slug, prev_url, no),
-        style_note=(book or {}).get("style_note") or "",
+        kosullar=book_kosullar,
     )
     book_title = (book and book.get("title")) or chapter["book_title"]
-    eklenen = _sozluge_isle(target_slug, result)  # künyeye girecek, kayıttan ÖNCE
+    eklenen = _sozluge_isle(target_slug, result, no)  # künyeye girecek, kayıttan ÖNCE
     payload = {
         "title": chapter["title"],
         "translation": result["translation"],
@@ -376,14 +543,27 @@ def fetch_into_book(
         # "GEMINI ile çevrildi" der, hangi halka olduğunu söylemezdi).
         "model": result.get("model"),
         "added_terms": eklenen,
+        # Uyum bayrağı da `_fetch_translate_save` ile AYNI: künyeyi üreten dört
+        # noktadan biri eksik kalırsa o yoldan gelen bölüm sessizce denetimsiz olur
+        # — `model` alanında tam bu hata yaşandı.
+        "glossary_leaks": _uyum_denetimi(book_glossary, result),
+        # Kalıntı bayrağı da `_fetch_translate_save` ile AYNI: bayrağı üreten
+        # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
+        # denetimsiz olur — `model` alanında tam bu hata yaşandı.
+        "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
         "cached": False,
     }
     cache.save_chapter(url, payload)
-    if prev_url:
-        cache.set_next(prev_url, url)  # kuyruğun next'ini yeni bölüme bağla (zincir)
+    if prev_url and kuyruga_ekleniyor:
+        # YALNIZ kuyruğa eklerken: aradan bir bölüm eklenirken kuyruğun next'ini
+        # yeni bölüme çevirmek zinciri koparıyordu (140 -> 137 -> 141 gibi).
+        cache.set_next(prev_url, url)
     library.upsert_book(
         target_slug, book_title, url, chapter["title"], no, update_position=False
     )
+    # Kapağı yazan İKİNCİ nokta (bkz. tests/test_kapak.py tel tuzağı): "web'den
+    # devam" ile eklenen kitap da kapaksız kalmamalı.
+    library.set_cover(target_slug, chapter.get("cover"))
     return payload
 
 
@@ -403,3 +583,29 @@ def refresh_metadata(url: str) -> dict:
     nav = {"next_url": chapter.get("next_url"), "prev_url": chapter.get("prev_url")}
     cache.update_nav(url, nav["next_url"], nav["prev_url"])
     return nav
+
+
+def terim_etkisi(book_slug: str, source: str) -> dict:
+    """Bir sözlük terimini düzeltmek ÇEVRİLMİŞ hangi bölümleri etkiler?
+
+    Sözlük ekranındaki ipucu "değişiklik yeni bölümlerde geçerli; eski bölüm için
+    Yeniden çevir" diyordu ama HANGİ eski bölümler olduğunu söylemiyordu —
+    kullanıcı elle aramak zorundaydı.
+
+    Eşleştirme `translate._term_regex` ile (yazım varyantı + çekim eki toleranslı),
+    kaynak metin üzerinde. Kaynak metni olmayan bölümler sayılamaz; `kapsama`
+    alanı bunu açıkça söyler ki "0 bölüm" yanıltıcı okunmasın.
+    """
+    bolumler = cache.kaynak_bolumleri(book_slug)
+    toplam, kapsanan, _metin = cache.kaynak_kapsamasi(book_slug)
+    terim = (source or "").strip()
+    if not terim:
+        return {"count": 0, "chapters": [], "kapsama": [kapsanan, toplam]}
+    desen = _translate_mod._term_regex(terim)
+    eslesen = [
+        {"url": b["url"], "chapter_no": b["chapter_no"], "title": b["title"]}
+        for b in bolumler
+        if desen.search(b["source"])
+    ]
+    return {"count": len(eslesen), "chapters": eslesen, "kapsama": [kapsanan, toplam]}
+

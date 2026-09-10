@@ -73,6 +73,69 @@ def test_start_bulk_records_error(monkeypatch):
     assert status["done"] == 0
 
 
+def test_bulk_gecici_ceviri_hatasinda_ISI_BIRAKMAZ(monkeypatch):
+    """Geçici bir yük dalgası 15 bölümlük işi ÖLDÜRMEMELİ.
+
+    Gerçek vaka (2026-09-10): toplu çeviri ikinci bölümde "Tüm modeller şu anda
+    meşgul (geçici)" ile durdu, kullanıcı kalan 13 bölümü hiç alamadı ve rafta
+    "! HATA" rozeti kaldı. Hatanın kendisi geçiciydi — Google'ın 503 gövdesi
+    bile "Spikes in demand are usually temporary. Please try again later."
+    diyor. Tek bir dalgaya bütün işi feda etmek yanlış takas.
+    """
+    monkeypatch.setattr(jobs.time, "sleep", lambda s: None)
+    cagri = {"n": 0}
+
+    def fake(url, api_key, **kwargs):
+        cagri["n"] += 1
+        if cagri["n"] == 1:
+            raise jobs.TranslateError("Tüm modeller şu anda meşgul (geçici).")
+        return {"next_url": f"u{cagri['n']}", "cached": False}
+
+    monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
+    job_id = jobs.start_bulk("kitap", "u1", 2, None)
+    status = _wait(job_id, {"done", "error"})
+
+    assert status["state"] == "done"
+    assert status["translated"] == 2
+
+
+def test_bulk_ISRARLI_ceviri_hatasinda_sonunda_durur(monkeypatch):
+    """Tekrar sonsuz değil: gerçekten kapalı bir kapıya sonsuza dek vurulmaz."""
+    monkeypatch.setattr(jobs.time, "sleep", lambda s: None)
+    sayac = {"n": 0}
+
+    def fake(url, api_key, **kwargs):
+        sayac["n"] += 1
+        raise jobs.TranslateError("Tüm modeller şu anda meşgul (geçici).")
+
+    monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
+    job_id = jobs.start_bulk("kitap", "u1", 2, None)
+    status = _wait(job_id, {"error"})
+
+    assert "meşgul" in status["message"]
+    assert sayac["n"] == jobs.BULK_GECICI_DENEME
+
+
+def test_bulk_yeniden_deneme_BEKLERKEN_durdurulabilir(monkeypatch):
+    """Beklerken DURDUR düğmesi cevapsız kalmamalı.
+
+    Bekleme tek bir uzun uykuysa kullanıcı dakikalarca cevap alamazdı; bekleme
+    parçalı ve her parçada durdurma sorgulanıyor.
+    """
+    monkeypatch.setattr(jobs.time, "sleep", lambda s: None)
+
+    def fake(url, api_key, **kwargs):
+        jobs.stop(job_kimlik["id"])
+        raise jobs.TranslateError("Tüm modeller şu anda meşgul (geçici).")
+
+    monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
+    job_kimlik = {}
+    job_kimlik["id"] = jobs.start_bulk("kitap", "u1", 3, None)
+    status = _wait(job_kimlik["id"], {"stopped", "error", "done"})
+
+    assert status["state"] == "stopped"
+
+
 def test_stop_marks_running_job_stopped(monkeypatch):
     entered = threading.Event()
     release = threading.Event()

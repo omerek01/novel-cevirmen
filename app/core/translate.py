@@ -10,44 +10,534 @@ sıradaki modele düşülür.
 from __future__ import annotations
 
 import json
+import os
 import re
+import sqlite3
 import time
+import unicodedata
+from datetime import datetime, timedelta, timezone
 from functools import lru_cache
 
+try:
+    from zoneinfo import ZoneInfo
+except ImportError:  # pragma: no cover — tzdata yoksa sabit UTC-8'e düşülür
+    ZoneInfo = None  # type: ignore[assignment]
+
+import httpx
 from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
+from . import kullanim
+from . import settings as _ayarlar
 from .glossary import fold_term
 
-# Çeviri modeli zinciri — ÖLÇÜMLE seçildi (2026-08-16, gerçek bölüm metinleriyle).
+# Çeviri modeli zinciri — TEK MOTOR: GEMINI (2026-09-02, kullanıcı kararı).
 #
-# TEK ZİNCİR, KALİTE ÖNCELİKLİ (2026-08-17, kullanıcı kararı). Sıra: en iyi modelden
-# başla, kota/servis tökezledikçe bir alta in. Aynı zincir HER YERDE geçerlidir —
-# okuma, prefetch, toplu çeviri, "yeniden çevir", içe aktarılan sayfa çevirisi ve
-# sözlük terim önerisi. Gün içinde okumanın gövdesi büyük ihtimalle alt halkalardan
-# geçecek (3.7/3.6 ücretsiz kotaları dar), o yüzden alt halkalar süsleme değil ASIL
-# taşıyıcıdır; zincir tükenene kadar iner ve okuma durmaz.
+# GEMINI DIŞI SAĞLAYICILAR ZİNCİRDEN ÇIKARILDI. Bir dönem OpenAI-uyumlu üç sağlayıcı
+# (OpenRouter/minimax, Mistral, Groq/Cerebras kod desteği) zincirde duruyordu; gerekçe
+# KOTAydı, kalite değil. Ölçüm tersini söyledi:
+#   - minimax (2026-09-02): UZUNLUK ORANI medyanı 22 bölümde 0,949 ve 22'sinin 22'si
+#     de 0,98'in ALTINDA — yani metni sistematik olarak KISALTIYOR. Hizalama ve
+#     `sozluk_ihlalleri` ikilisi bunu göstermiyordu: onlar "terimi doğru yazdın mı"
+#     diye sorar, "cümleyi eksiksiz kurdun mu" diye SORMAZ.
+#   - mistral-medium (2026-08-30): gerçek bölümlerde cümle akıcılığı beklentiyi
+#     karşılamadı; uzunluk oranı 0,914 ile ölçülenlerin en kötüsü.
+#   - Groq: ücretsiz TPM 8.000, bu projenin girdisi tek başına 5.061 token → hepsi 413.
+#   - Cerebras: ücretsiz bağlam 8.192 token → aynı duvar.
+# Bakımı da bedavaya gelmiyordu: ikinci bir düşme kuralı, `:free` sonekinin sessizce
+# paraya dönme riski (gerçek vaka: kıyas turları hesapta 0,05 $ yaktı) ve sağlayıcıya
+# özel token tavanları. Kalite kazancı yoksa bu yükü taşımanın anlamı yok.
 #
-# Ölçüm (450 kelimelik iki metin: oyun-terimli + edebi anlatı; 5 kısa çağrı güvenilirlik):
-#   gemini-3.6-flash       akıcılık EN İYİ, doğal deyim ("kendini gözünde büyütmek"),
-#                          Türkçe tırnak; 5/5 çağrı başarılı; ~15 sn/450 kelime
-#                          ANCAK ücretsiz kotası ÇOK düşük (~25 istek/gün'de 429 verdi),
-#                          o yüzden zincirin geri kalanı süsleme değil, asıl taşıyıcıdır
-#   gemini-3.5-flash       akıcılık iyi, kota geniş; 3/5 çağrı 503 (yüksek talep) → orta halka
-#   gemini-3.5-flash-lite  EN HIZLI (10 sn/bölüm, 3.6'da 36 sn) ve 5/5 güvenilir, üslubu
-#                          en zayıf olan ama sözlüğe artık tam uyuyor → son çare
-#   gemini-3.7-flash       ölçüm gününde uzun isteklerde ısrarla 503 verdi, kalitesi
-#                          ÖLÇÜLEMEDİ; zincirin başında duruyor — 503 sürerse istek
-#                          birkaç saniye geri-çekilip 3.6'ya düşer, okuma durmaz
-#   gemini-3.1-pro-preview / gemini-pro-latest  429 — ücretsiz katmanda YOK, kullanılamaz
+# Kotanın yerine gelen çözüm ANAHTAR HAVUZU (aşağıda): aynı zincir, birden çok Gemini
+# anahtarı. Kota dolunca başka bir SAĞLAYICIYA değil, başka bir ANAHTARA geçilir —
+# yani kaliteden ödün verilmeden kota genişler.
 #
-# Not: ücretsiz katmanın model-başına RPD tablosu Google tarafından artık yayınlanmıyor
-# (AI Studio > Rate limits'ten bakılır). Bu yüzden kotaya göre değil, 429'a DAYANIKLI
-# tasarıma güveniyoruz: bir halka tükenirse zincir kendiliğinden bir alta iner.
+# Ölçüm geçmişi (gerçek bölüm metinleriyle):
+#   gemini-3.6-flash       akıcılık EN İYİ; önbellekteki 76 bölümde uzunluk oranı
+#                          medyanı 0,972 (ölçülenlerin en iyisi). Ücretsiz kotası dar.
+#   gemini-3.5-flash       akıcılık iyi, kota geniş; 503'e meyilli → orta halka
+#   gemini-3.5-flash-lite  EN HIZLI ve en dayanıklı ama SÖZLÜK KURALINA %24 oranında
+#                          UYMUYOR (3.6-flash %0,7) → yalnız son çare
+#   gemini-3.1-pro-preview / gemini-pro-latest  429 — ücretsiz katmanda YOK
+#
+# Not: ücretsiz katmanın model-başına RPD tablosu Google tarafından artık
+# yayınlanmıyor (AI Studio > Rate limits'ten bakılır). Bu yüzden kotaya göre değil,
+# 429'a DAYANIKLI tasarıma güveniyoruz: bir halka tükenirse önce sıradaki ANAHTAR,
+# o da tükenirse sıradaki MODEL denenir.
+#
+# PARÇALAMA KALİTEYİ İYİLEŞTİRMİYOR (ölçüldü 2026-09-02): "bölümü 3'e bölsek model
+# daha az atlar mı" hipotezi sınandı. Aynı model, aynı bölüm, üç parça: oran 0,922 →
+# 0,912 (DÜŞTÜ), süre 51 → 76 sn, token ~1,8 kat (prompt'un %41-48'i sabit yük —
+# sistem talimatı + sözlük her parçada YENİDEN gider). Parçalama yalnız dar bağlam
+# pencerelerine sığmak için bir araçtır, kalite aracı değil.
+#
+# `gemini-3.5-flash-lite` ZİNCİRDEN ÇIKARILDI (2026-09-09, kullanıcı kararı).
+# Ölçüm: sözlük kuralına uyumu zincirin EN KÖTÜsüydü — Shadow Slave'in
+# önbelleğinde 3.6-flash 60 bölümde 5 ihlal, 3.5-flash 45 bölümde 1, lite ise
+# 4 bölümde 30. Somut vaka: 109. bölümü lite çevirdi, `Saint -> Aziz` kaynakta
+# 12 kez geçti ve 12'si de İngilizce kaldı. Son halka olması bunu daha da kötü
+# yapıyordu: üst halkalar 429/503 ile elendiğinde okuma sessizce ORAYA iniyor,
+# çeviri kalıcı önbelleğe yazılıyor ve bir daha denetlenmiyordu.
+#
+# Zincir bu yüzden İKİ halka. Daralan kapasitenin karşılığı anahtar tarafında
+# ödendi: 503 artık sıradaki ANAHTARI deniyor (eskiden modeli atlıyordu) ve
+# istekler anahtarlar arasında DÖNÜŞÜMLÜ dağıtılıyor — ikisi de aşağıda.
 DEFAULT_MODELS = (
-    "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.5-flash", "gemini-3.5-flash-lite",
+    "gemini-3.6-flash",
+    "gemini-3.5-flash",
 )
+
+# ---------------------------------------------------------------------------
+# SEÇİLEBİLİR MODEL — okuyucudaki ayardan gelir (2026-09-02, kullanıcı isteği)
+# ---------------------------------------------------------------------------
+# Seçim zincirin YERİNİ ALMAZ, BAŞINA geçer (`zincir_kur`). Sebep dayanıklılık:
+# ölçüldü ki 3.7 ve 3.8 bu projenin uzunluktaki isteklerini sık sık 503 ile
+# reddediyor. Seçim "yalnız bunu kullan" diye yorumlansaydı, o modeli seçen
+# kullanıcının okuması modelin kapasitesi daraldığı anda TÜMDEN dururdu. Seçim bir
+# TERCİHTİR, kilit değil: tercih edilen model çeviremezse okuma alt halkalardan
+# devam eder ve künye rozeti FİİLEN çevirenin adını yazar — yani "3.8 seçtim ama
+# 3.6 çevirmiş" durumu kullanıcıdan gizlenmez.
+#
+# `etiket` okuyucuya çıkar, `not` ise ölçüm özetidir: kullanıcı seçerken neyin
+# bedelini ödediğini görmeli. Ölçüm 2026-09-02, `scratch/gemini_kiyas.py`.
+# ---------------------------------------------------------------------------
+# CLAUDE — ÜCRETLİ ve YALNIZ AÇIKÇA SEÇİLİNCE (2026-09-02, kullanıcı kararı)
+# ---------------------------------------------------------------------------
+# Zincirin bugüne kadarki bütün halkaları ÜCRETSİZ. Claude ücretli, ve bu tek fark
+# tasarımı belirliyor: Claude ASLA yedek halka olamaz. Sebep, bu projede bir kez
+# ödenmiş bir ders — OpenRouter'ın `:free` soneki düştüğünde istek 200 dönüyor,
+# çeviri çalışıyor, hiçbir hata görünmüyor, yalnız FATURA işliyordu. Sessizce paraya
+# dönen bir arıza, gürültülü bir arızadan tehlikelidir.
+#
+# Bu yüzden `zincir_kur` Claude seçilince TEK HALKALI bir zincir kurar: Gemini'ye
+# sessizce düşülmez (hangi modelin çevirdiği belirsiz kalmaz) ve tersi de olmaz —
+# Gemini seçiliyken kota dolsa bile Claude'a ASLA inilmez, yani beklenmedik harcama
+# yapısal olarak imkânsız.
+#
+# Fiyat ve ölçüm (`scratch/claude_maliyet.py`, gerçek prompt + gerçek bölümler):
+# ortalama bölüm 8.284 giriş + 4.952 çıkış token. Çıkış tokenı girişin 5 katı
+# fiyatta olduğu için maliyetin ~%75'i ÇIKIŞTAN gelir — prompt önbelleklemesi
+# (girişin %58'i sabit yük) bu iş yükünde yalnız ~%13 kazandırır, o yüzden
+# kurulmadı. Ölçmeden önce tam tersi bekleniyordu.
+CLAUDE_ANAHTAR_ENVLERI = ("CLAUDE_API_KEY", "ANTHROPIC_API_KEY")
+# `dusunme`: Claude'un "extended thinking" ayarı. KAPALI tutulur çünkü düşünme
+# çıktısı da ÇIKIŞ tokenı olarak faturalanır ($5-10/M) ve çeviri mekanik bir iş —
+# kazancı belirsiz, maliyeti düzenli. Sonnet 5'te `thinking` HİÇ verilmezse adaptif
+# düşünme AÇIK gelir (varsayılan), yani açıkça kapatmak şart. Haiku 4.5 eski nesil:
+# orada `disabled` göndermek yerine parametreyi hiç vermemek doğru yol.
+CLAUDE_MODELLER = {
+    "claude-haiku-4-5": {
+        "etiket": "Haiku 4.5",
+        "not": "ÜCRETLİ ~$0,033/bölüm. Hızlı ve ucuz Claude. Kalitesi ölçülmedi.",
+        "dusunme": None,  # eski nesil: parametre verilmez
+    },
+    "claude-sonnet-5": {
+        "etiket": "Sonnet 5",
+        "not": "ÜCRETLİ ~$0,066/bölüm. Haiku'nun iki katı. Kalitesi ölçülmedi.",
+        "dusunme": {"type": "disabled"},
+    },
+}
+
+
+def _claude_modeli(model: str | None) -> bool:
+    return bool(model) and model in CLAUDE_MODELLER
+
+
+def claude_anahtari() -> str:
+    """Claude anahtarı. İki ad da kabul edilir: `CLAUDE_API_KEY` kullanıcının bu
+    projede yazdığı ad, `ANTHROPIC_API_KEY` ise SDK'nın kanonik adı — birini
+    dayatmak, diğerini yazan kurulumu sessizce anahtarsız gösterirdi."""
+    for ad in CLAUDE_ANAHTAR_ENVLERI:
+        deger = (os.getenv(ad) or "").strip()
+        if deger:
+            return deger
+    return ""
+
+
+GEMINI_SECENEKLERI = (
+    {
+        "ad": "gemini-3.8-flash",
+        "etiket": "3.8 Flash",
+        "not": "En yeni. Uzun bölümlerde sık 503 veriyor; ölçülemedi.",
+    },
+    {
+        "ad": "gemini-3.7-flash",
+        "etiket": "3.7 Flash",
+        "not": "Uzun bölümleri reddediyor ve reddi PAHALI (74-220 sn). Ölçülemedi.",
+    },
+    {
+        "ad": "gemini-3.6-flash",
+        "etiket": "3.6 Flash",
+        "not": "Varsayılan. 76 bölümde uzunluk oranı 0,972 — ölçülenlerin en iyisi.",
+    },
+    {
+        "ad": "gemini-3.5-flash",
+        "etiket": "3.5 Flash",
+        "not": "Kıyasın en temizi: oran 0,985, sıfır sözlük ihlali. Daha yavaş.",
+    },
+    # `gemini-3-flash-preview` BİLEREK YOK (2026-09-06). Bir gün eklenmesi
+    # önerilirse ölçüm kaydı şudur: 3 gerçek bölümde hizalamayı 3/3 KAYBETTİ
+    # (53-62 paragraflık bölümlere 19-25 paragraf döndü — paragrafları birleştirip
+    # metnin yarısını attı), uzunluk oranı 0,436'da kaldı (3.6-flash 0,952) ve en
+    # yavaşıydı (109 sn / 49 sn). Yani çevirmiyor, ÖZETLİYOR.
+    #
+    # Listede tutulamamasının sebebi zincirin onu KURTARAMAMASI: düşme yalnız
+    # HATADA olur (429/503/404), başarılı ama kötü bir yanıtta olmaz. Seçilseydi
+    # her bölüm böyle çevrilir, iki dilli okuma ölür ve İngilizce-kalıntı denetimi
+    # de çalışamazdı (hizalama ister). Sert bir uyarı notu yetmez: seçenek listesi
+    # bir TEKLİFTİR ve teklif edilmemesi gereken tek şey sessizce bozan bir yoldur.
+    #
+    # AYRICA: `gemini-3-flash` ve `gemini-3.0-flash` adları API'de YOK (404).
+    # Gemini 3'ün çalışan tek adı `-preview` sonekliydi.
+    #
+    # Eski nesil ama ölçümde SAĞLAM çıktı: oran 0,932, hizalama 3/3, 3 bölümde 1
+    # sözlük ihlali ve en HIZLIsı (45 sn / 3.6-flash'ın 49 sn'si). Kotası ayrı
+    # olduğu için 3.x halkaları tükendiğinde gerçek bir alternatif.
+    {
+        "ad": "gemini-2.5-flash",
+        "etiket": "2.5 Flash",
+        "not": "Eski nesil, sağlam: oran 0,932, hizalama 3/3, en hızlısı (45 sn).",
+    },
+)
+SECILEBILIR_MODELLER = GEMINI_SECENEKLERI + tuple(
+    {"ad": ad, "etiket": bilgi["etiket"], "not": bilgi["not"], "ucretli": True}
+    for ad, bilgi in CLAUDE_MODELLER.items()
+)
+SECILEBILIR_ADLAR = tuple(m["ad"] for m in SECILEBILIR_MODELLER)
+# Ayarın DB anahtarı. Varsayılan, zinciri bugünkü hâlinde bırakan seçimdir —
+# yani ayar hiç dokunulmamışsa davranış birebir eskisi gibi kalır.
+MODEL_AYAR_ANAHTARI = "ceviri_modeli"
+VARSAYILAN_MODEL = DEFAULT_MODELS[0]
+
+
+def zincir_kur(secili: str | None = None) -> tuple[str, ...]:
+    """Seçilen modele göre model zinciri.
+
+    İKİ DAVRANIŞ, ve ayrım ÜCRETTEN geliyor:
+      * Gemini seçimi -> seçilen model zincirin BAŞINA geçer, gerisi YEDEK kalır.
+        Halkaların hepsi ücretsiz, dolayısıyla aşağı inmek bedava; okumanın
+        durmaması her zaman daha değerli.
+      * Claude seçimi -> zincir TEK HALKA. Ücretli bir halkanın altına ücretsiz
+        yedek koymak cazip görünür ama iki şeyi birden bozardı: künye rozeti
+        "Claude" derken bölümü Gemini çevirmiş olabilirdi, ve daha kötüsü, tersi
+        yönde bir gün birinin "Gemini'nin altına Claude koyalım" demesinin önü
+        açılırdı — sessiz harcamanın kapısı. Claude çeviremezse hata verir.
+
+    Tekrar elenir ve sıra korunur. Tanınmayan/boş bir seçim SESSİZCE yok sayılır:
+    ayar tablosunda elle bozulmuş bir değer, her isteği 404'e çarpan bir birinci
+    halka yaratırdı ve arıza "model meşgul" kılığına girerdi.
+    """
+    if secili not in SECILEBILIR_ADLAR:
+        return DEFAULT_MODELS
+    if _claude_modeli(secili):
+        return (secili,)
+    return tuple(dict.fromkeys((secili, *DEFAULT_MODELS)))
+
+
+def secili_zincir() -> tuple[str, ...]:
+    """Ayardaki seçime göre model zinciri — zincirin TEK çözüm noktası.
+
+    Zinciri çağrı yerlerine tek tek geçirmek yerine burada çözülmesinin sebebi
+    somut: zinciri kullanan BEŞ yol var (okuma, prefetch, toplu çeviri, içe
+    aktarılan sayfa, sözlük terim önerisi) ve bu projede aynı kuralın birden çok
+    yerde yazılması defalarca ayrışmayla sonuçlandı (künye alanları, motor adı).
+    Biri güncellenmeyi unutulursa kullanıcı "modeli değiştirdim ama bazı bölümler
+    hâlâ eskisiyle çevriliyor" derdi ve sebebi görünmez olurdu.
+
+    DB okunamazsa varsayılan zincire düşülür: bir ayar okuma hatası çevirinin
+    tamamını durdurmamalı.
+    """
+    try:
+        secili = _ayarlar.get(MODEL_AYAR_ANAHTARI, VARSAYILAN_MODEL)
+    except sqlite3.Error:
+        return DEFAULT_MODELS
+    return zincir_kur(secili)
+
+# Anahtar yokluğu TEK yerden anlatılır: mesaj beş ayrı çağrı yerinde kopyalanmıştı ve
+# sağlayıcılar kaldırılınca hepsi "ya da MISTRAL_API_KEY ekleyin" demeye devam ederdi.
+ANAHTAR_YOK_MESAJI = (
+    "Çeviri için API anahtarı yok: .env dosyasına GEMINI_API_KEY ekleyin."
+)
+
+# ---------------------------------------------------------------------------
+# ANAHTAR HAVUZU — birden çok Gemini anahtarı, SIRAYLA
+# ---------------------------------------------------------------------------
+# UYARI, önce bunu oku: Gemini'nin ücretsiz kotası PROJE başınadır, ANAHTAR başına
+# DEĞİL. Aynı Google Cloud projesinden üretilmiş iki anahtar AYNI RPM/RPD havuzundan
+# içer ve ikincisi hiçbir şey kazandırmaz — birincisi 429 alırsa ikincisi de alır.
+# Havuzun anlamlı olması için anahtarların AYRI PROJELERDEN gelmesi gerekir.
+#
+# Değişken adı ESNEK tutulur (`GEMINI_API_KEY`, `GEMINI2_API_KEY`,
+# `GEMINI_API_KEY_3`…): tek bir kanonik ad dayatmak, `.env`'i elle düzenleyen
+# kullanıcının anahtarı sessizce görünmez kılmasına yol açardı — ve arıza "kota dolu"
+# kılığına girerdi. Sıra addaki SAYIDAN gelir; sayı taşımayan ad birinci sayılır.
+_ANAHTAR_DESENI = re.compile(r"^GEMINI_?(\d*)_?API_KEY_?(\d*)$")
+
+
+def _anahtar_sirasi(ad: str) -> tuple[int, str]:
+    """`GEMINI_API_KEY` -> 1, `GEMINI2_API_KEY` -> 2, `GEMINI_API_KEY_3` -> 3."""
+    eslesme = _ANAHTAR_DESENI.match(ad)
+    no = (eslesme.group(1) or eslesme.group(2) or "1") if eslesme else "1"
+    return (int(no) if no.isdigit() else 1, ad)
+
+
+def gemini_anahtar_degiskenleri() -> list[str]:
+    """Ortamdaki Gemini anahtar değişkenlerinin ADLARI, deneme sırasıyla.
+
+    Testler için de gerekli: "anahtarsız reddedilir" iddiaları TÜM anahtar
+    değişkenlerini silmeli. Adları tek tek yazmak, ikinci bir anahtar eklendiğinde
+    testi geliştiricinin makinesindeki `.env`'e bağımlı kılardı (`server` importu
+    `.env`i pytest sürecine yüklüyor).
+    """
+    adlar = [
+        ad
+        for ad, deger in os.environ.items()
+        if _ANAHTAR_DESENI.match(ad) and (deger or "").strip()
+    ]
+    return sorted(adlar, key=_anahtar_sirasi)
+
+
+def anahtar_degiskenleri() -> list[str]:
+    """Çeviriyi mümkün kılan TÜM anahtar değişkenlerinin adları (Gemini + Claude).
+
+    Testler için TEK doğru kaynak: "anahtarsız reddedilir" iddiaları bunların
+    hepsini silmeli. Adları tek tek yazmak, yeni bir sağlayıcı ya da üçüncü bir
+    anahtar eklendiğinde testi sessizce geliştiricinin `.env`ine bağımlı kılar
+    (`server` importu onu pytest sürecine yüklüyor) — bu proje o tuzağa bir kez
+    düştü ve testler geliştiricinin makinesinde geçip başka yerde kalıyordu.
+    """
+    return gemini_anahtar_degiskenleri() + [
+        ad for ad in CLAUDE_ANAHTAR_ENVLERI if (os.getenv(ad) or "").strip()
+    ]
+
+
+def gemini_anahtarlari(birincil: str | None = None) -> list[str]:
+    """Kullanılacak anahtarlar, DENEME SIRASIYLA; tekrar elenir.
+
+    ``birincil`` (çağrı zincirinden gelen `api_key`) daima ilk sıradadır: sunucu onu
+    `GEMINI_API_KEY`'den okuyor, yani normalde ortamdaki ilk anahtarla aynıdır ve
+    tekrar eleme sırayı bozmadan tek kayda indirir. Testlerin açıkça geçtiği anahtar
+    da böylece ortamdakinin ÖNÜNE geçer.
+    """
+    sirali: list[str] = []
+    adaylar = [birincil or ""]
+    adaylar += [os.environ[ad] for ad in gemini_anahtar_degiskenleri()]
+    for deger in adaylar:
+        deger = (deger or "").strip()
+        if deger and deger not in sirali:
+            sirali.append(deger)
+    return sirali
+
+
+# Kota dolan anahtar SOĞUMAYA alınır: aynı bölümün sonraki parçaları o anahtara boşuna
+# gitmesin (bir bölüm birden çok parça, her parça ayrı istek).
+#
+# Süre neden 60 sn: Gemini'nin 429'u ya DAKİKALIK (RPM) ya da GÜNLÜK (RPD) sınırdan
+# gelir ve ikisi yanıttan ayırt edilemez. 60 sn dakikalık sınırı TAM karşılar; günlük
+# sınırda ise dakikada bir boşa istek maliyeti bırakır (ucuz, ve gün dönümünde
+# kendiliğinden düzelir). Alternatifi — uzun soğuma — dakikalık bir tökezlemede
+# anahtarı gün boyu kaybettirirdi, ki asıl kaçınılan şey o.
+#
+# Soğuma MODEL BAŞINADIR: Gemini'nin günlük kotası model başına ayrı tutulur, yani
+# 3.6-flash'ta tükenen anahtar 3.5-flash'ta hâlâ çalışır. Tek bir "anahtar bitti"
+# bayrağı, çalışan halkaları da kapatırdı.
+ANAHTAR_SOGUMA_SN = 60.0
+_ANAHTAR_SOGUMA: dict[tuple[int, str], float] = {}
+
+
+def _hata_govdesi(hata: Exception) -> dict:
+    """429/4xx yanıtının JSON gövdesi; okunamazsa boş sözlük."""
+    ham = getattr(hata, "details", None)
+    if isinstance(ham, dict) and ham:
+        return ham
+    metin = str(hata)
+    basla = metin.find("{")
+    if basla < 0:
+        return {}
+    try:
+        cozulen = json.loads(metin[basla:])
+    except (ValueError, TypeError):
+        return {}
+    return cozulen if isinstance(cozulen, dict) else {}
+
+
+def gunluk_kota_mi(hata: Exception) -> bool:
+    """429 GÜNLÜK sınırdan mı geldi? Ayrımı yalnız `quotaId` söyler.
+
+    Gemini kota aşımını iki ayrı sınırdan verir ve HTTP kodu ikisinde de 429:
+      * DAKİKALIK (RPM/TPM) — bir dakika içinde kendiliğinden açılır.
+      * GÜNLÜK    (RPD)     — Pasifik gece yarısına kadar KAPALI kalır.
+    Gerçek gövde (2026-09-09 ölçümü, `gemini-3.6-flash`):
+        quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier
+        quotaValue: 20
+    """
+    govde = _hata_govdesi(hata)
+    err = govde.get("error", govde) if isinstance(govde, dict) else {}
+    if not isinstance(err, dict):
+        return False
+    for ayrinti in err.get("details") or []:
+        if not isinstance(ayrinti, dict):
+            continue
+        if (ayrinti.get("@type") or "").split(".")[-1] != "QuotaFailure":
+            continue
+        for ihlal in ayrinti.get("violations") or []:
+            if not isinstance(ihlal, dict):
+                continue
+            kimlik = ihlal.get("quotaId") or ihlal.get("quotaMetric") or ""
+            if "PerDay" in kimlik:
+                return True
+    return False
+
+
+def pasifik_gece_yarisina_kalan() -> float:
+    """GÜNLÜK kotanın sıfırlanmasına kalan saniye (yaz saatine duyarlı)."""
+    simdi = datetime.now(timezone.utc)
+    pas = None
+    if ZoneInfo is not None:
+        try:
+            pas = simdi.astimezone(ZoneInfo("America/Los_Angeles"))
+        except Exception:  # noqa: BLE001 — tzdata yoksa sabit ofsete düş
+            pas = None
+    if pas is None:
+        pas = simdi.astimezone(timezone(timedelta(hours=-8)))
+    ertesi = (pas + timedelta(days=1)).replace(
+        hour=0, minute=0, second=0, microsecond=0
+    )
+    # Alt sınır: saat tam gece yarısıysa soğuma sıfıra düşüp anlamsızlaşmasın.
+    return max(ANAHTAR_SOGUMA_SN, (ertesi - pas).total_seconds())
+
+
+def _kota_soguma_suresi(hata: Exception) -> float:
+    """Kotanın TÜRÜNE göre soğuma: günlükse gün sonuna, değilse bir dakika.
+
+    Sabit 60 sn iken günlük kotası dolan anahtar DAKİKADA BİR yeniden deneniyor,
+    her bölüm ona boş bir istek daha atıyor ve kullanıcı bunu bekleme olarak
+    ödüyordu. Ayrıştırılamayan gövdede DAKİKALIK varsayılır: yanlış tarafta hata
+    yapmak (bir dakika erken denemek) anahtarı gün boyu kaybetmekten ucuzdur.
+    """
+    return pasifik_gece_yarisina_kalan() if gunluk_kota_mi(hata) else ANAHTAR_SOGUMA_SN
+
+
+def _sogumada(indeks: int, model: str) -> bool:
+    return _ANAHTAR_SOGUMA.get((indeks, model), 0.0) > time.monotonic()
+
+
+def _sogut(indeks: int, model: str, sure: float | None = None) -> None:
+    _ANAHTAR_SOGUMA[(indeks, model)] = time.monotonic() + (
+        ANAHTAR_SOGUMA_SN if sure is None else sure
+    )
+
+
+def anahtar_sogumalarini_temizle() -> None:
+    """Soğuma hafızası modül düzeyinde ve SÜREÇ ÖMÜRLÜDÜR; testler sıfırlamalı."""
+    _ANAHTAR_SOGUMA.clear()
+
+
+# ---------------------------------------------------------------------------
+# ANAHTAR ROTASYONU — her istek SONRAKİ anahtardan başlar (2026-09-09)
+# ---------------------------------------------------------------------------
+# Eskiden her istek DAİMA #1'den başlıyordu ve havuz ancak arıza hâlinde işe
+# yarıyordu. Ölçüm bunun neden pahalı olduğunu gösterdi: Gemini'nin ücretsiz
+# günlük kotası model başına 20 istek / PROJE (429 gövdesinden okundu —
+# `GenerateRequestsPerDayPerProjectPerModel-FreeTier`, quotaValue 20). Yani ilk
+# anahtar erken tükeniyor, sonraki HER istek önce ona çarpıp 429 yiyor, soğuma
+# yazıyor, ancak sonra #2'ye geçiyordu. Beş anahtarlı bir havuzda bile yük tek
+# anahtara yığılıyor ve kotanın dörtte beşi boşta duruyordu.
+#
+# Rotasyon yükü havuza EŞİT dağıtır: istek başına başlangıç indeksi bir kayar,
+# yani bir sonraki bölüm bir sonraki anahtardan başlar. Soğumanın YERİNE geçmez
+# — sırası gelen anahtar kotadaysa yine atlanır.
+_ROTASYON = 0
+
+
+def _sonraki_baslangic(sayi: int, model: str | None = None) -> int:
+    """Bu isteğin başlayacağı anahtar indeksi; her çağrıda bir ilerler.
+
+    Soğumadaki (kotası dolu) anahtar başlangıç olarak SEÇİLMEZ ve sırayı da
+    tüketmez. Döngü onu zaten atlıyordu, ama rotasyon sayacı bir tur harcadığı
+    için sağlam anahtarlara eşitsiz dağılıyordu: üç anahtarın biri kotadayken
+    dört istek kalan ikiliye 3/1 gidiyordu.
+    """
+    global _ROTASYON
+    if sayi <= 1:
+        return 0
+    for _ in range(sayi):
+        deger = _ROTASYON % sayi
+        _ROTASYON += 1
+        if model is None or not _sogumada(deger, model):
+            return deger
+    return _ROTASYON % sayi  # hepsi soğumada: sıradan devam, döngü zaten atlar
+
+
+def anahtar_rotasyonunu_sifirla() -> None:
+    """Rotasyon sayacı modül düzeyinde ve SÜREÇ ÖMÜRLÜDÜR; testler sıfırlamalı."""
+    global _ROTASYON
+    _ROTASYON = 0
+
+
+def _gemini_fabrikasi(api_key: str | None):
+    """Gemini istemcilerini TEMBEL kuran fabrika (anahtar havuzu üzerinden).
+
+    ``fabrika(indeks)`` o sıradaki anahtarın istemcisini verir; istemci ancak
+    gerçekten kullanılacağı anda kurulur. Peşinen kurmak, hiç inilmeyen bir halka
+    için bile anahtarı zorunlu kılardı.
+
+    ``fabrika.anahtar_sayisi`` çağıranın kaç anahtar deneyebileceğini söyler —
+    `_generate_once_with_retry` KOTA (429) durumunda bu sayıya kadar döner.
+
+    Anahtar yoksa fabrika ÇAĞRILDIĞINDA hata verir, kurulurken değil: zincir o
+    halkayı atlayıp devam edebilsin diye.
+    """
+    anahtarlar = gemini_anahtarlari(api_key)
+    tutulan: dict[int, genai.Client] = {}
+
+    def fabrika(indeks: int = 0) -> genai.Client:
+        if indeks >= len(anahtarlar):
+            raise TranslateError(ANAHTAR_YOK_MESAJI)
+        if indeks not in tutulan:
+            tutulan[indeks] = genai.Client(api_key=anahtarlar[indeks])
+        return tutulan[indeks]
+
+    fabrika.anahtar_sayisi = len(anahtarlar)
+    return fabrika
+
+
+def motor_adi(model: str | None) -> str | None:
+    """Künyenin MOTOR alanı: bölümü çeviren sağlayıcı.
+
+    Tek motor kaldı (Gemini), ama alan çağrı yerlerinde SABİT YAZILMAZ. Bir dönem tam
+    olarak öyle yapılmıştı ("tek motor kaldığından sabit") ve ikinci bir sağlayıcı
+    zincire girince bu doğrudan YANLIŞ bilgiye dönüştü: Mistral'in çevirdiği bölüm
+    rozette "GEMINI ile çevrildi" diyordu. Künyeyi üreten DÖRT nokta da bu tek tanımı
+    çağırır, böylece motor bir daha değişirse tek satır güncellenir.
+
+    DB'de eski `mistral`/`claude` satırları duruyor; onlar yazıldıkları anda
+    saklandığı için etkilenmez (okuyucu rozeti değeri olduğu gibi gösterir).
+    """
+    if not model:
+        return None
+    # Parcalar farkli halkalara dusmus olabilir (" + " ile birlesik gelir); sira
+    # korunur, tekrar elenir. Claude TEK HALKALI oldugu icin pratikte karisik bir
+    # kunye uretmez, ama kural tek yerde dursun diye ayrim burada yapilir.
+    return " + ".join(
+        dict.fromkeys(
+            "claude" if _claude_modeli(m) else "gemini"
+            for m in model.split(" + ")
+            if m
+        )
+    ) or None
+
+
+def ceviri_anahtari_var_mi(api_key: str | None = None) -> bool:
+    """Çeviri yapabilecek EN AZ BİR anahtar var mı?
+
+    Kapı, çağrı zincirinden gelen anahtara ek olarak ORTAMI da sayar: ikinci anahtar
+    yalnız `.env`'de duruyor olabilir ve onu görmeyen bir kapı, pekâlâ çalışabilecek
+    bir kurulumu sebepsiz reddederdi.
+    """
+    return bool(gemini_anahtarlari(api_key)) or bool(claude_anahtari())
+
 # Parça çıktısı modelin token sınırını aşıp çeviriyi kesmesin diye ölçülü tutulur.
 # Büyük parça = daha az kopma noktası = bölüm içinde daha tutarlı üslup; sınırı
 # `max_output_tokens` (aşağıda) koruyor, ölçümle 1600'den yükseltildi.
@@ -97,10 +587,55 @@ CORE_TERM_HINTS = (
 )
 _CORE_HINT_STR = ", ".join(f"{en} -> {tr}" for en, tr in CORE_TERM_HINTS)
 
+# Bir kişiyi ad YERİNE GEÇEREK adlandıran lakap da İngilizce kalır. Gerçek bulgu
+# (Shadow Slave 6. bölüm, 2026-08-23): anlatıcı gerçek adını bilmediği kişileri
+# özelliklerine göre adlandırıyor (`Scholar`, `Shifty`, `Hero`). Kural "İngilizce
+# kalan TEK sınıf gerçek kişi adları, UNVAN çevrilir" derken model bunları harfiyen
+# unvan sayıp Türkçeleştirdi (`Kurnaz`, `Bilgin`, `Kahraman`) ve karşılık sözlüğe
+# KURAL olarak yazıldı; sonraki bölüm de ona uydu. Model bunları `detected_names`
+# kutusuna hiç önermedi, yani süzgeçlerin eleyeceği bir şey yoktu — boşluk kuraldaydı.
+#
+# Ölçüt DAR tutulur: belirteç ('a/an/the') alan ya da bir SINIFI anlatan sözcük
+# lakap DEĞİLDİR. Aksi halde `an Aspirant` / `the Awakened` gibi sistem terimleri de
+# İngilizce'ye kaçardı — bu, düzeltmeye çalıştığımız hatadan daha büyük bir zarar.
+#
+# ÜÇ talimat da (çeviri, okurken terim önerisi, bakım aracının sınıflandırması) bu
+# TEK metni kullanır: üçü ayrışırsa aynı kitapta iki farklı politika oluşur.
+LAKAP_KURALI = (
+    "- LAKAP ÖLÇÜTÜ (ad mı, kategori unvanı mı): sözcük büyük harfle başlıyor, TEK "
+    "belirli bir kişiyi gösteriyor ve önünde 'a/an/the' YOKSA cümlede tıpkı bir ad "
+    "gibi duruyor demektir -> LAKAPTIR, İngilizce kalır ('Scholar nodded' -> "
+    "'Scholar başını salladı'; 'Hero drew his sword' -> 'Hero kılıcını çekti'). "
+    "Önünde belirteç varsa YA DA bir sınıfı/kategoriyi anlatıyorsa lakap DEĞİLDİR, "
+    "çevrilir ('an Aspirant' -> 'bir Aday', 'the Awakened' -> 'Uyanmışlar', "
+    "'a scholar arrived' -> 'bir bilgin geldi'). Aynı sözcük bir cümlede lakap, "
+    "başkasında cins isim olabilir; ölçüt BELİRTEÇ ve tek-kişi göndergesidir.\n"
+)
+
 SYSTEM_INSTRUCTION = (
     "Sen profesyonel bir İngilizce'den Türkçe'ye web roman çevirmenisin.\n"
     "Kurallar:\n"
     "- Akıcı, doğal, edebi Türkçe üret. Birebir değil, anlamı koru.\n"
+    # Ölçülen arıza (2026-09-05, shadow-slave önbelleği): hizalama TUTTUĞU hâlde
+    # tek tek paragraflar İngilizce dönüyordu — #179/#181/#188 tam, #58/#177/#194
+    # cümle başındaki bağlaç ya da yardımcı fiil kalıntısı. Prompt paragraf
+    # DÜZENİNİ ("her paragrafın başına [[n]] koy") şart koşuyordu ama hiçbir
+    # maddesi paragrafın ÇEVRİLMİŞ olmasını istemiyordu: model işaretçiyi doğru
+    # koyup metni olduğu gibi kopyalayınca hiçbir kural çiğnenmiş olmuyordu.
+    "- HİÇBİR paragrafı, cümleyi ya da cümle parçasını İngilizce BIRAKMA; kaynak "
+    "metni olduğu gibi KOPYALAMA. Her [[n]] paragrafının karşılığı TÜRKÇE olmalı. "
+    "Bu kural cümle başındaki bağlaçları ve yardımcı fiilleri de kapsar: 'But' -> "
+    "'Ama', 'Then' -> 'Sonra', 'And' -> 'Ve'. İngilizce 'was/were/did' gibi "
+    "yardımcı fiiller Türkçede EKE dönüşür, olduğu gibi bırakılmaz ('Was Neph "
+    "working?' -> 'Neph çalışıyor muydu?'; 'Was Neph çalışıyor muydu?' YANLIŞTIR). "
+    "Tek istisna yukarıdaki KİŞİ ADLARI kuralıdır.\n"
+    # Gerçek vaka (shadow-slave #201): `ten times` -> `ten kat`. Model ölçü
+    # sözcüğünü çevirdi, sayıyı bırakti. Sayı hatası ötekilerden PAHALI: cümlenin
+    # anlamını değiştirir ve okurken "ten kat" gözden kaçabilir.
+    "- SAYILARI da çevir: 'ten times' -> 'on kat', 'three days' -> 'üç gün', "
+    "'a hundred' -> 'yüz'. İngilizce sayı sözcüğünü ('one, two, ten, hundred, "
+    "thousand') olduğu gibi bırakma. Tek istisna sayının bir ÖZEL ADIN parçası "
+    "olmasıdır (Nine Dragons Emperor, Ninth Heaven) — orada ad kuralı geçerlidir.\n"
     # Gerçek bulgu (bölüm 1862): "turn the tables on them" → "masaları onlara karşı
     # çevirecekti". Genel "birebir değil" maddesi bunu tutmadı; deyimler AYRI ve
     # örnekli bir kural istiyor.
@@ -112,9 +647,12 @@ SYSTEM_INSTRUCTION = (
     "your court' -> 'sıra sende'. ÖLÇÜT: kurduğun Türkçe cümleyi bağlamı bilmeyen "
     "biri okuduğunda 'bu ne demek şimdi' diyorsa kalıbı birebir çevirmişsindir; "
     "o cümleyi anlamıyla yeniden yaz.\n"
-    "- İngilizce korunacak TEK sınıf: gerçek kişi/karakter adları (örn. Sunny, "
-    "Kim Dokja, Nephis). Başka hiçbir özel ad İngilizce kalmaz.\n"
-    "- Büyü, beceri, sınıf, ırk, unvan, eşya, YER, LONCA/klan/birlik/örgüt ve "
+    "- İngilizce korunacak TEK sınıf: bir KİŞİYİ ADLANDIRAN ifadeler. İkisi de "
+    "girer: gerçek adlar (Sunny, Kim Dokja, Nephis) ve gerçek adı bilinmeyen birini "
+    "ad YERİNE GEÇEREK adlandıran lakaplar (Scholar, Shifty, Hero). Başka hiçbir "
+    "özel ad İngilizce kalmaz.\n"
+    + LAKAP_KURALI +
+    "- Büyü, beceri, sınıf, ırk, KATEGORİ UNVANI, eşya, YER, LONCA/klan/birlik/örgüt ve "
     "sistem/dünya terimlerini İngilizce BIRAKMA; Türkçe'ye çevir (Spell -> Büyü, "
     "Nightmare -> Kabus, Skill -> Beceri, Zero Wing -> Sıfır Kanat gibi). Bir "
     "kelimenin büyük harfle başlaması onu korumak için sebep DEĞİLDİR.\n"
@@ -134,6 +672,12 @@ SYSTEM_INSTRUCTION = (
     "kelimeler sözlüğe DAHİL DEĞİLDİR: sözlükte 'Tier -> Kademe' varsa 'level' "
     "yine 'seviye' olarak çevrilir, 'kademe' DEĞİL.\n"
     "  * Karşılık cümlede ek almalıysa Türkçe ekini DOĞRU getir (aşağıdaki EK KURALI).\n"
+    # Aynı İngilizce sözcüğün bağlama göre iki karşılığı olabiliyor (ölçülen vaka:
+    # `Great` hem Kabus Yaratığı rütbesi hem gündelik "Great!" ünlemi). Koşulsuz
+    # bir kayıt modele "her yerde bunu yaz" der ve ünlemleri de bozardı.
+    "  * Bir satırda [KOŞUL: ...] varsa karşılık YALNIZ o koşul sağlandığında "
+    "geçerlidir. Koşul sağlanmıyorsa o kelimeyi bağlama göre normal çevir; "
+    "sözlük karşılığını ZORLAMA.\n"
     "  * Kaynak çoğul veya iyelikse karşılık da Türkçe'de çoğul/iyelik olur "
     "(Tiers -> Kademeler; the Tier's power -> Kademenin gücü).\n"
     "  * İngilizce korunan özel isim ek alırken kesme işareti kullan ve eki "
@@ -155,26 +699,25 @@ SYSTEM_INSTRUCTION = (
     "- ÖNCEKİ ÇEVİRİ verilirse onu TEKRAR çevirme; yalnızca devamlılık için kullan: "
     "anlatım kişisi, kip ve hitap düzeyi (sen/siz) oradan devam etmeli — bölüm başında "
     "üslup değiştirme.\n"
-    "- ÜSLUP NOTU verilirse kitap boyunca ona uy (anlatım kişisi, hitap, ton). Notla "
-    "metin çelişirse METİN kazanır; not bir tercih, uydurma sebebi değildir.\n"
     "- METİN paragrafları [[n]] ile numaralıdır. Çeviride HER paragrafın başına AYNI "
     "[[n]] işaretini koy; hiçbir işareti ATLAMA, BİRLEŞTİRME veya sırasını DEĞİŞTİRME. "
     "Bir İngilizce paragraf bir Türkçe paragrafa karşılık gelir.\n"
     '- Yanıtı SADECE şu JSON ile ver: {"translation": "[[1]] ...\\n\\n[[2]] ...", '
     '"detected_names": ["..."], '
     '"detected_terms": {"İngilizce özel ad": "Türkçe karşılığı"}}\n'
-    "- detected_names: SADECE metinde geçen KARAKTER (kişi) isimleri — İngilizce "
-    "yazımıyla (çeviride de İngilizce kalan tek sınıf bunlardır). Buraya KİŞİ "
-    "OLMAYAN hiçbir şeyi yazma: lonca/klan, şehir, krallık, imparatorluk, kale, "
-    "eşya, beceri, ırk, unvan, canavar türü buraya girerse kitabın sözlüğüne "
-    "İngilizce olarak çakılır ve sonraki bölümlerde de Türkçeye çevrilemez. "
-    "KİŞİ Mİ diye tereddüt ediyorsan detected_names'e DEĞİL detected_terms'e yaz.\n"
+    "- detected_names: metinde geçen KİŞİLERİ adlandıran ifadeler — gerçek adlar VE "
+    "yukarıdaki LAKAP ÖLÇÜTÜ'nü geçen lakaplar, İngilizce yazımıyla (çeviride de "
+    "İngilizce kalan tek sınıf bunlardır). Buraya bir KİŞİYİ ADLANDIRMAYAN hiçbir "
+    "şeyi yazma: lonca/klan, şehir, krallık, imparatorluk, kale, eşya, beceri, ırk, "
+    "kategori unvanı, canavar türü buraya girerse kitabın sözlüğüne İngilizce olarak "
+    "çakılır ve sonraki bölümlerde de Türkçeye çevrilemez. Bir KİŞİYİ mi adlandırıyor "
+    "diye tereddüt ediyorsan detected_names'e DEĞİL detected_terms'e yaz.\n"
     "- detected_names'teki her ad çeviri metninde de AYNEN İngilizce yazımıyla "
     "geçmelidir. Çeviride Türkçeleştirdiğin bir adı buraya YAZMA ve buraya asla "
     "Türkçe kelime koyma (Türkçeleştirdiysen yeri detected_terms'tir).\n"
     "- detected_terms: metinde geçen DİĞER TÜM ÖZEL ADLAR — hiçbirini atlama: yer "
     "(şehir/imparatorluk/kale/bölge/diyar), lonca/klan/birlik/örgüt, EŞYA ve eser "
-    "ve silah, BECERİ/büyü/teknik/yetenek, unvan, ırk/tür, sınıf, adı olan canavar, "
+    "ve silah, BECERİ/büyü/teknik/yetenek, kategori unvanı, ırk/tür, sınıf, adı olan canavar, "
     "olay/kurum ve sistem/dünya terimi. Anahtar İngilizce özgün ad, değer senin "
     "çeviride KULLANDIĞIN Türkçe karşılık "
     "(\"Puppeteer's Shroud\" -> \"Kuklacının Örtüsü\", "
@@ -183,6 +726,13 @@ SYSTEM_INSTRUCTION = (
     "adlandıran her ifade detected_terms'e girer; sıradan cins isim (a sword, the "
     "city) girmez ama adlandırılmış hâli (the Sword of Dawn) GİRER. Birden çok "
     "kelimeli adı BÜTÜN olarak ver, parçalama.\n"
+    "- HİYERARŞİ İSTİSNASI: metnin sıralı bir düzenin adlandırılmış BASAMAĞI olarak "
+    "kullandığı ad (canavar rütbesi, güç kademesi, tehlike derecesi) KÜÇÜK harfle "
+    "yazılmış olsa bile detected_terms'e girer. Bu dizilerin yazımı kitap içinde "
+    "tutarsızdır ve büyük harf ölçütü onları kaçırır. AYIRT EDİCİ: ad bir DİZİ "
+    "hâlinde sayılıyorsa ya da bir düzene bağlanıyorsa ('lowest to highest', "
+    "'rank of', 'above/below the ...') basamaktır ve girer; düzene bağlanmadan, "
+    "tek başına geçen sıradan cins isim girmez.\n"
     "- detected_terms'te çeviride ne yazdıysan burada AYNISINI ver; ikisi tutmazsa "
     "sözlük bozulur. Böyle bir ad yoksa boş bırak."
 )
@@ -197,16 +747,24 @@ class TranslateError(Exception):
 
 
 class _Retryable(Exception):
-    """İç sinyal: bu modelde geçici hata tükendi; sıradaki modele geç."""
+    """İç sinyal: bu anahtar/model denemesi başarısız — çağıran nereye düşeceğine karar verir.
+
+    Taşınan bayraklar düşme YÖNÜNÜ belirler (`_generate_once_with_retry`):
+      * ``kota``      429 — sıradaki ANAHTAR, ve bu anahtar soğumaya alınır.
+      * ``gecici``    500/503/taşıma — sıradaki ANAHTAR, soğutma YOK.
+      * (bayraksız)   404 / engellenmiş / anahtarsız — sıradaki MODEL.
+      * ``blocked``   içerik filtresi; hata mesajını değiştirir.
+      * ``anahtarsiz`` bu halkada hiç anahtar yoktu; hata mesajını değiştirir.
+    """
 
 
 def translate_chapter(
     text: str,
     api_key: str,
     glossary: dict[str, str] | None = None,
-    models: tuple[str, ...] = DEFAULT_MODELS,
+    models: tuple[str, ...] | None = None,
     prev_context: str = "",
-    style_note: str = "",
+    kosullar: dict[str, str] | None = None,
 ) -> dict:
     """Tüm bölümü parçalayıp çevirir; bağlamı taşır, yeni isimleri biriktirir.
 
@@ -218,7 +776,6 @@ def translate_chapter(
     ``prev_context``: ÖNCEKİ BÖLÜMÜN son Türkçe metni. İlk parçanın bağlamı olur —
     parçalar arası devamlılık zaten taşınıyordu ama bölüm sınırında sıfırlanıyor,
     sahnenin ortasında biten bir bölümün devamı bağlamsız çevriliyordu.
-    ``style_note``: kitap başına serbest üslup notu (anlatım kişisi, hitap, ton).
 
     Döner: {"translation": str, "source": str|None, "detected_names": list[str],
             "detected_terms": dict[str, str], "chunk_count": int, "engine": str}
@@ -230,18 +787,10 @@ def translate_chapter(
     (`chapters.engine`) parçası ve DB'de eski kayıtlar başka değer taşıyor.
     """
     glossary = dict(glossary or {})
+    models = models or secili_zincir()
     chunks = _split_paragraphs(text)
 
-    # Tembel: parça yoksa (boş bölüm) istemci hiç kurulmaz.
-    _client: genai.Client | None = None
-
-    def client_factory() -> genai.Client:
-        nonlocal _client
-        if _client is None:
-            if not api_key:
-                raise TranslateError("GEMINI_API_KEY ayarlı değil.")
-            _client = genai.Client(api_key=api_key)
-        return _client
+    client_factory = _gemini_fabrikasi(api_key)
 
     tr_paras: list[str] = []
     en_paras: list[str] = []
@@ -256,7 +805,7 @@ def translate_chapter(
     for chunk in chunks:
         chunk_en = [p.strip() for p in chunk.split("\n\n") if p.strip()]
         result = _translate_chunk(
-            client_factory, models, chunk_en, glossary, prev_tail, style_note,
+            client_factory, models, chunk_en, glossary, prev_tail, kosullar,
         )
         if result.get("model"):
             used_models[result["model"]] = None
@@ -281,6 +830,21 @@ def translate_chapter(
             aligned = False
             prev_tail = _last_sentences(clean, 2)
 
+    # Kaynakta hiç geçmeyen anahtarlar (model uydurması) sözlüğe girmemeli. Terimler
+    # ÖNCE süzülür: `ayikla_karakter_adlari` 1. elemesinde bu listeyi kullanıyor,
+    # elenmiş bir anahtarın karakter adını sessizce kurtarması istenmez.
+    # İNGİLİZCE KALAN paragrafları onar. Hizalama tutmadıysa ölçüt uygulanamaz:
+    # hangi Türkçe paragrafın hangi İngilizce paragrafa karşılık geldiği bilinmiyor.
+    kalinti: dict[int, str] = {}
+    if aligned:
+        kalinti = ingilizce_kalinti(tr_paras, en_paras, glossary)
+        if kalinti:
+            kalinti = _kalintiyi_onar(
+                client_factory, models, tr_paras, en_paras, kalinti,
+                glossary, used_models, new_names, new_terms, kosullar,
+            )
+
+    new_terms = ayikla_terim_anahtarlari(new_terms, text)
     translation = "\n\n".join(tr_paras)
     return {
         "translation": translation,
@@ -288,13 +852,23 @@ def translate_chapter(
         # Süzgeç ŞART: model karakter olmayan adları (lonca, şehir, eşya) düzenli
         # olarak bu kutuya sızdırıyor ve oraya düşen her ad sözlüğe İNGİLİZCE
         # çakılıyor (`merge_names`, X -> X) — kitap boyunca çevrilemez hâle gelir.
-        "detected_names": ayikla_karakter_adlari(sorted(new_names), new_terms, translation),
+        "detected_names": ayikla_karakter_adlari(
+            sorted(new_names), new_terms, translation, text
+        ),
         "detected_terms": new_terms,
         # Künye: bölümü FİİLEN çeviren model(ler). Parçalar farklı halkalara düştüyse
         # hepsi yazılır ("… + …"); boş bölümde (hiç parça yok) None.
         "model": " + ".join(used_models) or None,
+        # Onarımdan SONRA hâlâ İngilizce kalan paragraflar. Boş = temiz. Künyeye
+        # yazılır ve okuyucuda ⚠ ile görünür; sessiz kalmak, kullanıcının bir
+        # daha asla çeviri tetiklemeyecek bozuk bir önbellek satırıyla kalması
+        # demekti.
+        "ingilizce_kalinti": kalinti,
         "chunk_count": len(chunks),
-        "engine": "gemini",  # künye alanı; tek motor kaldığından sabit
+        # MOTOR fiilen çeviren model(ler)den türetilir. Sabit "gemini" yazmak,
+        # Mistral zincirin ilk halkası olduğundan doğrudan yanlış bilgiydi:
+        # Mistral'in çevirdiği bölüm rozette "GEMINI ile çevrildi" diyordu.
+        "engine": motor_adi(" + ".join(used_models)),
     }
 
 
@@ -304,8 +878,43 @@ def translate_chapter(
 _TR_HARF_RE = re.compile(r"[çğıİöşüÇĞÖŞÜ]")
 
 
+def kaynakta_gecen(terim: str, kaynak: str, cogul_esnek: bool = False) -> bool:
+    """Terim İNGİLİZCE kaynak metinde geçiyor mu (varyant + çekim toleranslı).
+
+    Kaynak boşsa DAİMA True. Doğrulayamadığımız kaydı atmak, o adı "her bölümde
+    yeniden karar" durumuna geri döndürür — sözlüğün var oluş sebebinin tersi.
+    Eski önbellek satırlarında `source_text` NULL olabilir; orada eleme yapılmaz.
+
+    Arama `_term_regex` ile: düz `in` kontrolü kesme işareti varyantını
+    (``Heaven's Burial`` ~ ``Heaven’s Burial``, ölçülmüş gerçek vaka) kaçırır ve
+    MEŞRU terimi eler.
+    """
+    if not (kaynak or "").strip() or not (terim or "").strip():
+        return True
+    return bool(_term_regex(terim, cogul_esnek).search(kaynak))
+
+
+def ayikla_terim_anahtarlari(
+    terms: dict[str, str], kaynak: str
+) -> dict[str, str]:
+    """`detected_terms` anahtarlarından kaynakta geçmeyenleri (uydurma) at.
+
+    Aynı gerekçe `detected_names` süzgecindeki 4. elemeyle ortak: model kaynakta
+    hiç bulunmayan bir adı anahtar yapabiliyor (ölçüm: başka kitapların
+    karakterleri sözlüğe düşmüştü). Kaynak yoksa hiçbir şey elenmez.
+    """
+    # Terimlerde çoğul esnek: model `Evil Beasts` bildirip kaynakta `Evil Beast`
+    # geçiyorsa MEŞRU kaydı elemek, onu her bölümde yeniden karar konusu yapardı.
+    # Şüphede kaydı bırakmak, kaybetmekten ucuzdur.
+    return {
+        k: v
+        for k, v in (terms or {}).items()
+        if kaynakta_gecen(k, kaynak, cogul_esnek=True)
+    }
+
+
 def ayikla_karakter_adlari(
-    names: list[str], terms: dict[str, str], translation: str
+    names: list[str], terms: dict[str, str], translation: str, kaynak: str = ""
 ) -> list[str]:
     """`detected_names`'ten gerçekten İngilizce kalan KİŞİ adlarını süz.
 
@@ -322,6 +931,11 @@ def ayikla_karakter_adlari(
     3. Ad çeviri metninde AYNEN geçmiyorsa → model onu çeviride Türkçeleştirmiş
        demektir; `X -> X` yazmak modelin kendi kararıyla çelişir ve sonraki
        bölümleri İngilizceye zorlar.
+    4. Ad İNGİLİZCE KAYNAKTA geçmiyorsa → İngilizce bir ad değildir. 1-3 bunu
+       kaçırıyordu: model çevirdiği adı Türkçe hâliyle bu kutuya yazınca
+       (ölçüm: `Bilgin`, `Kurnaz` — `Scholar`/`Shifty`'nin Türkçesi, kaynakta
+       0 bölüm) 2. eleme saf-ASCII oldukları için, 3. eleme çeviride gerçekten
+       geçtikleri için geçiriyordu. Kaynak verilmezse bu eleme koşmaz.
 
     Karşılaştırma `fold_term` üzerinden: Türkçe ek/yazım varyantı ("Nephis'in",
     "OreEmpire") adı elemesin.
@@ -337,6 +951,8 @@ def ayikla_karakter_adlari(
             continue
         if anahtar not in ceviri:
             continue
+        if not kaynakta_gecen(ad, kaynak):
+            continue
         ayikli.append(ad)
     return ayikli
 
@@ -345,9 +961,11 @@ SUGGEST_INSTRUCTION = (
     "Sen bir İngilizce→Türkçe web roman çevirmenisin. Sana bir ÖZEL AD ve geçtiği "
     "cümle verilecek; bu adın kitap sözlüğüne nasıl kaydedileceğine karar ver.\n"
     "Kural (çeviri sözlüğünün kuralıyla AYNI):\n"
-    "- Ad bir KİŞİ/KARAKTER adıysa İngilizce KALIR: karşılık, adın kendisidir.\n"
+    "- Ad bir KİŞİYİ adlandırıyorsa İngilizce KALIR: karşılık, adın kendisidir. "
+    "Gerçek ad da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
+    + LAKAP_KURALI +
     "- Başka her özel ad (yer, şehir, imparatorluk, lonca/klan/örgüt, eşya, silah, "
-    "beceri/büyü/teknik, unvan, ırk, adlandırılmış canavar, sistem/dünya terimi) "
+    "beceri/büyü/teknik, kategori unvanı, ırk, adlandırılmış canavar, sistem/dünya terimi) "
     "TÜRKÇE'ye çevrilir; karşılık o Türkçe biçimdir.\n"
     "- Bir örgüt/yer adının İÇİNDE kişi adı geçiyorsa o kişi adı İngilizce kalır, "
     "gerisi çevrilir ('Wang Lin's Hall' -> 'Wang Lin Salonu').\n"
@@ -365,7 +983,7 @@ def suggest_term(
     source: str,
     context: str = "",
     api_key: str = "",
-    models: tuple[str, ...] = DEFAULT_MODELS,
+    models: tuple[str, ...] | None = None,
 ) -> dict:
     """Seçilen özel ad için sözlük karşılığı öner (okuyucudaki hızlı ekleme kısayolu).
 
@@ -379,14 +997,14 @@ def suggest_term(
     source = (source or "").strip()
     if not source:
         raise TranslateError("Terim boş.")
-    if not api_key:
-        raise TranslateError("GEMINI_API_KEY ayarlı değil.")
+    if not ceviri_anahtari_var_mi(api_key):
+        raise TranslateError(ANAHTAR_YOK_MESAJI)
     user = (
         f"ÖZEL AD: {source}\n\n"
         f"GEÇTİĞİ CÜMLE (bağlam): {(context or '').strip()[:600] or '(yok)'}"
     )
     response, _model = _generate_with_fallback(
-        genai.Client(api_key=api_key), models, user,
+        _gemini_fabrikasi(api_key), models or secili_zincir(), user,
         system=SUGGEST_INSTRUCTION, max_tokens=512,
     )
     try:
@@ -407,9 +1025,11 @@ CLASSIFY_INSTRUCTION = (
     "özel ad listesi verilecek; hepsi şu an İngilizce korunuyor. Her ad için bunun "
     "doğru olup olmadığına karar ver.\n"
     "Kural (çeviri sözlüğünün kuralıyla AYNI):\n"
-    "- Ad bir KİŞİ/KARAKTER adıysa İngilizce KALIR: karşılık adın kendisidir.\n"
+    "- Ad bir KİŞİYİ adlandırıyorsa İngilizce KALIR: karşılık adın kendisidir. "
+    "Gerçek ad da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
+    + LAKAP_KURALI +
     "- Başka her özel ad (yer, şehir, imparatorluk, krallık, kale, lonca/klan/örgüt, "
-    "eşya, silah, zırh, beceri/büyü/teknik, unvan, ırk, sınıf, adlandırılmış canavar, "
+    "eşya, silah, zırh, beceri/büyü/teknik, kategori unvanı, ırk, sınıf, adlandırılmış canavar, "
     "olay, sistem/dünya terimi) TÜRKÇE'ye çevrilir; karşılık o Türkçe biçimdir.\n"
     "- Bir örgüt/yer adının İÇİNDE kişi adı geçiyorsa o kişi adı İngilizce kalır, "
     "gerisi çevrilir ('Wang Lin's Hall' -> 'Wang Lin Salonu').\n"
@@ -429,7 +1049,7 @@ def classify_terms(
     terms: list[str],
     api_key: str = "",
     book_title: str = "",
-    models: tuple[str, ...] = DEFAULT_MODELS,
+    models: tuple[str, ...] | None = None,
 ) -> dict[str, dict]:
     """Sözlükte İngilizce korunan adları TOPLU sınıflandır (bakım aracı).
 
@@ -446,14 +1066,14 @@ def classify_terms(
     temiz = [t.strip() for t in terms if (t or "").strip()]
     if not temiz:
         return {}
-    if not api_key:
-        raise TranslateError("GEMINI_API_KEY ayarlı değil.")
+    if not ceviri_anahtari_var_mi(api_key):
+        raise TranslateError(ANAHTAR_YOK_MESAJI)
     user = (
         (f"KİTAP: {book_title}\n\n" if book_title else "")
         + "ADLAR:\n" + "\n".join(f"- {t}" for t in temiz)
     )
     response, _model = _generate_with_fallback(
-        genai.Client(api_key=api_key), models, user,
+        _gemini_fabrikasi(api_key), models or secili_zincir(), user,
         system=CLASSIFY_INSTRUCTION, max_tokens=MAX_OUTPUT_TOKENS,
     )
     try:
@@ -563,22 +1183,413 @@ def _term_parts(term: str) -> list[str]:
     return parts
 
 
+# Anahtarın SONUNDAKİ çoğul ekini isteğe bağlı kılmak için en az bu kadar kök kalmalı.
+# Kısa köklerde ("Os" -> "O") eşleşme sıradan harflere bulaşırdı.
+MIN_COGUL_KOK = 3
+
+
+# Cumle ayirici: nokta/unlem/soru/uc-nokta + bosluk. Kisaltma ("Dr.") yanlis
+# bolebilir ama koken cumlesi bir KUNYE bilgisidir, bir cumle bir fazla ya da
+# eksik olmasi bilgiyi bozmaz — karmasik bir cumle ayirici bu is icin fazla.
+_CUMLE_AYIRICI = re.compile(r"(?<=[.!?…])\s+")
+# Kokene giden cumle kirpilir: sozluk ekraninda satir alti bir kunye satiri, alinti degil.
+KOKEN_CUMLE_MAX = 300
+
+
+def cumle_bul(metin: str, terim: str) -> str | None:
+    """`terim`in metinde GECTIGI ilk cumle; yoksa None.
+
+    Terim eslestirme `_term_regex` ile yapilir — sozlugun her yerinde kullanilan
+    AYNI olcut. Duz `in` aramasi yazim varyantini (Ore-Imparatorlugu) kacirir ve
+    kayitli bir terim icin koken cumlesi bulunamazdi.
+    """
+    metin = (metin or "").strip()
+    terim = (terim or "").strip()
+    if not metin or not terim:
+        return None
+    try:
+        desen = _term_regex(terim)
+    except re.error:
+        return None
+    for satir in metin.splitlines():
+        for cumle in _CUMLE_AYIRICI.split(satir):
+            c = cumle.strip()
+            if c and desen.search(c):
+                return c[:KOKEN_CUMLE_MAX]
+    return None
+
+
 @lru_cache(maxsize=2048)
-def _term_regex(term: str) -> re.Pattern[str]:
+def _term_regex(term: str, cogul_esnek: bool = False) -> re.Pattern[str]:
     """Terimi kelime-sınırlı, çekim ekine ve YAZIM VARYANTINA toleranslı arayan desen.
 
     ``Tier`` deseni ``Tier``, ``Tiers``, ``Tier's`` ile eşleşir; ``Tiernan`` ile
     eşleşmez. ``Ore Empire`` deseni ``OreEmpire`` ve ``Ore-Empire`` ile de eşleşir
     (parçalar arası ayırıcı serbest). Alfanümerik olmayan uçlarda ``\\b`` eşleşmeyi
     öldüreceğinden koşullu.
+
+    ``cogul_esnek``: ANAHTARIN sonundaki çoğul ekini de isteğe bağlı yapar. Kuyruk
+    eki (``s?``) çoğulu EKLİYOR ama ÇIKARMIYORDU, yani **çoğul kaydedilmiş bir terim
+    tekilini asla yakalayamıyordu** — kayıt sözlükte durduğu hâlde prompt'a hiç
+    girmiyordu. Ölçülen vaka (2026-08-23): ``tyrants -> Tiranlar`` kaydı varken metinde
+    ``tyrant`` 22 kez tekil, 2 kez çoğul geçiyordu; 24 geçişin 22'si kaçtı ve model
+    ``the Tyrant``ı serbestçe çevirdi.
+
+    Gerçek sözlükte ölçüldü: ``s`` ile biten 53 kaydın 17'sinin kökü metinde geçiyor
+    ve **17'si de meşru tekil/çoğul çifti** (``Evil Beast``/``Evil Beasts``,
+    ``Hell Tank``/``Hell Tanks``) — bu veride yanlış eşleşme yok.
+
+    Yine de VARSAYILAN KAPALI ve çağıran yalnız TÜRKÇE KARŞILIKLI kayıtlarda açar
+    (bkz. `_terim_metinde`): risk sınıfı İngilizce korunan KİŞİ adlarıdır (``Nephis``
+    -> ``Nephi``), ve orada yanlış eşleşmenin bedeli sıradan bir sözcüğü İngilizce
+    bırakmaktır. Yalnız SON ``s`` düşürülür; ``es`` çoğulları (``Witches`` -> ``Witch``)
+    kapsam dışıdır — fazla soymak gerçek bir kökü bozardı, eksik soymak yalnız
+    fırsat kaçırır.
     """
     parts = _term_parts(term)
     if not parts:
         return re.compile(r"(?!)")  # hiçbir şeyle eşleşmeyen desen
+    if cogul_esnek and parts[-1][-1:].lower() == "s":
+        kok = parts[-1][:-1]
+        if len(kok) >= MIN_COGUL_KOK:
+            parts = parts[:-1] + [kok]  # kuyruktaki `s?` çoğulu geri getirir
     head = r"\b" if parts[0][:1].isalnum() else ""
     tail = r"(?:['’]s|es|s)?\b" if parts[-1][-1:].isalnum() else ""
     core = _TERM_GLUE.join(re.escape(p) for p in parts)
     return re.compile(head + core + tail, re.IGNORECASE)
+
+
+def _ingilizce_korunan(source: str, target: str) -> bool:
+    """Kayıt fiilen "İngilizce korunacak" anlamına mı geliyor (`X -> X`)?
+
+    Karşılaştırma `fold_term` ile: `Ore Empire -> OreEmpire` gibi bir kayıt da
+    İngilizce korunuyor demektir. Bakım aracı (`scripts/sozluk_gozden_gecir.py`)
+    da aynı ölçütü kullanıyor; iki yerde iki ayrı tanım olması, prompt'un ve
+    raporun aynı kayıt için farklı karar vermesine yol açardı.
+    """
+    return fold_term(source) == fold_term(target or "")
+
+
+def _terim_metinde(source: str, target: str, text: str) -> bool:
+    """Terim metinde geçiyor mu — İngilizce korunan adda KÜÇÜK HARFLİ eşleşme sayılmaz.
+
+    Sebep ölçüldü: `_term_regex` `IGNORECASE` arıyor ve İngilizce korunan tek
+    kelimelik adların çoğu sıradan İngilizce kelime (`Dark`, `Blue`, `Sun`,
+    `Rain`, `Wind`). Gerçek bölümlerde `Dark` 113, `Blue` 53, `Sun` 5 kez
+    SIRADAN kelime olarak eşleşiyordu; her eşleşme "bu ad AYNEN İngilizce
+    kalacak" kuralını prompt'a sokuyor ve model sıradan bir sıfatı çevirmiyor.
+
+    Kural YALNIZ İngilizce korunan kayıtlara uygulanır çünkü kaybın yönü
+    asimetrik: Türkçe karşılığı olan bir kayıt küçük yazıma uygulanınca doğru
+    çeviri çıkar (zararsız), İngilizce korunan kayıt uygulanınca sıradan kelime
+    İngilizce kalır (görünür bozukluk).
+
+    Kaynağı TÜMÜYLE küçük harfli kayıt (gerçek örnek: `tls123 -> tls123`, bir
+    kullanıcı adı) kural DIŞIDIR — orada büyük harf beklemek kaydı hiç
+    eşleşmez hâle getirirdi.
+
+    Düz "büyük-küçük harf duyarlı arama" DEĞİL: "SUNNY!" gibi tümü büyük harfli
+    bağırma yazımı da geçerli bir geçiştir, elenmemeli.
+    """
+    korunan = _ingilizce_korunan(source, target)
+    # Çoğul esnekliği YALNIZ Türkçe karşılıklı kayıtlarda: risk sınıfı İngilizce
+    # korunan kişi adlarıdır (`Nephis` -> `Nephi`) ve orada yanlış eşleşme sıradan
+    # bir sözcüğü İngilizce bıraktırır — pahalı yön.
+    desen = _term_regex(source, not korunan)
+    if not (korunan and not source.islower()):
+        return bool(desen.search(text))
+    return any(not m.group(0).islower() for m in desen.finditer(text))
+
+
+def sozluk_ihlalleri(
+    glossary: dict[str, str] | None,
+    kaynak: str | None,
+    ceviri: str | None,
+) -> dict[str, str]:
+    """Türkçe karşılığı kayıtlı olduğu hâlde çeviride İNGİLİZCE kalmış terimler.
+
+    Zincir yalnız ERİŞİLEBİLİRLİĞE bakarak iniyor (kota dolunca bir alt halka) ve
+    kaliteyi hiçbir yerde ölçmüyordu. Ölçüm (2026-08-30, Shadow Slave'in
+    önbellekteki 110 bölümü): sözlük ihlali oranı 3.6-flash'ta %0,7 ·
+    3.5-flash'ta %0,3 · **flash-lite'ta %23,9**. 109. bölümde `Saint -> Aziz`
+    kaynakta 12 kez geçti, 12'si de İngilizce kaldı. Lite'ın çevirisi sessizce
+    kalıcı önbelleğe yazılıp bir daha kontrol edilmiyordu.
+
+    Denetim deterministiktir ve API çağırmaz — çeviriden sonra bedavaya koşar.
+    Ölçüt, prompt'a hangi terimlerin girdiğini belirleyen ölçütle AYNI
+    (`_terim_metinde`); ayrışırlarsa prompt'a giren bir terim denetimden kaçardı.
+
+    Üç sınıf denetim dışıdır:
+      * `X -> X` (İngilizce korunan karakter adları) — İngilizce kalmak ZORUNDA
+      * bu bölümün kaynağında hiç geçmeyen kayıtlar
+      * karşılığının İÇİNDE kaynağı geçen kayıtlar (`Ore Empire -> Ore Empire
+        Krallığı`) — doğru çeviri bile deseni tetikler, ölçülemez
+
+    Döner: kaçan terimlerin {kaynak: karşılık} eşlemesi (boş = uyumlu).
+    """
+    if not glossary or not kaynak or not ceviri:
+        return {}
+    ihlal: dict[str, str] = {}
+    for source, target in glossary.items():
+        if not source or not target:
+            continue
+        if _ingilizce_korunan(source, target):
+            continue
+        if _terim_metinde(source, target, target):
+            continue  # karşılık kaynağı içeriyor: ölçülemez, sahte ihlal üretme
+        if not _terim_metinde(source, target, kaynak):
+            continue
+        if _terim_metinde(source, target, ceviri):
+            ihlal[source] = target
+    return ihlal
+
+
+# Türkçe'de KARŞILIĞI OLMAYAN İngilizce işlev sözcükleri. Çeviride birinin geçmesi
+# o cümlenin (ya da bir parçasının) çevrilmeden kaldığının güçlü işaretidir.
+# Liste bilerek DAR: Türkçe'de de var olan yazımlar ELENMİŞTİR. Ölçüm (2026-09-05,
+# 21.411 gerçek paragraf) `not` ("not etmişti") ve `has` ("kendine has") yüzünden
+# 126 sahte vaka üretmişti; `of` de Türkçe ünlem "Of!" ile çakıştığı için yok.
+# Listeyi genişletirken ölçüt: sözcüğün Türkçe bir yazımı VAR MI — varsa girmez.
+ISLEV_SOZCUKLERI = frozenset("""
+the and but that with was were would could should they them their your from have
+had been than then there what when which who will about into over just only even
+still down this these those some more most much many very such how why where
+while before after again once here never always said asked replied because though
+although himself herself itself themselves yourself something nothing anything
+everything someone everyone another being having going upon without within through
+around against between among behind toward towards already almost enough perhaps
+however therefore instead rather quite really actually simply finally suddenly
+slowly quickly seemed looked thought knew felt make take took come came went know
+think
+""".split())
+
+# İngilizce SAYI sözcükleri. AYRI bir sınıf, çünkü `ISLEV_SOZCUKLERI`'nin kuralı
+# ("Türkçe yazımı olan sözcük girmez") bunları dışarıda bırakıyordu: `ten` Türkçede
+# cilt demek. Oysa sızıntı gerçek ve PAHALI — yanlış kalan bir sayı cümlenin
+# anlamını değiştirir (gerçek vaka, shadow-slave #201: `ten times` -> `ten kat`,
+# model ölçü sözcüğünü çevirmiş, sayıyı bırakmış).
+#
+# Ölçüm (21.411 paragraf) bu sınıfın güvenle ayrılabileceğini gösterdi: sayı
+# sözcüklerinin 112 geçişinin TAMAMI özel ad parçasıydı (`Solitary Nine`,
+# `Ninth Heaven`, `Thousand Transformations`, `Hundred Flowers Pavilion`) ve hepsi
+# BÜYÜK harfliydi; tek gerçek sızıntı küçük harfliydi.
+SAYI_SOZCUKLERI = frozenset("""
+one two three four five six seven eight nine ten eleven twelve thirteen fourteen
+fifteen sixteen seventeen eighteen nineteen twenty thirty forty fifty sixty
+seventy eighty ninety hundred thousand million billion first second third fourth
+fifth sixth seventh eighth ninth tenth dozen twice
+""".split())
+
+# Blok ölçütü: bu kadar aday token'dan azına BAKILMAZ. Ölçüm, kısa replikte
+# (``"Sunny! Sunny! Uyan!"`` ~ ``"Sunny! Sunny! Wake up!"``) oranın DOĞRU çeviride
+# bile 0,5-0,67'ye çıktığını gösterdi: özel ad + ünlem paragrafın tamamı oluyor.
+KALINTI_MIN_TOKEN = 5
+# Ölçülen dağılımda 0,7 ile 1,0 arasında HİÇ paragraf yok — eşik o boşluğa konur.
+KALINTI_ORAN = 0.9
+
+_KALINTI_TOK = re.compile(r"[A-Za-z\u00c0-\u024f'\u2019]+")
+# Cümle sonu sayılan işaretler: bunlardan sonra gelen BÜYÜK harf özel ad DEĞİLDİR.
+_CUMLE_SONU = ".!?:;\u2026\"\u201c\u201d'\u2018\u2019(-[\u2014\u2013"
+
+
+def _kalinti_normal(metin: str) -> str:
+    return unicodedata.normalize("NFKC", metin or "").replace("\u2019", "'")
+
+
+def _cumle_basinda(metin: str, konum: int) -> bool:
+    """`konum`daki sözcük bir cümlenin BAŞINDA mı?
+
+    Ayrım load-bearing: cümle başındaki büyük harf özel ad göstermez. Bu ayrım
+    olmadan ``Was Neph...`` vakasındaki ``Was`` "özel ad" sayılıp elenirdi.
+    """
+    onc = metin[:konum].rstrip()
+    return not onc or onc[-1] in _CUMLE_SONU
+
+
+def _ozel_adlar(kaynak: str) -> set[str]:
+    """Kaynakta CÜMLE BAŞI DIŞINDA büyük harfle geçen token'lar = özel ad."""
+    kaynak = _kalinti_normal(kaynak)
+    out: set[str] = set()
+    for m in _KALINTI_TOK.finditer(kaynak):
+        w = m.group(0)
+        if w[:1].isupper() and not _cumle_basinda(kaynak, m.start()):
+            out.add(w.lower())
+    return out
+
+
+def _sozluk_kapsami(ceviri: str, glossary: dict[str, str] | None) -> list[tuple[int, int]]:
+    """Çeviride sözlük kaydıyla örtüşen aralıklar (İÇİNDEKİ işlev sözcüğü sızıntı değil).
+
+    Gerçek vaka: ``Auro of the Nine`` sözlükte İngilizce korunuyor; içindeki
+    ``the`` iki bölümde sahte sızıntı üretiyordu. YALNIZ işlev sözcüğü İÇEREN
+    kayıtlar taranır — 300 kayıtlık bir sözlükte hepsini her paragrafta regex'e
+    sokmak boşuna maliyet olurdu.
+    """
+    if not glossary:
+        return []
+    araliklar: list[tuple[int, int]] = []
+    for kaynak in glossary:
+        parcalar = _KALINTI_TOK.findall(kaynak or "")
+        if not any(p.lower() in ISLEV_SOZCUKLERI for p in parcalar):
+            continue
+        for m in _term_regex(kaynak).finditer(ceviri):
+            araliklar.append((m.start(), m.end()))
+    return araliklar
+
+
+def _blok_kalintisi(ceviri: str, kaynak: str) -> bool:
+    """Paragrafın TAMAMI (ya da neredeyse tamamı) İngilizce mi?"""
+    ozel = _ozel_adlar(kaynak)
+    kaynak_kume = {w.lower() for w in _KALINTI_TOK.findall(_kalinti_normal(kaynak))}
+    aday = [
+        w.lower()
+        for w in _KALINTI_TOK.findall(_kalinti_normal(ceviri))
+        if w.lower() not in ozel
+    ]
+    if len(aday) < KALINTI_MIN_TOKEN:
+        return False
+    return sum(1 for w in aday if w in kaynak_kume) / len(aday) >= KALINTI_ORAN
+
+
+def _sozcuk_kalintisi(
+    ceviri: str, kaynak: str, glossary: dict[str, str] | None
+) -> bool:
+    """Paragrafın İÇİNDE tek tük İngilizce işlev sözcüğü kalmış mı?
+
+    Blok ölçütü bunu göremez: ``...But sadece birkaç dakika sonra`` çevrilmiştir,
+    yalnız baştaki bağlaç düşmemiştir — oran 13'te 1'dir.
+    """
+    ceviri_n = _kalinti_normal(ceviri)
+    kaynak_kume = {w.lower() for w in _KALINTI_TOK.findall(_kalinti_normal(kaynak))}
+    sozluk_anahtarlari = {(k or "").lower() for k in (glossary or {})}
+    kapsam = _sozluk_kapsami(ceviri_n, glossary)
+    eslesmeler = list(_KALINTI_TOK.finditer(ceviri_n))
+    for sira, m in enumerate(eslesmeler):
+        w = m.group(0)
+        lw = w.lower()
+        sayi = lw in SAYI_SOZCUKLERI
+        if not sayi and lw not in ISLEV_SOZCUKLERI:
+            continue
+        # Kaynakta GEÇMİYORSA Türkçe bir sözcüktür, sızıntı değil.
+        if lw not in kaynak_kume:
+            continue
+        # Sözlükte İngilizce korunan bir adın KENDİSİ (ör. `Song` adlı karakter).
+        if lw in sozluk_anahtarlari:
+            continue
+        # Çok kelimeli bir sözlük kaydının İÇİNDE (`Auro of the Nine` -> `the`).
+        if any(a <= m.start() and m.end() <= b for a, b in kapsam):
+            continue
+        # Çeviride BÜYÜK harfli ve cümle başında değilse özel adın parçasıdır
+        # (`Glorious Will` -> `Will`). Cümle başındaki büyük harf ayırt etmez.
+        if w[:1].isupper() and not _cumle_basinda(ceviri_n, m.start()):
+            continue
+        # SAYI sınıfına ÖZEL guard: sonraki sözcük büyük harfliyse ad başlangıcıdır
+        # (`Nine Dragons Emperor`, `Ninth Heaven`). Cümle başındaki büyük harf
+        # ayırt etmediği için yukarıdaki guard bu deseni göremiyor.
+        #
+        # İŞLEV sözcüklerine UYGULANAMAZ: gerçek vaka `Was Neph...` tam olarak bu
+        # desendedir (sonraki sözcük büyük harfli bir kişi adı) ve aynı guard onu
+        # sessizce elerdi. İki sınıfın guard'ları bilerek AYRIDIR.
+        if sayi:
+            sonraki = eslesmeler[sira + 1].group(0) if sira + 1 < len(eslesmeler) else ""
+            if sonraki[:1].isupper():
+                continue
+        return True
+    return False
+
+
+def ingilizce_kalinti(
+    tr_paras: list[str],
+    en_paras: list[str],
+    glossary: dict[str, str] | None = None,
+) -> dict[int, str]:
+    """Çevrilmeden İNGİLİZCE kalmış paragrafları bulur (indeks -> çeviri metni).
+
+    Ölçülen arıza (2026-09-05, shadow-slave): hizalama TUTTUĞU hâlde tek tek
+    paragraflar İngilizce dönüyordu ve boru hattında bunu gören hiçbir denetim
+    yoktu. `_split_by_markers` yalnız YAPIYI doğruluyor (işaretler tam mı),
+    `sozluk_ihlalleri` yalnız KAYITLI terimlere bakıyor — ikisi de "bu paragraf
+    Türkçe mi" sorusunu sormuyordu. Sonuç kalıcı önbelleğe yazıldığı ve önbellek
+    isabeti bir daha çeviri tetiklemediği için kullanıcı o paragrafı SONSUZA DEK
+    İngilizce görüyordu.
+
+    Denetim deterministiktir ve API çağırmaz — `sozluk_ihlalleri` gibi bedavaya
+    koşar. İKİ ölçüt birleşir, çünkü arıza iki biçimde geliyor:
+      * BLOK: paragrafın tamamı kaynakla aynı (``"But to me, it's a paradise."``)
+      * SÖZCÜK: paragraf çevrilmiş ama cümle başındaki bağlaç/yardımcı fiil
+        düşmemiş (``...But sadece birkaç dakika sonra``, ``Was Neph...``) ya da
+        iki özel ad arasındaki bağlaç kalmış (``Sunny and Nephis``)
+
+    Hizalama tutmayan bölümlerde ölçüt UYGULANAMAZ (hangi Türkçe paragrafın hangi
+    İngilizce paragrafa karşılık geldiği bilinmiyor) ve boş döner.
+
+    Kalibrasyon: 21.411 gerçek paragrafta 6 gerçek vaka, 0 yanlış pozitif.
+    """
+    if not tr_paras or len(tr_paras) != len(en_paras):
+        return {}
+    out: dict[int, str] = {}
+    for i, (tr, en) in enumerate(zip(tr_paras, en_paras)):
+        if not (tr or "").strip() or not (en or "").strip():
+            continue
+        if _blok_kalintisi(tr, en) or _sozcuk_kalintisi(tr, en, glossary):
+            out[i] = tr
+    return out
+
+
+def _kalintiyi_onar(
+    client_factory,
+    models: tuple[str, ...],
+    tr_paras: list[str],
+    en_paras: list[str],
+    kalinti: dict[int, str],
+    glossary: dict[str, str],
+    used_models: dict[str, None],
+    new_names: set[str],
+    new_terms: dict[str, str],
+    kosullar: dict[str, str] | None = None,
+) -> dict[int, str]:
+    """Sızan paragrafları TEK turda yeniden çevirir; KALAN sızıntıyı döner.
+
+    `tr_paras` YERİNDE güncellenir. Onarım yalnız sızan paragrafları gönderir:
+    hizalama tuttuğu için hangilerinin çevrilmediği tam olarak bilinir ve tipik
+    vaka 60 paragraflık bölümde 1 paragraftır — bölümün tamamını yeniden
+    çevirmek her sızıntıyı tam bölüm maliyetine (ücretli model seçiliyken PARAYA)
+    çıkarırdı.
+
+    TEK tur bilinçlidir. Sızıntı modelin dikkat kaymasıdır ve kısa, odaklı bir
+    istek onu çoğunlukla düzeltir; düzeltmiyorsa döngü kurmak maliyeti katlar.
+    Onarılamayan sızıntı bayrak olarak yukarı taşınır ve okuyucuda görünür.
+    """
+    indeksler = sorted(kalinti)
+    hedef = [en_paras[i] for i in indeksler]
+    # Bağlam: ilk sızıntıdan ÖNCEKİ Türkçe paragraf. Bağlamsız çevrilen bir
+    # replik hitap düzeyini (sen/siz) ve kipi bölümün geri kalanından koparır.
+    onceki = tr_paras[indeksler[0] - 1] if indeksler[0] else ""
+    try:
+        sonuc = _translate_chunk(
+            client_factory, models, hedef, glossary,
+            _last_sentences(onceki, 2), kosullar,
+        )
+    except Exception:
+        # Onarım BEST-EFFORT: bölüm zaten çevrildi, yalnız bir paragrafı sızdı.
+        # Hatayı yukarı sızdırmak BAŞARILI bir çeviriyi tümden kaybettirirdi.
+        return kalinti
+
+    yeni = _split_by_markers(sonuc.get("translation") or "", len(hedef))
+    if yeni is None:
+        return kalinti
+    if sonuc.get("model"):
+        used_models[sonuc["model"]] = None
+    for ad in sonuc.get("detected_names") or []:
+        if ad and ad not in glossary:
+            new_names.add(ad)
+    for kaynak, karsilik in (sonuc.get("detected_terms") or {}).items():
+        if kaynak and karsilik and kaynak not in glossary:
+            new_terms.setdefault(kaynak, karsilik)
+    for sira, i in enumerate(indeksler):
+        if yeni[sira].strip():
+            tr_paras[i] = yeni[sira]
+    return ingilizce_kalinti(tr_paras, en_paras, glossary)
 
 
 def _relevant_glossary(glossary: dict[str, str], text: str) -> dict[str, str]:
@@ -603,7 +1614,7 @@ def _relevant_glossary(glossary: dict[str, str], text: str) -> dict[str, str]:
         term = (source or "").strip()
         if not term or fold_term(term) not in folded:  # ucuz ön eleme
             continue
-        if _term_regex(term).search(text):
+        if _terim_metinde(term, target, text):
             out[source] = target
     return out
 
@@ -614,7 +1625,7 @@ def _translate_chunk(
     en_paras: list[str],
     glossary: dict[str, str],
     prev_tail: str,
-    style_note: str = "",
+    kosullar: dict[str, str] | None = None,
 ) -> dict:
     """Bir parçayı Gemini ile çevirir (model yedek zinciriyle).
 
@@ -622,8 +1633,11 @@ def _translate_chunk(
     tutulur: uzun bölümde ilk parça kotayı bitirip sonraki parçalar bir alt halkaya
     düşebiliyor, tek bir "bölümün modeli" varsayımı yanlış olurdu.
     """
-    user = _build_user_prompt(en_paras, glossary, prev_tail, style_note)
-    response, model = _generate_with_fallback(client_factory(), models, user)
+    user = _build_user_prompt(en_paras, glossary, prev_tail, kosullar)
+    # Fabrika ÇAĞRILMADAN geçirilir: Gemini istemcisi ancak gerçekten bir Gemini
+    # halkasına inilirse kurulur. Peşinen kurmak, çeviri yalnız Mistral'e gitse
+    # bile GEMINI_API_KEY'i zorunlu kılıyordu.
+    response, model = _generate_with_fallback(client_factory, models, user)
     out = _parse_response(response.text)
     out["model"] = model
     return out
@@ -633,18 +1647,31 @@ def _build_user_prompt(
     en_paras: list[str],
     glossary: dict[str, str],
     prev_tail: str,
-    style_note: str = "",
+    kosullar: dict[str, str] | None = None,
 ) -> str:
-    """Çeviri promptunu kurar. Bölümlerin SIRASI load-bearing — bkz. SON HATIRLATMA."""
-    relevant = _relevant_glossary(glossary, "\n\n".join(en_paras))
+    """Çeviri promptunu kurar. Bölümlerin SIRASI load-bearing — bkz. SON HATIRLATMA.
+
+    ``kosullar``: {kaynak: koşul} — karşılığın HANGİ BAĞLAMDA geçerli olduğunu
+    anlatan serbest metin. Karşılığın YERİNE GEÇMEZ, yanına ``[KOŞUL: ...]`` diye
+    iliştirilir; `sozluk_ihlalleri` ve terim eşleştirme karşılığı olduğu gibi görür.
+    """
+    metin = "\n\n".join(en_paras)
+    relevant = _relevant_glossary(glossary, metin)
+    kosullar = kosullar or {}
+
+    def _satir(s: str, t: str) -> str:
+        # Koşul YALNIZ süzgeçten geçen (metinde fiilen geçen) terimler için yazılır;
+        # geçmeyen bir terimin koşulu her istekte boşa token yakardı.
+        kosul = (kosullar.get(s) or "").strip()
+        return f"{s} -> {t}" + (f"  [KOŞUL: {kosul}]" if kosul else "")
+
     glossary_str = (
-        "\n" + "\n".join(f"{s} -> {t}" for s, t in relevant.items())
+        "\n" + "\n".join(_satir(s, t) for s, t in relevant.items())
         if relevant
         else "(boş)"
     )
     numbered = "\n\n".join(f"[[{i + 1}]] {p}" for i, p in enumerate(en_paras))
     user = (
-        f"ÜSLUP NOTU (bu kitap boyunca geçerli): {style_note.strip() or '(yok)'}\n\n"
         f"SÖZLÜK — YALNIZ bu terimler için geçerli (kaynak -> karşılık); kaynağı "
         f"görünce karşılığını yaz, cümle gerektiriyorsa Türkçe ekini getir; "
         f"listede OLMAYAN kelimelere bu karşılıkları UYGULAMA: {glossary_str}\n\n"
@@ -658,7 +1685,18 @@ def _build_user_prompt(
     # → "Lightshadow City" yerine uydurma "Işıkölge"). Talimat metne en yakın yerde
     # tekrarlanınca kural görüş alanında kalıyor.
     if relevant:
-        korunacak = [s for s, t in relevant.items() if s == t]
+        # Hatırlatma listesi DAİMA süzülür — `_relevant_glossary` eşiğin altındaki
+        # sözlükleri hiç süzmüyor (`GLOSSARY_FILTER_MIN`), o yüzden buradaki liste
+        # bölümde geçmeyen adları da kapsıyordu. Ölçüm: 30 terimlik bir kitapta
+        # HER bölümde 18 ad "AYNEN İngilizce kalacak" diye dayatılıyordu, geçip
+        # geçmediklerine bakılmadan — süzgecin önlemek için var olduğu kirlenmenin
+        # ta kendisi. Ana SÖZLÜK listesi eşiğin altında olduğu gibi kalır (düzensiz
+        # çoğul yüzünden terim kaçırma riski); dar tutulan yalnız ZORLAYICI kısım.
+        korunacak = [
+            s
+            for s, t in relevant.items()
+            if _ingilizce_korunan(s, t) and _terim_metinde(s, t, metin)
+        ]
         user += (
             "\n\nSON HATIRLATMA — SÖZLÜK KURALI HÂLÂ GEÇERLİDİR: yukarıdaki sözlükte "
             "verilen karşılıkları BİREBİR kullan."
@@ -672,14 +1710,109 @@ def _build_user_prompt(
     return user
 
 
+class _KodluHata(Exception):
+    """HTTP durumunu `genai_errors.APIError.code` ile AYNI alanda taşır.
+
+    Böylece `_tek_anahtarla_uret`'teki TEK düşme/tekrar mantığı Claude için de
+    aynen çalışır; ikinci bir kural kümesi doğmaz.
+    """
+
+    def __init__(self, code: int | None, detay: str = "") -> None:
+        super().__init__(f"claude HTTP {detay or code}")
+        self.code = code
+
+
+class _ClaudeYanit:
+    """`response.text` sözleşmesini karşılayan asgari sarmalayıcı.
+
+    Yanıt nesnesi zincirin geri kalanına Gemini'ninkiyle aynı yüzeyle ulaşır —
+    `_parse_response` sağlayıcıyı bilmez ve bilmemeli.
+    """
+
+    __slots__ = ("text",)
+
+    def __init__(self, text: str) -> None:
+        self.text = text
+
+
+def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _ClaudeYanit:
+    """Claude ile üret; kullanılan tokenları GÖSTERGE deposuna yazar.
+
+    Akış (`messages.stream`) kullanılır: `max_tokens` bu projede 32.768 ve SDK bu
+    büyüklükte akışsız istekte HTTP zaman aşımına düşebiliyor.
+
+    Düşünme ("extended thinking") KAPALI: düşünme çıktısı da ÇIKIŞ tokenı olarak
+    faturalanıyor ve çeviri mekanik bir iş. Sonnet 5'te parametre hiç verilmezse
+    adaptif düşünme AÇIK gelir, yani kapatmak açıkça yapılmalı. `temperature` da
+    `temperature` HİÇ gönderilmez (Gemini yolunda 0.3): SDK'nın akış yardımcısı
+    örnekleme parametrelerini kabul etmiyor (`stream()` imzasında yok) ve Sonnet 5
+    zaten onları 400 ile reddediyor. Kopyalamaya çalışmak `TypeError` veriyordu —
+    ölçülen vaka, bu entegrasyonun ilk gerçek çağrısı.
+    """
+    import anthropic  # tembel: Claude seçilmedikçe bağımlılık yüklenmesin
+
+    anahtar = claude_anahtari()
+    if not anahtar:
+        atla = _Retryable()
+        atla.anahtarsiz = True
+        raise atla
+
+    bilgi = CLAUDE_MODELLER[model]
+    govde: dict = {
+        "model": model,
+        "max_tokens": max_tokens,
+        "system": system,
+        "messages": [{"role": "user", "content": user}],
+    }
+    if bilgi.get("dusunme") is not None:
+        govde["thinking"] = bilgi["dusunme"]
+
+    client = anthropic.Anthropic(api_key=anahtar)
+    try:
+        with client.messages.stream(**govde) as akis:
+            yanit = akis.get_final_message()
+    except anthropic.APIStatusError as exc:
+        kod = exc.status_code
+        if kod == 429 or kod >= 500:
+            raise _KodluHata(503, str(kod)) from exc  # geri-çekilmeli tekrar
+        if kod in (401, 403):
+            # Kurulum hatası: "modeller meşgul" demek yanlış teşhis olurdu ve
+            # kullanıcıyı beklemeye iterdi. Zinciri BİLEREK öldürür.
+            raise TranslateError(
+                f"Claude anahtarı reddedildi (HTTP {kod}). CLAUDE_API_KEY doğru mu?"
+            ) from exc
+        raise _KodluHata(404, str(kod)) from exc
+    except anthropic.APIConnectionError as exc:
+        raise _KodluHata(503, "ağ") from exc
+
+    # TOKEN saklanır, maliyet DEĞİL: fiyat sağlayıcının elinde ve değişir; doları
+    # kaydetseydik fiyat değiştiği gün geçmiş kayıtlar sessizce yanlışa dönerdi.
+    kullanim.ekle(
+        model,
+        getattr(yanit.usage, "input_tokens", 0) or 0,
+        getattr(yanit.usage, "output_tokens", 0) or 0,
+    )
+    metin = "".join(b.text for b in yanit.content if getattr(b, "type", "") == "text")
+    return _ClaudeYanit(metin)
+
+
 def _generate_with_fallback(
-    client: genai.Client,
+    client_factory,
     models: tuple[str, ...],
     user: str,
     system: str = SYSTEM_INSTRUCTION,
     max_tokens: int = MAX_OUTPUT_TOKENS,
 ):
     """Model yedek zincirini sırayla dener; hepsi başarısızsa TranslateError fırlatır.
+
+    İKİ BOYUTLU düşme var ve sırası load-bearing:
+      1. KOTA (429) → aynı MODELDE sıradaki ANAHTAR (`_generate_once_with_retry`).
+         Model sabit kalmalı: kota bir kalite kusuru değil, kaliteden ödün vermek
+         için sebep de değil.
+      2. Başka her arıza → sıradaki MODEL (burası).
+
+    ``client_factory`` çağrılabilir bir FABRİKADIR, kurulmuş istemci değil: Gemini
+    istemcisi ancak gerçekten kullanılacağı anda kurulur.
 
     ``system``/``max_tokens`` varsayılanları bölüm çevirisidir; terim önerisi gibi
     kısa işler kendi talimatını ve daha küçük bir tavanı geçer.
@@ -688,36 +1821,168 @@ def _generate_with_fallback(
     Yalnız `response` dönseydi zincirin hangi halkasının çevirdiği kaybolurdu; kalite
     şikâyetlerinde "bunu hangi model çevirdi" sorusu tahminle cevaplanıyordu.
     """
+    # Ofset istek başına BİR kez alınır ve zincirdeki BÜTÜN modellere aynısı
+    # uygulanır: aynı isteğin 3.6'da #2, 3.5'te #4'ten başlaması izi okunamaz
+    # kılardı ve kotayı da daha eşit dağıtmazdı.
+    baslangic = _sonraki_baslangic(
+        max(1, getattr(client_factory, "anahtar_sayisi", 1)),
+        models[0] if models else None,
+    )
     last_exc: Exception | None = None
     blocked = False
+    # Her halka ANAHTARSIZLIKTAN mı düştü? Öyleyse "modeller meşgul" demek yanlış
+    # teşhis olur — kullanıcının yapması gereken beklemek değil, anahtar ayarlamak.
+    anahtarsiz = True
     for model in models:
         try:
-            return _generate_once_with_retry(client, model, user, system, max_tokens), model
+            return (
+                _generate_once_with_retry(
+                    client_factory, model, user, system, max_tokens, baslangic
+                ),
+                model,
+            )
         except _Retryable as exc:
             last_exc = exc
             blocked = blocked or getattr(exc, "blocked", False)
+            if not getattr(exc, "anahtarsiz", False):
+                anahtarsiz = False
             continue
+    if anahtarsiz and models and not blocked:
+        raise TranslateError(ANAHTAR_YOK_MESAJI) from last_exc
     if blocked:
         raise TranslateError(
             "Bu bölümün içeriği hiçbir model tarafından çevrilemedi (içerik filtresi); "
             "metin engellenmiş olabilir."
         ) from last_exc
+    detay = getattr(last_exc, "detay", "")
     raise TranslateError(
         "Tüm modeller şu anda meşgul (geçici). Biraz sonra tekrar deneyin."
+        + (f" Son hata — {detay}" if detay else "")
     ) from last_exc
 
 
 def _generate_once_with_retry(
-    client: genai.Client,
+    client_factory,
     model: str,
     user: str,
     system: str = SYSTEM_INSTRUCTION,
     max_tokens: int = MAX_OUTPUT_TOKENS,
+    baslangic: int = 0,
 ):
-    """Tek modelde üstel geri-çekilmeyle dener; geçici hata/engel tükenince _Retryable."""
+    """Tek modelde ANAHTARLARI SIRAYLA dener; hepsi tükenirse _Retryable.
+
+    Döngü ``baslangic`` indeksinden başlar ve havuzu dolanır (rotasyon), ama
+    her zaman TÜM anahtarları gezer — rotasyon sırayı kaydırır, kapsamı değil.
+
+    Anahtar döngüsü İKİ hata sınıfında döner, çünkü ikisinde de başka bir
+    anahtar İŞE YARAR:
+      - 429 kota → başka anahtar (ayrı projedense) çalışır  → sıradaki anahtar,
+        ve bu anahtar soğumaya alınır (kota kalıcıdır, tekrar denemek boşa gider)
+      - 500/503/taşıma → ÖLÇÜLDÜ (2026-09-09): 503 tek bir anahtarda çıkarken
+        diğerleri AYNI ANDA açık dönüyor  → aynı anahtarda geri-çekilmeli tekrar,
+        sonra sıradaki anahtar. SOĞUTMA YOK: arıza geçici, anahtar sağlam.
+    Kalan sınıflarda anahtar değiştirmek yalnız maliyeti ikiye katlar:
+      - 404 model yok → ad yanlış ya da katmanda kapalı; ikinci anahtar da aynı
+        cevabı verir                                              → sıradaki model
+      - boş/engellenmiş → içerik filtresi deterministik            → sıradaki model
+      - anahtar yok → hiçbir indekste anahtar yok                  → sıradaki model
+
+    Eski kural 503'ü de "sıradaki model" dalına koyuyordu ve o varsayım
+    ("arıza Google tarafında, anahtar fark etmez") ölçümle çürüdü: tek geçici
+    503, o modeldeki kalan bütün sağlam anahtarları iptal ediyordu. İki model
+    üst üste böyle atlanınca okuma zincirin dibine iniyordu.
+    """
+    if _claude_modeli(model):
+        # Claude'un TEK anahtari var. Gemini anahtar havuzu uzerinde donmek ayni
+        # istegi bosuna tekrarlar ve her tekrar PARA harcardi.
+        return _tek_anahtarla_uret(
+            client_factory, 0, model, user, system, max_tokens
+        )
+    sayi = max(1, getattr(client_factory, "anahtar_sayisi", 1))
+    # İKİ KATMAN, ve ayrım ölçülerek bulundu (iki ayrı yanlıştan sonra):
+    #   İÇ  — havuzu UYKUSUZ dolaş. Sıradaki anahtar zaten yeni bir denemedir ve
+    #         ölçüm 503'ün anahtara bağlı olduğunu gösterdi (bir anahtar 503
+    #         alırken diğerleri aynı anda açık dönüyordu). Anahtar başına ayrıca
+    #         3 kez geri-çekilmek 5 anahtar x 2 modelde 30 istek + 60 sn UYKU
+    #         demekti; kullanıcı bunu "aşırı yavaş çeviriyor" diye gördü.
+    #   DIŞ — hiçbir anahtar çeviremediyse geri-çekilerek turu TEKRARLA. Uykuyu
+    #         tümden kaldırmak ters yönde bir hataydı: 10 deneme saniyeler içinde
+    #         tükeniyor ve zincir pes ediyordu (gerçek vaka 2026-09-10, 15
+    #         bölümlük toplu çeviri ikinci bölümde durdu). Google'ın 503 gövdesi
+    #         "Spikes in demand are usually temporary. Please try again later."
+    #         diyor — beklemek BAZEN tam olarak doğru cevaptır.
+    # Tur tekrarı YALNIZ geçici arızaya özgüdür: kota beklemekle açılmaz, orada
+    # tekrar saf kayıp olur ve okumayı sebepsiz geciktirirdi.
+    son: Exception | None = None
     delay = 2.0
-    for attempt in range(MAX_RETRIES):
+    for tur in range(MAX_RETRIES):
+        turda_gecici = False
+        for adim in range(sayi):
+            indeks = (baslangic + adim) % sayi
+            if _sogumada(indeks, model):
+                # Bu anahtar bu modelde az önce 429 yedi; boşuna gitme. Sebep yine
+                # de TAŞINIR: zincir tükenirse mesaj "meşgul" değil "kota" demeli.
+                if son is None:
+                    son = _Retryable()
+                    son.detay = f"{model}: anahtar #{indeks + 1} kota soğumasında"
+                continue
+            try:
+                return _tek_anahtarla_uret(
+                    client_factory, indeks, model, user, system, max_tokens, 1
+                )
+            except _Retryable as exc:
+                son = exc
+                if getattr(exc, "kota", False):
+                    _sogut(indeks, model, getattr(exc, "kota_sn", None))
+                    continue  # KOTA → sıradaki anahtar, model aynı kalır
+                if getattr(exc, "gecici", False):
+                    # GEÇİCİ (500/503/taşıma) → sıradaki anahtar. SOĞUTMA YOK:
+                    # soğuma kotaya özgüdür ve 503 alan anahtar ölçümde bir
+                    # sonraki turda AÇIK dönüyor.
+                    turda_gecici = True
+                    continue
+                raise  # 404 / engellenmiş / anahtarsız → sıradaki model
+        if not turda_gecici:
+            break  # kota / anahtarsızlık: beklemek hiçbir şeyi değiştirmez
+        if tur < MAX_RETRIES - 1:
+            time.sleep(delay)
+            delay *= 2
+    raise son or _Retryable()
+
+
+def _tek_anahtarla_uret(
+    client_factory,
+    indeks: int,
+    model: str,
+    user: str,
+    system: str,
+    max_tokens: int,
+    tekrar_sayisi: int = MAX_RETRIES,
+):
+    """Tek model + TEK anahtar: geçici hatada üstel geri-çekilmeyle yeniden dener.
+
+    ``tekrar_sayisi`` çağırandan gelir: anahtar havuzu varsa 1 (sıradaki anahtar
+    zaten yeni bir deneme), tek anahtarlı kurulumda `MAX_RETRIES`.
+    """
+    delay = 2.0
+    for attempt in range(max(1, tekrar_sayisi)):
         try:
+            if _claude_modeli(model):
+                response = _claude_uret(model, user, system, max_tokens)
+                if not (response.text or "").strip():
+                    atla = _Retryable()
+                    atla.blocked = True
+                    raise atla
+                return response
+            try:
+                client = client_factory(indeks)
+            except TranslateError as exc:
+                # Anahtar yok → bu halka KULLANILAMAZ, ama zincir ölmesin. `anahtarsiz`
+                # işareti, zincirin TAMAMI anahtarsızlıktan düşerse dürüst hata mesajı
+                # üretilmesini sağlar ("modeller meşgul" demek yanlış teşhis olurdu).
+                atla = _Retryable()
+                atla.anahtarsiz = True
+                raise atla from exc
             response = client.models.generate_content(
                 model=model,
                 contents=user,
@@ -729,17 +1994,55 @@ def _generate_once_with_retry(
                     safety_settings=SAFETY_SETTINGS,
                 ),
             )
-        except genai_errors.APIError as exc:
+        except (genai_errors.APIError, _KodluHata) as exc:
             code = getattr(exc, "code", None)
             if code in FALLBACK_CODES:
-                raise _Retryable() from exc  # kota/erişim yok -> sıradaki modele geç
+                atla = _Retryable()
+                # KOTA bayrağı, çağıranın "sıradaki anahtar mı, sıradaki model mi"
+                # kararını verir. 404 (model yok) bu bayrağı ALMAZ: ikinci anahtar da
+                # aynı cevabı verirdi.
+                atla.kota = code == 429
+                if atla.kota:
+                    # Soğuma süresi kotanın TÜRÜNDEN gelir (günlük mü dakikalık
+                    # mı); tek sabit süre günlük kotada anahtarı dakikada bir
+                    # boşuna denetiyordu.
+                    atla.kota_sn = _kota_soguma_suresi(exc)
+                # Sebep TAŞINIR: "tüm modeller meşgul" tek başına teşhis edilemez bir
+                # mesajdı ve yapılandırma hatasını geçici arıza gibi gösteriyordu.
+                atla.detay = f"{model} (anahtar #{indeks + 1}): {exc}"
+                raise atla from exc
             if code in RETRY_CODES:
-                if attempt < MAX_RETRIES - 1:
+                if attempt < tekrar_sayisi - 1:
                     time.sleep(delay)
                     delay *= 2
                     continue
-                raise _Retryable() from exc
+                atla = _Retryable()
+                # GEÇİCİ → sıradaki ANAHTAR. "Sunucu arızası, anahtar fark etmez"
+                # varsayımı ölçümle çürüdü (2026-09-09): 503 tek bir anahtarda
+                # çıkarken diğerleri AYNI ANDA açık dönüyor.
+                atla.gecici = True
+                atla.detay = f"{model} (anahtar #{indeks + 1}): {exc}"
+                raise atla from exc
             raise TranslateError(f"Çeviri hatası: {exc}") from exc
+        except (_Retryable, TranslateError):
+            raise  # kendi sinyalimiz (anahtar yok) — aşağıdaki dala düşmesin
+        except httpx.HTTPError as exc:
+            # TAŞIMA katmanı: bağlantı koptu, TLS, okuma zaman aşımı. Bunlar
+            # `APIError` DEĞİLDİR ve bir dönem hiçbir dala girmeyip zinciri tümden
+            # öldürüyordu — bölüm çevrilmiyor, kullanıcı ham bir istisna görüyordu.
+            # Ölçülen vaka (2026-09-02): `gemini-3.6-flash` 81 sn sonra
+            # `RemoteProtocolError`. Sunucu tarafı 503 ile aynı sınıf arızadır
+            # (geçici, anahtar fark etmez) → aynı muamele: geri-çekilmeli tekrar,
+            # sonra sıradaki model. Tek motor kaldığından bu yolun dayanıklılığı
+            # artık çevirinin TAMAMININ dayanıklılığıdır.
+            if attempt < tekrar_sayisi - 1:
+                time.sleep(delay)
+                delay *= 2
+                continue
+            atla = _Retryable()
+            atla.gecici = True  # 503 ile aynı sınıf: sıradaki ANAHTAR denenir
+            atla.detay = f"{model} (anahtar #{indeks + 1}): {type(exc).__name__}"
+            raise atla from exc
         # Yanıt geldi ama boş/engellenmiş olabilir (finish_reason PROHIBITED_CONTENT/
         # SAFETY/RECITATION → HTTP 200, metin yok). Bu deterministiktir; aynı modelde
         # tekrar denemek beyhude → sıradaki modele düş (başka model çevirebilir).

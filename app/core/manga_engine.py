@@ -21,6 +21,9 @@ import tempfile
 from pathlib import Path
 
 from . import media
+# Künye motoru tek tanımdan gelir (`translate.motor_adi`): sabit "gemini" yazmak,
+# zincirin ilk halkası Mistral olduğundan yanlış bilgiydi.
+from . import translate
 
 _CONFIG = Path(__file__).resolve().parent / "manga_engine_config.json"
 _TIMEOUT = 900  # sn: CPU'da uzun sayfa + ilk model indirmesi uzun sürebilir
@@ -262,5 +265,5 @@ def _save_engine_page(slug: str, n: int, data: bytes, model: str | None = None) 
         "book_slug": slug, "book_title": staged.get("book_title") or "Manga",
         "chapter_no": n, "content_type": "html",
         # Künye: metin bölümleriyle AYNI rozet (motor + fiilen çeviren model).
-        "engine": "gemini" if model else None, "model": model,
+        "engine": translate.motor_adi(model), "model": model,
     })

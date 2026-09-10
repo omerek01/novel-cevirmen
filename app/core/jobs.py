@@ -21,6 +21,34 @@ _THREADS: dict[str, threading.Thread] = {}
 _LOCK = threading.RLock()
 _MAX_JOBS = 50  # kayıt sınırsız büyümesin (en eski bitmişleri buda)
 
+# GEÇİCİ çeviri hatası toplu işi ÖLDÜRMEZ (2026-09-10).
+# Gerçek vaka: 15 bölümlük iş ikinci bölümde "Tüm modeller şu anda meşgul
+# (geçici)" ile durdu ve kullanıcı kalan 13 bölümü hiç alamadı; rafta yalnız
+# "! HATA" rozeti kaldı. Hata gerçekten geçiciydi — Google'ın 503 gövdesi bile
+# "Spikes in demand are usually temporary. Please try again later." diyor.
+# Toplu çeviri arka planda koşar ve acelesi yoktur; bir dalgayı beklemek,
+# bütün işi feda etmekten her zaman ucuzdur. Tekrar SONSUZ değil: gerçekten
+# kapalı bir kapıya sonsuza dek vurulmaz, üçüncü denemede iş hataya düşer.
+BULK_GECICI_DENEME = 3
+BULK_GECICI_BEKLEME = (30.0, 90.0)  # denemeler arası bekleme, sırayla
+
+
+def _bekle(job_id: str, saniye: float) -> bool:
+    """Durdurmaya duyarlı bekleme. False dönerse kullanıcı işi durdurmuştur.
+
+    Bekleme PARÇALI: tek bir uzun uyku olsaydı "DURDUR" düğmesi dakikalarca
+    cevapsız kalırdı. Adım `time.sleep` sahtelense bile azalır (testler uyku
+    yapmadan koşar), yani döngü her koşulda sonlanır.
+    """
+    kalan = saniye
+    while kalan > 0:
+        if _should_stop(job_id):
+            return False
+        adim = min(1.0, kalan)
+        time.sleep(adim)
+        kalan -= adim
+    return not _should_stop(job_id)
+
 
 def _connect() -> sqlite3.Connection:
     conn = db.connect()
@@ -175,10 +203,20 @@ def get_status(job_id: str) -> dict | None:
 def get_book_job(slug: str, job_type: str | None = None) -> dict | None:
     """Kitabın dikkat gerektiren işini döndürür (rozet bu sırayla seçer).
 
-    E-5: dikkat önceliği tip-farkında uygulanır — çalışan iş > hata > gerisi
-    (updated_at DESC). Böylece gece check-updates işinin 'done' kaydı, yarım
-    bulk HATASININ rozetini sökmez. job_type verilirse yalnız o tip (E-22
-    dedup anahtarı (slug, type) bunu kullanır)."""
+    Kural İKİ AŞAMALI: önce her TİP kendi EN SON kaydıyla temsil edilir, sonra
+    tipler arasında dikkat önceliği uygulanır (çalışan iş > hata > gerisi).
+
+    E-5: tip-farkındalık böylece korunur — gece check-updates işinin 'done'
+    kaydı, yarım bulk HATASININ rozetini sökmez.
+
+    İlk aşama 2026-09-10'da eklendi. Öncelik doğrudan uygulanınca AYNI tip
+    içinde TARİH yok sayılıyordu: shadow-slave'de bulk 09-09 23:20'de 2/15'te
+    hataya düştü, kullanıcı 09-10 06:43'te yeniden çalıştırdı ve 10/10 bitti,
+    ama raf hâlâ "! HATA" gösteriyordu. Rozet "ilgilenmen gereken bir şey var"
+    demek; kullanıcı sorunu çözmüşken orada durması yanlış bilgiydi.
+
+    job_type verilirse yalnız o tip (E-22 dedup anahtarı (slug, type) bunu
+    kullanır)."""
     conn = _connect()
     try:
         where = "slug = ?"
@@ -188,6 +226,11 @@ def get_book_job(slug: str, job_type: str | None = None) -> dict | None:
             args.append(job_type)
         row = conn.execute(
             f"SELECT {_COLS} FROM jobs WHERE {where} "
+            # 1. aşama: her tipin yalnız EN SON kaydı yarışa girer.
+            "AND updated_at = (SELECT MAX(j2.updated_at) FROM jobs j2 "
+            "  WHERE j2.slug = jobs.slug "
+            "    AND COALESCE(j2.type, 'bulk') = COALESCE(jobs.type, 'bulk')) "
+            # 2. aşama: kalanlar arasında dikkat önceliği.
             "ORDER BY CASE state WHEN 'running' THEN 0 WHEN 'error' THEN 1 ELSE 2 END, "
             "updated_at DESC LIMIT 1",
             args,
@@ -388,22 +431,55 @@ def _run_bulk(job_id: str, api_key: str | None) -> None:
             message=f"Bölüm {done + 1} / {total} hazırlanıyor…",
             updated_at=time.time(),
         )
-        try:
-            # background=True: çekim düşük öncelikli (okuyucu kapıda öne geçer)
-            # ve kitabın "kaldığın yer" konumu ilerletilmez.
-            data = pipeline.get_or_translate(url, api_key, background=True)
-        except (FetchError, TranslateError) as exc:
-            _set(
-                job_id, state="error", message=f"Durdu: {exc}", done=done,
-                translated=translated, updated_at=time.time(),
-            )
-            return
-        except Exception as exc:  # beklenmedik; işi sızdırmadan bitir
-            _set(
-                job_id, state="error", message=f"Beklenmedik hata: {exc}",
-                done=done, translated=translated, updated_at=time.time(),
-            )
-            return
+        # ÇEVİRİ hatası geçici olabilir (model yükü) → bekleyip aynı bölümü
+        # yeniden dene. ÇEKİM hatası ayrı tutulur: `fetch` kendi üstel
+        # geri-çekilmesini zaten yapıyor, buradan ikinci bir tekrar katmanı
+        # eklemek Cloudflare'e üst üste inmek olurdu.
+        data = None
+        deneme = 0
+        while data is None:
+            try:
+                # background=True: çekim düşük öncelikli (okuyucu kapıda öne
+                # geçer) ve kitabın "kaldığın yer" konumu ilerletilmez.
+                data = pipeline.get_or_translate(url, api_key, background=True)
+            except TranslateError as exc:
+                deneme += 1
+                if deneme >= BULK_GECICI_DENEME:
+                    _set(
+                        job_id, state="error", message=f"Durdu: {exc}", done=done,
+                        translated=translated, updated_at=time.time(),
+                    )
+                    return
+                bekleme = BULK_GECICI_BEKLEME[
+                    min(deneme - 1, len(BULK_GECICI_BEKLEME) - 1)
+                ]
+                _set(
+                    job_id,
+                    message=(
+                        f"Modeller meşgul; {int(bekleme)} sn sonra yeniden "
+                        f"denenecek ({deneme}/{BULK_GECICI_DENEME})…"
+                    ),
+                    done=done, translated=translated, updated_at=time.time(),
+                )
+                if not _bekle(job_id, bekleme):
+                    _set(
+                        job_id, state="stopped",
+                        message=f"Durduruldu. {translated} yeni bölüm çevrildi.",
+                        done=done, translated=translated, updated_at=time.time(),
+                    )
+                    return
+            except FetchError as exc:
+                _set(
+                    job_id, state="error", message=f"Durdu: {exc}", done=done,
+                    translated=translated, updated_at=time.time(),
+                )
+                return
+            except Exception as exc:  # beklenmedik; işi sızdırmadan bitir
+                _set(
+                    job_id, state="error", message=f"Beklenmedik hata: {exc}",
+                    done=done, translated=translated, updated_at=time.time(),
+                )
+                return
         done += 1
         if not data.get("cached"):
             translated += 1

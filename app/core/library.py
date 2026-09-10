@@ -44,12 +44,11 @@ def _connect() -> sqlite3.Connection:
     # Manga sonsuz devam: son çekilen bölümün site URL'i + sonraki bölümün URL'i.
     # Okuyucu manga bölümünün sonuna gelince next_source_url'i çekip ekler (novel
     # sonsuz okumanın manga karşılığı). Yalnız web'den çekilen manga'da dolu.
+    # Kapak adresi (kutuphane izgarasinda gosterilir). Cevirinin hicbir asamasi
+    # buna bagli DEGIL: bos kalirsa izgara renkli sirt gorunumune duser.
+    db.ensure_column(conn, "books", "cover", "cover TEXT")
     db.ensure_column(conn, "books", "manga_source_url", "manga_source_url TEXT")
     db.ensure_column(conn, "books", "manga_next_url", "manga_next_url TEXT")
-    # Kitap başına serbest ÜSLUP NOTU (anlatım kişisi, hitap düzeyi, ton). Sözlük
-    # yalnız terim eşler; üslup ondan bağımsız ve bölümden bölüme kayabiliyordu.
-    # Her çeviri prompt'una enjekte edilir (translate.translate_chapter).
-    db.ensure_column(conn, "books", "style_note", "style_note TEXT")
     return conn
 
 
@@ -154,6 +153,35 @@ def merge_books(source: str, target: str) -> str:
     finally:
         conn.close()
     return target
+
+
+def konum_adini_duzelt(slug: str, current_title: str | None, chapter_no: int | None) -> bool:
+    """Okuma konumunun ADINI/NUMARASINI `current_url` ile tutarlı hâle getir.
+
+    `current_url`'e ve `current_ratio`'ya DOKUNMAZ: kullanıcı nerede kaldıysa orada
+    kalır, yalnız o bölümü ANLATAN türetilmiş alanlar düzeltilir.
+
+    `upsert_book(update_position=False)` bu iş için KULLANILAMAZ — o, var olan
+    satıra bilerek hiç dokunmuyor (`INSERT OR IGNORE`), çünkü amacı arka plan
+    işlerinin konumu ilerletmesini önlemek. Bakım aracının ihtiyacı tam tersi:
+    konumu ilerletmeden var olan satırı düzeltmek.
+
+    Gerçek vaka (Shadow Slave, 2026-09-02): `current_url` 141. bölümü gösterirken
+    `current_title` "Chapter 138" diyordu — okuyucu "kaldığın yer"de yanlış bölüm
+    adı gösteriyordu. Satır yoksa False.
+    """
+    if not slug:
+        return False
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "UPDATE books SET current_title = ?, chapter_no = ? WHERE slug = ?",
+            (current_title, chapter_no, slug),
+        )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        conn.close()
 
 
 def upsert_book(
@@ -287,28 +315,6 @@ def set_status(slug: str, status: str) -> bool:
         conn.close()
 
 
-STYLE_NOTE_MAX = 600
-
-
-def set_style_note(slug: str, note: str | None) -> bool:
-    """Kitabın üslup notunu yaz (boş = notu kaldır). Bilinmeyen kitap → False.
-
-    Not prompt'a girdiği için sınırlı: uzun bir not sözlüğün ve metnin önüne geçer
-    ve modelin dikkatini asıl işten (çeviri) çalar."""
-    if not slug:
-        return False
-    temiz = (note or "").strip()[:STYLE_NOTE_MAX]
-    conn = _connect()
-    try:
-        cur = conn.execute(
-            "UPDATE books SET style_note = ? WHERE slug = ?", (temiz or None, slug)
-        )
-        conn.commit()
-        return cur.rowcount > 0
-    finally:
-        conn.close()
-
-
 def set_manga_source(slug: str, source_url: str | None, next_url: str | None) -> None:
     """Manga kitabının son çekilen bölüm URL'i + sonraki bölüm URL'ini kaydet.
 
@@ -362,12 +368,34 @@ def delete_book(slug: str) -> bool:
         conn.close()
 
 
+def set_cover(slug: str, cover: str | None) -> None:
+    """Kitabin kapak adresini YALNIZ bos ise yazar.
+
+    Kapak her bolumde yeniden yazilsaydi site kapagini degistirdigi gun kullanicinin
+    gordugu gorsel bolum bolum ziplardi; kapak kitabin kimligidir, bolumun degil.
+    Sozluge otomatik terim yaziminda oldugu gibi burada da kural "ilk yazan kazanir"
+    ve elle duzeltme (bakim araci) bunu acikca ezer.
+    """
+    if not (cover or "").strip():
+        return
+    conn = _connect()
+    try:
+        conn.execute(
+            "UPDATE books SET cover = ? WHERE slug = ? "
+            "AND (cover IS NULL OR cover = '')",
+            (cover.strip(), slug),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
 def list_books() -> list[dict]:
     conn = _connect()
     try:
         rows = conn.execute(
             "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
-            "updated_at, status FROM books ORDER BY updated_at DESC"
+            "updated_at, status, cover FROM books ORDER BY updated_at DESC"
         ).fetchall()
     finally:
         conn.close()
@@ -383,6 +411,10 @@ def list_books() -> list[dict]:
             # yerel "son okunan" işaretinin zaman damgasıyla kıyaslar (çevrimdışı resume).
             "updated_at": r[6] or 0.0,
             "status": r[7] or "okunuyor",  # NULL = okunuyor (eski satırlar)
+            # Kapak: yalnız kütüphane ızgarasında kullanılır. NULL kalması
+            # normaldir (içe aktarılan/paste kitapların kaynağı yok) ve
+            # okuyucu o durumda renkli sırt görünümüne düşer.
+            "cover": r[8],
         }
         for r in rows
     ]
@@ -393,7 +425,7 @@ def get_book(slug: str) -> dict | None:
     try:
         row = conn.execute(
             "SELECT slug, title, current_url, current_title, chapter_no, current_ratio, "
-            "updated_at, status, manga_source_url, manga_next_url, style_note "
+            "updated_at, status, manga_source_url, manga_next_url "
             "FROM books WHERE slug = ?",
             (slug,),
         ).fetchone()
@@ -412,7 +444,6 @@ def get_book(slug: str) -> dict | None:
         "status": row[7] or "okunuyor",
         "manga_source_url": row[8],
         "manga_next_url": row[9],
-        "style_note": row[10] or "",
     }
 
 

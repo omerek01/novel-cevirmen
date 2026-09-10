@@ -524,7 +524,28 @@ def _parse(html: str, base_url: str, site: dict) -> dict:
         "book_slug": slug,
         "book_title": book_title,
         "chapter_no": chapter_no,
+        "cover": _kapak_adresi(soup, base_url),
     }
+
+
+def _kapak_adresi(soup: BeautifulSoup, base_url: str) -> str | None:
+    """Kitap kapaginin adresi — BOLUM sayfasindan, ek istek OLMADAN.
+
+    OLCULDU (2026-09-10, freewebnovel/shadow-slave): `og:image` bolum sayfasinda
+    da duruyor ve KITAP sayfasindakiyle birebir ayni adresi veriyor. Yani kapak
+    icin ayri bir sayfa cekmek — tek kalici profilden Cloudflare'e bir kez daha
+    inmek — tamamen gereksizdi; mevcut cekimden bedavaya gelir.
+
+    Adres MUTLAKLASTIRILIR: goreli birakilirsa okuyucu onu KENDI kokunde arar ve
+    kapak sessizce kirik cikar. Kapagi olmayan site None dondurur ve akis bundan
+    etkilenmez — kapak susleme, icerik degil.
+    """
+    for secici in ('meta[property="og:image"]', 'meta[name="twitter:image"]'):
+        el = soup.select_one(secici)
+        deger = (el.get("content") or "").strip() if el else ""
+        if deger:
+            return urljoin(base_url, deger)
+    return None
 
 
 def _webnovel_locked(soup: BeautifulSoup) -> bool:

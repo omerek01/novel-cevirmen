@@ -88,10 +88,21 @@ class _FakeClient:
         self.models = _FakeModels(by_model)
 
 
+def _fabrika(client):
+    """Gerçek fabrikanın sözleşmesi: ANAHTAR İNDEKSİ alır, o anahtarın istemcisini
+    verir ve kaç anahtar denenebileceğini `anahtar_sayisi` ile söyler.
+
+    Burada tek anahtarlık havuz taklit edilir: bu dosyanın konusu anahtar rotasyonu
+    değil, boş/engellenmiş yanıtta MODEL düşmesi."""
+    fabrika = lambda _indeks=0: client  # noqa: E731
+    fabrika.anahtar_sayisi = 1
+    return fabrika
+
+
 def test_fallback_on_blocked_empty_response():
     # m1 boş/engellenmiş döner (PROHIBITED_CONTENT gibi) → m2'ye düşülür.
     client = _FakeClient({"m1": "", "m2": '{"translation":"Çeviri","detected_names":[]}'})
-    resp, model = translate._generate_with_fallback(client, ("m1", "m2"), "user")
+    resp, model = translate._generate_with_fallback(_fabrika(client), ("m1", "m2"), "user")
     assert "Çeviri" in resp.text
     assert client.models.calls == ["m1", "m2"]  # m1 denendi, m2'ye geçildi
     assert model == "m2"  # künye FİİLEN çeviren halkayı göstermeli, zincirin ilkini değil
@@ -102,7 +113,7 @@ def test_all_blocked_raises_content_filter_error():
 
     client = _FakeClient({"m1": "", "m2": "   "})  # ikisi de boş/whitespace
     with pytest.raises(translate.TranslateError, match="içerik filtresi"):
-        translate._generate_with_fallback(client, ("m1", "m2"), "user")
+        translate._generate_with_fallback(_fabrika(client), ("m1", "m2"), "user")
 
 
 # ---------- işaretçi (marker) hizalama ----------

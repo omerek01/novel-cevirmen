@@ -152,15 +152,20 @@ def _model_yaniti(monkeypatch, ham):
 
 
 def test_translate_chapter_ozel_adlari_toplar(monkeypatch):
-    # Çeviri metni gerçekçi olmalı: karakter adı ÇEVİRİDE de geçiyorsa İngilizce
-    # kalan sınıfa girer (bkz. detected_names süzgeci).
+    # Hem KAYNAK hem ÇEVİRİ gerçekçi olmalı: süzgeç adın çeviride İngilizce
+    # kaldığını VE İngilizce kaynakta geçtiğini arıyor. Kaynağı "Bir paragraf."
+    # bırakmak, kaynakta hiç geçmeyen adın sözlüğe yazılmadığını doğrulayan
+    # 4. elemeyi tetikler (bkz. translate.kaynakta_gecen).
     _model_yaniti(monkeypatch, (
         '{"translation": "[[1]] Wang Lin, Sıfır Kanat locasına döndü.", '
         '"detected_names": ["Wang Lin"], '
         '"detected_terms": {"Zero Wing": "Sıfır Kanat", '
         '"Dark Night Empire": "Karanlık Gece İmparatorluğu"}}'
     ))
-    r = translate.translate_chapter("Bir paragraf.", api_key="k")
+    r = translate.translate_chapter(
+        "Wang Lin returned to the Zero Wing hall after the Dark Night Empire fell.",
+        api_key="k",
+    )
     assert r["detected_names"] == ["Wang Lin"]
     assert r["detected_terms"] == {
         "Zero Wing": "Sıfır Kanat",
@@ -271,7 +276,9 @@ def test_translate_chapter_sizan_adi_temizler(monkeypatch):
         '"detected_names": ["Nephis", "Blackwater Guild"], '
         '"detected_terms": {"Blackwater Guild": "Karasu Loncası"}}'
     ))
-    r = translate.translate_chapter("Bir paragraf.", api_key="k")
+    r = translate.translate_chapter(
+        "The Blackwater Guild attacked, and Nephis fought back.", api_key="k"
+    )
     assert r["detected_names"] == ["Nephis"]
     assert r["detected_terms"] == {"Blackwater Guild": "Karasu Loncası"}
 
@@ -353,7 +360,14 @@ def test_suggest_bozuk_yanitta_kaynagi_korur(monkeypatch):
     assert translate.suggest_term("Zero Wing", api_key="k")["target"] == "Zero Wing"
 
 
-def test_suggest_anahtarsiz_reddedilir():
+def test_suggest_anahtarsiz_reddedilir(monkeypatch):
+    """Kapı tek değişkene değil anahtar HAVUZUNA bakıyor (ikinci anahtar yalnız
+    `.env`'de duruyor olabilir). Bu yüzden anahtar değişkenlerinin HEPSİ açıkça
+    kaldırılmalı ve liste `gemini_anahtar_degiskenleri` ile TÜRETİLMELİ: adları
+    tek tek yazmak, üçüncü bir anahtar eklendiğinde testi sessizce geliştiricinin
+    `.env`ine bağımlı kılardı (`server` importu onu sürece yüklüyor)."""
+    for ad in translate.anahtar_degiskenleri():
+        monkeypatch.delenv(ad, raising=False)
     with pytest.raises(translate.TranslateError):
         translate.suggest_term("Zero Wing", api_key="")
 
@@ -428,7 +442,10 @@ def test_classify_supheli_yaniti_kaydi_bozmaz(ham, monkeypatch):
     assert translate.classify_terms(["Zero Wing"], api_key="k") == {}
 
 
-def test_classify_anahtarsiz_reddedilir():
+def test_classify_anahtarsiz_reddedilir(monkeypatch):
+    """Bkz. `test_suggest_anahtarsiz_reddedilir`: hiçbir anahtar yokken reddedilir."""
+    for ad in translate.anahtar_degiskenleri():
+        monkeypatch.delenv(ad, raising=False)
     with pytest.raises(translate.TranslateError):
         translate.classify_terms(["Zero Wing"], api_key="")
 
@@ -458,3 +475,106 @@ def test_suggest_ucu_kaydetmez(monkeypatch):
     )
     TestClient(server.app).post("/api/book/kitap/glossary/suggest", json={"source": "Orc Empire"})
     assert glossary.get_glossary("kitap") == {}
+
+
+# ---------- 4. eleme: ad İNGİLİZCE KAYNAKTA geçmiyorsa İngilizce bir ad değildir ----------
+
+
+def test_kaynakta_gecmeyen_ad_ingilizce_cakilmaz():
+    """Gerçek bulgu: `Bilgin` / `Kurnaz` — `Scholar` ve `Shifty`'nin Türkçesi.
+
+    Model çevirdiği adı TÜRKÇE hâliyle `detected_names` kutusuna yazınca 2. eleme
+    (Türkçe'ye özgü harf) saf-ASCII oldukları için, 3. eleme (çeviride geçiyor mu)
+    gerçekten geçtikleri için onları geçiriyordu. Ölçüm: İngilizce kaynakta
+    0 bölüm, Türkçe çeviride 6 bölüm — ve sözlüğe `X -> X` diye çakılmışlardı.
+    """
+    assert translate.ayikla_karakter_adlari(
+        ["Bilgin"], {}, "Bilgin ona baktı.", "The Scholar looked at him."
+    ) == []
+
+
+def test_kaynakta_gecen_ad_korunur():
+    assert translate.ayikla_karakter_adlari(
+        ["Nephis"], {}, "Nephis ona baktı.", "Nephis looked at him."
+    ) == ["Nephis"]
+
+
+def test_kaynak_verilmezse_dorduncu_eleme_kosmaz():
+    """DEĞİŞMEZ KURAL: doğrulayamadığını atma.
+
+    Eski önbellek satırlarında `source_text` NULL. Oradaki adı elemek onu "her
+    bölümde yeniden karar" durumuna geri döndürür — sözlüğün var oluş sebebinin
+    tersi. Fazladan bir satırın bedeli birkaç token, kayıp satırınki tutarsızlık.
+    """
+    assert translate.ayikla_karakter_adlari(
+        ["Nephis"], {}, "Nephis ona baktı.", ""
+    ) == ["Nephis"]
+
+
+def test_kaynakta_kesme_varyantiyla_gecen_ad_elenmez():
+    """Düz `in` kontrolü kesme işareti varyantını kaçırıp MEŞRU adı elerdi.
+
+    Ölçülmüş vaka: aynı ad bir bölümde düz `'`, ötekinde kıvrık `’` ile geçiyor.
+    """
+    assert translate.ayikla_karakter_adlari(
+        ["Heaven's Burial"], {}, "Heaven's Burial belirdi.",
+        "Heaven’s Burial appeared in the sky.",
+    ) == ["Heaven's Burial"]
+
+
+def test_kaynakta_gecmeyen_terim_anahtari_atilir():
+    """`detected_terms` anahtarı da uydurma olabiliyor.
+
+    Ölçüm: bir kitabın sözlüğünde BAŞKA kitapların karakterleri vardı
+    (`Kim Dokja`, `Sunny`) — modelin sistem talimatındaki örneklerden sızdırdığı
+    adlar, kitabın hiçbir bölümünde geçmiyor.
+    """
+    assert translate.ayikla_terim_anahtarlari(
+        {"Zero Wing": "Sıfır Kanat", "Kim Dokja": "Kim Dokja"},
+        "The Zero Wing guild advanced.",
+    ) == {"Zero Wing": "Sıfır Kanat"}
+
+
+def test_terim_anahtarlari_kaynaksiz_dokunulmaz():
+    terimler = {"Zero Wing": "Sıfır Kanat"}
+    assert translate.ayikla_terim_anahtarlari(terimler, "") == terimler
+
+
+def test_translate_chapter_kaynakta_olmayan_adi_yazmaz(monkeypatch):
+    """Uçtan uca: model Türkçeleştirdiği adı kutuya yazsa da sözlüğe girmez."""
+    _model_yaniti(monkeypatch, (
+        '{"translation": "[[1]] Bilgin, Sıfır Kanat locasına döndü.", '
+        '"detected_names": ["Bilgin"], '
+        '"detected_terms": {"Zero Wing": "Sıfır Kanat", "Kim Dokja": "Kim Dokja"}}'
+    ))
+    r = translate.translate_chapter(
+        "The Scholar returned to the Zero Wing hall.", api_key="k"
+    )
+    assert r["detected_names"] == []
+    assert r["detected_terms"] == {"Zero Wing": "Sıfır Kanat"}
+
+
+# ---------- DEĞİŞMEZ KURAL regresyon testi ----------
+
+
+def test_iki_sinif_kurali_ucdan_uca(monkeypatch):
+    """Karakter İNGİLİZCE (`X -> X`), karakter dışı her özel ad TÜRKÇE karşılıkla.
+
+    Sözlüğe dokunan HER turdan sonra bu geçmeli. Kural sessizce gevşerse aynı ad
+    bölümden bölüme başka türlü çevrilir ve sözlüğün var oluş sebebi ortadan
+    kalkar — süzgeç sertleştirmeleri bu kuralı korumak için var, gevşetmek için değil.
+    """
+    _model_yaniti(monkeypatch, (
+        '{"translation": "[[1]] Nephis, Sıfır Kanat locasına döndü.", '
+        '"detected_names": ["Nephis"], '
+        '"detected_terms": {"Zero Wing": "Sıfır Kanat"}}'
+    ))
+    sonuc = translate.translate_chapter(
+        "Nephis returned to the Zero Wing hall.", api_key="k"
+    )
+    pipeline._sozluge_isle("kitap", sonuc)
+    assert glossary.get_glossary("kitap") == {
+        "Nephis": "Nephis",          # karakter -> İngilizce KALIR
+        "Zero Wing": "Sıfır Kanat",  # diğer her özel ad -> TÜRKÇE karşılık
+    }
+
