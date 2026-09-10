@@ -49,3 +49,11 @@ Aynı kitabın farklı sitelerdeki slug'larını kanonik bir slug ile eşler.
 
 3. **Geriye Dönük Uyumluluk (Idempotent Migration):**
    - Veritabanı şemasında yapılan tüm güncellemeler `db.ensure_column` aracılığıyla idempotent şekilde çalıştırılır. Mevcut DB dosyaları bozulmadan ek sütunlar (`current_ratio`, `prev_url`) eklenir.
+
+---
+
+## 3. Metodoloji ve GSD (Get Shit Done) Protokolü
+
+* **Metodoloji:** Proje otomasyon ve geliştirme süreçlerinde B.L.A.S.T. protokolü kaldırılmış olup **GSD (Get Shit Done)** metodolojisi kullanılmaktadır.
+* **Dil Ayarı (Language Setting):** Tüm GSD iş akışlarında, iletişimde ve oluşturulan belgelerde varsayılan dil **Türkçe (`turkish`)** olarak ayarlanmıştır (`response_language=turkish`).
+

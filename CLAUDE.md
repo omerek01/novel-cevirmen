@@ -63,8 +63,24 @@ saf-heves ile `async`'e çevirme.
 
 **`app/core/pipeline.py`** — Tek orkestrasyon noktası. Hem HTTP endpoint'i hem
 arka plan toplu-çeviri işi bunu kullanır. Sıra: refresh değilse cache'e bak →
-`fetch_chapter` → slug'ı kanonikleştir → glossary çek → `translate_chapter` →
-cache'e yaz → glossary/library güncelle. `FetchError`/`TranslateError` yukarı sızar.
+kaynak seç → slug'ı kanonikleştir → glossary çek → `translate_chapter` → cache'e yaz →
+glossary/library güncelle. `FetchError`/`TranslateError` yukarı sızar.
+
+**Kaynak seçimi siteye inmeden ÖNCE dört dala bakar** (`_do_fetch_translate_save`):
+görsel içerik (`content_type="html"`) → sayfa render; içe aktarılmış `raw_source` →
+ondan çevir; sentetik URL ama kaynak yok → 404; **önbellekte hizalı İngilizce kaynak
+(`chapters.source_text`) → `_onbellek_kaynagi`, web'e HİÇ gitme**; hiçbiri değilse
+`fetch_chapter`. Dördüncü dal 2026-08-23'te eklendi: **"yeniden çevir" (`refresh=True`)
+eskiden önbelleği atlayınca doğrudan Playwright + Cloudflare'e iniyordu** (deneme başına
+60 sn zaman aşımı + kendi geri-çekilmesi + tek kalıcı profil yüzünden serileşme), oysa
+kullanıcı "yeniden çevir" derken genellikle SÖZLÜĞÜ değiştirmiş
+oluyor ve İngilizce kaynak aynı — aynı metni yeniden indirmek tamamen boşa harcanan
+süreydi (ölçülen vaka: Shadow Slave 1. bölüm 1-2 dakika). Dal KENDİNİ SEÇER: bölüm
+önbellekte yoksa ya da hizalama tutmadığı için `source` NULL'sa akış fetch'e düşer.
+İndirmeyi zorlamak için `refetch=True` (uçta `?refetch=1`) — kaynağın KENDİSİ bozuk
+geldiğinde gerekir, okuyucudaki "Bölüm Boş → Siteden Yeniden Çek" düğmesi bunu kullanır.
+Bu yol `next_url`/`prev_url`'ü önbellekten TAŞIR, tazelemez; tazeleme ayrı bir iştir
+(`refresh_metadata`, check-updates).
 
 **`app/core/fetch.py`** (en riskli parça) — Playwright ile Cloudflare bypass. **İki
 akış, otomatik yedekleme**: (1) `FETCH_CDP_URL` ayarlıysa kullanıcının elle
@@ -84,26 +100,421 @@ geçer; geri-çekilme uykuları kapı DIŞINDA tutulur. Tipli hatalar:
 `MAX_WORDS_PER_CHUNK` (2800 kelime) sınırında parçalar, parçalar arası son cümleleri
 bağlam olarak taşır, glossary'i prompt'a enjekte eder. **`[[n]]` işaretçileri**
 Türkçe↔İngilizce paragrafları hizalar (iki-dilli okuma; hizalama tutmazsa o parça tek
-blok, `source` None). **TEK model yedek zinciri, KALİTE öncelikli** (2026-08-17, kullanıcı
-kararı): `DEFAULT_MODELS` = `gemini-3.7-flash` → `gemini-3.6-flash` → `gemini-3.5-flash`
-→ `gemini-3.5-flash-lite`. Bu sıra HER YERDE geçerlidir — okuma, prefetch, toplu çeviri,
-"yeniden çevir", içe aktarılan sayfa çevirisi (`import_translate`) ve sözlük terim önerisi
-(`suggest_term`) aynı sabiti kullanır; `refresh` artık YALNIZ önbelleği yok sayar, model
-sırasına karışmaz. Yola göre AYRI zincir (ucuz okuma / kaliteli refresh) denendi ve aynı
-gün kaldırıldı: okumanın gövdesi prefetch'ten geldiği için ucuz zincir pratikte çevirinin
-çoğunu belirliyordu. Düşme kuralı: 500/503 → aynı modelde geri-çekilmeli tekrar, 404/429
-(kota dolu) → beklemeden sıradaki modele geç, boş/engellenmiş yanıt (safety) → sıradaki
-model. Ölçüm (2026-08-16): 3.6 en akıcı ama ücretsiz kotası ~25 istek/gün, 3.5-flash orta
-halka (503'e meyilli), flash-lite en hızlı/en dayanıklı (o yüzden zincirin SON halkası),
-3.7 o gün ısrarla 503 verdi (kalitesi ölçülemedi; tökezlerse zincir 3.6'ya iner).
-Zincirin alt halkaları süsleme değil, günün çoğunda ASIL taşıyıcıdır — üst halkaların
-ücretsiz kotası dar. Fiilen hangi halkanın çevirdiği künyeye yazılır (`chapters.model`).
+blok, `source` None). **TEK MOTOR: Gemini** (2026-09-02, kullanıcı kararı) ve **TEK model
+yedek zinciri, KALİTE öncelikli**: `DEFAULT_MODELS` = **`gemini-3.6-flash`** →
+`gemini-3.5-flash`. Bu sıra HER YERDE geçerlidir — okuma,
+prefetch, toplu çeviri, "yeniden çevir", içe aktarılan sayfa çevirisi (`import_translate`)
+ve sözlük terim önerisi (`suggest_term`) aynı sabiti kullanır; `refresh` YALNIZ önbelleği
+yok sayar, model sırasına karışmaz. Yola göre AYRI zincir (ucuz okuma / kaliteli refresh)
+denendi ve aynı gün kaldırıldı: okumanın gövdesi prefetch'ten geldiği için ucuz zincir
+pratikte çevirinin çoğunu belirliyordu. Zincirin alt halkaları süsleme değil, günün
+çoğunda ASIL taşıyıcıdır — üst halkaların ücretsiz kotası dar. Fiilen hangi halkanın
+çevirdiği künyeye yazılır (`chapters.model`).
+
+**ÇEVİRİ MODELİ SEÇİLEBİLİR** (2026-09-02, kullanıcı isteği). Okuyucunun ayarlar
+panelinde yedi seçenek: `gemini-3.8-flash` · `gemini-3.7-flash` · `gemini-3.6-flash`
+(varsayılan) · `gemini-3.5-flash` · `gemini-2.5-flash` · **`claude-haiku-4-5`** ·
+**`claude-sonnet-5`** (son ikisi ÜCRETLİ, aşağıya bak). `gemini-2.5-flash`
+2026-09-06'da eklendi; ölçümü aşağıda. **Seçim zincirin YERİNİ ALMAZ, BAŞINA geçer**
+(`translate.zincir_kur`): ölçüldü ki 3.7 ve 3.8 bu projenin uzunluktaki isteklerini sık
+sık 503 ile reddediyor, dolayısıyla "yalnız bunu kullan" yorumu o modeli seçen
+kullanıcının okumasını modelin kapasitesi daraldığı anda TÜMDEN durdururdu. Seçim bir
+TERCİHTİR, kilit değil; künye rozeti FİİLEN çevirenin adını yazdığı için "3.8 seçtim
+ama 3.6 çevirmiş" durumu gizlenmez. Tanınmayan seçim sessizce varsayılana düşer (ayar
+tablosunda bozulmuş bir değer, her isteği 404'e çarpan bir birinci halka yaratırdı).
+
+Ayar **sunucuda** durur (`app/core/settings.py`, `settings` kv tablosu; uçlar
+`GET`/`POST /api/settings/model`), okuyucunun `localStorage`'ında DEĞİL. Üç sebep:
+çeviriyi sunucu yapıyor · telefon ve PC aynı seçimi görmeli · okumanın GÖVDESİ
+prefetch'ten ve toplu çeviriden geliyor, ikisi de istemci olmadan koşuyor ve
+istemci-taraflı bir ayarı okuyamazlardı. Seçenek listesini de sunucu veriyor
+(`SECILEBILIR_MODELLER`, etiket + ölçüm notuyla); okuyucuda ikinci bir liste tutulsaydı
+model eklendiğinde ayrışır ve sunucunun tanımadığı bir ad gönderilirdi.
+
+**Zincir TEK noktada çözülür** (`translate.secili_zincir`), çağrı yerlerine tek tek
+geçirilmez: zinciri kullanan BEŞ yol var (okuma, prefetch, toplu çeviri, içe aktarılan
+sayfa/manga, sözlük terim önerisi) ve bu projede aynı kuralın birden çok yerde
+yazılması defalarca ayrışmayla sonuçlandı (künye alanları, motor adı). Biri
+güncellenmeyi unutulsa kullanıcı "modeli değiştirdim ama bazı bölümler hâlâ eskisiyle
+çevriliyor" derdi. `models=None` varsayılanı ayardan çözülür; açıkça verilen zincir
+ayarı ezer (testler ve bakım araçları için). Sözlükle aynı kural: seçim
+YALNIZ yeni çevrilen bölümde geçerlidir.
+
+**CLAUDE: ÜCRETLİ, YALNIZ AÇIKÇA SEÇİLİNCE, YEDEKSİZ** (2026-09-02, kullanıcı kararı).
+Zincirin diğer bütün halkaları ücretsiz; Claude değil, ve bu tek fark tasarımı belirliyor.
+**Claude ASLA yedek halka olamaz** — `zincir_kur` Claude seçilince TEK HALKALI bir zincir
+kurar. İki yönü de kapalı: Claude çeviremezse Gemini'ye sessizce düşülmez (künye "Claude"
+derken bölümü Gemini çevirmiş olmaz), ve Gemini seçiliyken kota dolsa bile Claude'a
+ASLA inilmez — yani sürpriz harcama YAPISAL olarak imkânsız. Gerekçe bu projede bir kez
+ödenmiş bir ders: OpenRouter'ın `:free` soneki düştüğünde istek 200 dönüyor, çeviri
+çalışıyor, hiçbir hata görünmüyor, yalnız FATURA işliyordu. Sessizce paraya dönen arıza,
+gürültülü arızadan tehlikelidir. `tests/test_model_secimi.py` iki yönü de tel tuzağıyla
+tutar.
+
+Claude yolunun üç özel kuralı var, üçü de ÖLÇÜLEREK bulundu:
+* **Anahtar döngüsü YOK.** `_generate_once_with_retry` Gemini anahtar havuzu üzerinde
+  döner; Claude'un tek anahtarı var ve aynı istek her turda PARA harcardı.
+* **`temperature` HİÇ gönderilmez** (Gemini yolunda 0.3). SDK'nın akış yardımcısı
+  örnekleme parametrelerini kabul etmiyor (`stream()` imzasında yok — ilk gerçek çağrı
+  `TypeError` ile patladı) ve Sonnet 5 onları zaten 400 ile reddediyor.
+* **Düşünme (extended thinking) KAPALI.** Düşünme çıktısı da ÇIKIŞ tokenı olarak
+  faturalanıyor ($5-10/M) ve çeviri mekanik bir iş. Sonnet 5'te `thinking` HİÇ
+  verilmezse adaptif düşünme AÇIK gelir, yani kapatmak açıkça yapılmalı.
+
+**MALİYET ÖLÇÜLDÜ** (`scratch/claude_maliyet.py`, gerçek prompt + gerçek bölümler;
+token sayımı Anthropic'in ücretsiz `count_tokens` ucuyla). Ortalama bölüm **8.284 giriş
++ 4.952 çıkış** token → Haiku 4.5 ~$0,033 · Sonnet 5 ~$0,066. **Maliyetin ~%75'i
+ÇIKIŞTAN gelir** (çıkış tokenı girişin 5 katı fiyatta) ve bu, alışılmış tavsiyeyi
+tersine çevirir: girişin %58'i sabit yük olmasına rağmen prompt önbelleklemesi bu iş
+yükünde yalnız ~%13 kazandırır, o yüzden KURULMADI. Batch API %50 kazandırır ama
+asenkron olduğu için okumaya uymaz.
+
+**Claude kalite ölçümü — TEK bölüm, tek koşu** (shadow-slave #123, 2026-09-02): Haiku 4.5
+uzunluk oranı **0,924** / 58 sn / $0,027 · Sonnet 5 **0,936** / 77 sn / $0,068. İkisinde
+de hizalama tuttu ve SIFIR sözlük ihlali. Kıyas için AYNI bölümde Gemini: 3.6-flash 0,939 ·
+3.5-flash 0,945 · 3.5-flash-lite 0,948. Yani her iki Claude modeli de ölçülen bütün Gemini
+modellerinin ALTINDA kaldı ve Haiku, zincirden kalite gerekçesiyle çıkarılan minimax'ın
+(0,922) seviyesinde. **Tek ölçüm tutarlılık göstermez** (bu projenin kendi kuralı) ve
+uzunluk oranı akıcılığı ölçmez — çeviriler `scratch/kiyas_ciktilari/` altında, karar
+okunarak verilmeli.
+
+**HARCAMA GÖSTERGESİ** (`app/core/kullanim.py`, `kullanim` tablosu; kullanıcı kararı: fren
+DEĞİL, gösterge). Ayarlar panelinde "bu ay N bölüm ≈ $X". **TOKEN saklanır, maliyet
+DEĞİL**: fiyat sağlayıcının elinde ve değişir; doları kaydetseydik fiyat değiştiği gün
+geçmiş kayıtlar sessizce yanlışa dönerdi. Fiyatı bilinmeyen (ücretsiz) modeller
+göstergeye girmez — "0,00 $ harcadın" satırları asıl bilgiyi gürültüye boğardı. Sayaç
+yazımı `sqlite3.Error`'ı YUTAR: gösterge, çeviri yolunun kritik parçası değil.
+
+**`gemini-3.5-flash-lite` ZİNCİRDEN ÇIKARILDI** (2026-09-09, kullanıcı kararı).
+Zincir artık İKİ halka. Lite bir dönem son halkaydı ("en dayanıklısı, zincir tükenmesin
+diye") ama sözlük uyumu ölçülenlerin en kötüsüydü — 4 bölümde 30 ihlal, 3.6-flash 60
+bölümde 5. Son halka olması durumu ağırlaştırıyordu: üst halkalar elendiğinde okuma
+sessizce ORAYA iniyor, çeviri kalıcı önbelleğe yazılıyor ve bir daha denetlenmiyordu.
+Daralan kapasitenin karşılığı anahtar tarafında ödendi (aşağıdaki iki madde).
+
+**Düşme kuralı İKİ BOYUTLUDUR ve sırası load-bearing** (2026-09-02; 503 dalı
+2026-09-09'da ölçümle DÜZELTİLDİ):
+1. **Kota (429) → aynı MODELDE sıradaki ANAHTAR**, ve o anahtar soğumaya alınır. Model
+   sabit kalır: kota bir kalite kusuru değildir, kaliteden ödün vermek için de sebep
+   değildir.
+2. **Geçici arıza (500/503/taşıma) → İKİ KATMAN.** SOĞUTMA YOK — arıza geçici, anahtar
+   sağlam. İÇ katman havuzu **uykusuz** dolaşır (sağlam anahtar ara); hiçbiri
+   çeviremediyse DIŞ katman geri-çekilerek **turu tekrarlar** (`MAX_RETRIES` tur,
+   2s→4s). Tur tekrarı yalnız geçici arızaya özgüdür: kota beklemekle açılmaz, orada
+   tekrar saf kayıptır (`turda_gecici` bayrağı bunu ayırır).
+
+   Denge iki ayrı yanlıştan sonra bulundu, ikisi de ölçüldü:
+   * **Anahtar başına 3 deneme + uyku** → zincirin tamamı 503 verdiğinde 5 anahtar x
+     2 model = 30 istek ve **60 sn UYKU** (üç modelli zincirde 90 sn). Kullanıcı:
+     "aşırı yavaş çeviriyor, çok uzun süre bekliyor."
+   * **Uykuyu TÜMDEN kaldırmak** → 10 deneme saniyeler içinde tükeniyor ve zincir pes
+     ediyor. Gerçek vaka (2026-09-10): 15 bölümlük toplu çeviri ikinci bölümde
+     "Tüm modeller şu anda meşgul" ile durdu. Google'ın 503 gövdesi "Spikes in demand
+     are usually temporary. Please try again later." diyor — beklemek BAZEN doğru cevap.
+
+   Bugünkü hâl aynı senaryoda 30 istek / **12 sn uyku**: havuzu kullanır ve dalgayı
+   bekler. Ölçüm `scratch/` altındaki maliyet betiğiyle API harcamadan tekrarlanabilir. Bu dal eskiden
+   doğrudan sıradaki MODELe iniyordu ve gerekçesi ("arıza Google tarafında, anahtar fark
+   etmez") ÖLÇÜMLE ÇÜRÜDÜ: 5 anahtar x 3 tur canlı yoklamada 503 tek bir anahtarda
+   çıkarken diğerleri AYNI ANDA açık dönüyordu. Eski kural tek geçici 503'te o modeldeki
+   kalan bütün sağlam anahtarları iptal ediyordu; iki model üst üste böyle atlanınca
+   okuma zincirin dibine iniyordu (kullanıcı şikâyeti: "5 anahtar var ama lite'a düşüyor").
+3. **Kalan her arıza → sıradaki MODEL.** 404 (model yok) doğrudan bir alt model — ikinci
+   anahtar da aynı cevabı verirdi, denemek her halkanın maliyetini ikiye katlardı.
+   Boş/engellenmiş yanıt (safety) deterministiktir → bir alt model (başkası çevirebilir).
+
+**ANAHTAR ROTASYONU: her istek SONRAKİ anahtardan başlar** (2026-09-09, kullanıcı
+isteği). Eskiden her istek DAİMA #1'den başlıyordu ve havuz ancak arıza hâlinde işe
+yarıyordu. Ölçüm bedeli gösterdi: Gemini'nin ücretsiz günlük kotası model başına
+**20 istek / PROJE** (429 gövdesinden okundu —
+`GenerateRequestsPerDayPerProjectPerModel-FreeTier`, `quotaValue: 20`), yani ilk anahtar
+erken tükeniyor, sonraki HER istek önce ona çarpıp 429 yiyor, soğuma yazıyor ve ancak
+sonra #2'ye geçiyordu. Beş anahtarlı havuzda bile yük tek anahtara yığılıyor, kotanın
+dörtte beşi boşta duruyordu. Ofset istek başına BİR kez alınır (`_sonraki_baslangic`) ve
+zincirdeki BÜTÜN modellere aynısı uygulanır; rotasyon sırayı kaydırır, KAPSAMI değil —
+döngü yine tüm anahtarları gezer. **Soğumadaki anahtar başlangıç olarak seçilmez ve
+sırayı da tüketmez**: döngü onu zaten atlıyordu, ama sayaç bir tur harcadığı için sağlam
+anahtarlara eşitsiz dağılıyordu (üç anahtarın biri kotadayken dört istek kalan ikiliye
+3/1 gidiyordu). Sayaç süreç
+ömürlüdür, testler `anahtar_rotasyonunu_sifirla()` ile sıfırlar.
+
+**ANAHTAR HAVUZU: birden çok Gemini anahtarı, sırayla** (2026-09-02, kullanıcı kararı).
+`.env`'deki tüm Gemini anahtarları keşfedilir ve numarasına göre sıralanır
+(`gemini_anahtarlari`); kota dolunca başka bir SAĞLAYICIYA değil başka bir ANAHTARA
+geçilir. **UYARI — Gemini kotası PROJE başınadır, ANAHTAR başına DEĞİL:** aynı Google
+Cloud projesinden üretilmiş iki anahtar aynı RPM/RPD havuzundan içer ve ikincisi hiçbir
+şey kazandırmaz (birincisi 429 alırsa ikincisi de alır). Havuzun anlamlı olması için
+anahtarlar AYRI PROJELERDEN gelmelidir. Değişken adı bilerek ESNEK
+(`GEMINI_API_KEY`, `GEMINI2_API_KEY`, `GEMINI_API_KEY_3`…): tek bir kanonik ad dayatmak,
+`.env`'i elle düzenleyen kullanıcının anahtarı sessizce görünmez kılmasına yol açardı ve
+arıza "kota dolu" kılığına girerdi.
+
+**Kota durumu: `scripts/kota_durum.py`.** "Kotam doldu mu, ne zaman açılır" sorusu
+tahminle cevaplanamaz — 429 İKİ ayrı sınırdan gelir ve açılma süreleri farklıdır.
+Araç her anahtar x her model için yoklar ve 429 gövdesindeki
+`QuotaFailure.violations[].quotaId`'yi okuyup DAKİKALIK mı GÜNLÜK mü olduğunu
+söyler, `RetryInfo.retryDelay`'i de basar. GÜNLÜK kota Pasifik gece yarısı sıfırlanır
+(yaz saatinde TSİ 10:00, kışın 11:00); araç yerel saate çevirip yazar.
+
+UYARI: araç KÜÇÜK bir istek atar, yani RPM/RPD'yi yoklar ama TPM'i (dakikadaki
+TOKEN) YOKLAMAZ. Gerçek çeviri isteği ~8.000 giriş token'ı taşır; "AÇIK" sonucu
+"kota tamamen boş" demek DEĞİLDİR.
+
+Araç ayrıca PROJE AYRILIĞI ipucu verir: iki anahtarın model erişimi FARKLIYSA
+(biri bir modele 404 derken öteki demiyorsa) projeleri kesinlikle ayrıdır, yani
+kotaları da ayrıdır. Erişim AYNIYSA bu bir kanıt değildir — anahtardan proje
+okunamaz. Ölçülen gerçek vaka (2026-09-06): 3. anahtar `gemini-2.5-flash`'a 404
+verdi, 1. ve 2. vermedi — 3. anahtarın projesi kesin ayrı, 1-2 arası belirsiz.
+
+Kota dolan anahtar **soğumaya** alınır, çünkü bir bölüm birden çok parça = birden çok
+istek ve her parça o anahtara boşuna bir tur daha atardı.
+
+**Soğuma süresi kotanın TÜRÜNDEN gelir** (2026-09-09, kullanıcı isteği). 429 iki ayrı
+sınırdan gelir ve HTTP kodu ikisinde de aynı, ama ayrım gövdededir:
+`QuotaFailure.violations[].quotaId` içinde `PerDay` varsa GÜNLÜK (RPD), yoksa DAKİKALIK
+(RPM/TPM). `translate.gunluk_kota_mi` bunu okur; günlükse soğuma Pasifik gece yarısına
+kadar (`pasifik_gece_yarisina_kalan`), değilse `ANAHTAR_SOGUMA_SN` = 60 sn. Gövde
+ayrıştırılamazsa DAKİKALIK varsayılır — bir dakika erken denemek, anahtarı gün boyu
+kaybetmekten ucuzdur. Süre eskiden sabit 60 sn'ydi ve günlük kotası dolan anahtar
+DAKİKADA BİR yeniden deneniyordu: her bölüm ona bir boş istek daha atıyordu.
+
+Ayrıştırma `scripts/kota_durum.py` ile PAYLAŞILIR (araç `translate._hata_govdesi` ve
+`gunluk_kota_mi`'yi çağırır); ikinci bir kopya, araç "GÜNLÜK" derken çeviri yolunun 60 sn
+sonra yeniden denemesi gibi sessiz bir ayrışma üretirdi.
+
+Soğuma **MODEL BAŞINADIR**: günlük kota model başına ayrı tutulduğu için
+3.6-flash'ta tükenen anahtar 3.5-flash'ta hâlâ çalışır; tek bir "anahtar bitti" bayrağı
+çalışan halkaları da kapatırdı. Testler `tests/test_gemini_anahtarlari.py`.
+
+**GEMİNİ DIŞI SAĞLAYICILAR KALDIRILDI** (2026-09-02, kullanıcı kararı). Bir dönem zincirde
+OpenAI-uyumlu üç sağlayıcı vardı (`openrouter:minimax/minimax-m3:free`,
+`mistral:mistral-medium-latest`, ayrıca Groq/Cerebras kod desteği). Hepsi zincire KOTA
+gerekçesiyle girmişti, kaliteyle değil, ve ölçüm tersini söyledi — bkz. aşağıdaki uzunluk
+oranı bulgusu. Taşıdıkları yük de bedavaya gelmiyordu: ikinci bir düşme kuralı, sağlayıcıya
+özel token tavanları ve OpenRouter'ın `:free` sonekinin sessizce PARAYA dönme riski (sonek
+düşerse istek yine 200 döner, hiçbir hata görünmez, yalnız fatura işler — gerçek vaka: bu
+projenin ilk kıyas turları hesapta 0,05 $ yaktı). Kotanın yerini anahtar havuzu aldı.
+Geri eklenmesi düşünülürse ölçüm kayıtları: minimax uzunluk oranı medyanı 22 bölümde
+**0,949** (22'sinin 22'si de 0,98'in ALTINDA) · mistral-medium **0,914** · Groq ücretsiz
+TPM 8.000'e karşı bu projenin girdisi tek başına 5.061 token (tüm sohbet modelleri 413) ·
+Cerebras ücretsiz bağlamı 8.192 token, aynı duvar. `translate.OPENAI_UYUMLU`,
+`_openai_uyumlu_uret`, `_onek_ayir` ve `<sağlayıcı>:<model>` yönlendirmesi tümüyle kalktı;
+`tests/test_gemini_anahtarlari.py` geri gelmelerini tutan bir tel tuzağı taşıyor.
+
+**UZUNLUK ORANI birincil kalite ölçütüdür** (2026-09-02, kullanıcı şikâyeti + ölçüm).
+Türkçe çıktı / İngilizce kaynak karakter. Sebebi somut: hizalama ve `sozluk_ihlalleri`
+"terimi doğru yazdın mı" diye sorar, "cümleyi eksiksiz kurdun mu" diye SORMAZ — minimax
+ikisinden de SIFIR hatayla geçtiği hâlde metni sistematik olarak kısaltıyordu ve şikâyet
+("çeviriyi düzgün yapmıyor") ancak bu ölçütle doğrulanabildi. Önbellekteki gerçek üretim
+verisi: `gemini-3.6-flash` 76 bölümde medyan **0,972** · minimax 22 bölümde **0,949** ·
+mistral-medium **0,914**. Aynı bölümde kontrollü koşu (shadow-slave 123): 3.6-flash 0,939 ·
+minimax 0,922. **Yeni bir model önerirken uzunluk oranını da ölç** — hizalama+sözlük
+ikilisi bu kusuru göstermiyor.
+
+**Model kıyası: `scratch/gemini_kiyas.py`** (2026-09-02). Gemini modellerini kendi
+aralarında ölçer: gerçek prompt (`_build_user_prompt`), gerçek sözlük, İKİ ayrı kitaptan
+gerçek bölümler. Kısa uydurma metinle yapılan doğrulama "çalışıyor mu" sorusunu cevaplar,
+"iyi mi" sorusunu CEVAPLAMAZ (Mistral dersi). Ölçütler projenin KENDİ deterministik
+fonksiyonlarındandır (`_split_by_markers`, `sozluk_ihlalleri`); kopyalanırsa ikinci bir
+kural kümesi doğardı. Akıcılık ölçülmez, okunur — çeviriler `scratch/kiyas_ciktilari/`
+altına yazılır. **Takma adlar (`gemini-flash-latest`) zincire konmaz**: hareketli hedeftir,
+ölçtüğümüz model bir gün sessizce başkası olur.
+
+**`gemini-2.5-flash` EKLENDİ, `gemini-3-flash-preview` ÖLÇÜLEREK ELENDİ**
+(2026-09-06, kullanıcı isteği + ölçüm). 2.5 YALNIZ seçilebilir listeye girdi,
+`DEFAULT_MODELS` zincirine DEĞİL. Ayrım load-bearing: seçilebilir liste bir
+TEKLİFTİR, zincir ise hiç kimse seçim yapmadığında herkesin düştüğü yoldur —
+ölçülmemiş bir modeli zincire koymak, ayarı hiç açmamış kullanıcının çevirisini
+sessizce değiştirirdi.
+
+**`gemini-3-flash` diye bir ad YOK.** Yoklandı: `gemini-3-flash` ve
+`gemini-3.0-flash` 404 dönüyor; çalışan ad `gemini-3-flash-preview`. Bu, projenin
+"model adını LİSTEYE bakarak seçme, YOKLA" kuralının bir kez daha işe yaradığı yer.
+
+Ölçüm (`scratch/gemini_kiyas.py`, 3 gerçek bölüm, iki kitap):
+
+| model | uzunluk oranı | hizalama | sözlük ihlali | süre |
+|---|---|---|---|---|
+| `gemini-3.6-flash` (taban) | 0,952 | 3/3 | 0 | 49 sn |
+| `gemini-2.5-flash` | 0,932 | 3/3 | 1 | **45 sn** |
+| `gemini-3-flash-preview` | **0,436** | **0/3** | 0 | 109 sn |
+
+`gemini-3-flash-preview` bu iş yükünde ÇEVİRMİYOR, ÖZETLİYOR: 53-62 paragraflık
+bölümlere 19-25 paragraf döndü, yani paragrafları birleştirip metnin yarısını attı.
+Hizalama üçünde de kayboldu. **Zincir bunu KURTARAMAZ** — düşme yalnız HATADA olur
+(429/503/404), başarılı ama kötü bir yanıtta olmaz; seçilseydi her bölüm böyle
+çevrilir, iki dilli okuma ölür ve İngilizce-kalıntı denetimi de çalışamazdı
+(hizalama ister). Bu yüzden LİSTEDEN ÇIKARILDI (kullanıcı kararı): sert bir uyarı
+notu yetmez, çünkü seçenek listesi bir TEKLİFTİR ve teklif edilmemesi gereken tek
+şey sessizce bozan bir yoldur. `tests/test_model_secimi.py` geri gelmesini bir tel
+tuzağıyla tutar.
+
+`gemini-2.5-flash` ise gerçek bir alternatif: oran 3.6-flash'a yakın, hizalama tam,
+ve ölçülenlerin EN HIZLIsı. Kotası 3.x'ten ayrı olduğu için 3.x halkaları
+tükendiğinde işe yarar.
+
+Bu ölçüm aynı zamanda "yeni sürüm daha iyidir" sezgisinin bu projede kaç kez
+yanlış çıktığının dördüncü kaydı (3.7, 3.8, 3.1-pro-preview, şimdi 3-preview).
+Yeni bir model eklerken ÖNCE uzunluk oranını ve hizalamayı ölç.
+
+**`gemini-3.7-flash` ve `gemini-3.8-flash` zincirde YOK** (3.7: 2026-08-23; 3.8:
+2026-09-02, ikisi de ölçülerek). İkisi de bu projenin uzunluktaki isteklerini ısrarla
+**503** ile reddediyor ve reddin bedeli sabit değil: ölçülen vakada 3.7 bir bölüm için
+74 sn, bir başkası için **220 sn** yakıp yine reddetti (3.8 daha hızlı reddediyor, 5-15
+sn). Üstüne üretim yolunda 503 aynı modelde 3 deneme + 6 sn uyku demek. Somut eski vaka:
+Shadow Slave 1. bölüm "yeniden çevir" 1-2 dk sürdü ve künyeye `gemini-3.6-flash` yazıldı —
+yani 3.7 reddetmiş, o süre tamamen boşa gitmişti. Ara sıra çalışması onları daha da kötü
+bir İLK halka yapıyor: kazanç belirsiz, maliyet düzenli. Geri eklenecekse ÖNCE kalitesi
+ölçülmeli; `tests/test_ceviri_yolu.py` ve `tests/test_gemini_anahtarlari.py` kazara geri
+gelmelerini tutan tel tuzakları taşıyor.
+
+**PARÇALAMA KALİTEYİ İYİLEŞTİRMİYOR** (ölçüldü 2026-09-02). "Bölümü 3'e bölsek model daha
+az atlar mı" hipotezi sınandı: aynı model, aynı bölüm, üç parça → oran 0,922'den 0,912'ye
+DÜŞTÜ, süre 51'den 76 sn'ye çıktı, token ~1,8 kat arttı. Sebep prompt anatomisinde:
+**%41-48'i SABİT yük** (sistem talimatı + 250-267 kayıtlık sözlük = 7.323
+karakter) ve o kısım her parçada YENİDEN gider. Parçalama yalnız bağlam penceresi dar
+katmanlara sığmak için bir araçtır, kalite aracı DEĞİL.
+
+**Model adını LİSTEYE bakarak seçme, YOKLA**: `/v1/models` çıktısında görünen bir ad
+ücretsiz katmanda çalışmayabilir (ölçülen vakalar: `mistral-large-latest` 403
+`tier_not_allowed`, `gemini-3.1-pro-preview` / `gemini-pro-latest` 429). Aynı disiplin
+`gemini-3.7-flash`ta bir kez çiğnendi ve düzenli gecikme + ölçülmemiş kalite ile geri
+alındı. Ölçüm önce gelir.
+
+**SÖZLÜK UYUM DENETİMİ ve bayrağı** (2026-08-30). Zincir yalnız ERİŞİLEBİLİRLİĞE bakarak
+iniyordu ve kaliteyi hiçbir yerde ölçmüyordu; alt halkanın çevirisi sessizce kalıcı
+önbelleğe yazılıp bir daha kontrol edilmiyordu. Ölçüm (Shadow Slave'in önbellekteki 110
+bölümü): Türkçe karşılığı KAYITLI olduğu hâlde İngilizce kalan terim, 3.6-flash'ta 60
+bölümde 5, 3.5-flash'ta 45 bölümde 1, **flash-lite'ta 4 bölümde 30**. Somut vaka: 109.
+bölümü flash-lite çevirdi, `Saint -> Aziz` kaynakta 12 kez geçti ve 12'si de İngilizce
+kaldı. `translate.sozluk_ihlalleri` çeviriden sonra bunu deterministik olarak ölçer
+(API çağırmaz, bedava koşar); sonuç `chapters.glossary_leaks`'e yazılır ve okuyucuda
+künye rozetinde ⚠ ile çıkar. Ölçüt prompt'a hangi terimlerin gireceğini belirleyen
+ölçütle AYNI sabittendir (`_terim_metinde`); ayrışırlarsa prompt'a giren bir terim
+denetimden kaçardı. OTOMATİK YENİDEN DENEME YOK (kullanıcı kararı): lite'a zaten kota
+tükendiği için düşülmüştü, aynı anda tekrar denemek çoğunlukla boşa giderdi — yeniden
+çeviriyi kullanıcı tetikler. Bayrağı üreten iki nokta var (`_fetch_translate_save` ve
+`fetch_into_book`); künyeye yeni alan eklerken olduğu gibi İKİSİNİ de güncelle.
+Üç sınıf denetim DIŞIDIR: `X -> X` (İngilizce korunan kişi adları), bölümün kaynağında
+geçmeyen kayıtlar, ve karşılığının İÇİNDE kaynağı geçen kayıtlar (`Ore Empire -> Ore
+Empire Krallığı` — doğru çeviri bile deseni tetikler).
+
+Eski bölümler için `scripts/uyum_denetle.py` (varsayılan KURU çalıştırma, `--uygula` ile
+yazar, `--ayrinti` ile ihlalli bölümleri listeler). Ölçütü BUGÜNKÜ sözlük DEĞİL, o bölüm
+çevrilirken sözlükte duran kayıtlardır (`glossary.bolumdeki_sozluk`, `first_chapter`
+sütununu okur): 200. bölümde kaydedilmiş terim 50. bölümün prompt'unda yoktu, model onu
+ihlal edemezdi. Köken taşımayan kayıt "her zaman vardı" sayıldığı için, sözlüğünün
+`MIN_KOKEN_KAPSAMA`'dan azı kökenli olan kitapların sayıları GÜVENİLMEZDİR ve rapor bunu
+açıkça söyler (gerçek veri: `reincarnation-of-the-strongest-sword-god`, 267 kaydın 267'si
+kökensiz). Araç ayrıca hatalı SÖZLÜK kayıtlarını da yakalar: iyi bir modelin ısrarla
+"ihlal ettiği" bir terim genellikle modelin haklı olduğunu gösterir (gerçek bulgu: elle
+eklenmiş `Rock -> Taş`, oysa Rock bir karakter adı — kural gereği İngilizce kalmalıydı).
+
+**İNGİLİZCE KALINTI: denetim + OTOMATİK ONARIM** (2026-09-05). Kullanıcı şikâyeti:
+"bazı kelimeler veya cümleler İngilizce kalıyor". Ölçüm (önbellekteki 392 hizalı
+bölüm, 21.411 paragraf) altı vaka buldu, ALTISI da `gemini-3.5-flash` — 3.6-flash
+93 bölümde sıfır verdi. Arıza iki biçimde geliyor: paragrafın TAMAMI kaynakla
+birebir aynı dönüyor (replik hiç çevrilmemiş), ya da paragraf çevrilmiş olduğu
+hâlde cümle BAŞINDAKİ bağlaç/yardımcı fiil düşmüyor (`...But sadece birkaç
+dakika`, `Was Neph... çalışıyor muydu?`) — Türkçede eke dönüşen `was` gibi
+sözcükler modelin en sık atladığı yer.
+
+**Kök neden denetimsizlikti, model değil.** Hizalama TUTUYORDU: `_split_by_markers`
+yalnız YAPIYI doğrular (işaretler tam ve sıralı mı), `sozluk_ihlalleri` yalnız
+KAYITLI terimlere bakar. İkisi de "bu paragraf Türkçe mi" sorusunu SORMUYORDU ve
+prompt'un hiçbir maddesi paragrafın çevrilmiş olmasını istemiyordu — model
+işaretçiyi doğru koyup metni olduğu gibi kopyalayınca hiçbir kural çiğnenmiyordu.
+Sonuç kalıcı önbelleğe yazılıyor, önbellek isabeti bir daha çeviri tetiklemediği
+için kullanıcı o paragrafı SONSUZA DEK İngilizce görüyordu.
+
+Üç katman eklendi:
+* **Önleme** — `SYSTEM_INSTRUCTION`'a açık madde: hiçbir paragraf İngilizce
+  kalamaz, kaynak metin KOPYALANMAZ; `But/Then/And` ve `was/were/did` örnekli.
+* **Denetim** — `translate.ingilizce_kalinti(tr_paras, en_paras, glossary)`.
+  Deterministik ve API'siz (`sozluk_ihlalleri` gibi bedavaya koşar). İKİ ölçüt:
+  BLOK (kaynakla ortaklık oranı >= `KALINTI_ORAN`, en az `KALINTI_MIN_TOKEN` aday
+  token) ve SÖZCÜK (`ISLEV_SOZCUKLERI`'nden biri hem çeviride hem kaynakta).
+* **Onarım** — `translate._kalintiyi_onar`, TEK tur. YALNIZ sızan paragrafları
+  yeniden gönderir (tipik vaka 60 paragrafta 1), bölümün tamamını değil.
+
+**Eşikler ölçülerek kondu, tahminle değil.** Ortaklık oranı dağılımında 0,7 ile
+1,0 arasında HİÇ paragraf yok; eşik o boşluğa oturur. `KALINTI_MIN_TOKEN` şart:
+kısa replikte (`"Sunny! Sunny! Uyan!"` ~ `"Sunny! Sunny! Wake up!"`) oran DOĞRU
+çeviride bile 0,5-0,67'ye çıkıyor, çünkü özel ad + ünlem paragrafın tamamı oluyor.
+Kalibrasyon sonucu: 6 gerçek vaka, **0 yanlış pozitif**.
+
+**SAYI sözcükleri AYRI bir sınıftır** (2026-09-05, kullanıcı bildirimi). `ten times`
+-> `ten kat`: model ölçü sözcüğünü çevirdi, sayıyı bıraktı (shadow-slave #201,
+`gemini-3.6-flash`). Sayılar `ISLEV_SOZCUKLERI`'ne GİREMEZ çünkü o listenin kuralı
+"Türkçe yazımı olan sözcük girmez" ve `ten` Türkçede cilt demek. Ama sızıntı gerçek
+ve ötekilerden PAHALI: yanlış kalan bir sayı cümlenin anlamını değiştirir ve okurken
+göze çarpmaz. Ölçüm sınıfın güvenle ayrılabileceğini gösterdi: sayı sözcüklerinin
+korpustaki 112 geçişinin TAMAMI özel ad parçasıydı (`Solitary Nine`, `Ninth Heaven`,
+`Thousand Transformations`, `Hundred Flowers Pavilion`) ve hepsi BÜYÜK harfliydi;
+tek gerçek sızıntı küçük harfliydi.
+
+`SAYI_SOZCUKLERI` bu yüzden İŞLEV sözcüklerinden FARKLI bir guard taşır: sonraki
+sözcük büyük harfliyse ad başlangıcıdır ve elenir. **Bu guard işlev sözcüklerine
+UYGULANAMAZ** — gerçek vaka `Was Neph...` tam olarak o desendedir (sonraki sözcük
+büyük harfli bir kişi adı) ve aynı guard onu sessizce elerdi. İki sınıfın guard'ları
+bilerek ayrıdır; birleştirme.
+
+Korpus temelli genel tarama da yapıldı (bir token Türkçeyse, kaynağında o token
+GEÇMEYEN paragraflarda da görünür; sızıntıysa görünmez). 69 küçük harfli adayın
+tamamı meşru çıktı: Türkçe alıntı sözcükler (`metal`, `platform`, `form`, `risk`),
+bilerek korunan yabancı terimler (`kunai`, `tachi`, `dantian`) ve tireli özel ad
+parçaları (`All-rounded Device`, `Lightning-horned Earth Dragon`). Yani `ten`
+dışında kapatılacak sınıf KALMADI — ve yöntem `ten`'i yapısal olarak bulamaz,
+çünkü eş sesli bir Türkçe sözcüğü vardır. Yeni bir sızıntı sınıfı aranacaksa bu
+taramayı tekrarla (`n_siz == 0` ölçütü), eş sesli sınıfları elle ekle.
+
+`ISLEV_SOZCUKLERI` bilerek DAR: Türkçe'de de var olan yazımlar ELENMİŞTİR. `not`
+("not etmişti") ve `has` ("kendine has") tek başına 126 sahte vaka üretmişti; `of`
+Türkçe ünlem "Of!" ile çakıştığı için yok. **Listeyi genişletirken ölçüt: sözcüğün
+Türkçe bir yazımı VAR MI — varsa girmez.** Üç eleme daha var, üçü de ölçülmüş
+yanlış pozitiften geliyor: sözcük kaynakta geçmiyorsa Türkçedir · çeviride BÜYÜK
+harfli ve cümle başında değilse özel adın parçasıdır (`Glorious Will` -> `Will`) ·
+çok kelimeli bir sözlük kaydının İÇİNDEyse sızıntı değildir (`Auro of the Nine`
+-> `the`). Cümle başı / özel ad ayrımı load-bearing: onsuz `Was Neph...`
+vakasındaki `Was` "özel ad" sayılıp elenirdi.
+
+**Onarım TEK turdur ve sözlüğe YAZMAZ.** Sızıntı modelin dikkat kaymasıdır; kısa,
+odaklı bir istek onu çoğunlukla düzeltir (ölçüm: 6/6). Düzeltmiyorsa döngü kurmak
+yalnız maliyeti — ücretli model seçiliyken PARAYI — katlar; onarılamayan sızıntı
+`chapters.ingilizce_kalinti`'ye yazılır ve okuyucuda ⚠ rozetiyle görünür. Onarımın
+sözlüğe kayıt eklememesi de bilinçli: tek bir paragraftan çıkan öneri, bölümün
+tamamını görerek verilmiş özgün kararla çelişebilir ve sözlük kaydı sonraki BÜTÜN
+bölümlerde KURAL olarak uygulanır.
+
+Eski bölümler için `scripts/kalinti_onar.py` (varsayılan KURU çalıştırma;
+`--isaretle` yalnız bayrak yazar ve API'siz koşar, `--uygula` yeniden çevirir).
+Kaynak önbellekten okunur — siteye YENİDEN İNİLMEZ. Onarım aracı çeviri yolundaki
+`_kalintiyi_onar`'ı AYNEN çağırır; ikinci bir onarım kuralı yazmak iki yolun
+zamanla ayrışması demekti (bu projede künye alanları tam olarak böyle ayrışmıştı).
+Araç künyeyi de tazeler (`cache.set_translation(model=…, engine=…)`), yoksa rozet
+paragrafı fiilen onaran halkayı gizlerdi.
+
+**Bayrağı üreten noktalar** `glossary_leaks` ile AYNI ikilidir:
+`_fetch_translate_save` ve `fetch_into_book`. Yeni bir çeviri yolu eklenirse
+İKİSİNİ de güncelle — `model` alanında tam bu hata yaşandı. NULL (hiç
+denetlenmedi) ile `{}` (denetlendi, temiz) AYRIDIR.
+
 `SAFETY_SETTINGS` = `BLOCK_NONE`, `max_output_tokens` açıkça verilir
 (sessiz kesilme → bozuk JSON → hizalama kaybı). Çıktı JSON
 `{translation, detected_names}`; bozuk/yarım JSON için kurtarma ayrıştırıcısı.
-**İki bağlam kaynağı** prompt'a girer: `prev_context` (önceki BÖLÜMÜN son ~160 kelimelik
-Türkçesi — `cache.prev_translation`) ve `style_note` (kitap başına üslup notu —
-`books.style_note`).
+Prompt'a giren bağlam: `prev_context` — önceki BÖLÜMÜN son ~160 kelimelik Türkçesi
+(`cache.prev_translation`), sahne sürekliliği bölüm sınırında kopmasın diye.
+
+**ÜSLUP NOTU KALDIRILDI** (2026-09-02, kullanıcı kararı: "boşuna token harcamasın").
+Kitap başına serbest bir üslup notu (`books.style_note`) her çeviri prompt'una
+giriyordu. Ölçüm kararı verdi: HİÇBİR kitapta yazılı değildi, yani satır her istekte
+`(yok)` diye gidiyordu — 36 token, girişin %0,4'ü. Token kazancı ihmal edilebilir
+(maliyetin %75'i ÇIKIŞTAN geliyor, bkz. aşağıdaki Claude ölçümü); asıl gerekçe ölü
+özellik: okuyucudaki kutu, uç (`/api/book/{slug}/style`), `library.set_style_note` ve
+prompt maddesi hep birlikte kaldırıldı. YARIM kaldırma bilinçle reddedildi — kutuyu
+bırakıp prompt'tan çıkarmak, kullanıcının not yazıp hiçbir şey olmadığını fark
+etmediği SESSİZ bir arıza üretirdi. `books.style_note` SÜTUNU duruyor (SQLite'ta
+sütun düşürmek zahmetli, veri zaten boş) ama hiçbir kod okumuyor.
 
 **`app/core/cache.py`** — `chapters` tablosu: çevrilmiş bölümlerin URL-anahtarlı
 kalıcı önbelleği. Cache isabeti = API çağrısı yok, anahtar gerekmez.
@@ -115,10 +526,22 @@ görür. `merge_books`/`resolve_slug`: aynı kitabın farklı sitelerdeki slug'l
 
 **`app/core/glossary.py`** — Kitap-başına terim eşlemesi (kaynak→karşılık). Özel adlar
 çeviri sırasında OTOMATİK eklenir (`pipeline._sozluge_isle`), **iki sınıf iki davranış**:
-**karakter** (`detected_names`) → İngilizce kalır (`merge_names`, `X -> X`) ve İngilizce
-kalan TEK sınıf budur; **karakter dışı HER özel ad** (`detected_terms`: yer, lonca, eşya,
-beceri/büyü, unvan, ırk, adlandırılmış canavar, sistem terimi…) → modelin çeviride
-kullandığı Türkçe karşılıkla sabitlenir (`merge_terms`). Kutu eskiden yalnız lonca+yer
+**bir KİŞİYİ ADLANDIRAN ifade** (`detected_names`) → İngilizce kalır (`merge_names`,
+`X -> X`) ve İngilizce kalan TEK sınıf budur; **kişi adlandırmayan HER özel ad**
+(`detected_terms`: yer, lonca, eşya, beceri/büyü, kategori unvanı, ırk, adlandırılmış
+canavar, sistem terimi…) → modelin çeviride kullandığı Türkçe karşılıkla sabitlenir
+(`merge_terms`). **Kişi sınıfına gerçek adın yanında LAKAP da girer** (2026-08-23):
+gerçek adı bilinmeyen birini ad yerine geçerek adlandıran sözcük (`Scholar`, `Shifty`,
+`Hero`). Sınıf eskiden "gerçek kişi/karakter adları" idi ve unvanı açıkça çevrilecekler
+arasında sayıyordu; model bu lakapları harfiyen unvan sayıp Türkçeleştirdi (Shadow Slave
+6. bölüm: `Kurnaz`, `Bilgin`, `Kahraman`), karşılık sözlüğe KURAL olarak yazıldı ve
+7. bölüm de ona uydu — model bunları `detected_names`'e hiç önermediği için süzgeçlerin
+eleyeceği bir şey yoktu, boşluk KURALDAYDI. Ölçüt (`translate.LAKAP_KURALI`) bilerek DAR:
+büyük harfli + TEK belirli kişiyi gösteren + önünde `a/an/the` OLMAYAN sözcük lakaptır;
+belirteç alan ya da sınıf anlatan (`an Aspirant`, `the Awakened`) çevrilir — gevşek bir
+kural sistem terimlerini İngilizce'ye kaçırırdı, bu daha büyük bir zarar. **Ölçüt üç
+talimatta da AYNI sabitten gelir** (çeviri, okurken terim önerisi, bakım aracının
+sınıflandırması); ayrışırlarsa aynı kitapta iki politika oluşur. Kutu eskiden yalnız lonca+yer
 idi; eşya/beceri adları hiçbir sınıfa girmediği için sessizce kaydedilmiyordu (gerçek
 bulgu: Shadow Slave 30. bölüm, `Puppeteer's Shroud`) — 2026-08-17'de tek genel kutuya
 çevrildi, **sınıf listesini yeniden daraltma**. Lonca eskiden İngilizce korunuyordu,
@@ -145,12 +568,71 @@ eklenemez — o tarayıcının menüsü, sayfaya kapalı), modal açılır ve ka
 `POST /api/book/{slug}/glossary/suggest` → `translate.suggest_term` ÖNERİR: aynı kural
 (karakter → İngilizce kalır, başka her özel ad → Türkçe). Öneri onaya sunulur, doğrudan
 yazılmaz; sözlük prompt'ta KURALdır, yanlış karşılık kitap boyunca birebir uygulanırdı.
-Terimi sözlük eşler, **üslubu** ise `books.style_note` sabitler (aynı ekranda,
-`/api/book/{slug}/style`): anlatım kişisi/hitap/ton kitap boyunca kaymasın diye her
-çeviri prompt'una girer. İkisi de YALNIZ yeni çevrilen bölümde etkilidir.
+Sözlük YALNIZ yeni çevrilen bölümde etkilidir.
+
+**KOŞULLU SÖZLÜK KARŞILIĞI** (2026-09-06, kullanıcı isteği + ölçüm). Sözlük düz bir
+`kaynak -> karşılık` eşlemesiydi ve aynı İngilizce sözcüğün BAĞLAMA göre iki farklı
+Türkçe karşılığı olduğu durumu İFADE EDEMİYORDU. Ölçülen vaka: Shadow Slave'de
+`Great` bir Kabus Yaratığı RÜTBESİ ("Dormant, Awakened, Fallen, Corrupted, Great,
+Cursed, Unholy") ve `Ulu` olmalı; insan tarafındaki eşdeğer rütbe `Supreme` ise
+`Yüce`. İkisi de "Yüce"ye eşlenmişti, ayrım kaybolmuştu.
+
+**Düz bir `Great -> Ulu` kaydı çözüm DEĞİLDİ ve ölçüm bunu gösterdi.** Önbellekteki
+32 geçişin ~17'si rütbe, **~12'si gündelik İngilizce** (`Great!`, `Great job`,
+`Great people`). Sözlük karşılığı prompt'ta KURAL olduğu için düz kayıt o on ikisini
+de "Ulu!" yapardı — bir sorunu çözerken on ikisini açardı. Çok kelimeli kayıtlar
+(`Great Devil` gibi) da yetmiyordu: rütbe dizisinde `Great` YALIN geçiyor.
+
+Çözüm `glossary.kosul` sütunu: karşılığın hangi bağlamda geçerli olduğunu anlatan
+serbest metin. Prompt'a `Great -> Ulu  [KOŞUL: ...]` diye çıkar ve
+`SYSTEM_INSTRUCTION` modele koşul sağlanmıyorsa karşılığı ZORLAMAMASINI söyler.
+Doğrulandı (aynı istekte beş cümle): `Great!` -> Harika · `Great rank` -> Ulu ·
+`Great job` -> Harika · `Great Devil` -> Ulu Şeytan · `Supreme rank` -> Yüce.
+
+Üç kural load-bearing:
+
+* **Koşul karşılığın YERİNE GEÇMEZ**, yanına iliştirilir ve YALNIZ prompt'a çıkar.
+  `sozluk_ihlalleri`, `_terim_metinde` ve terim eşleştirme karşılığı olduğu gibi
+  görmeye devam eder — koşulu karşılığın içine gömmek bu üçünü birden bozardı.
+* **`set_term` koşulu KORUR, `set_kosul` yazar/temizler.** İkisinin "verilmedi"
+  anlamı zıttır: okuyucunun çevrimdışı kuyruğu yalnız `{source, target}` gönderir
+  ve `set_term`'ün koşulu silmesi, kullanıcının sıradan bir karşılık düzeltmesinin
+  kuralı sessizce yok etmesi demekti. `INSERT OR REPLACE` satırı silip yeniden
+  yazdığı için koşul `created_at`/`first_chapter` gibi TAŞINIR.
+* **Koşul yalnız SÜZGEÇTEN geçen terimler için yazılır.** Metinde geçmeyen bir
+  terimin koşulu her istekte boşa token yakardı.
+
+Koşul okuyucunun sözlük ekranında satırın altında GÖRÜNÜR (`.gloss-kosul`) — kural
+prompt'a çıkıyor, ekranda saklanırsa terim beklenmedik çevrildiğinde sebebi hiçbir
+yerde okunamaz. Düzenleme uçtan yapılır (`POST /api/book/{slug}/glossary`, `kosul`
+alanı); `None` = alan gönderilmedi (KORU), `""` = temizle.
+
+**Koşulları okuyan yol SÖZLÜĞÜ okuyan yolla aynı olmalı.** `pipeline`'da
+`get_glossary` çağrılan her yerde `get_kosullar` da çağrılır ve `translate_chapter`'ı
+çağıran her nokta `kosullar=` geçirir; `tests/test_sozluk_kosul.py` ikisini de
+statik tel tuzağıyla tutar. Bu projede `model` künyesi tam olarak böyle ayrışmıştı.
+
 
 **`app/core/jobs.py`** — **Bellek-içi** arka plan toplu çeviri (sekme kapansa da sürer;
 sunucu yeniden başlarsa iş kaybolur — bölümler cache'te kaldığı için sorun değil).
+**GEÇİCİ çeviri hatası işi ÖLDÜRMEZ** (2026-09-10): `TranslateError` alınınca aynı
+bölüm `BULK_GECICI_DENEME` (3) kez, aralarında `BULK_GECICI_BEKLEME` (30 sn, sonra
+90 sn) beklenerek yeniden denenir. Eskiden tek bir hata `state="error"` yazıp işi
+bırakıyordu — 15 bölümlük iş ikinci bölümde ölüyor, kullanıcı kalan 13'ünü hiç almıyor
+ve rafta yalnız "! HATA" rozeti kalıyordu. **ÇEKİM hatası bilerek AYRI tutulur**:
+`fetch` kendi üstel geri-çekilmesini zaten yapıyor, buradan ikinci bir tekrar katmanı
+Cloudflare'e üst üste inmek olurdu. Bekleme `_bekle()` ile PARÇALIDIR (1 sn'lik
+adımlar, her adımda durdurma sorgulanır) — tek uzun uyku olsaydı "DURDUR" düğmesi
+dakikalarca cevapsız kalırdı.
+
+**Raf rozetini seçen kural İKİ AŞAMALIDIR** (`get_book_job`, 2026-09-10): önce her TİP
+kendi EN SON kaydıyla temsil edilir, sonra tipler arasında dikkat önceliği uygulanır
+(çalışan iş > hata > gerisi). İkinci aşama tek başınayken aynı tip içinde TARİH yok
+sayılıyordu: bulk 09-09'da hataya düştü, kullanıcı 09-10'da yeniden çalıştırıp 10/10
+bitirdi, ama raf hâlâ "! HATA" gösteriyordu. Rozet "ilgilenmen gereken bir şey var"
+demektir; sorun çözülmüşken orada durması yanlış bilgidir. İlk aşama E-5'i BOZMAZ —
+gece check-updates işinin done kaydı yarım bulk hatasının rozetini yine sökmez, çünkü
+iki tip ayrı temsil edilir (`tests/test_jobs_types.py` ikisini de tutar).
 
 **`app/core/db.py`** — Paylaşılan SQLite yardımcıları: `db_path()` (`NOVEL_DB_PATH` ile
 override), `connect()` (WAL + `busy_timeout`), `ensure_column()` (idempotent migration).
@@ -184,8 +666,10 @@ portu + ayrı profil (`cache/.chrome-cdp`) ile açar. **`faz0/`** — eski kavra
 
 ## Tek veritabanı
 
-Her şey **tek SQLite dosyasında**: `cache/chapters.db` (WAL modu). Üç mantıksal depo:
-`chapters` (cache), `books`+`aliases` (kütüphane), `glossary`. **Merkezi şema/migration
+Her şey **tek SQLite dosyasında**: `cache/chapters.db` (WAL modu). Beş mantıksal depo:
+`chapters` (cache), `books`+`aliases` (kütüphane), `glossary`, `settings` (sunucu-taraflı
+genel ayarlar — bugün yalnız çeviri modeli seçimi) ve `kullanim` (ücretli model token
+sayacı). **Merkezi şema/migration
 dosyası yoktur** — her modülün `_connect()`'i kendi tablosunu `CREATE TABLE IF NOT EXISTS`
 ile tembel oluşturur. **Yeni sütun eklerken `db.ensure_column()` kullan** (idempotent;
 SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştirir;
@@ -197,6 +681,46 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
   değişince `app/web/sw.js` içindeki `SHELL_CACHE = "novellink-shell-vNN"` **artırılmalı**,
   yoksa telefonlar bayat kabuğu servis eder. `DATA_CACHE` **sabit** isimlidir (bölüm
   `/api` yanıtlarını tutar; sürümle silinmez). Bu tekrarlayan, elle yapılan bir adımdır.
+- **ÇEVRİMDIŞI KAYIT GÜVENLİ BAĞLAM İSTER — düz IP adresinde ÇALIŞMAZ** (2026-09-10,
+  ölçüldü). Service Worker ve Cache API yalnız `https://` ya da `http://localhost`
+  üzerinde vardır. Telefon `http://100.x.x.x:8000` (Tailscale IP) ya da
+  `http://10.x.x.x:8000` (LAN) ile bağlandığında `window.isSecureContext` **false**,
+  `caches` API **yok**, SW **hiç kaydolmaz**. Ölçüm (aynı sunucu, üç adres):
+
+  | adres | secureContext | caches | SW |
+  |---|---|---|---|
+  | `http://localhost:8000` | True | var | AKTİF |
+  | `http://100.103.112.103:8000` | False | YOK | YOK |
+  | `https://<makine>.<tailnet>.ts.net` | True | var | AKTİF |
+
+  Arıza AYLARCA "toplu çeviri çevrimdışı kaydetmiyor" kılığında göründü, çünkü
+  `otoIndirmeTur` `caches` bulamayınca SESSİZCE çıkıyordu — çalışmayan bir özellik
+  çalışıyor gibi duruyordu. Artık güvensiz adreste KALICI bir uyarı basılır (4 sn'lik
+  temizleyici bilerek çalıştırılmaz). Çözüm Tailscale Serve'dir
+  (`tailscale serve --bg 8000`) ve `start.bat` HTTPS adresini MagicDNS'ten
+  (`tailscale status --json` → `Self.DNSName`) bulup ÖNERİLEN olarak basar; düz IP
+  satırlarının yanında "CEVRIMDISI KAYIT YAPMAZ" yazar. **Batch tuzağı:** `for /f`
+  backtick'i içinde çift tırnaklı PowerShell komutuna `^|` geçirilemez — pipe
+  `tailscale`e argüman olarak gider (`unexpected non-flag arguments`). Pipe yerine
+  `ConvertFrom-Json ($t -join '')` kullanılır.
+- **Toplu çeviri telefona KENDİLİĞİNDEN inmez; taramayı tetikleyen kütüphanedir.**
+  SW yalnız telefondan GEÇEN `GET /api/chapter` yanıtlarını `DATA_CACHE`'e yazar; toplu
+  çeviri ise SUNUCUDA koşuyor ve telefona tek bayt inmiyor. Isıtma taraması
+  (`app.js:otoIndirmeTur`) boşluğu kapatır ve **`renderLibrary`'den** çağrılır — yani
+  uygulamayı açmak yeter. Eskiden tek tetikleyici `openBook` idi (o kitabın bölüm
+  listesini açmak) ve `pollBulk`'ün bitiş dalı da yalnız hâlâ o sayfadaysan
+  `openBook` çağırıyordu; üç boşluk açık kalıyordu — iş sen başka yerdeyken biterse,
+  uygulamayı kapatırsan, ya da ertesi gün açarsan hiçbir şey inmiyordu (gerçek
+  şikâyet 2026-09-03). Tarama tek-uçuşludur, zaten önbellekte olanı atlar (tekrarlanan
+  turlar genelde sıfır istek), elle indirme açıkken ya da çevrimdışıyken durur.
+- **`translated` bayrağı PARA güvenliğidir** (`cache.list_chapters`). `chapters`
+  tablosu SAHNELENMİŞ satır da tutar (içe aktarılan PDF/EPUB/manga sayfaları,
+  `translation` NULL, okundukça çevrilir) ve bir bölümü GET'lemek çevirisi yoksa
+  ÇEVİRİ TETİKLER — ücretli model seçiliyken PARA harcar. Her iki toplu indirme yolu
+  da (elle "çevrimdışı indir" ve otomatik tarama) yalnız `translated` olanları ister:
+  ikisi de "indir" diyor, "çevir" demiyor. Bayrak olmadan otomatik tarama, içe
+  aktarılan bir kitabı sessizce baştan sona çevirtirdi. **Listeye yeni bir toplu
+  indirme yolu eklerken bu süzgeci de ekle.**
 - **mimetypes düzeltmesi** (`server.py` başı): Windows kayıt defteri `.webmanifest`/`.svg`
   için yanlış Content-Type verir → Chrome PWA ikonu/manifesti reddeder; elle kayıt şart.
 - **Tipli hata → `error_class`**: `server.py` hata yanıtlarında `error_class` döndürür
@@ -208,8 +732,16 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 - **Bölüm künyesi cache'te saklanır** (`chapters.engine`, `chapters.model`,
   `chapters.added_terms`): hangi motor + zincirin hangi HALKASI çevirdi ve o çeviride
   sözlüğe ne eklendi. Okuyucuda bölüm sonundaki açılır rozet bunu gösterir.
-  `engine` bugün hep `gemini` yazar ama sütun DURUYOR: DB'de ikinci-motor
-  denemesinden kalma `claude` satırları var, rozet onları da doğru göstermeli.
+  `engine` artık FİİLEN çeviren sağlayıcıdır (`translate.motor_adi`, tek tanım):
+  `gemini` · `mistral` · parçalar farklı sağlayıcıya düştüyse `mistral + gemini`.
+  2026-08-30'a kadar sabit `"gemini"` yazıyordu ("tek motor kaldığından sabit") ve
+  Mistral zincirin ilk halkası olunca bu doğrudan YANLIŞ bilgiye dönüştü: Mistral'in
+  çevirdiği bölüm rozette "GEMINI ile çevrildi" diyordu. Motoru üreten ÜÇ nokta var
+  (`translate_chapter`, `_render_import_page`, `manga_engine._save_engine_page`);
+  üçü de aynı yardımcıyı çağırmalı, yoksa aynı bilgi için üç ayrı kural oluşur.
+  DB'de ikinci-motor denemesinden kalma `claude` satırları da var; okuyucu rozeti
+  sağlayıcı adını olduğu gibi büyüttüğü için onlar da doğru etiketlenmeye devam eder
+  (yeni motor eklenince rozette ayrı bir dal açmak gerekmez).
   `model` (2026-08-17) fiilen çeviren model adıdır — `_generate_with_fallback` artık
   `(response, model)` döndürüp bunu yukarı taşır; parçalar farklı halkalara düştüyse
   `" + "` ile birleşir. Eklenme sebebi somut: bir deyim hatası tartışılırken "bunu hangi
@@ -275,6 +807,27 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
   kontrolü terimi regex'e VARMADAN eliyordu, yani sözlükte kayıtlı ad prompt'a hiç
   girmiyordu. `merge_terms` "zaten kayıtlı mı" kararını da `fold_term` ile verir
   (varyant ikinci satır açmaz, karşılıklar ayrışmaz). **Ayırıcı listesini daraltma.**
+- **ÇOĞUL kaydedilmiş terim tekili de yakalamalı** (`_term_regex(term, cogul_esnek)`):
+  kuyruk eki (`(?:'s|es|s)?`) çoğulu EKLİYOR ama ÇIKARMIYORDU, yani çoğul anahtar
+  tekili ASLA yakalayamıyordu ve kayıt sözlükte durduğu hâlde prompt'a hiç girmiyordu.
+  Ölçülen vaka (2026-08-23): `tyrants -> Tiranlar` kayıtlıyken metinde `tyrant` 22 kez
+  tekil / 2 kez çoğul geçiyordu; `the Tyrant` prompt'a girmediği için model serbestçe
+  "hükümdar" çevirdi. Düzeltme anahtarın SON `s`'ini isteğe bağlı yapar; gerçek
+  sözlükte kapsanan geçiş **14 → 59**. Esneklik **yalnız TÜRKÇE KARŞILIKLI kayıtlarda**
+  açılır (`_terim_metinde`): risk sınıfı İngilizce korunan KİŞİ adlarıdır (`Nephis`
+  → `Nephi`) ve orada yanlış eşleşme sıradan bir sözcüğü İngilizce bıraktırır — pahalı
+  yön. `MIN_COGUL_KOK` kısa kökleri korur, `es` çoğulları bilerek kapsam dışı (fazla
+  soymak gerçek kökü bozar, eksik soymak yalnız fırsat kaçırır). Ölçüm: `s` ile biten
+  53 kaydın 17'sinin kökü metinde geçiyor ve 17'si de meşru tekil/çoğul çifti.
+  **Sözlüğe terim TEKİL yazılmalı** — karşılık da tekil olmalı, yoksa tekil cümlede
+  modele çoğul karşılık dayatılır.
+- **Hiyerarşi basamakları küçük harfli de olsa terimdir** (`SYSTEM_INSTRUCTION`,
+  HİYERARŞİ İSTİSNASI): `detected_terms` ÖLÇÜTÜ "metinde BÜYÜK HARFLE başlayarak
+  adlandıran" diyordu; canavar rütbeleri kaynakta çoğunlukla küçük harfli geçiyor
+  (Shadow Slave 4. bölüm: `monsters` 13 küçük / 1 büyük) ve model onları harfiyen
+  cins isim sayıp hiçbirini sözlüğe yazmadı. İstisna DAR: ad bir DİZİ hâlinde
+  sayılıyorsa ya da bir düzene bağlanıyorsa basamaktır; düzene bağlanmadan geçen
+  sıradan cins isim girmez.
 - **Türkçe ek kuralı prompt'ta TEK ve GENEL madde olmalı**: kural bir zamanlar yalnız
   SÖZLÜK maddesinin altındaydı, `CORE_TERM_HINTS` ile gelen sistem terimlerini
   (level→seviye) kapsamıyordu — "farklı bir seviyeindeydi" (doğrusu: seviyesindeydi)
@@ -292,6 +845,28 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
   `ensureChapterList` ile çekilir ve `loadChapter` sonunda ısıtılır (SW önbelleğine girsin
   diye — çevrimdışı devamın ön koşulu bu). Kuralı tersine çevirme: zincir listedeyse yine
   zincir kazanır, yoksa web'den ilerleyen okuma bozulur.
+- **Bölüm NUMARASI uydurulabilir bir alandır; ARADAN ekleme onu bozar.**
+  `fetch_into_book` ("web'den devam") bir dönem sayfanın KENDİ numarasını yok sayıp
+  kuyruk sayacı (`tail+1`) veriyordu ve her ekleme kuyruğun `next`'ini yeni bölüme
+  çeviriyordu. Sona ekleme için doğru, ARAYA ekleme için yıkıcı: ölçülen gerçek vaka
+  (Shadow Slave 2026-09-02) kuyruk 140'tayken eklenen `chapter-137` 141 numarasını,
+  sonra eklenen `chapter-141` 142'yi aldı; zincir de koptu (140 → 137 → 141) ve
+  okuma sırası kaydı. Numara önceliği artık: açık argüman → **sayfanın kendi
+  numarası** → `tail+1`. Ortadaki adım KOŞULLU — yalnız kitap zaten kaynağın
+  numaralandırmasını izliyorsa (kuyruğun URL'sindeki numara `chapter_no`'ya eşitse).
+  Koşul şart: `fetch_into_book`'un asıl işi PASTE kitabını web'e köprülemek ve orada
+  sayfanın numarası başka bir evrenden gelir (paste kitabın 2. bölümü, sitenin
+  1704'ü). Zincir de yalnız gerçekten kuyruğa eklerken kurulur.
+  Onarım: **`scripts/bolum_sirasi_denetle.py`** (varsayılan KURU çalıştırma,
+  `--uygula` ile yazar; slug verilmezse tüm kitaplar). Üç ayrı denetim:
+  numara (URL ve BAŞLIK **birbiriyle** uyuşup `chapter_no`'dan ayrıldığında —
+  tek kaynağa dayanmak manga sayfalarını ve "Chapter 0" ön sözlerini bozardı),
+  zincir (yalnız AYNI kitapta önbellekli bir bölümü gösteren yanlış bağ; önbellek
+  BOŞLUKLU olabildiği için boş/dışarıyı gösteren bağlantı bozukluk sayılmaz) ve
+  okuma konumu (`current_url` ölçüttür, ad/numara türetilmiş alanlardır).
+  Konumu düzelten yardımcı `library.konum_adini_duzelt` — `upsert_book(
+  update_position=False)` bu iş için KULLANILAMAZ, o var olan satıra bilerek hiç
+  dokunmuyor (`INSERT OR IGNORE`).
 - **slug her şeyin anahtarı**, URL'den türetilir; pipeline cache/glossary'den önce daima
   `resolve_slug` ile kanonikleştirir. Yeni endpoint yazarken bu adımı atlama.
 - Durum dökümanları: `PLAN-dayaniklilik.md` (Faz 5, kısmen sevk edildi — bulk kalıcılığı
@@ -301,10 +876,31 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 
 | Değişken | Zorunlu | Ne işe yarar |
 |---|---|---|
-| `GEMINI_API_KEY` | Evet | Gemini anahtarı (yalnız yeni çeviri için; cache isabeti gerektirmez) |
+| `GEMINI_API_KEY` | Evet | Zincirin BİRİNCİ anahtarı (yalnız yeni çeviri için; cache isabeti gerektirmez) |
+| `GEMINI2_API_KEY` | Hayır | İKİNCİ anahtar: birincinin kotası dolunca (429) aynı MODELDE devralır. Yoksa sessizce atlanır. Ad esnek — `GEMINI_API_KEY_2` / `GEMINI3_API_KEY`… da tanınır, sıra addaki sayıdan gelir. **Kota PROJE başına olduğu için ayrı bir Google Cloud projesinden alınmadıkça hiçbir şey kazandırmaz** |
+| `CLAUDE_API_KEY` | Hayır | Claude halkaları (`claude-haiku-4-5` · `claude-sonnet-5`). **ÜCRETLİ** ve YALNIZ okuyucudan açıkça seçilince kullanılır — ücretsiz zincir asla buraya inmez. `ANTHROPIC_API_KEY` de tanınır (SDK'nın kanonik adı). Yoksa halka sessizce atlanır |
 | `FETCH_CDP_URL` | Hayır | Örn. `http://127.0.0.1:9222` → sert CF için gerçek Chrome'a bağlan |
 | `FETCH_HEADLESS` | Hayır | `0` → görünür pencere (CF'i bir kez elle çözmek için) |
 | `NOVEL_DB_PATH` | Hayır | Test/CI'da DB'yi geçici dosyaya yönlendirir |
+
+`OPENROUTER_API_KEY` · `MISTRAL_API_KEY` · `GROQ_API_KEY` · `CEREBRAS_API_KEY` 2026-09-02'de
+ARTIK OKUNMUYOR (Gemini dışı sağlayıcılar kaldırıldı). `.env`'de kalmaları zararsızdır ama
+hiçbir işe yaramaz.
+
+**Anahtar kapısı ANAHTAR HAVUZUNA bakar** (2026-09-02, `translate.ceviri_anahtari_var_mi`).
+Eskiden `if not api_key` diye sorulup "GEMINI_API_KEY ayarlı değil" hatası veriliyordu; ikinci
+anahtar yalnız `.env`'de durabildiği için bu, pekâlâ çalışabilecek bir kurulumu sebepsiz
+reddederdi. Gemini istemcisi ayrıca TEMBEL kurulur (`translate._gemini_fabrikasi`):
+`_generate_with_fallback` kurulmuş istemci değil FABRİKA alır, istemci ancak gerçekten
+kullanılacağı anda kurulur — böylece hiç inilmeyen bir halka için anahtar zorunlu olmaz.
+Zincirin TAMAMI anahtarsızlıktan düşerse hata mesajı "modeller meşgul" değil "API anahtarı
+yok" der (yanlış teşhis kullanıcıyı beklemeye iterdi).
+
+**Test tuzağı:** `server` importu `.env`i pytest sürecine yüklüyor, bu yüzden "anahtarsız
+reddedilir" testleri anahtar değişkenlerini `translate.gemini_anahtar_degiskenleri()` ile
+TÜRETİP döngüyle `delenv` etmeli. Adları tek tek yazmak, üçüncü bir anahtar eklendiğinde
+testi sessizce geliştiricinin makinesindeki `.env`e bağımlı kılar.
+
 
 `.env` git'e girmez (`.gitignore`); ikinci makineye elle kopyalanır — bkz. `KURULUM.md`
 (Tailscale ile 7/24 sunucu kurulumu ve sorun giderme).
