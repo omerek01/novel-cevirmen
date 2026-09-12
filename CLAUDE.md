@@ -928,6 +928,25 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
   Konumu düzelten yardımcı `library.konum_adini_duzelt` — `upsert_book(
   update_position=False)` bu iş için KULLANILAMAZ, o var olan satıra bilerek hiç
   dokunmuyor (`INSERT OR IGNORE`).
+- **Okuma konumu bir ÜÇLÜDÜR: (url, ad, numara) — ayrı yazılamaz** (2026-09-12).
+  `library.set_position` bir dönem yalnız `current_url` + `current_ratio` +
+  `updated_at` yazıyordu; ad ve numara bir önceki bölümde kalıyordu. Ölçülen vaka:
+  `current_url` 393'ü gösterirken `chapter_no` 391, ikinci kitapta sapma 15 bölüm.
+  Zarar İKİ katmanlı ve ikincisi daha sinsi: `updated_at` de tazelendiği için
+  okuyucunun DOĞRU yerel kaydı (`resolveResume`, `local.ts >= serverTs` ölçütü)
+  "bayat" sayılıp ATILIYOR ve ekrana bayat SUNUCU değeri çiziliyordu — kullanıcı
+  391'deyken ana sayfa "BÖL. 390" diyor, okuyucuya girip çıkınca (yerel ts
+  tazelenince) düzeliyordu. Adı doğru yazan yol (`upsert_book`) devreye girmiyor:
+  indirilmiş bölüm Service Worker önbelleğinden geliyor, `GET /api/chapter`
+  sunucuya HİÇ ulaşmıyor. Ad/numara verilmediğinde davranış bilerek asimetriktir:
+  aynı bölümde kaydırma (url değişmedi) adı KORUR — en sık çağrı budur; bölüm
+  değiştiyse TEMİZLER, çünkü eski adı korumak okuyucuya güvenle YANLIŞ bir numara
+  çizdirir ve NULL'da fiş "SON BÖLÜM"e düşer (eksik bilgi yanlıştan iyidir). Karar
+  TEK bir UPDATE içinde SQL'le verilir (SET sağ tarafları ESKİ satır değerleriyle
+  hesaplandığı için url karşılaştırması aynı deyimde güvenli; SELECT-sonra-yaz
+  TOCTOU açardı). İstemci değerleri `currentChapterNo`/`currentChapterTitle`
+  GLOBAL'lerinden değil konumu yazılan ENTRY'den okur. Eski satırların onarımı:
+  `scripts/bolum_sirasi_denetle.py` (KONUM denetimi). `tests/test_konum_uclusu.py`.
 - **slug her şeyin anahtarı**, URL'den türetilir; pipeline cache/glossary'den önce daima
   `resolve_slug` ile kanonikleştirir. Yeni endpoint yazarken bu adımı atlama.
 - Durum dökümanları: `PLAN-dayaniklilik.md` (Faz 5, kısmen sevk edildi — bulk kalıcılığı
@@ -1005,6 +1024,31 @@ Sunucuya Chromium KURULMADI: düz HTTP yolu yeterli ve 1 GB RAM'de Chromium zate
 zor. Yani tarayıcı yedeği bu sunucuda FİİLEN yok — düz HTTP kapanırsa (site CF'i
 bölümlere yayarsa) ayrı bir çözüm gerekir, `playwright install chromium` tek başına
 yetmeyebilir.
+
+**Dağıtım `git pull`'dur, `scp` DEĞİL** (2026-09-12, kullanıcı kararı). Kod
+`github.com/omerek01/novel-cevirmen` (ÖZEL depo) üzerinden gider; sunucudaki
+`~/novel-cevirmen` gerçek bir çalışma ağacıdır. Sunucu depoya SALT-OKUNUR bir
+**deploy key** ile bağlanır (`~/.ssh/novel-cevirmen-deploy`, `~/.ssh/config`'te
+`github.com` kaydı): sunucuda yazma yetkisi olan bir token durmaz, ve anahtar
+yalnız BU depoyu açar. Erişim `ssh OMEREK@100.75.105.102` (Tailscale; GCP
+anahtarı `~/.ssh/google_compute_engine`).
+
+```bash
+ssh OMEREK@100.75.105.102 'cd ~/novel-cevirmen && git pull && sudo systemctl restart novel-cevirmen'
+```
+
+Üç kural:
+* **Restart'tan ÖNCE koşan toplu çeviri işi var mı bak.** İşler BELLEK-İÇİ
+  (`jobs.py`), restart onları öldürür: `curl -s localhost:8000/api/book/<slug>/job`.
+* **Yalnız `app/web/` değiştiyse restart GEREKMEZ** — statikler her istekte
+  diskten okunuyor. Python değiştiyse gerekir (süreç açılışında yükleniyor).
+  Açılış e2-micro'da ~8 sn sürer; hemen atılan `curl` 000 döner, panik etme.
+* **`cache/`, `.env`, `.venv/` takip EDİLMEZ** (`.gitignore`), yani `git pull`
+  ve hatta `git reset --hard` onlara dokunmaz — takipsiz dosyalar silinmez.
+  Yine de `--hard`'a geçmeden önce `git reset` (MIXED) + `git diff
+  --ignore-cr-at-eol` ile gerçek farkı gör: sunucuya elle konmuş bir düzeltme
+  varsa sessizce kaybolur. (Dosyalar scp ile gittiği için sunucuda CRLF, repoda
+  LF — satır sonunu yok saymazsan HER dosya "değişmiş" görünür.)
 (Tailscale ile 7/24 sunucu kurulumu ve sorun giderme).
 
 ## Test yazımı
