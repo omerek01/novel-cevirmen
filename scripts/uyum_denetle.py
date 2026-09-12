@@ -50,13 +50,23 @@ def denetle(kitap: str | None) -> list[dict]:
     (`glossary.bolumdeki_sozluk`): 200. bölümde kaydedilmiş bir terim 50. bölümün
     prompt'unda yoktu, model onu ihlal edemezdi. Süzmesiz ölçüm en eski bölümlerde
     ihlal sayısını ciddi biçimde şişiriyordu.
+
+    KOŞULLAR bilerek BUGÜNKÜ hâliyle okunur (kökene göre süzülmez): koşullu bir
+    kayıt ölçülemez sınıftır ve "bugün koşullu" olması onu bugün de ölçülemez
+    yapar. Koşulları hiç geçirmemek, doğru çeviriye sahte ihlal yazmak olurdu —
+    üstelik `--uygula` o bayrağı kalıcı olarak DB'ye basar.
     """
     sonuc = []
+    kosul_onbellegi: dict[str, dict[str, str]] = {}
     for bolum in cache.denetim_bolumleri(kitap):
+        slug = bolum["book_slug"]
+        if slug not in kosul_onbellegi:
+            kosul_onbellegi[slug] = glossary.get_kosullar(slug)
         bolum["ihlaller"] = translate.sozluk_ihlalleri(
-            glossary.bolumdeki_sozluk(bolum["book_slug"], bolum["chapter_no"]),
+            glossary.bolumdeki_sozluk(slug, bolum["chapter_no"]),
             bolum["source"],
             bolum["translation"],
+            kosullar=kosul_onbellegi[slug],
         )
         sonuc.append(bolum)
     return sonuc

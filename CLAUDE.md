@@ -391,13 +391,48 @@ kaldı. `translate.sozluk_ihlalleri` çeviriden sonra bunu deterministik olarak 
 (API çağırmaz, bedava koşar); sonuç `chapters.glossary_leaks`'e yazılır ve okuyucuda
 künye rozetinde ⚠ ile çıkar. Ölçüt prompt'a hangi terimlerin gireceğini belirleyen
 ölçütle AYNI sabittendir (`_terim_metinde`); ayrışırlarsa prompt'a giren bir terim
-denetimden kaçardı. OTOMATİK YENİDEN DENEME YOK (kullanıcı kararı): lite'a zaten kota
-tükendiği için düşülmüştü, aynı anda tekrar denemek çoğunlukla boşa giderdi — yeniden
-çeviriyi kullanıcı tetikler. Bayrağı üreten iki nokta var (`_fetch_translate_save` ve
+denetimden kaçardı.
+
+**OTOMATİK ONARIM VAR, TEK TUR** (2026-09-11, kullanıcı kararı — eski "otomatik
+deneme yok" kaydının yerini aldı). Eski karar flash-lite gerekçesiyle alınmıştı
+("lite'a zaten kota tükendiği için düşülmüştü") ve lite 2026-09-09'da zincirden
+çıkınca gerekçe düştü. Tespit tek başına yetmiyordu: bayrak künyeye yazılıp ⚠
+çıkıyor ama çeviri kalıcı önbelleğe BOZUK giriyor ve önbellek isabeti bir daha
+çeviri tetiklemediği için kullanıcı o terimi SONSUZA DEK İngilizce görüyordu.
+Onarım `_kalintiyi_onar` ile AYNI deseni izler: `sozluk_ihlali_paragraflari`
+bozuk paragrafları bulur, `_paragraflari_yeniden_cevir` (iki onarım yolunun ORTAK
+gövdesi) yalnız onları tek turda yeniden gönderir. Bayrak onarımdan SONRA ölçülür;
+künyeye "onarıma rağmen kalan" yazılır.
+
+**Ölçüm artık `translate_chapter`'da, pipeline TAŞIYICI.** `_uyum_denetimi`
+eskiden ölçümü KENDİ yapıyordu ve `kosullar`ı hiç görmüyordu — koşullu kayıtlara
+sahte ihlal yazardı. Denetim hizalamaya İHTİYAÇ DUYMAZ (düz metin karşılaştırması);
+hizalama yalnız ONARIM için şarttır (hangi paragrafın bozuk olduğu ancak öyle
+bilinir). Bayrağı üreten iki nokta var (`_fetch_translate_save` ve
 `fetch_into_book`); künyeye yeni alan eklerken olduğu gibi İKİSİNİ de güncelle.
-Üç sınıf denetim DIŞIDIR: `X -> X` (İngilizce korunan kişi adları), bölümün kaynağında
-geçmeyen kayıtlar, ve karşılığının İÇİNDE kaynağı geçen kayıtlar (`Ore Empire -> Ore
-Empire Krallığı` — doğru çeviri bile deseni tetikler).
+Geriye dönük araç (`scripts/uyum_denetle.py`) AYNI ölçütü kullanmalı ve koşulları
+geçirmelidir — `tests/test_sozluk_ihlal_onarim.py` bunu tel tuzağıyla tutar.
+
+DÖRT sınıf denetim DIŞIDIR: `X -> X` (İngilizce korunan kişi adları), bölümün
+kaynağında geçmeyen kayıtlar, karşılığının İÇİNDE kaynağı geçen kayıtlar
+(`Ore Empire -> Ore Empire Krallığı` — doğru çeviri bile deseni tetikler) ve
+KOŞULLU kayıtlar: koşulun sağlanıp sağlanmadığı deterministik olarak ölçülemez,
+koşulu yok saymak önce sahte bir ⚠ üretir sonra otomatik onarımın DOĞRU bırakılmış
+özel adı zorla Türkçeleştirmesine yol açardı.
+
+**SÖZLÜK, KİŞİ ADI İSTİSNASINI EZER** (2026-09-11, ölçüldü). Arıza: `Saint -> Aziz`
+kayıtlı ve prompt'a giriyordu (`_terim_metinde` üç bölümde de True), buna rağmen
+model terimi bölümden bölüme farklı çeviriyordu — shadow-slave #379/#380'de "Aziz",
+#376/#378/#381'de "Saint". Kök neden MODELDE değil KURALDAYDI: `SYSTEM_INSTRUCTION`
+"İngilizce korunacak TEK sınıf: bir KİŞİYİ ADLANDIRAN ifadeler" diyor ve
+İngilizce-bırakma yasağına "Tek istisna yukarıdaki KİŞİ ADLARI kuralıdır" diye açık
+bir KAÇIŞ KAPISI koyuyordu; sözlüğün o istisnayı ezip ezmediği hiçbir yerde
+yazmıyordu. `Saint` kitapta hem bir rütbe hem bir gölge kölesinin adı olduğu için
+model onu ad gördüğü an kapıdan çıkıyordu. Aynı prompt sistem terimleri için
+önceliği ZATEN açıkça söylüyordu ("SÖZLÜK'te farklı bir karşılık verilmişse SÖZLÜK
+geçerlidir") — çalışan örnekle bozuk örnek arasındaki fark tam buydu. Kural
+kendinden FARKLI karşılığı olan kayıtlara özgüdür; kişi adları sözlükte kendi
+yazımıyla durduğu için (`Sunny -> Sunny`, `merge_names`) onları etkilemez.
 
 Eski bölümler için `scripts/uyum_denetle.py` (varsayılan KURU çalıştırma, `--uygula` ile
 yazar, `--ayrinti` ile ihlalli bölümleri listeler). Ölçütü BUGÜNKÜ sözlük DEĞİL, o bölüm
@@ -594,6 +629,11 @@ Doğrulandı (aynı istekte beş cümle): `Great!` -> Harika · `Great rank` -> 
 * **Koşul karşılığın YERİNE GEÇMEZ**, yanına iliştirilir ve YALNIZ prompt'a çıkar.
   `sozluk_ihlalleri`, `_terim_metinde` ve terim eşleştirme karşılığı olduğu gibi
   görmeye devam eder — koşulu karşılığın içine gömmek bu üçünü birden bozardı.
+  AMA koşullu KAYIT uyum denetiminin DIŞINDADIR (2026-09-11): karşılık yalnız o
+  bağlamda geçerli olduğu için "uyulmadı" ölçülemez. Ölçüt tek yerde durur
+  (`translate._denetlenebilir_terimler`) ve hem bayrağı hem otomatik onarımın
+  hedefini o belirler; ayrışırlarsa onarım denetimin görmediği sahte bir ihlali
+  "düzeltmeye" kalkar ve doğru bırakılmış özel adı bozar.
 * **`set_term` koşulu KORUR, `set_kosul` yazar/temizler.** İkisinin "verilmedi"
   anlamı zıttır: okuyucunun çevrimdışı kuyruğu yalnız `{source, target}` gönderir
   ve `set_term`'ün koşulu silmesi, kullanıcının sıradan bir karşılık düzeltmesinin

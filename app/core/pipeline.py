@@ -189,7 +189,7 @@ def _sozluge_isle(
     return eklenen
 
 
-def _uyum_denetimi(prompt_sozlugu: dict[str, str], veri: dict) -> dict[str, str]:
+def _uyum_denetimi(veri: dict) -> dict[str, str]:
     """Çeviri, prompt'ta KURAL olarak verilen sözlüğe fiilen uydu mu?
 
     Ölçülen sebep (2026-08-30, Shadow Slave'in önbellekteki 110 bölümü): zincirin
@@ -203,13 +203,16 @@ def _uyum_denetimi(prompt_sozlugu: dict[str, str], veri: dict) -> dict[str, str]
     terimlerin karşılığını model kendi seçti, ona uymadı diye suçlamak dairesel
     olurdu. Model yalnız kendisine KURAL olarak verilen karşılıktan sorumludur.
 
-    Otomatik yeniden deneme YOK (kullanıcı kararı): lite'a zaten kota tükendiği
-    için düşülmüştü, aynı anda tekrar denemek çoğunlukla boşa giderdi. Bayrak
-    künyeye yazılır, yeniden çeviriyi kullanıcı tetikler.
+    Ölçüm BURADA YAPILMAZ, `translate_chapter`'dan alınır. İkinci bir kopya
+    yazmak bu projede defalarca ayrışma üretti (künye alanları, motor adı) ve
+    burada somut bir arızası var: pipeline `kosullar`ı görmüyor, yani KOŞULLU
+    bir kayıt (`Saint -> Aziz [KOŞUL: rütbe anlamında]`) burada sahte ihlal
+    sayılır — üstelik çeviri yolu onu onarımdan geçirip temiz ilan etmişken.
+
+    Bayrak artık çeviri yolunda OTOMATİK onarımdan (tek tur, yalnız bozuk
+    paragraflar) SONRA ölçülür; buraya ulaşan değer "onarıma rağmen kalan"dır.
     """
-    return _translate_mod.sozluk_ihlalleri(
-        prompt_sozlugu, veri.get("source"), veri.get("translation")
-    )
+    return veri.get("glossary_leaks") or {}
 
 
 def _fetch_translate_save(
@@ -368,7 +371,7 @@ def _do_fetch_translate_save(
     # birlikte cache'e yazılıyor, böylece bölüm ikinci açılışta (önbellek isabeti)
     # künyesini kaybetmiyor.
     eklenen = _sozluge_isle(book_slug, result, chapter.get("chapter_no"))
-    ihlaller = _uyum_denetimi(book_glossary, result)
+    ihlaller = _uyum_denetimi(result)
 
     payload = {
         "title": chapter["title"],
@@ -546,7 +549,7 @@ def fetch_into_book(
         # Uyum bayrağı da `_fetch_translate_save` ile AYNI: künyeyi üreten dört
         # noktadan biri eksik kalırsa o yoldan gelen bölüm sessizce denetimsiz olur
         # — `model` alanında tam bu hata yaşandı.
-        "glossary_leaks": _uyum_denetimi(book_glossary, result),
+        "glossary_leaks": _uyum_denetimi(result),
         # Kalıntı bayrağı da `_fetch_translate_save` ile AYNI: bayrağı üreten
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.

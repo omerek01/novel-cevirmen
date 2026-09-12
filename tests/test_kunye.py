@@ -226,12 +226,19 @@ def test_temiz_yeniden_ceviri_bayragi_dusurur():
 
 
 def test_payload_sozluk_ihlallerini_tasir(monkeypatch):
+    """Bayrağı ÖLÇEN yer `translate_chapter`, TAŞIYAN yer pipeline.
+
+    Ölçüm oraya taşındı çünkü onarım orada yapılabiliyor (paragraf hizalaması
+    elde) ve `kosullar` orada biliniyor — pipeline koşulu hiç görmediği için
+    ikinci bir kopya koşullu kayıtlara sahte ihlal yazardı.
+    """
     glossary.merge_terms("kitap", {"Saint": "Aziz"}, "manuel", 1)
     _pipeline_kur(monkeypatch, {
         "translation": "Saint elini kaldırdı.",
         "source": "The Saint raised his hand.",
         "chunk_count": 1, "engine": "gemini", "model": "gemini-3.5-flash-lite",
         "detected_names": [], "detected_terms": {},
+        "glossary_leaks": {"Saint": "Aziz"},
     })
     payload = pipeline.get_or_translate("g5", "anahtar")
     assert payload["glossary_leaks"] == {"Saint": "Aziz"}
@@ -246,20 +253,30 @@ def test_uyumlu_ceviride_bayrak_bos(monkeypatch):
         "source": "The Saint raised his hand.",
         "chunk_count": 1, "engine": "gemini", "model": "gemini-3.6-flash",
         "detected_names": [], "detected_terms": {},
+        "glossary_leaks": {},
     })
     assert pipeline.get_or_translate("g6", "anahtar")["glossary_leaks"] == {}
 
 
-def test_hizalanmamis_bolumde_denetim_olcum_yapmaz(monkeypatch):
-    """`source` None (hizalama tutmadı) → kıyaslanacak İngilizce metin yok. Denetim
-    ölçüm yapamaz; "ihlal yok" demek yanlış olmaz ama uydurmamalı: boş döner."""
+def test_hizalanmamis_bolumde_de_bayrak_tasinir(monkeypatch):
+    """`source` None (hizalama tutmadı) ama bayrak yine de taşınmalı.
+
+    Eski kısıt bir BİLGİ EKSİKLİĞİNDEN geliyordu, ilkeden değil: pipeline'a
+    yalnız hizalı `source` ulaşıyordu, ham İngilizce metin ulaşmıyordu. Ölçüm
+    `translate_chapter` içine taşınınca ham metin (`text`) elde oldu — denetim
+    düz metin karşılaştırmasıdır, hizalamaya İHTİYAÇ DUYMAZ. (Hizalama yalnız
+    ONARIM için şart: hangi paragrafın bozuk olduğu ancak öyle bilinir.)
+    Bayrağı burada düşürmek, kullanıcının bozuk bölümü hiçbir ⚠ görmeden
+    okuması demekti.
+    """
     glossary.merge_terms("kitap", {"Saint": "Aziz"}, "manuel", 1)
     _pipeline_kur(monkeypatch, {
         "translation": "Saint elini kaldırdı.", "source": None,
         "chunk_count": 1, "engine": "gemini", "model": "gemini-3.5-flash-lite",
         "detected_names": [], "detected_terms": {},
+        "glossary_leaks": {"Saint": "Aziz"},
     })
-    assert pipeline.get_or_translate("g7", "anahtar")["glossary_leaks"] == {}
+    assert pipeline.get_or_translate("g7", "anahtar")["glossary_leaks"] == {"Saint": "Aziz"}
 
 
 def test_denetim_bolumleri_yalniz_kaynakli_satirlari_verir():
@@ -310,6 +327,7 @@ def test_url_ile_eklenen_bolum_de_denetlenir(monkeypatch):
         "source": "The Saint raised his hand.",
         "chunk_count": 1, "engine": "gemini", "model": "gemini-3.5-flash-lite",
         "detected_names": [], "detected_terms": {},
+        "glossary_leaks": {"Saint": "Aziz"},
     })
     payload = pipeline.fetch_into_book("https://site/b9", "kitap", "anahtar")
     assert payload["glossary_leaks"] == {"Saint": "Aziz"}

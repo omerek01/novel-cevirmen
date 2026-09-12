@@ -672,6 +672,17 @@ SYSTEM_INSTRUCTION = (
     "kelimeler sözlüğe DAHİL DEĞİLDİR: sözlükte 'Tier -> Kademe' varsa 'level' "
     "yine 'seviye' olarak çevrilir, 'kademe' DEĞİL.\n"
     "  * Karşılık cümlede ek almalıysa Türkçe ekini DOĞRU getir (aşağıdaki EK KURALI).\n"
+    # Ölçülen arıza (2026-09-11, shadow-slave #376/#378/#380/#381): `Saint -> Aziz`
+    # kayıtlı ve prompt'a giriyordu, model yine de bölümden bölüme farklı çeviriyordu.
+    # `Saint` metinde hem bir rütbe hem bir varlığın adı olarak geçiyor; model onu
+    # ad gördüğü an "İngilizce korunacak TEK sınıf" kuralına sığınıyordu. Sözlüğün
+    # o istisnayı EZİP EZMEDİĞİ hiçbir yerde yazmıyordu — oysa aynı prompt sistem
+    # terimleri için önceliği açıkça söylüyor. Boşluk KURALDAYDI, modelde değil.
+    "  * Sözlükte KENDİNDEN FARKLI bir karşılıkla kayıtlı bir ad, bir KİŞİYİ ya da "
+    "bir varlığı adlandırıyor GİBİ GÖRÜNSE BİLE sözlük karşılığıyla çevrilir; "
+    "yukarıdaki KİŞİ ADLARI istisnası onu kurtarmaz. İngilizce kalacak adlar "
+    "sözlükte kendi yazımıyla durur (Sunny -> Sunny); karşılık kaynaktan "
+    "farklıysa o ad bilerek Türkçeleştirilmiştir.\n"
     # Aynı İngilizce sözcüğün bağlama göre iki karşılığı olabiliyor (ölçülen vaka:
     # `Great` hem Kabus Yaratığı rütbesi hem gündelik "Great!" ünlemi). Koşulsuz
     # bir kayıt modele "her yerde bunu yaz" der ve ünlemleri de bozardı.
@@ -843,6 +854,18 @@ def translate_chapter(
                 client_factory, models, tr_paras, en_paras, kalinti,
                 glossary, used_models, new_names, new_terms, kosullar,
             )
+        # SÖZLÜK ihlalini de onar. Tespit tek başına yetmiyordu: bayrak künyeye
+        # yazılıp okuyucuda ⚠ çıkıyor ama çeviri kalıcı önbelleğe bozuk giriyor
+        # ve önbellek isabeti bir daha çeviri tetiklemediği için kullanıcı o
+        # terimi SONSUZA DEK İngilizce görüyordu (shadow-slave #376/#378/#381).
+        # Kalıntı onarımından SONRA koşar: o tur paragrafı zaten yenilemiş
+        # olabilir, önce ölçmek boşa bir istek attırırdı.
+        ihlalli = sozluk_ihlali_paragraflari(glossary, tr_paras, en_paras, kosullar)
+        if ihlalli:
+            _paragraflari_yeniden_cevir(
+                client_factory, models, tr_paras, en_paras, sorted(ihlalli),
+                glossary, used_models, new_names, new_terms, kosullar,
+            )
 
     new_terms = ayikla_terim_anahtarlari(new_terms, text)
     translation = "\n\n".join(tr_paras)
@@ -864,6 +887,17 @@ def translate_chapter(
         # daha asla çeviri tetiklemeyecek bozuk bir önbellek satırıyla kalması
         # demekti.
         "ingilizce_kalinti": kalinti,
+        # Onarımdan SONRA hâlâ sözlüğe uymayan terimler. Ölçüt bilerek BÖLÜM
+        # geneli ve hizalamadan BAĞIMSIZ: onarım hizalama ister (hangi paragraf
+        # bozuk?), denetim istemez (düz metin karşılaştırması). Hizalama
+        # tutmadığında bayrağı düşürmek, kullanıcının bozuk bir bölümü hiçbir
+        # uyarı görmeden okuması demekti.
+        "glossary_leaks": sozluk_ihlalleri(
+            glossary,
+            "\n\n".join(en_paras) if aligned else text,
+            translation,
+            kosullar,
+        ),
         "chunk_count": len(chunks),
         # MOTOR fiilen çeviren model(ler)den türetilir. Sabit "gemini" yazmak,
         # Mistral zincirin ilk halkası olduğundan doğrudan yanlış bilgiydi:
@@ -1301,10 +1335,61 @@ def _terim_metinde(source: str, target: str, text: str) -> bool:
     return any(not m.group(0).islower() for m in desen.finditer(text))
 
 
+def _denetlenebilir_terimler(
+    glossary: dict[str, str] | None,
+    kosullar: dict[str, str] | None,
+):
+    """İhlali ÖLÇÜLEBİLEN sözlük kayıtları (kaynak, karşılık) olarak akar.
+
+    Ölçüt TEK yerde durur: denetim (`sozluk_ihlalleri`) ile onarımın hedefini
+    seçen tespit (`sozluk_ihlali_paragraflari`) ayrışırsa, onarım denetimin
+    görmediği bir "ihlali" düzeltmeye kalkar ve doğru çeviriyi bozar.
+    """
+    for source, target in (glossary or {}).items():
+        if not source or not target:
+            continue
+        # KOŞULLU kayıt ölçülemez: karşılık YALNIZ o bağlamda geçerlidir ve
+        # koşulun sağlanıp sağlanmadığı deterministik olarak bilinemez. Gerçek
+        # vaka (shadow-slave): `Saint -> Aziz [KOŞUL: rütbe anlamında]` kayıtlı
+        # iken terim gölge kölesinin ADI olarak geçip İngilizce kaldığında bu
+        # DOĞRU çeviridir — koşulu yok sayan denetim sahte bir ⚠ üretir ve
+        # otomatik onarım özel adı zorla Türkçeleştirirdi.
+        if (kosullar or {}).get(source, "").strip():
+            continue
+        if _ingilizce_korunan(source, target):
+            continue
+        if _terim_metinde(source, target, target):
+            continue  # karşılık kaynağı içeriyor: ölçülemez, sahte ihlal üretme
+        yield source, target
+
+
+def sozluk_ihlali_paragraflari(
+    glossary: dict[str, str] | None,
+    tr_paras: list[str],
+    en_paras: list[str],
+    kosullar: dict[str, str] | None = None,
+) -> dict[int, dict[str, str]]:
+    """İhlalin HANGİ paragraflarda olduğunu bulur: {indeks: {kaynak: karşılık}}.
+
+    Onarımın ön koşulu: hizalama tuttuğunda i. Türkçe paragraf i. İngilizce
+    paragrafa karşılık gelir, yani bozuk paragraf TAM olarak bilinir ve bölümün
+    tamamı değil yalnız o paragraflar yeniden çevrilir.
+    """
+    if not glossary or not tr_paras or not en_paras:
+        return {}
+    out: dict[int, dict[str, str]] = {}
+    for i, (tr, en) in enumerate(zip(tr_paras, en_paras)):
+        ihlal = sozluk_ihlalleri(glossary, en, tr, kosullar)
+        if ihlal:
+            out[i] = ihlal
+    return out
+
+
 def sozluk_ihlalleri(
     glossary: dict[str, str] | None,
     kaynak: str | None,
     ceviri: str | None,
+    kosullar: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Türkçe karşılığı kayıtlı olduğu hâlde çeviride İNGİLİZCE kalmış terimler.
 
@@ -1319,24 +1404,20 @@ def sozluk_ihlalleri(
     Ölçüt, prompt'a hangi terimlerin girdiğini belirleyen ölçütle AYNI
     (`_terim_metinde`); ayrışırlarsa prompt'a giren bir terim denetimden kaçardı.
 
-    Üç sınıf denetim dışıdır:
+    DÖRT sınıf denetim dışıdır:
       * `X -> X` (İngilizce korunan karakter adları) — İngilizce kalmak ZORUNDA
       * bu bölümün kaynağında hiç geçmeyen kayıtlar
       * karşılığının İÇİNDE kaynağı geçen kayıtlar (`Ore Empire -> Ore Empire
         Krallığı`) — doğru çeviri bile deseni tetikler, ölçülemez
+      * KOŞULLU kayıtlar (`[KOŞUL: ...]`) — karşılık yalnız o bağlamda geçerli,
+        koşulun sağlanıp sağlanmadığı deterministik olarak ölçülemez
 
     Döner: kaçan terimlerin {kaynak: karşılık} eşlemesi (boş = uyumlu).
     """
     if not glossary or not kaynak or not ceviri:
         return {}
     ihlal: dict[str, str] = {}
-    for source, target in glossary.items():
-        if not source or not target:
-            continue
-        if _ingilizce_korunan(source, target):
-            continue
-        if _terim_metinde(source, target, target):
-            continue  # karşılık kaynağı içeriyor: ölçülemez, sahte ihlal üretme
+    for source, target in _denetlenebilir_terimler(glossary, kosullar):
         if not _terim_metinde(source, target, kaynak):
             continue
         if _terim_metinde(source, target, ceviri):
@@ -1560,10 +1641,38 @@ def _kalintiyi_onar(
     istek onu çoğunlukla düzeltir; düzeltmiyorsa döngü kurmak maliyeti katlar.
     Onarılamayan sızıntı bayrak olarak yukarı taşınır ve okuyucuda görünür.
     """
-    indeksler = sorted(kalinti)
+    if not _paragraflari_yeniden_cevir(
+        client_factory, models, tr_paras, en_paras, sorted(kalinti),
+        glossary, used_models, new_names, new_terms, kosullar,
+    ):
+        return kalinti
+    return ingilizce_kalinti(tr_paras, en_paras, glossary)
+
+
+def _paragraflari_yeniden_cevir(
+    client_factory,
+    models: tuple[str, ...],
+    tr_paras: list[str],
+    en_paras: list[str],
+    indeksler: list[int],
+    glossary: dict[str, str],
+    used_models: dict[str, None],
+    new_names: set[str],
+    new_terms: dict[str, str],
+    kosullar: dict[str, str] | None = None,
+) -> bool:
+    """Verilen paragrafları TEK turda yeniden çevirir; `tr_paras` YERİNDE güncellenir.
+
+    İki onarım yolunun (İngilizce kalıntı, sözlük ihlali) ORTAK gövdesi. Aynı
+    işi iki yerde yazmak bu projede defalarca ayrışmayla sonuçlandı (künye
+    alanları, motor adı): biri künyeye modeli yazmayı unutsa rozet onaran
+    halkayı gizlerdi. Ölçüt her yolun KENDİsinde kalır, tur mekaniği burada.
+
+    Döner: tur uygulandı mı (False = çağıran ölçtüğü hatayı olduğu gibi tutar).
+    """
     hedef = [en_paras[i] for i in indeksler]
-    # Bağlam: ilk sızıntıdan ÖNCEKİ Türkçe paragraf. Bağlamsız çevrilen bir
-    # replik hitap düzeyini (sen/siz) ve kipi bölümün geri kalanından koparır.
+    # Bağlam: ilk bozuk paragraftan ÖNCEKİ Türkçe paragraf. Bağlamsız çevrilen
+    # bir replik hitap düzeyini (sen/siz) ve kipi bölümün geri kalanından koparır.
     onceki = tr_paras[indeksler[0] - 1] if indeksler[0] else ""
     try:
         sonuc = _translate_chunk(
@@ -1571,13 +1680,13 @@ def _kalintiyi_onar(
             _last_sentences(onceki, 2), kosullar,
         )
     except Exception:
-        # Onarım BEST-EFFORT: bölüm zaten çevrildi, yalnız bir paragrafı sızdı.
+        # Onarım BEST-EFFORT: bölüm zaten çevrildi, yalnız bir paragrafı bozuk.
         # Hatayı yukarı sızdırmak BAŞARILI bir çeviriyi tümden kaybettirirdi.
-        return kalinti
+        return False
 
     yeni = _split_by_markers(sonuc.get("translation") or "", len(hedef))
     if yeni is None:
-        return kalinti
+        return False
     if sonuc.get("model"):
         used_models[sonuc["model"]] = None
     for ad in sonuc.get("detected_names") or []:
@@ -1589,7 +1698,7 @@ def _kalintiyi_onar(
     for sira, i in enumerate(indeksler):
         if yeni[sira].strip():
             tr_paras[i] = yeni[sira]
-    return ingilizce_kalinti(tr_paras, en_paras, glossary)
+    return True
 
 
 def _relevant_glossary(glossary: dict[str, str], text: str) -> dict[str, str]:
