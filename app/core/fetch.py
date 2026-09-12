@@ -6,9 +6,10 @@ import re
 import threading
 import time
 from pathlib import Path
-from urllib.parse import urljoin, urlparse
+from urllib.parse import unquote, urljoin, urlparse
 
 from bs4 import BeautifulSoup
+from curl_cffi import requests as _curl
 from playwright.sync_api import TimeoutError as PlaywrightTimeout
 from playwright.sync_api import sync_playwright
 
@@ -120,6 +121,25 @@ LAUNCH_ARGS = [
     "--no-sandbox",
     "--disable-dev-shm-usage",
 ]
+
+# Roman sayfasında İÇERİK DIŞINDA kalan ağır kaynaklar. Proxy GB başına
+# ücretlendirildiği için bunları indirmek doğrudan para yakar: bölüm başına
+# ~2 MB yerine ~300 KB (sitenin reklamları, logosu, fontları). Koddan yalnız
+# `site["content"]` seçicisindeki metin alınıyor, hiçbiri kullanılmıyor; kapak
+# bile etkilenmez, `_kapak_adresi` HTML'den yalnız ADRESİ okur.
+#
+# KARA liste, beyaz liste DEĞİL: tanımadığımız bir kaynak türü sayfayı
+# bozmasın. `script` ve `stylesheet` BURAYA EKLENMEZ — Cloudflare challenge'ı
+# JavaScript ile çözülüyor, script kesilirse sayfa hiç açılmaz.
+ENGELLENEN_KAYNAKLAR = {"image", "media", "font"}
+
+
+def _kaynak_engelle(route) -> None:
+    """Ağır kaynakları iptal eder, kalan her şeyi geçirir."""
+    if route.request.resource_type in ENGELLENEN_KAYNAKLAR:
+        route.abort()
+    else:
+        route.continue_()
 
 # "Just a moment…" / Turnstile bekleme sayfası başlık imzaları.
 CF_CHALLENGE_TITLES = ("just a moment", "attention required", "checking your browser")
@@ -294,34 +314,172 @@ _CDP_SOLVE_HINT = (
 def _fetch_locked(url: str, headless: bool, timeout_ms: int) -> dict:
     site = _site_for(url)
     host = urlparse(url).hostname or "kaynak site"
-    # FETCH_CDP_URL ayarlıysa önce kullanıcının elle başlattığı gerçek Chrome'a (CDP)
+    # SIRA: düz HTTP → CDP → paket Chromium. Her katman başarısızlıkta None döner
+    # ve bir alttakine düşülür; hiçbiri istisna fırlatmaz (fırlatsa alttaki yol
+    # hiç denenmezdi).
+    html = _fetch_via_http(url, site, timeout_ms)
+    # FETCH_CDP_URL ayarlıysa kullanıcının elle başlattığı gerçek Chrome'a (CDP)
     # bağlanmayı dene — otomasyon bayrakları olmadığı için Cloudflare onu insan kabul
     # eder. Bağlanamazsa (Chrome açık değil) None döner → normal paket-Chromium akışına
     # düşülür. Böylece env ayarlı olsa bile telefon/normal kullanım hiçbir zaman bozulmaz.
-    cdp_url = os.getenv("FETCH_CDP_URL", "").strip()
-    html = None
-    if cdp_url:
-        html = _fetch_via_cdp(cdp_url, url, site, host, timeout_ms)
+    if html is None:
+        cdp_url = os.getenv("FETCH_CDP_URL", "").strip()
+        if cdp_url:
+            html = _fetch_via_cdp(cdp_url, url, site, host, timeout_ms)
     if html is None:
         html = _fetch_via_launch(url, headless, site, host, timeout_ms)
     return _parse(html, url, site)
+
+
+# Düz HTTP yolunun "içerik geldi mi" eşiği (karakter). Ölçülen en kısa gerçek
+# bölüm 5.789 karakterdi; eşik bilerek çok altta tutuldu çünkü yanlış NEGATİF
+# yalnız yavaşlatır (tarayıcı yedeği devreye girer, sonuç yine doğru gelir),
+# yanlış POZİTİF ise kullanıcıya boş bölüm okutur.
+MIN_HTTP_ICERIK = 500
+
+
+def _requests_proxy() -> dict[str, str] | None:
+    """`FETCH_PROXY` → requests proxy sözlüğü; ayarsızsa None.
+
+    Playwright'ınkinden (`_proxy_ayari`) ayrı, çünkü biçimler farklı: requests
+    kimlik bilgisini URL'in İÇİNDE ister, Playwright ayrı alanlarda. İkisi de
+    AYNI ortam değişkenini okur, yani kullanıcı tek yer doldurur.
+    """
+    ham = os.getenv("FETCH_PROXY", "").strip()
+    return {"http": ham, "https": ham} if ham else None
+
+
+def _http_get(url: str, headers: dict, proxies: dict | None, timeout: float):
+    """Chrome'un TLS parmak izini TAKLİT ederek HTTP GET yapar.
+
+    `impersonate` süsleme değil, bu yolun çalışmasının TEK şartı. Ölçüm
+    (2026-09-11, GCP e2-micro / Ubuntu 24.04): düz `requests` ile freewebnovel
+    **403 + "just a moment"** döndü. Aynı anda EV makinesinden (Windows) aynı
+    URL 200 veriyordu, yani site erişilebilirdi.
+
+    Suçlu IP DEĞİLDİ: beş ayrı ülkeden beş residential proxy IP'si denendi,
+    beşi de 403 verdi (0/5). Fark TLS katmanındaydı — Linux OpenSSL'in ürettiği
+    JA3 imzası Cloudflare tarafından reddediliyor. `curl_cffi` Chrome'un TLS
+    imzasını taklit edince sunucudan da 200 geldi, üstelik proxy OLMADAN.
+
+    Bu yüzden `impersonate` kaldırılırsa sunucuda çekim TÜMDEN durur;
+    `tests/test_fetch_duz_http.py` bunu tel tuzağıyla tutar.
+    """
+    return _curl.get(
+        url,
+        headers=headers,
+        proxies=proxies,
+        timeout=timeout,
+        impersonate="chrome",
+    )
+
+
+def _icerik_var_mi(html: str, site: dict) -> bool:
+    """Sayfada gerçek bölüm metni var mı (yoksa yedek yola düşülmeli).
+
+    Durum kodu TEK BAŞINA ölçüt değildir: Cloudflare'in "Just a moment..."
+    bekleme sayfası da 200 dönebilir ve o sayfada içerik seçicisi boştur.
+    `_parse` ile aynı ayrıştırıcıyı (`html.parser`) kullanır; ayrışırlarsa bu
+    yol "içerik var" derken `_parse` bulamayabilirdi.
+    """
+    try:
+        dugum = BeautifulSoup(html, "html.parser").select_one(site["content"])
+    except Exception:
+        return False
+    return dugum is not None and len(dugum.get_text(" ", strip=True)) >= MIN_HTTP_ICERIK
+
+
+def _fetch_via_http(url: str, site: dict, timeout_ms: int) -> str | None:
+    """Bölümü TARAYICISIZ, düz HTTP ile çeker. Başarısızsa None (yedeğe düşülür).
+
+    Ölçüm (2026-09-11, 5 kitap x 12 bölüm, bölüm 4'ten 1880'e): hepsi HTTP 200
+    döndü ve ayrıştırılan metin önbellektekiyle BİREBİR aynı çıktı. Süre 1-8 sn;
+    aynı bölüm Playwright'la 68 sn sürüyor ve çoğu zaman challenge'a takılıyordu.
+    Sebep: Cloudflare koruması ANA SAYFADA var, BÖLÜM sayfalarında yok.
+
+    Kazanç yalnız hız değil — bu yol bulut sunucuda Chromium'u tümden gereksiz
+    kılıyor. Tarayıcı yolu yine de SİLİNMEZ: site korumayı bölümlere yayarsa
+    akış kendiliğinden oraya düşer.
+
+    `FETCH_HTTP_FIRST=0` acil çıkıştır: yol bozulursa kod değişmeden kapatılır.
+    """
+    if os.getenv("FETCH_HTTP_FIRST", "1").strip() == "0":
+        return None
+    try:
+        resp = _http_get(
+            url,
+            headers={
+                "User-Agent": USER_AGENT,
+                "Accept-Language": "en-US,en;q=0.9",
+            },
+            proxies=_requests_proxy(),
+            timeout=timeout_ms / 1000,
+        )
+    except Exception:
+        # BEST-EFFORT: hata yukarı sızarsa tarayıcı yedeği hiç denenmezdi.
+        return None
+    if resp.status_code != 200:
+        return None
+    return resp.text if _icerik_var_mi(resp.text, site) else None
+
+
+def _proxy_ayari() -> dict | None:
+    """`FETCH_PROXY` → Playwright proxy sözlüğü; ayarsızsa None.
+
+    Bulut sunucuda çekim residential proxy üzerinden çıkmak ZORUNDA: Cloudflare
+    veri merkezi ASN'lerini otomatik en yüksek risk skoruna alıyor ve stealth
+    ayarları bunu kurtarmıyor (ölçüm: VPS IP'sinde challenge'ların ~%5'i
+    geçiliyor). Ev makinesinde değişken boştur, akış doğrudan çıkar — yani bu
+    özellik varsayılan davranışı DEĞİŞTİRMEZ.
+
+    Biçim: `http://kullanici:parola@host:port`. Kimlik bilgisi AYRI alanlara
+    ayrıştırılır çünkü Playwright `server` içine gömülmüş kullanıcı/parolayı
+    YOK SAYAR; URL'de bırakılırsa kimlik doğrulaması sessizce başarısız olur ve
+    arıza "Cloudflare geçilemedi" kılığına girip yanlış yerde aranır.
+    """
+    ham = os.getenv("FETCH_PROXY", "").strip()
+    if not ham:
+        return None
+    parca = urlparse(ham)
+    ayar: dict[str, str] = {
+        "server": f"{parca.scheme}://{parca.hostname}:{parca.port}"
+    }
+    if parca.username:
+        ayar["username"] = unquote(parca.username)
+    if parca.password:
+        ayar["password"] = unquote(parca.password)
+    return ayar
+
+
+def _baglam_ac(p, headless: bool):
+    """Kalıcı profille Chromium bağlamı açar — çekim ve clearance için ORTAK.
+
+    İki çağıran aynı parametre bloğunu ayrı ayrı taşıyordu. Proxy'yi ikisine
+    ayrı eklemek, birinin unutulması riskini taşır: clearance yolunda
+    unutulursa Cloudflare cookie'si proxy DIŞINDAN, yani başka bir IP'yle
+    alınıp kalıcı profile yazılır ve sonraki proxy'li çekimlerde sessizce
+    reddedilir — arıza proxy'de değil cookie'de olur, teşhisi zordur.
+    """
+    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
+    context = p.chromium.launch_persistent_context(
+        user_data_dir=str(PROFILE_DIR),
+        headless=headless,
+        user_agent=USER_AGENT,
+        locale="en-US",
+        viewport={"width": 1280, "height": 800},
+        args=LAUNCH_ARGS,
+        proxy=_proxy_ayari(),
+    )
+    context.add_init_script(STEALTH_JS)  # tüm sayfalara, goto'dan önce
+    return context
 
 
 def _fetch_via_launch(
     url: str, headless: bool, site: dict, host: str, timeout_ms: int
 ) -> str:
     """Paket Chromium'u kalıcı profille başlatıp sayfayı çeker (varsayılan/sabah akışı)."""
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
-            headless=headless,
-            user_agent=USER_AGENT,
-            locale="en-US",
-            viewport={"width": 1280, "height": 800},
-            args=LAUNCH_ARGS,
-        )
-        context.add_init_script(STEALTH_JS)  # tüm sayfalara, goto'dan önce
+        context = _baglam_ac(p, headless)
         page = context.pages[0] if context.pages else context.new_page()
         try:
             return _extract_html(page, url, site, host, timeout_ms, _LAUNCH_SOLVE_HINT)
@@ -333,17 +491,8 @@ def _refresh_clearance_via_launch(
     url: str, headless: bool, host: str, timeout_ms: int
 ) -> None:
     """Paket Chromium kalıcı profilini açıp hafif sayfa ziyareti yapar."""
-    PROFILE_DIR.mkdir(parents=True, exist_ok=True)
     with sync_playwright() as p:
-        context = p.chromium.launch_persistent_context(
-            user_data_dir=str(PROFILE_DIR),
-            headless=headless,
-            user_agent=USER_AGENT,
-            locale="en-US",
-            viewport={"width": 1280, "height": 800},
-            args=LAUNCH_ARGS,
-        )
-        context.add_init_script(STEALTH_JS)
+        context = _baglam_ac(p, headless)
         page = context.pages[0] if context.pages else context.new_page()
         try:
             _visit_clearance_page(page, url, host, timeout_ms, _LAUNCH_SOLVE_HINT)
@@ -431,6 +580,17 @@ def _extract_html(
     Hata semantiği: 52x origin → FetchError; challenge → FetchError(solve_hint);
     içerik gelmedi/yavaş → _Transient (yeniden denenebilir).
     """
+    # Kaynak engelleme YALNIZ roman yolunda: bu fonksiyondan hem launch hem CDP
+    # akışı geçer, manga (`manga_fetch.py`) geçmez — orada sayfa görselleri asıl
+    # içeriktir. Route `goto`'dan ÖNCE kurulmalı, sonra kurulursa ilk isteğin
+    # kaynakları engellemeden iner.
+    #
+    # Varsayılan KAPALI: Cloudflare'in görsel bileşenleri engellemeden
+    # etkilenebilir ve ev makinesinde trafiğin maliyeti yok. Sunucuda açılır;
+    # doğrulama sırası önce proxy'yi TEK BAŞINA sınar, böylece arıza çıkarsa
+    # suçlunun hangisi olduğu bilinir.
+    if os.getenv("FETCH_BLOCK_ASSETS", "").strip() == "1":
+        page.route("**/*", _kaynak_engelle)
     try:
         resp = page.goto(url, wait_until="domcontentloaded", timeout=timeout_ms)
     except PlaywrightTimeout as exc:
