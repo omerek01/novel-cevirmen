@@ -232,6 +232,11 @@ class MergeRequest(BaseModel):
 class PositionRequest(BaseModel):
     url: str
     ratio: float
+    # Konum bir ÜÇLÜ: (url, ad, numara). Ad/numara OPSİYONEL — önbellekteki eski
+    # bir app.js yalnız (url, ratio) gönderir ve 422 ile reddedilmemeli; sunucu o
+    # durumda bayat adı temizler (bkz. library.set_position).
+    title: str | None = None
+    chapter_no: int | None = None
 
 
 class BulkRequest(BaseModel):
@@ -560,8 +565,12 @@ def set_book_status(slug: str, req: StatusRequest) -> dict:
 
 @app.post("/api/book/{slug}/position")
 def set_position(slug: str, req: PositionRequest) -> dict:
-    """Bölüm-içi okuma oranını (0..1) kaydet (cihazlar arası paylaşılır)."""
-    library.set_position(slug, req.url, req.ratio)
+    """Okuma konumunu kaydet (cihazlar arası paylaşılır): url + oran + ad/numara.
+
+    Ad ve numara URL ile BİRLİKTE gelir; ayrı yazılırlarsa kütüphane fişi okunan
+    bölümden geride bir numara gösterir (bkz. library.set_position).
+    """
+    library.set_position(slug, req.url, req.ratio, req.title, req.chapter_no)
     return {"ok": True}
 
 

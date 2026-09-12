@@ -253,11 +253,40 @@ def upsert_book(
         conn.close()
 
 
-def set_position(slug: str, current_url: str, ratio: float) -> None:
-    """Bölüm-içi okuma oranını (0..1) kaydet (kaydırdıkça frontend çağırır).
+def set_position(
+    slug: str,
+    current_url: str,
+    ratio: float,
+    current_title: str | None = None,
+    chapter_no: int | None = None,
+) -> None:
+    """Okuma konumunu kaydet (kaydırdıkça frontend çağırır).
 
-    (url, ratio) çiftini birlikte yazar; böylece başka bir bölüme geçilmiş olsa
-    bile konum doğru bölümle eşleşir. Kitap yoksa sessizce yok sayılır.
+    Konum bir ÜÇLÜDÜR: (url, ad, numara). Üçü birlikte yazılır, çünkü ad ve numara
+    `current_url`i ANLATIR — ayrı yazılırlarsa satır kendi içinde tutarsızlaşır.
+
+    Gerçek arıza (2026-09-12): burası yalnız `current_url`i ilerletiyordu ve ad/numara
+    bir önceki bölümde kalıyordu (canlı satır: `current_url` 392'yi gösterirken
+    `chapter_no` 391). İki katmanlı zarar veriyordu: (1) satır yanlış, (2) `updated_at`
+    de tazelendiği için okuyucunun DOĞRU yerel kaydı (`resolveResume`, `local.ts >=
+    serverTs` ölçütü) "bayat" sayılıp atılıyor ve ekrana bayat SUNUCU değeri
+    çiziliyordu. Kullanıcı 391'deyken ana sayfa "BÖL. 390" diyordu; okuyucuya girip
+    çıkınca yerel kayıt tazelenip düzeliyordu. Adı doğru yazan yol (`upsert_book`)
+    devreye girmiyordu: indirilmiş bölüm Service Worker önbelleğinden geliyor,
+    `GET /api/chapter` sunucuya hiç ulaşmıyor.
+
+    Ad/numara VERİLMEDİYSE davranış URL'e bakar ve bilerek asimetriktir:
+      * aynı bölümde kaydırma (url değişmedi) → mevcut ad KORUNUR. En sık çağrı bu;
+        silmek her kaydırmada adı düşürürdü.
+      * bölüm değişti (eski istemci üçlüyü göndermiyor) → ad/numara TEMİZLENİR.
+        Eski adı korumak, adın artık BAŞKA bir bölümü anlatması demek ve okuyucu
+        güvenle YANLIŞ bir numara çizer — düzeltmeye çalıştığımız arızanın kendisi.
+        NULL'da fiş "SON BÖLÜM"e, sırt "OKU"ya düşer; eksik bilgi yanlıştan iyidir.
+
+    Karar TEK bir UPDATE içinde SQL'le verilir: SET sağ tarafları satırın ESKİ
+    değerleriyle hesaplanır, yani `current_url` karşılaştırması aynı deyimde
+    güvenle yapılır. SELECT-sonra-yaz yapılsaydı arada gelen bir yazım ezilirdi
+    (`upsert_book`taki TOCTOU gerekçesinin aynısı). Kitap yoksa sessizce yok sayılır.
     """
     if not slug or not current_url:
         return
@@ -268,9 +297,29 @@ def set_position(slug: str, current_url: str, ratio: float) -> None:
     conn = _connect()
     try:
         conn.execute(
-            "UPDATE books SET current_url = ?, current_ratio = ?, updated_at = ? "
-            "WHERE slug = ?",
-            (current_url, ratio, time.time(), slug),
+            """
+            UPDATE books SET
+                current_title = CASE
+                    WHEN :title IS NOT NULL THEN :title
+                    WHEN current_url = :url THEN current_title
+                    ELSE NULL END,
+                chapter_no = CASE
+                    WHEN :no IS NOT NULL THEN :no
+                    WHEN current_url = :url THEN chapter_no
+                    ELSE NULL END,
+                current_url = :url,
+                current_ratio = :ratio,
+                updated_at = :now
+            WHERE slug = :slug
+            """,
+            {
+                "title": current_title,
+                "no": chapter_no,
+                "url": current_url,
+                "ratio": ratio,
+                "now": time.time(),
+                "slug": slug,
+            },
         )
         conn.commit()
     finally:

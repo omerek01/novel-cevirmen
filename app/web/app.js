@@ -256,10 +256,21 @@ function persistScroll() {
   const st = history.state;
   if (st && st.view === "reader") history.replaceState({ view: "reader", url: e.url, ratio }, "");
   if (currentBookSlug) {
+    // Konum ÜÇLÜ gider: (url, ad, numara). Ad/numara sunucuda `current_url`i
+    // ANLATIR; yalnız url gönderilince satır tutarsızlaşıyor ve kütüphane fişi
+    // okunan bölümden bir geride kalıyordu (bkz. library.set_position).
+    // Değerler `currentChapterNo`/`currentChapterTitle` GLOBAL'lerinden değil,
+    // konumu yazılan ENTRY'nin kendisinden alınır: url ile ad tek kaynaktan
+    // gelsin, global'lerin geride kalması bu satırı yeniden bozamasın.
     fetch(`/api/book/${encodeURIComponent(currentBookSlug)}/position`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ url: e.url, ratio }),
+      body: JSON.stringify({
+        url: e.url,
+        ratio,
+        title: e.title || null,
+        chapter_no: e.no != null ? e.no : null,
+      }),
     }).catch(() => {});
   }
 }
