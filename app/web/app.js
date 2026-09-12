@@ -880,7 +880,14 @@ function renderChapterList(chapters, book, query) {
     list.appendChild(p);
     return;
   }
-  for (const ch of chapters) {
+  // Ekranda TERS sıra: en son çevrilen bölüm en üstte, 1. bölüm en altta. Tersleme
+  // YALNIZ çizim anında yapılır — `currentChapters` mantıksal kaynak olarak ARTAN
+  // kalmak zorunda, çünkü akış devamı ondan türetiliyor (`chapterListPrev` idx-1 =
+  // önceki, `pickNextTarget` idx+1 = sonraki). Listeyi ters SAKLAMAK sonsuz okumayı
+  // sessizce geriye çevirirdi. `slice()` de load-bearing: `filterChapters` boş
+  // sorguda dizinin KENDİSİNİ döndürür ve `reverse()` yerinde çalışır — kopyasız
+  // tersleme `currentChapters`ı kalıcı olarak bozardı.
+  for (const ch of chapters.slice().reverse()) {
     const item = document.createElement("div");
     item.className = "chapter-item";
     const row = document.createElement("button");
