@@ -82,12 +82,33 @@ geldiğinde gerekir, okuyucudaki "Bölüm Boş → Siteden Yeniden Çek" düğme
 Bu yol `next_url`/`prev_url`'ü önbellekten TAŞIR, tazelemez; tazeleme ayrı bir iştir
 (`refresh_metadata`, check-updates).
 
-**`app/core/fetch.py`** (en riskli parça) — Playwright ile Cloudflare bypass. **İki
-akış, otomatik yedekleme**: (1) `FETCH_CDP_URL` ayarlıysa kullanıcının elle
-başlattığı **gerçek Chrome**'a CDP ile bağlan (otomasyon parmak izi yok → sert CF'i
-geçer); Chrome kapalıysa sessizce (2) paket Chromium'u kalıcı profil + `STEALTH_JS`
-ile başlatan akışa düşer. Yani CDP opsiyonel, ayarlı olsa da telefon/normal kullanım
-bozulmaz. Site-özel ayrıştırma kuralları `SITES` sözlüğünde (yeni site = yeni kayıt),
+**`app/core/fetch.py`** (en riskli parça) — bölüm çekme, **ÜÇ akış, otomatik
+yedekleme**: (0) **düz HTTP** (`_fetch_via_http`, tarayıcısız) → (1) `FETCH_CDP_URL`
+ayarlıysa kullanıcının elle başlattığı **gerçek Chrome**'a CDP ile bağlan (otomasyon
+parmak izi yok → sert CF'i geçer) → (2) paket Chromium'u kalıcı profil + `STEALTH_JS`
+ile başlatan akış. Her katman başarısızlıkta `None` döner ve bir alttakine düşülür;
+hiçbiri istisna FIRLATMAZ — fırlatsa alttaki yol hiç denenmezdi. Yani CDP opsiyonel,
+ayarlı olsa da telefon/normal kullanım bozulmaz.
+
+**DÜZ HTTP BİRİNCİ YOL** (2026-09-11, ölçüldü). Cloudflare koruması freewebnovel'in
+ANA SAYFASINDA var, BÖLÜM sayfalarında YOK. Ölçüm: 5 kitap x 12 bölüm (bölüm 4'ten
+1880'e), hepsi HTTP 200 ve ayrıştırılan metin önbellektekiyle BİREBİR aynı. Süre
+1-8 sn; aynı bölüm Playwright'la 68 sn sürüyor ve çoğu zaman challenge'a takılıyordu.
+Kazanç yalnız hız değil: tarayıcısız yol bulut sunucuda Chromium'u tümden gereksiz
+kılar. `FETCH_HTTP_FIRST=0` acil çıkıştır. Tarayıcı yolu SİLİNMEZ — site korumayı
+bölümlere yayarsa akış kendiliğinden oraya düşer.
+
+**TLS PARMAK İZİ: `curl_cffi` ŞART** (2026-09-11, ölçüldü). Düz HTTP yolunun
+SUNUCUDA çalışmasının TEK koşulu. Ölçüm (GCP e2-micro / Ubuntu 24.04): düz `requests`
+ile **403 + "just a moment"**, aynı anda ev makinesinden (Windows) aynı URL **200**.
+Suçlu IP DEĞİLDİ — beş ayrı ülkeden beş residential proxy IP'si denendi, **beşi de
+403** (0/5). Fark TLS katmanında: Linux OpenSSL'in ürettiği JA3 imzası CF tarafından
+reddediliyor. `_http_get` içindeki `impersonate="chrome"` ile sunucudan da 200 geldi,
+üstelik **proxy OLMADAN**. Parametre kaldırılırsa sunucuda çekim TÜMDEN durur;
+`tests/test_fetch_duz_http.py` tel tuzağıyla tutar. Ders: "403 geldi → IP engellendi"
+sezgisi bu projede yanlış çıktı, önce TLS katmanını ölç.
+
+Site-özel ayrıştırma kuralları `SITES` sözlüğünde (yeni site = yeni kayıt),
 bilinmeyen host için `GENERIC_SITE`. Çözülen CF cookie'si `cache/.pw-profile`'da
 kalıcı. **Tüm çekimler tek `_FETCH_GATE` (iki-öncelikli kapı) ile serileşir** — tek kalıcı profil eşzamanlı
 açılamaz. Kapıda bekleyen okuyucu isteği (`priority="interactive"`, varsayılan) toplu
@@ -919,7 +940,10 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 | `GEMINI_API_KEY` | Evet | Zincirin BİRİNCİ anahtarı (yalnız yeni çeviri için; cache isabeti gerektirmez) |
 | `GEMINI2_API_KEY` | Hayır | İKİNCİ anahtar: birincinin kotası dolunca (429) aynı MODELDE devralır. Yoksa sessizce atlanır. Ad esnek — `GEMINI_API_KEY_2` / `GEMINI3_API_KEY`… da tanınır, sıra addaki sayıdan gelir. **Kota PROJE başına olduğu için ayrı bir Google Cloud projesinden alınmadıkça hiçbir şey kazandırmaz** |
 | `CLAUDE_API_KEY` | Hayır | Claude halkaları (`claude-haiku-4-5` · `claude-sonnet-5`). **ÜCRETLİ** ve YALNIZ okuyucudan açıkça seçilince kullanılır — ücretsiz zincir asla buraya inmez. `ANTHROPIC_API_KEY` de tanınır (SDK'nın kanonik adı). Yoksa halka sessizce atlanır |
-| `FETCH_CDP_URL` | Hayır | Örn. `http://127.0.0.1:9222` → sert CF için gerçek Chrome'a bağlan |
+| `FETCH_HTTP_FIRST` | Hayır | `0` → düz HTTP yolunu KAPAT, doğrudan tarayıcıya düş. **ACİL ÇIKIŞ**; varsayılan açık. Bölüm sayfalarında CF koruması yok, düz HTTP 1 sn'de çekiyor (tarayıcı yolu aynı bölümde 68 sn) |
+| `FETCH_PROXY` | Hayır | Çekimi residential proxy üzerinden çıkarır (`http://kullanıcı:parola@host:port`; parolada `@` varsa `%40` diye yüzde-kodla). Bulut sunucuda **gerekmedi** — engel IP değil TLS'ti, `curl_cffi` çözdü. Sigorta olarak durur |
+| `FETCH_BLOCK_ASSETS` | Hayır | `1` → TARAYICI yolunda resim/font/medya indirilmez. `script`/`stylesheet` ASLA engellenmez (CF challenge JS ile çözülür). Manga etkilenmez (`_extract_html`'den geçmez) |
+| `FETCH_CDP_URL` | Hayır | Örn. `http://127.0.0.1:9222` → sert CF için gerçek Chrome'a bağlan. Bulut sunucuda BOŞ (gerçek Chrome yok) |
 | `FETCH_HEADLESS` | Hayır | `0` → görünür pencere (CF'i bir kez elle çözmek için) |
 | `NOVEL_DB_PATH` | Hayır | Test/CI'da DB'yi geçici dosyaya yönlendirir |
 
@@ -943,6 +967,44 @@ testi sessizce geliştiricinin makinesindeki `.env`e bağımlı kılar.
 
 
 `.env` git'e girmez (`.gitignore`); ikinci makineye elle kopyalanır — bkz. `KURULUM.md`
+Şablon: `.env.example` (tüm değişkenler, değerler BOŞ). Ad `.env.ornek` DEĞİL —
+güvenlik araçları `.env.<sonek>` desenini gerçek sır dosyası sayıyor ve yalnız
+`.example/.sample/.template/.dist` soneklerini istisna tanıyor.
+
+## Bulut sunucu (2026-09-12'den beri ASIL kurulum)
+
+Backend artık **Google Cloud e2-micro**'da 7/24 çalışıyor; ev bilgisayarı devrede
+değil. Erişim `https://novel-cevirmen.<tailnet>.ts.net` (Tailscale, **tailnet-only** —
+`funnel` KULLANILMAZ, proje kişisel kullanım için dışarıya kapalı kalmalı). Servis
+systemd (`novel-cevirmen.service`): açılışta başlar, çökerse kalkar.
+
+**SUNUCU TEK KAYNAKTIR.** `cache/chapters.db` sunucuda yaşar ve orada büyür: yeni
+bölümler, sözlüğe OTOMATİK eklenen terimler, okuma konumu. Ev makinesindeki kopya
+taşındığı gündeki hâlinde donmuştur. Yerel `start.bat`'ı BAŞLATMA — iki ayrı
+kütüphane, iki ayrı okuma konumu ve iki ayrı sözlük oluşur. Gerçek vaka
+(2026-09-12): `Saints -> Azizler` kaydı yalnız SUNUCUDA oluştu (orada çevrilen bir
+bölümden), yerelde hiç yoktu; sözlük onarımı iki yerde ayrı ayrı koşturuldu.
+Sözlük/veri düzeltmeleri SUNUCUDA yapılır; yerel kurulum yalnız geliştirme içindir.
+
+**Bedava katman ŞARTLARI** (biri bozulursa fatura işler, sessizce):
+* Ayda **1 adet** e2-micro; ikincisi ücretli.
+* Bölge **us-west1 / us-central1 / us-east1**; başka bölge ücretli.
+* Boot disk **`pd-standard`**, en fazla 30 GB. Konsol varsayılanı `pd-balanced`
+  getirir ve o ÜCRETLİDİR — sürpriz faturaların en yaygın sebebi. İlk kurulumda
+  tam bu tuzağa düşüldü, VM silinip `--boot-disk-type=pd-standard` ile yeniden
+  oluşturuldu.
+* Egress ayda 1 GB bedava. Ölçülen kullanım ~50-100 MB/ay (bölüm başına ~15-20 KB),
+  yani sınırın çok altında. İSTİSNA: `cache/media` (içe aktarılan kitaplar) Service
+  Worker'a girmez, her erişimde egress yakar — o yüzden sunucuya hiç taşınmadı.
+
+Fatura hesabında **10 TRY bütçe uyarısı** kurulu (%50 ve %100 eşiği). Bu projede
+"sessizce paraya dönen arıza" dersi bir kez ödendi (OpenRouter `:free` soneki);
+gürültüsüz fatura riskine karşı gösterge şart.
+
+Sunucuya Chromium KURULMADI: düz HTTP yolu yeterli ve 1 GB RAM'de Chromium zaten
+zor. Yani tarayıcı yedeği bu sunucuda FİİLEN yok — düz HTTP kapanırsa (site CF'i
+bölümlere yayarsa) ayrı bir çözüm gerekir, `playwright install chromium` tek başına
+yetmeyebilir.
 (Tailscale ile 7/24 sunucu kurulumu ve sorun giderme).
 
 ## Test yazımı
