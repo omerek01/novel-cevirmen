@@ -240,9 +240,33 @@ Daralan kapasitenin karşılığı anahtar tarafında ödendi (aşağıdaki iki 
    çıkarken diğerleri AYNI ANDA açık dönüyordu. Eski kural tek geçici 503'te o modeldeki
    kalan bütün sağlam anahtarları iptal ediyordu; iki model üst üste böyle atlanınca
    okuma zincirin dibine iniyordu (kullanıcı şikâyeti: "5 anahtar var ama lite'a düşüyor").
-3. **Kalan her arıza → sıradaki MODEL.** 404 (model yok) doğrudan bir alt model — ikinci
-   anahtar da aynı cevabı verirdi, denemek her halkanın maliyetini ikiye katlardı.
-   Boş/engellenmiş yanıt (safety) deterministiktir → bir alt model (başkası çevirebilir).
+3. **Erişim (404) → aynı MODELDE sıradaki ANAHTAR** (2026-09-15, ölçümle DÜZELTİLDİ).
+   Soğutma YOK (anahtar sağlam, o modeli görmüyor) ve tur tekrarı da YOK (erişim
+   beklemekle açılmaz — 404 `turda_gecici` işaretlemez, yoksa her bölüm zincir
+   başına boşuna 6 sn yakardı). Havuzun tamamı 404 verirse sıradaki MODELe inilir.
+
+   Bu dal eskiden doğrudan sıradaki MODELe iniyordu ve gerekçesi ("404 model yok
+   demektir, ikinci anahtar da aynı cevabı verirdi") projenin KENDİ ölçümüyle
+   çürüktü — `kota_durum.py` 2026-09-06'da şunu yazmıştı: 3. anahtar
+   `gemini-2.5-flash`'a 404 derken 1. ve 2. anahtar AÇIK dönüyordu. **Model erişimi
+   de kota gibi PROJE başınadır, yani ANAHTAR başına değişir.** Eski kural tek bir
+   404'te o modeldeki kalan bütün SAĞLAM anahtarları iptal ediyordu.
+
+   Arıza 2026-09-15'te gerçekleşti: zincirin İKİ halkası da (3.6-flash, 3.5-flash)
+   aynı anahtarda 404 alınca çeviri TÜMDEN durdu — kullanıcının BEŞ anahtarı vardı,
+   dördü çalışıyordu ve hiçbiri denenmedi. Bu, 503 dalında 2026-09-09'da düzeltilen
+   hatanın AYNISIDIR; o tur 404'ü atlamıştı. **Yeni bir hata sınıfı eklerken sor:
+   bu arıza anahtara mı bağlı, modele mi — ölç, varsayma.**
+4. **Kalan her arıza → sıradaki MODEL.** Boş/engellenmiş yanıt (safety)
+   deterministiktir → bir alt model (başkası çevirebilir).
+
+**404'TE MESAJ "MEŞGUL" DEMEZ** (2026-09-15). Zincirin tamamı 404'ten düştüğünde eski
+mesaj "Tüm modeller şu anda meşgul (geçici). Biraz sonra tekrar deneyin." diyordu ve bu
+YANLIŞ TEŞHİSTİR: erişim beklemekle ASLA açılmaz. Kullanıcı mesaja uyup arızayı kota
+tarafında aradı ("5 anahtarım var, kotanın dolması imkânsız"). Mesaj artık sebebi,
+modelleri ve çıkışı (`scripts/kota_durum.py` + ayarlar panelinden model seçimi) söyler.
+Aynı kural anahtarsızlık dalında ZATEN vardı; 404 dalı atlanmıştı — **hata mesajı
+üreten yeni bir dal eklerken "kullanıcı bu mesaja uyarsa ne yapar" diye sor.**
 
 **ANAHTAR ROTASYONU: her istek SONRAKİ anahtardan başlar** (2026-09-09, kullanıcı
 isteği). Eskiden her istek DAİMA #1'den başlıyordu ve havuz ancak arıza hâlinde işe

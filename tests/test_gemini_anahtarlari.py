@@ -419,17 +419,93 @@ def test_kota_turu_okunamazsa_KISA_soguma_secilir(monkeypatch):
 
 # ---------- düşme kuralı: KOTA DIŞI arızalar -> sıradaki MODEL ----------
 
-def test_404_anahtar_dondurmez_dogrudan_sonraki_modele_iner(monkeypatch):
-    """404 "model yok" demektir; ikinci anahtar da aynı cevabı verirdi. Anahtar
-    denemek her halkanın maliyetini ikiye katlar, kazancı yoktur."""
+def test_404_modeli_ATLAMAZ_sonraki_ANAHTARI_dener(monkeypatch):
+    """404 modeli ATLAMAZ, sıradaki ANAHTARI dener (2026-09-15, ölçümle düzeltildi).
+
+    Eski kural "404 model yok demektir, ikinci anahtar da aynı cevabı verirdi"
+    diyordu ve o varsayım bu projenin KENDİ ölçümüyle çürüktü. `kota_durum.py`
+    2026-09-06'da şunu yazdı:
+
+        GEMINI_API_KEY    gemini-2.5-flash  AÇIK
+        GEMINI2_API_KEY   gemini-2.5-flash  AÇIK
+        GEMINI3_API_KEY   gemini-2.5-flash  YOK (bu projede sunulmuyor)
+
+    Yani model erişimi PROJE başınadır — tıpkı kota gibi — ve anahtar başına
+    DEĞİŞİR. Eski kural tek bir 404'te o modeldeki kalan bütün SAĞLAM anahtarları
+    iptal ediyordu. Zincirin İKİ halkası da aynı anahtarda 404 alınca çeviri
+    tümden duruyordu: gerçek arıza 2026-09-15, kullanıcıda BEŞ anahtar vardı,
+    dördü çalışıyordu ve hiçbiri denenmiyordu.
+
+    Bu, 503 dalında 2026-09-09'da düzeltilen hatanın AYNISIDIR (aşağıdaki test);
+    o tur yalnız 503'ü düzeltmiş, 404'ü atlamıştı.
+    """
+    _api_hatasi_yakalansin(monkeypatch)
+    birinci = _SahteClient([_APIHatasi(404)])
+    ikinci = _SahteClient(['{"translation": "ikinci anahtar"}'])
+    yanit, model = translate._generate_with_fallback(
+        _fabrika(birinci, ikinci), ("gemini-3.6-flash", "gemini-3.5-flash"), "p"
+    )
+    assert model == "gemini-3.6-flash"  # MODEL AYNI KALDI
+    assert yanit.text == '{"translation": "ikinci anahtar"}'
+    assert ikinci.models.cagrilar == ["gemini-3.6-flash"]  # ikinci anahtar DENENDİ
+
+
+def test_tum_anahtarlar_404_verince_sonraki_modele_inilir(monkeypatch):
+    """Havuz gerçekten tükendiyse (ad yanlış / model hiçbir projede yok) zincir
+    yine sıradaki MODELe iner — anahtar döngüsü bunu geciktirmez, 404 hızlı
+    döner ve bu dalda UYKU yoktur."""
     _api_hatasi_yakalansin(monkeypatch)
     birinci = _SahteClient([_APIHatasi(404), '{"translation": "alt halka"}'])
-    ikinci = _SahteClient([])
+    ikinci = _SahteClient([_APIHatasi(404), '{"translation": "alt halka"}'])
     yanit, model = translate._generate_with_fallback(
         _fabrika(birinci, ikinci), ("gemini-yok", "gemini-3.5-flash"), "p"
     )
     assert model == "gemini-3.5-flash"
-    assert ikinci.models.cagrilar == []  # ikinci anahtara HİÇ gidilmedi
+    assert birinci.models.cagrilar == ["gemini-yok", "gemini-3.5-flash"]
+    # İkinci anahtar YALNIZ tükenen modelde denendi: alt halkayı birinci anahtar
+    # zaten çevirdi, havuzu boşuna dolaşmak her halkanın maliyetini ikiye katlardı.
+    assert ikinci.models.cagrilar == ["gemini-yok"]
+
+
+def test_404_beklemez_tur_tekrari_yapmaz(monkeypatch):
+    """404 `turda_gecici` İŞARETLEMEZ: erişim beklemekle açılmaz.
+
+    503 dalı turu geri-çekilerek TEKRARLAR (2s→4s). 404 orada olsaydı her bölüm
+    zincir başına boşuna 6 sn yakardı ve arıza "yavaş çeviriyor" kılığına girerdi.
+    """
+    _api_hatasi_yakalansin(monkeypatch)
+    uyudu = []
+    monkeypatch.setattr(translate.time, "sleep", lambda sn: uyudu.append(sn))
+    istemci = _SahteClient([_APIHatasi(404), _APIHatasi(404)])
+    with pytest.raises(translate.TranslateError):
+        translate._generate_with_fallback(
+            _fabrika(istemci), ("gemini-yok", "gemini-yok-2"), "p"
+        )
+    assert uyudu == []  # HİÇ uyunmadı
+
+
+def test_zincirin_tamami_404_ise_mesaj_MESGUL_demez(monkeypatch):
+    """Yanlış teşhis, arızanın kendisi kadar pahalıdır.
+
+    Zincirin tamamı 404'ten düştüğünde eski mesaj "Tüm modeller şu anda meşgul
+    (geçici). Biraz sonra tekrar deneyin." diyordu. Bu kullanıcıyı BEKLEMEYE
+    iter, oysa erişim beklemekle ASLA açılmaz — gerçek vaka 2026-09-15:
+    kullanıcı "5 anahtarım var, kotanın dolması imkânsız" diyerek arızayı kota
+    tarafında aradı. Mesaj artık sebebi ve çıkışı söylüyor.
+
+    Aynı kural anahtarsızlık dalında zaten vardı ("modeller meşgul" demek yerine
+    "anahtar yok"); 404 dalı atlanmıştı.
+    """
+    _api_hatasi_yakalansin(monkeypatch)
+    istemci = _SahteClient([_APIHatasi(404), _APIHatasi(404)])
+    with pytest.raises(translate.TranslateError) as hata:
+        translate._generate_with_fallback(
+            _fabrika(istemci), ("gemini-3.6-flash", "gemini-3.5-flash"), "p"
+        )
+    mesaj = str(hata.value)
+    assert "meşgul" not in mesaj.lower()
+    assert "404" in mesaj and "gemini-3.6-flash" in mesaj
+    assert "kota_durum" in mesaj  # kullanıcıya teşhis aracını gösterir
 
 
 def test_503_modeli_ATLAMAZ_sonraki_ANAHTARI_dener(monkeypatch):

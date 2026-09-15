@@ -763,7 +763,9 @@ class _Retryable(Exception):
     Taşınan bayraklar düşme YÖNÜNÜ belirler (`_generate_once_with_retry`):
       * ``kota``      429 — sıradaki ANAHTAR, ve bu anahtar soğumaya alınır.
       * ``gecici``    500/503/taşıma — sıradaki ANAHTAR, soğutma YOK.
-      * (bayraksız)   404 / engellenmiş / anahtarsız — sıradaki MODEL.
+      * ``yok``       404 — sıradaki ANAHTAR (model erişimi PROJE başınadır),
+        havuz tükenince sıradaki MODEL. Soğutma ve bekleme YOK.
+      * (bayraksız)   engellenmiş / anahtarsız — sıradaki MODEL.
       * ``blocked``   içerik filtresi; hata mesajını değiştirir.
       * ``anahtarsiz`` bu halkada hiç anahtar yoktu; hata mesajını değiştirir.
     """
@@ -1942,6 +1944,13 @@ def _generate_with_fallback(
     # Her halka ANAHTARSIZLIKTAN mı düştü? Öyleyse "modeller meşgul" demek yanlış
     # teşhis olur — kullanıcının yapması gereken beklemek değil, anahtar ayarlamak.
     anahtarsiz = True
+    # Aynı sınıf ikinci bir yanlış teşhis: her halka 404'ten düştüyse sorun MEŞGUL
+    # OLMAK değil ERİŞİMDİR (model bu anahtarların projesine sunulmuyor ya da ad
+    # artık geçerli değil). "Biraz sonra tekrar deneyin" demek kullanıcıyı saatlerce
+    # beklemeye iter, oysa beklemek bunu ASLA açmaz — gerçek vaka 2026-09-15:
+    # 3.x halkalarının ikisi de 404 verirken kullanıcı "kotanın dolması imkânsız,
+    # 5 anahtarım var" diye arıza aradı ve mesaj onu kota tarafına yönlendirdi.
+    modelsiz = True
     for model in models:
         try:
             return (
@@ -1955,9 +1964,19 @@ def _generate_with_fallback(
             blocked = blocked or getattr(exc, "blocked", False)
             if not getattr(exc, "anahtarsiz", False):
                 anahtarsiz = False
+            if not getattr(exc, "yok", False):
+                modelsiz = False
             continue
     if anahtarsiz and models and not blocked:
         raise TranslateError(ANAHTAR_YOK_MESAJI) from last_exc
+    if modelsiz and models and not blocked:
+        raise TranslateError(
+            "Zincirdeki modellerin hiçbiri bu anahtarlarda sunulmuyor (HTTP 404): "
+            + ", ".join(models)
+            + ". Anahtarlar sağlam — beklemek bunu açmaz. Hangi anahtarın hangi "
+            "modele eriştiğini `scripts/kota_durum.py` yazar; okuyucunun ayarlar "
+            "panelinden erişilebilen bir model seçin."
+        ) from last_exc
     if blocked:
         raise TranslateError(
             "Bu bölümün içeriği hiçbir model tarafından çevrilemedi (içerik filtresi); "
@@ -2050,7 +2069,13 @@ def _generate_once_with_retry(
                     # sonraki turda AÇIK dönüyor.
                     turda_gecici = True
                     continue
-                raise  # 404 / engellenmiş / anahtarsız → sıradaki model
+                if getattr(exc, "yok", False):
+                    # 404 → sıradaki ANAHTAR. Soğutma YOK (anahtar sağlam) ve
+                    # `turda_gecici` de İŞARETLENMEZ: erişim beklemekle açılmaz,
+                    # tur tekrarı burada saf kayıp olurdu. Havuz tükenirse `son`
+                    # `yok` bayrağını yukarı taşır ve zincir sıradaki MODELe iner.
+                    continue
+                raise  # engellenmiş / anahtarsız → sıradaki model
         if not turda_gecici:
             break  # kota / anahtarsızlık: beklemek hiçbir şeyi değiştirmez
         if tur < MAX_RETRIES - 1:
@@ -2107,10 +2132,20 @@ def _tek_anahtarla_uret(
             code = getattr(exc, "code", None)
             if code in FALLBACK_CODES:
                 atla = _Retryable()
-                # KOTA bayrağı, çağıranın "sıradaki anahtar mı, sıradaki model mi"
-                # kararını verir. 404 (model yok) bu bayrağı ALMAZ: ikinci anahtar da
-                # aynı cevabı verirdi.
+                # Bayraklar çağıranın "sıradaki anahtar mı, sıradaki model mi"
+                # kararını verir. İKİSİ de sıradaki ANAHTARI dener, ama sebepleri
+                # ayrı: 429 kotadır (anahtar soğumaya alınır), 404 erişimdir
+                # (soğutma yok — anahtar sağlam, o modeli görmüyor).
                 atla.kota = code == 429
+                # 404 bir dönem "model yok, ikinci anahtar da aynı cevabı verirdi"
+                # sayılıp o modeli TÜMDEN iptal ediyordu. Varsayım ÖLÇÜMLE çürüdü
+                # (2026-09-06, `scripts/kota_durum.py`): 3. anahtar
+                # `gemini-2.5-flash`a 404 verirken 1. ve 2. anahtar AÇIK dönüyordu —
+                # model erişimi PROJE başınadır, yani ANAHTAR başına değişir. Eski
+                # kural tek bir 404'te o modeldeki kalan bütün SAĞLAM anahtarları
+                # iptal ediyordu; zincirin iki halkası da aynı anahtarda 404 alınca
+                # çeviri TÜMDEN duruyordu (5 anahtarın 4'ü çalışırken).
+                atla.yok = code == 404
                 if atla.kota:
                     # Soğuma süresi kotanın TÜRÜNDEN gelir (günlük mü dakikalık
                     # mı); tek sabit süre günlük kotada anahtarı dakikada bir
