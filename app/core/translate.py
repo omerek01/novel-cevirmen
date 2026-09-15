@@ -80,12 +80,31 @@ from .glossary import fold_term
 # yapıyordu: üst halkalar 429/503 ile elendiğinde okuma sessizce ORAYA iniyor,
 # çeviri kalıcı önbelleğe yazılıyor ve bir daha denetlenmiyordu.
 #
-# Zincir bu yüzden İKİ halka. Daralan kapasitenin karşılığı anahtar tarafında
-# ödendi: 503 artık sıradaki ANAHTARI deniyor (eskiden modeli atlıyordu) ve
-# istekler anahtarlar arasında DÖNÜŞÜMLÜ dağıtılıyor — ikisi de aşağıda.
+# Zincir bu yüzden bir dönem İKİ halkaydı. Daralan kapasitenin karşılığı anahtar
+# tarafında ödendi: 503 ve 404 artık sıradaki ANAHTARI deniyor (eskiden modeli
+# atlıyorlardı) ve istekler anahtarlar arasında DÖNÜŞÜMLÜ dağıtılıyor.
+#
+# ÜÇÜNCÜ HALKA `gemini-2.5-flash` (2026-09-15, kullanıcı kararı + arıza). Zincirin
+# iki halkası da 3.x AİLESİNDENDİ ve o aile kullanıcının anahtarlarına 404 dönmeye
+# başlayınca ayakta kalan hiçbir halka kalmadı — çeviri TÜMDEN durdu. 2.5 o gün
+# çalışan tek modeldi ama YALNIZ seçilebilir listedeydi, yani ancak ayarı açıp elle
+# seçen kullanıcı çeviri yapabildi.
+#
+# Ders: zincirin dayanıklılığı halka SAYISINDAN değil, halkaların BİRLİKTE
+# ölmemesinden gelir. Aynı ailenin iki sürümü ortak bir kaderi paylaşıyor (aynı
+# erişim politikası, yakın kota havuzları); farklı nesilden bir halka bunu kırar.
+# 2.5 SONA konur, başa değil: ölçümde 3.6-flash hâlâ daha iyi (oran 0,972 / 0,932)
+# ve 2.5'e ancak üst halkalar elendiğinde inilir, yani 3.x çalışırken davranış
+# birebir eskisi gibi kalır. Künye rozeti fiilen çevireni yazdığı için inildiği
+# gizlenmez. Kotası 3.x'ten AYRI olduğu için o gün de gerçek bir yedektir.
+#
+# Bu, zincire ÖLÇÜLMEMİŞ model koymama kuralının istisnası DEĞİL: 2.5 ölçüldü
+# (2026-09-06, 3 gerçek bölüm — oran 0,932, hizalama 3/3, 3 bölümde 1 sözlük
+# ihlali, ölçülenlerin en hızlısı). Ölçülmemiş olsaydı yine listede kalırdı.
 DEFAULT_MODELS = (
     "gemini-3.6-flash",
     "gemini-3.5-flash",
+    "gemini-2.5-flash",
 )
 
 # ---------------------------------------------------------------------------

@@ -87,26 +87,43 @@ def test_secilebilir_modeller_kullanicinin_istedikleri():
         assert m["etiket"] and m["not"], m  # etiket ve ölçüm notu okuyucuya çıkıyor
 
 
-def test_yeni_modeller_zinciri_DEGISTIRMEZ():
-    """Ekleme YALNIZ seçilebilir listeye; `DEFAULT_MODELS` aynı kalır.
-
-    Ayrım load-bearing: seçilebilir liste bir TEKLİFTİR, zincir ise hiç kimse
+def test_secilebilir_liste_zincire_KENDILIGINDEN_girmez():
+    """Ayrım load-bearing: seçilebilir liste bir TEKLİFTİR, zincir ise hiç kimse
     seçim yapmadığında herkesin düştüğü yoldur. Ölçülmemiş bir modeli zincire
     koymak, ayarı hiç açmamış bir kullanıcının çevirisini sessizce değiştirirdi.
+
+    Yani listeye eklemek zincire eklemek DEĞİLDİR; zincire giriş ayrı bir karar
+    ister (ölçüm + gerekçe). Bugün listede olup zincirde OLMAYAN modeller bunun
+    kanıtı: 3.8 ve 3.7 uzun bölümleri 503 ile reddediyor, Claude ise ÜCRETLİ ve
+    asla yedek halka olamaz.
     """
-    assert translate.DEFAULT_MODELS == (
-        "gemini-3.6-flash",
-        "gemini-3.5-flash",
-    )
-    assert "gemini-2.5-flash" in translate.SECILEBILIR_ADLAR
-    assert "gemini-2.5-flash" not in translate.DEFAULT_MODELS
+    for ad in ("gemini-3.8-flash", "gemini-3.7-flash",
+               "claude-haiku-4-5", "claude-sonnet-5"):
+        assert ad in translate.SECILEBILIR_ADLAR
+        assert ad not in translate.DEFAULT_MODELS
 
 
-def test_yeni_model_zincirin_basina_gecebilir():
-    """Seçilince zincirin başına geçer, yedekler ALTTA kalır (ücretsiz kural)."""
+def test_2_5_flash_zincire_YEDEK_halka_olarak_girdi():
+    """2026-09-15, kullanıcı kararı: 2.5 listeden ZİNCİRE terfi etti.
+
+    Gerekçe bir arıza: zincirin iki halkası da 3.x ailesindendi ve aile 404
+    dönmeye başlayınca çeviri tümden durdu. 2.5 farklı nesil, kotası ayrı.
+
+    SONDA olması şart — 3.6-flash ölçümde hâlâ daha iyi (uzunluk oranı 0,972 /
+    0,932). Başa alınsaydı 3.x geri geldiğinde herkesin çevirisi sessizce daha
+    kötü bir modele kayardı ve bunu fark etmek zor olurdu.
+    """
+    assert translate.DEFAULT_MODELS[-1] == "gemini-2.5-flash"
+    assert translate.VARSAYILAN_MODEL == "gemini-3.6-flash"  # ilk halka DEĞİŞMEDİ
+
+
+def test_zincirdeki_model_secilince_basa_gecer_ve_TEKRARLAMAZ():
+    """Seçilince başa geçer; zincirde zaten varsa ikinci kez denenmez — yoksa o
+    model kotasını iki kez yakar ve alt halkalara geç inilirdi."""
     zincir = translate.zincir_kur("gemini-2.5-flash")
     assert zincir[0] == "gemini-2.5-flash"
-    assert zincir[1:] == translate.DEFAULT_MODELS
+    assert len(zincir) == len(set(zincir))
+    assert set(zincir) == set(translate.DEFAULT_MODELS)
 
 
 def test_gemini_3_onizleme_LISTEDE_DEGIL():

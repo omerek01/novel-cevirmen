@@ -147,11 +147,31 @@ def test_zincir_kaliteden_ucuza_iner():
     metni kısaltıyordu (uzunluk oranı medyanı 0,949 ve 0,914; 3.6-flash 0,972).
     Kotanın yerini ANAHTAR HAVUZU aldı: kota dolunca başka bir sağlayıcıya değil,
     başka bir Gemini anahtarına geçilir — kaliteden ödün verilmeden.
+    2026-09-15: ÜÇÜNCÜ halka `gemini-2.5-flash` eklendi. Zincirin iki halkası da
+    3.x AİLESİNDENDİ ve o aile kullanıcının anahtarlarına 404 dönmeye başlayınca
+    ayakta kalan hiçbir halka kalmadı — çeviri tümden durdu. Dayanıklılık halka
+    SAYISINDAN değil, halkaların BİRLİKTE ölmemesinden gelir: aynı ailenin iki
+    sürümü ortak bir kaderi paylaşır (aynı erişim politikası, yakın kota havuzu).
+    2.5 farklı nesildir ve kotası ayrıdır. SONA konur — 3.6-flash ölçümde hâlâ
+    daha iyi (oran 0,972 / 0,932), yani 3.x çalışırken davranış değişmez.
+
     Halka sırası ve gerekçesi `tests/test_gemini_anahtarlari.py` içinde."""
     assert translate.DEFAULT_MODELS == (
         "gemini-3.6-flash",
         "gemini-3.5-flash",
+        "gemini-2.5-flash",
     )
+
+
+def test_zincir_tek_model_ailesine_bagli_degil():
+    """Tel tuzağı: zincirin TAMAMI tek bir sürüm ailesinden olamaz.
+
+    2026-09-15 arızasının kök nedeni tam buydu — `3.6-flash` ve `3.5-flash`
+    ikisi de 3.x'ti, aile 404 dönünce zincirde yedek kalmadı. Bu test zincirin
+    kazara yeniden tek-aileye daralmasını tutar.
+    """
+    aileler = {m.split("-")[1].split(".")[0] for m in translate.DEFAULT_MODELS}
+    assert len(aileler) >= 2, translate.DEFAULT_MODELS
 
 
 def test_zincirde_gemini_disi_saglayici_yok():

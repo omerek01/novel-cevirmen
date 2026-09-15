@@ -123,7 +123,7 @@ bağlam olarak taşır, glossary'i prompt'a enjekte eder. **`[[n]]` işaretçile
 Türkçe↔İngilizce paragrafları hizalar (iki-dilli okuma; hizalama tutmazsa o parça tek
 blok, `source` None). **TEK MOTOR: Gemini** (2026-09-02, kullanıcı kararı) ve **TEK model
 yedek zinciri, KALİTE öncelikli**: `DEFAULT_MODELS` = **`gemini-3.6-flash`** →
-`gemini-3.5-flash`. Bu sıra HER YERDE geçerlidir — okuma,
+`gemini-3.5-flash` → `gemini-2.5-flash`. Bu sıra HER YERDE geçerlidir — okuma,
 prefetch, toplu çeviri, "yeniden çevir", içe aktarılan sayfa çevirisi (`import_translate`)
 ve sözlük terim önerisi (`suggest_term`) aynı sabiti kullanır; `refresh` YALNIZ önbelleği
 yok sayar, model sırasına karışmaz. Yola göre AYRI zincir (ucuz okuma / kaliteli refresh)
@@ -207,7 +207,8 @@ göstergeye girmez — "0,00 $ harcadın" satırları asıl bilgiyi gürültüye
 yazımı `sqlite3.Error`'ı YUTAR: gösterge, çeviri yolunun kritik parçası değil.
 
 **`gemini-3.5-flash-lite` ZİNCİRDEN ÇIKARILDI** (2026-09-09, kullanıcı kararı).
-Zincir artık İKİ halka. Lite bir dönem son halkaydı ("en dayanıklısı, zincir tükenmesin
+Zincir o gün İKİ halkaya indi (2026-09-15'te 2.5-flash ile yeniden ÜÇ oldu; aşağıya
+bak). Lite bir dönem son halkaydı ("en dayanıklısı, zincir tükenmesin
 diye") ama sözlük uyumu ölçülenlerin en kötüsüydü — 4 bölümde 30 ihlal, 3.6-flash 60
 bölümde 5. Son halka olması durumu ağırlaştırıyordu: üst halkalar elendiğinde okuma
 sessizce ORAYA iniyor, çeviri kalıcı önbelleğe yazılıyor ve bir daha denetlenmiyordu.
@@ -366,11 +367,34 @@ altına yazılır. **Takma adlar (`gemini-flash-latest`) zincire konmaz**: harek
 ölçtüğümüz model bir gün sessizce başkası olur.
 
 **`gemini-2.5-flash` EKLENDİ, `gemini-3-flash-preview` ÖLÇÜLEREK ELENDİ**
-(2026-09-06, kullanıcı isteği + ölçüm). 2.5 YALNIZ seçilebilir listeye girdi,
+(2026-09-06, kullanıcı isteği + ölçüm). 2.5 O GÜN yalnız seçilebilir listeye girdi,
 `DEFAULT_MODELS` zincirine DEĞİL. Ayrım load-bearing: seçilebilir liste bir
 TEKLİFTİR, zincir ise hiç kimse seçim yapmadığında herkesin düştüğü yoldur —
 ölçülmemiş bir modeli zincire koymak, ayarı hiç açmamış kullanıcının çevirisini
-sessizce değiştirirdi.
+sessizce değiştirirdi. **Listeye eklemek zincire eklemek değildir; zincire giriş
+ayrı bir karar ister.** (Bugün listede olup zincirde OLMAYANLAR bunun kanıtı: 3.8
+ve 3.7 uzun bölümleri 503 ile reddediyor, Claude ise ücretli.)
+
+**2.5-flash ZİNCİRE TERFİ ETTİ — ÜÇÜNCÜ ve SON halka** (2026-09-15, kullanıcı
+kararı; yukarıdaki kaydı GÜNCELLER). Gerekçe bir arıza: zincirin iki halkası da
+3.x AİLESİNDENDİ (`3.6-flash`, `3.5-flash`) ve o aile kullanıcının anahtarlarına
+404 dönmeye başlayınca ayakta kalan hiçbir halka kalmadı — çeviri TÜMDEN durdu.
+2.5 o gün çalışan tek modeldi ama yalnız listede olduğu için, ancak ayarı açıp
+elle seçen kullanıcı çeviri yapabildi.
+
+**Ders: zincirin dayanıklılığı halka SAYISINDAN değil, halkaların BİRLİKTE
+ölmemesinden gelir.** Aynı ailenin iki sürümü ortak bir kaderi paylaşır — aynı
+erişim politikası, yakın kota havuzları. Farklı nesilden bir halka bunu kırar;
+2.5'in kotası 3.x'ten ayrıdır. `tests/test_ceviri_yolu.py` zincirin kazara
+yeniden TEK AİLEYE daralmasını bir tel tuzağıyla tutar.
+
+2.5 **SONA** konur, başa değil: ölçümde 3.6-flash hâlâ daha iyi (uzunluk oranı
+0,972 / 0,932), yani 3.x çalışırken davranış birebir eskisi gibi kalır ve 2.5'e
+ancak üst halkalar elendiğinde inilir. Başa alınsaydı 3.x geri geldiğinde herkesin
+çevirisi sessizce daha kötü bir modele kayardı. Künye rozeti fiilen çevirenin adını
+yazdığı için inildiği gizlenmez. Bu, "zincire ÖLÇÜLMEMİŞ model koyma" kuralının
+istisnası DEĞİL — 2.5 ölçülmüştü (oran 0,932, hizalama 3/3, 3 bölümde 1 sözlük
+ihlali, ölçülenlerin en hızlısı); ölçülmemiş olsaydı yine listede kalırdı.
 
 **`gemini-3-flash` diye bir ad YOK.** Yoklandı: `gemini-3-flash` ve
 `gemini-3.0-flash` 404 dönüyor; çalışan ad `gemini-3-flash-preview`. Bu, projenin
