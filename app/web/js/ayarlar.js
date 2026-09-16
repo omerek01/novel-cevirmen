@@ -1,6 +1,7 @@
 /* Okuma ayarları (tema, punto, satır aralığı, kenar, sonsuz okuma), çeviri modeli
    seçimi, harcama göstergesi, kabuk sürümü ve sıfırlama. */
 
+import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { refreshStreamEnd, setStatus } from "./okuyucu.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { ICONS, THEME_ICON, el, markSegment } from "./temel.js";
@@ -323,11 +324,13 @@ export function kur() {
   });
 
   el("settingsBtn").addEventListener("click", () => {
-    el("settingsPanel").hidden = !el("settingsPanel").hidden;
-    if (!el("settingsPanel").hidden) {
-      showShellVersion();
-      loadModelSecim();
+    if (diyalogAcikMi("settingsPanel")) {
+      diyalogKapat("settingsPanel");
+      return;
     }
+    diyalogAc("settingsPanel");
+    showShellVersion();
+    loadModelSecim();
   });
 
   el("shellReset")?.addEventListener("click", async () => {

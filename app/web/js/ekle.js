@@ -1,5 +1,6 @@
 /* Kitap ekle: URL / metin yapıştır / dosya (EPUB, PDF, manga). */
 
+import { diyalogAc, diyalogKapat } from "./diyalog.js";
 import { navigate } from "./gezinme.js";
 import { fetchBooks } from "./kutuphane.js";
 import { el, markSegment } from "./temel.js";
@@ -123,13 +124,13 @@ export async function openAddModal() {
   el("uploadProgress").hidden = true;
   el("uploadStatus").textContent = "";
   setAddTab(addTab);
-  el("addModal").hidden = false;
+  diyalogAc("addModal");
   fillPasteBookSelect();
   if (addTab === "url") el("addUrlInput").focus();
 }
 export function closeAddModal() {
   savePasteDraft(); // taslak kaybolmasın
-  el("addModal").hidden = true;
+  diyalogKapat("addModal");
 }
 
 export async function submitPaste() {
@@ -163,7 +164,7 @@ export async function submitPaste() {
     ["pasteBookTitle", "pasteChapterTitle", "pasteChapterNo", "pasteText"].forEach(
       (id) => (el(id).value = "")
     );
-    el("addModal").hidden = true;
+    diyalogKapat("addModal");
     // Kitap görünümüne git: koşan paste-import işi ilerleme ekranını kendisi açar.
     navigate({ view: "book", slug: data.slug });
   } catch {

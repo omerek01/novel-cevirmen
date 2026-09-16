@@ -195,9 +195,9 @@
   </section>
 
   <!-- KİTAP EKLE -->
-  <div id="addModal" class="modal" hidden>
+  <dialog id="addModal" class="modal" aria-labelledby="addModal-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">KİTAP EKLE</h3>
+      <h3 id="addModal-baslik" class="modal-title">KİTAP EKLE</h3>
       <!-- D-B4/5/8v2: tek giriş, açık sekmeler (DOSYA sekmesi EPUB/PDF dilimiyle gelir). -->
       <div class="segmented add-tabs" role="group" aria-label="Ekleme türü">
         <button class="seg" data-add-tab="url" aria-pressed="true">URL</button>
@@ -245,12 +245,12 @@
         <button id="addConfirm" class="next-btn">Ekle ve Oku</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- TOPLU ÇEVİR -->
-  <div id="bulkModal" class="modal" hidden>
+  <dialog id="bulkModal" class="modal" aria-labelledby="bulkModal-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">TOPLU ÇEVİR</h3>
+      <h3 id="bulkModal-baslik" class="modal-title">TOPLU ÇEVİR</h3>
       <p class="modal-hint">
         En son çevrilmiş bölümden ileriye doğru kaç bölüm önceden çevrilsin?
         Çevrilmiş bölümler atlanır (kota harcanmaz). Sekmeyi kapatsan veya
@@ -262,12 +262,12 @@
         <button id="bulkStart" class="next-btn">Başlat</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- TOPLU ÇEVİR İLERLEME -->
-  <div id="bulkProgress" class="modal" hidden>
+  <dialog id="bulkProgress" class="modal" aria-labelledby="bulkProgress-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">ÇEVRİLİYOR…</h3>
+      <h3 id="bulkProgress-baslik" class="modal-title">ÇEVRİLİYOR…</h3>
       <p id="bulkProgressText" class="modal-hint">Hazırlanıyor…</p>
       <p class="modal-hint">
         İş sunucuda sürer: bu ekranı arka plana atıp okumaya devam edebilirsin.
@@ -279,12 +279,12 @@
         <button id="bulkHide" class="next-btn">Arka Plana Al</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- KİTAP BİRLEŞTİR -->
-  <div id="mergeModal" class="modal" hidden>
+  <dialog id="mergeModal" class="modal" aria-labelledby="mergeModal-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">KİTAPLARI BİRLEŞTİR</h3>
+      <h3 id="mergeModal-baslik" class="modal-title">KİTAPLARI BİRLEŞTİR</h3>
       <p class="modal-hint">
         Bu kitabı, aynı seri olan başka bir kitapla birleştir. Bölümleri ve sözlüğü
         seçtiğin kitaba taşınır; bu kitap listeden kalkar. Bundan sonra bu kaynaktan
@@ -295,23 +295,23 @@
         <button id="mergeCancel" class="pill">Vazgeç</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- ÇEVRİMDIŞI İNDİR İLERLEME -->
-  <div id="offlineProgress" class="modal" hidden>
+  <dialog id="offlineProgress" class="modal" aria-labelledby="offlineProgress-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">TELEFONA İNDİRİLİYOR…</h3>
+      <h3 id="offlineProgress-baslik" class="modal-title">TELEFONA İNDİRİLİYOR…</h3>
       <p id="offlineProgressText" class="modal-hint">Hazırlanıyor…</p>
       <div class="modal-actions">
         <button id="offlineStop" class="pill">Durdur</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- BÖLÜM EKLE (bu kitaba) -->
-  <div id="chapterAddModal" class="modal" hidden>
+  <dialog id="chapterAddModal" class="modal" aria-labelledby="chapterAddModal-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">BÖLÜM EKLE</h3>
+      <h3 id="chapterAddModal-baslik" class="modal-title">BÖLÜM EKLE</h3>
       <div class="segmented" role="group" aria-label="Ekleme yöntemi">
         <button class="seg" data-chadd-tab="paste" aria-pressed="true">METİN YAPIŞTIR</button>
         <button class="seg" data-chadd-tab="url" aria-pressed="false">WEB ADRESİ</button>
@@ -336,12 +336,12 @@
         <button id="chAddConfirm" class="next-btn">Ekle</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- ePub İNDİR -->
-  <div id="epubModal" class="modal" hidden>
+  <dialog id="epubModal" class="modal" aria-labelledby="epubModal-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">ePub İNDİR</h3>
+      <h3 id="epubModal-baslik" class="modal-title">ePub İNDİR</h3>
       <p class="modal-hint">
         Çevrilmiş bölümlerden e-kitap oluştur. Sadece çevrilmiş bölümler eklenir.
       </p>
@@ -358,7 +358,7 @@
         <button id="epubDownload" class="next-btn">İndir</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- Kısa bildirim (GERİ AL vb.). Tek alan: yeni bildirim eskisinin yerini alır. -->
   <div id="bildirim" class="bildirim" role="status" aria-live="polite" hidden></div>
@@ -366,9 +366,9 @@
   <!-- SEÇİMDEN SÖZLÜĞE: okurken metin seçilince beliren kısayol -->
   <button id="selGlossBtn" class="sel-gloss-btn" hidden>+ SÖZLÜĞE EKLE</button>
 
-  <div id="glossQuickModal" class="modal" hidden>
+  <dialog id="glossQuickModal" class="modal" aria-labelledby="glossQuickModal-baslik">
     <div class="modal-card">
-      <h3 class="modal-title">SÖZLÜĞE EKLE</h3>
+      <h3 id="glossQuickModal-baslik" class="modal-title">SÖZLÜĞE EKLE</h3>
       <p id="glossQuickHint" class="modal-hint"></p>
       <div class="gloss-add gloss-add-stack">
         <input id="glossQuickSource" type="text" placeholder="Kaynak (İngilizce)"
@@ -382,11 +382,11 @@
         <button id="glossQuickSave" class="next-btn">Kaydet</button>
       </div>
     </div>
-  </div>
+  </dialog>
 
   <!-- Ayarlar: alttan açılan sheet. `readerView` içindeyken yalnız
        okuyucuda erişilebiliyordu, oysa içindeki ayarların hepsi global. -->
-  <div id="settingsPanel" class="settings-panel" hidden>
+  <dialog id="settingsPanel" class="settings-panel" aria-label="Okuma ayarları">
     <div class="setting-row">
       <span>Tema</span>
       <div class="segmented" role="group" aria-label="Tema">
@@ -454,7 +454,7 @@
       <span>Uygulama kabuğu <span id="shellVersion" class="shell-ver"></span></span>
       <button id="shellReset" class="pill">Sıfırla</button>
     </div>
-  </div>
+  </dialog>
 
   <!-- ALT GEZINME (Stitch "Level 1 docked container").
        UC sekme, dordu degil: Stitch'in "Guncellemeler" sekmesinin bu projede

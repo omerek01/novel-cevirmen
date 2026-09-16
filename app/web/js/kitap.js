@@ -1,5 +1,6 @@
 /* Kitap sayfası: bölüm listesi, toplu çeviri, birleştirme, silme, bölüm ekleme, ePub. */
 
+import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { chaptersOf, otoCevrimdisiKaydet, otoIndirmeTur, purgeChapterFromSwCache } from "./cevrimdisi.js";
 import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
@@ -159,7 +160,7 @@ export function hideBulkToBackground(jobId) {
   bulkActiveJobId = null;
   clearTimeout(bulkPollTimer);
   clearTimeout(bulkDoneTimer);
-  el("bulkProgress").hidden = true;
+  diyalogKapat("bulkProgress");
 }
 
 export async function startBulk(count) {
@@ -188,7 +189,7 @@ export async function startBulk(count) {
 
   el("bulkProgressText").textContent = "Başlatılıyor…";
   el("bulkStop").disabled = false;
-  el("bulkProgress").hidden = false;
+  diyalogAc("bulkProgress");
 
   let jobId;
   try {
@@ -215,7 +216,7 @@ export async function startBulk(count) {
 export function openBulkProgress(job) {
   el("bulkProgressText").textContent = job.message || "Hazırlanıyor…";
   el("bulkStop").disabled = false;
-  el("bulkProgress").hidden = false;
+  diyalogAc("bulkProgress");
   el("bulkStop").onclick = () => {
     fetch(`/api/bulk/${job.id}/stop`, { method: "POST" }).catch(() => {});
   };
@@ -237,7 +238,7 @@ export function pollBulk(jobId) {
   // Ekran kapandıysa VEYA ekran artık başka bir işi gösteriyorsa bu anket ölür.
   // Görünürlük tek başına yetmez: A işinin uçuştaki yanıtı, araya giren B işinin
   // açık ekranını "görünür" bulup B'nin ilerlemesini ezebilirdi.
-  const stale = () => el("bulkProgress").hidden || bulkActiveJobId !== jobId;
+  const stale = () => !diyalogAcikMi("bulkProgress") || bulkActiveJobId !== jobId;
   const tick = async () => {
     if (stale()) return;
     let s;
@@ -261,7 +262,7 @@ export function pollBulk(jobId) {
       const jobSlug = durum.currentBookSlug;
       bulkDoneTimer = setTimeout(() => {
         if (stale()) return;
-        el("bulkProgress").hidden = true;
+        diyalogKapat("bulkProgress");
         bulkActiveJobId = null;
         if (jobSlug && jobSlug === durum.currentBookSlug && !views.book.hidden) {
           openBook(jobSlug);
@@ -299,7 +300,7 @@ export function openChapterAddModal() {
     : "Takılan/eksik bir bölümün metnini, o bölümün web adresiyle yapıştır. Kitap web bağlantısını korur.";
   ["chAddPasteUrl", "chAddTitle", "chAddText", "chAddFetchUrl"].forEach((id) => (el(id).value = ""));
   setChAddTab("paste");
-  el("chapterAddModal").hidden = false;
+  diyalogAc("chapterAddModal");
 }
 
 export async function submitChapterAdd() {
@@ -343,7 +344,7 @@ export async function submitChapterAdd() {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail?.message || err.detail || "Ekleme başarısız.");
     }
-    el("chapterAddModal").hidden = true;
+    diyalogKapat("chapterAddModal");
     openBook(durum.currentBookSlug); // liste yenilensin, yeni bölüm görünsün
   } catch (e) {
     alert(String(e.message || e));
@@ -391,7 +392,7 @@ export async function openMergeModal() {
       list.appendChild(row);
     }
   }
-  el("mergeModal").hidden = false;
+  diyalogAc("mergeModal");
 }
 
 export async function confirmMerge(target) {
@@ -408,13 +409,13 @@ export async function confirmMerge(target) {
       body: JSON.stringify({ target: target.slug }),
     });
     const data = await res.json();
-    el("mergeModal").hidden = true;
+    diyalogKapat("mergeModal");
     durum.currentBookSlug = data.canonical || target.slug;
     // Mevcut book kaydını kanonik slug'la güncelle (birleşmeyle eski slug kaybolabilir).
     history.replaceState({ view: "book", slug: durum.currentBookSlug }, "");
     openBook(durum.currentBookSlug);
   } catch {
-    el("mergeModal").hidden = true;
+    diyalogKapat("mergeModal");
   }
 }
 
@@ -422,6 +423,12 @@ export async function confirmMerge(target) {
    çağırınca kurulur — döngüsel içe aktarmalarda yarım değerlendirilmiş bir
    modülün fonksiyonuna erken dokunulmasın. */
 export function kur() {
+  // Escape = "Arka Plana Al": iş sunucuda sürer, pencere yalnız gizlenir. Varsayılan
+  // kapanış anketi sahipsiz bırakırdı (ekran kapalıyken durum yazmaya çalışırdı).
+  el("bulkProgress").addEventListener("cancel", (e) => {
+    e.preventDefault();
+    el("bulkHide").click();
+  });
   // D-B12: durum düzenleme kitap görünümünde. İyimser güncelle; sunucu reddederse
   // eski değere dön (kalıcı yanlış aria-pressed bırakma).
   document.querySelectorAll("[data-status-opt]").forEach((b) =>
@@ -463,15 +470,15 @@ export function kur() {
       return;
     }
     el("bulkCount").value = "10";
-    el("bulkModal").hidden = false;
+    diyalogAc("bulkModal");
   });
   el("bulkCancel").addEventListener("click", () => {
-    el("bulkModal").hidden = true;
+    diyalogKapat("bulkModal");
   });
 
   el("bulkStart").addEventListener("click", () => {
     const n = Math.max(1, Math.min(500, parseInt(el("bulkCount").value, 10) || 0));
-    el("bulkModal").hidden = true;
+    diyalogKapat("bulkModal");
     startBulk(n);
   });
 
@@ -479,33 +486,33 @@ export function kur() {
   el("mergeBtn")?.addEventListener("click", openMergeModal);
   el("deleteBookBtn")?.addEventListener("click", deleteCurrentBook);
   el("addChapterBtn")?.addEventListener("click", openChapterAddModal);
-  el("chAddCancel")?.addEventListener("click", () => (el("chapterAddModal").hidden = true));
+  el("chAddCancel")?.addEventListener("click", () => diyalogKapat("chapterAddModal"));
   el("chapterAddModal")?.addEventListener("click", (e) => {
-    if (e.target === el("chapterAddModal")) el("chapterAddModal").hidden = true;
+    if (e.target === el("chapterAddModal")) diyalogKapat("chapterAddModal");
   });
   document.querySelectorAll("#chapterAddModal .seg[data-chadd-tab]").forEach((b) =>
     b.addEventListener("click", () => setChAddTab(b.dataset.chaddTab))
   );
   el("chAddConfirm")?.addEventListener("click", submitChapterAdd);
   el("mergeCancel")?.addEventListener("click", () => {
-    el("mergeModal").hidden = true;
+    diyalogKapat("mergeModal");
   });
   el("mergeModal")?.addEventListener("click", (e) => {
-    if (e.target === el("mergeModal")) el("mergeModal").hidden = true;
+    if (e.target === el("mergeModal")) diyalogKapat("mergeModal");
   });
 
   /* ---------- ePub ---------- */
   el("epubBtn").addEventListener("click", () => {
-    el("epubModal").hidden = false;
+    diyalogAc("epubModal");
   });
   el("epubCancel").addEventListener("click", () => {
-    el("epubModal").hidden = true;
+    diyalogKapat("epubModal");
   });
   el("epubDownload").addEventListener("click", () => {
     if (!durum.currentBookSlug) return;
     const start = Math.max(1, parseInt(el("epubStart").value, 10) || 1);
     const count = Math.max(1, Math.min(2000, parseInt(el("epubCount").value, 10) || 1));
-    el("epubModal").hidden = true;
+    diyalogKapat("epubModal");
     const url =
       `/api/book/${encodeURIComponent(durum.currentBookSlug)}/epub?start=${start}&count=${count}`;
     const a = document.createElement("a");

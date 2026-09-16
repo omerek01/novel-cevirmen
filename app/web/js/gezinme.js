@@ -1,5 +1,6 @@
 /* Görünüm değişimi ve geçmiş (history) tabanlı uygulama-içi geri; alt gezinme. */
 
+import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { settings } from "./ayarlar.js";
 import { startOfflineDownloadAll } from "./cevrimdisi.js";
 import { views } from "./durum.js";
@@ -25,7 +26,7 @@ export function showView(name) {
   if (name === "reader") hudGoster();
   // Okuyucudan çıkarken açık kalmış ayar sheet'i kapansın: body seviyesine
   // taşındığı için artık görünüm değişince kendiliğinden gizlenmiyor.
-  if (name !== "reader") el("settingsPanel").hidden = true;
+  if (name !== "reader") diyalogKapat("settingsPanel");
   senkronlaSekme(name);
 }
 
@@ -35,7 +36,7 @@ export function showView(name) {
    koymak, tasarımdan çıkarılan puan/yazar/özet alanlarıyla aynı türden bir boş
    vaat olurdu. */
 export function senkronlaSekme(name) {
-  const acik = !el("settingsPanel").hidden;
+  const acik = diyalogAcikMi("settingsPanel");
   for (const t of document.querySelectorAll(".navtab")) {
     const etkin = acik ? t.dataset.tab === "settings"
                        : t.dataset.tab === "library" && name === "library";
@@ -121,12 +122,12 @@ export function kur() {
       tab.querySelector(".navtab-icon").innerHTML = IKON[ad] || "";
       tab.addEventListener("click", () => {
         if (ad === "library") {
-          el("settingsPanel").hidden = true;
+          diyalogKapat("settingsPanel");
           navigate({ view: "library" });
         } else if (ad === "offline") {
           // İndirme kütüphane ekranının akışı: başka görünümdeysen önce oraya dön,
           // yoksa ilerleme satırı görünmeyen bir ekranda akardı.
-          el("settingsPanel").hidden = true;
+          diyalogKapat("settingsPanel");
           if (views.library.hidden) navigate({ view: "library" });
           startOfflineDownloadAll();
         } else if (ad === "settings") {

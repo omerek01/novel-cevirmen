@@ -1,5 +1,6 @@
 /* Okurken seçimden sözlüğe ekleme kısayolu. */
 
+import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { durum, views } from "./durum.js";
 import { fetchGlossary, fetchWithTimeout, kuyruk, kuyrukDinle, saveTerm } from "./sozluk.js";
 import { el } from "./temel.js";
@@ -89,7 +90,7 @@ export function openGlossQuick() {
     ? "Karakter adıysa İngilizce kalır, değilse Türkçe karşılığı yazılır. Sözlük YALNIZ bundan sonra çevrilecek bölümlerde geçerlidir."
     : "Türkçe metinden seçtin: bunu KARŞILIK alanına koydum, kaynak İngilizce terimi sen yaz. Sözlük yalnız bundan sonra çevrilecek bölümlerde geçerlidir.";
   el("glossQuickState").textContent = "";
-  el("glossQuickModal").hidden = false;
+  diyalogAc("glossQuickModal");
   hideSelGloss();
   window.getSelection()?.removeAllRanges();
   (kaynaktan ? el("glossQuickTarget") : el("glossQuickSource")).focus();
@@ -106,7 +107,7 @@ export async function doldurOneri(secim) {
   // Zaten kayıtlıysa öneri istemeye gerek yok (kayıt INSERT OR REPLACE: kullanıcı
   // üzerine yazdığını bilerek yazsın). Çevrimdışıysa boş döner, akış sürer.
   const terms = await fetchGlossary(durum.currentBookSlug);
-  if (el("glossQuickModal").hidden) return; // kullanıcı bu arada kapattı
+  if (!diyalogAcikMi("glossQuickModal")) return; // kullanıcı bu arada kapattı
   if (terms[terim] !== undefined) {
     if (!el("glossQuickTarget").value.trim()) el("glossQuickTarget").value = terms[terim];
     el("glossQuickState").textContent =
@@ -126,13 +127,13 @@ export async function doldurOneri(secim) {
     );
     if (!res.ok) throw new Error("öneri alınamadı");
     const data = await res.json();
-    if (el("glossQuickModal").hidden) return;
+    if (!diyalogAcikMi("glossQuickModal")) return;
     if (!el("glossQuickTarget").value.trim()) el("glossQuickTarget").value = data.target || terim;
     el("glossQuickState").textContent = data.is_character
       ? "Karakter adı → İngilizce kalacak. Yanlışsa karşılığı sen yaz."
       : "Önerilen karşılık dolduruldu; istersen değiştir.";
   } catch {
-    if (el("glossQuickModal").hidden) return;
+    if (!diyalogAcikMi("glossQuickModal")) return;
     el("glossQuickState").textContent =
       "Öneri alınamadı (sunucu kapalı ya da kota dolu olabilir) — karşılığı elle yaz.";
   }
@@ -179,7 +180,7 @@ function hizliKaydiIzle(id, source, target, kalici) {
     if (ad === "gonderildi") {
       hizliKaydiBirak();
       yaz(`Sunucuya kaydedildi: ${source} → ${target}`);
-      setTimeout(() => (el("glossQuickModal").hidden = true), 900);
+      setTimeout(() => diyalogKapat("glossQuickModal"), 900);
     } else if (ad === "hata") {
       hizliKaydiBirak();
       yaz(
@@ -190,7 +191,7 @@ function hizliKaydiIzle(id, source, target, kalici) {
       hizliKaydiBirak();
       if (kuyruk.kalici()) {
         yaz(`Cihazda bekliyor: ${source} → ${target} — sunucuya ulaşınca kendiliğinden kaydedilecek.`);
-        setTimeout(() => (el("glossQuickModal").hidden = true), 1800);
+        setTimeout(() => diyalogKapat("glossQuickModal"), 1800);
       } else {
         yaz(
           `Sunucuya ulaşılamadı ve cihaza da yazılamadı: uygulamayı kapatırsan ${source} kaybolur. ` +
@@ -219,10 +220,10 @@ export function kur() {
   el("glossQuickSave")?.addEventListener("click", saveGlossQuick);
   el("glossQuickCancel")?.addEventListener("click", () => {
     hizliKaydiBirak();
-    el("glossQuickModal").hidden = true;
+    diyalogKapat("glossQuickModal");
   });
   el("glossQuickModal")?.addEventListener("click", (e) => {
-    if (e.target === el("glossQuickModal")) el("glossQuickModal").hidden = true;
+    if (e.target === el("glossQuickModal")) diyalogKapat("glossQuickModal");
   });
   for (const id of ["glossQuickSource", "glossQuickTarget"]) {
     el(id)?.addEventListener("keydown", (e) => {

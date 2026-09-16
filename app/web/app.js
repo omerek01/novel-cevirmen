@@ -6,6 +6,7 @@
    eklenmeli — yoksa çevrimdışı açılışta o modül indirilemez ve uygulama
    hiç başlamaz (tests/test_modul_kabugu.py bunu tutar). */
 
+import { kur as diyalogKur } from "./js/diyalog.js";
 import { showView, kur as gezinmeKur } from "./js/gezinme.js";
 import { renderLibrary, kur as kutuphaneKur } from "./js/kutuphane.js";
 import { kur as kitapKur } from "./js/kitap.js";
@@ -16,6 +17,7 @@ import { kur as cevrimdisiKur } from "./js/cevrimdisi.js";
 import { kur as ekleKur } from "./js/ekle.js";
 import { kur as sozluk_secimKur } from "./js/sozluk-secim.js";
 
+diyalogKur();
 gezinmeKur();
 kutuphaneKur();
 kitapKur();

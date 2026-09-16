@@ -1,6 +1,7 @@
 /* Okuyucu: sonsuz okuma akışı, bölüm çizimi, künye, prefetch, iki-dilli satır,
    bölümde arama, köken odağı. */
 
+import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { settings } from "./ayarlar.js";
 import { warmOffline } from "./cevrimdisi.js";
 import { durum, views } from "./durum.js";
@@ -149,7 +150,7 @@ export function hudGuncelle() {
   if (!bar) return;
   // Ayar sheet'i ya da arama çubuğu açıkken HUD kaçmaz: kullanıcı o an onlarla
   // uğraşıyor ve dayanak aldığı çubuğun kayması yön kaybettirir.
-  if (!el("settingsPanel").hidden || !el("findBar").hidden) {
+  if (diyalogAcikMi("settingsPanel") || !el("findBar").hidden) {
     bar.classList.remove("hud-gizli");
     return;
   }
@@ -378,7 +379,7 @@ export async function loadChapter(url, opts = {}) {
   const wasHidden = views.reader.hidden;
   if (wasHidden) showView("reader");
   closeFind();
-  el("settingsPanel").hidden = true;
+  diyalogKapat("settingsPanel");
   resetStream();
   setStatus(refresh ? "Yeniden çevriliyor…" : "Yükleniyor…");
 

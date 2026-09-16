@@ -1,5 +1,7 @@
 /* Çevrimdışı: service worker önbelleği yardımcıları, otomatik ve elle indirme. */
 
+import { bildir } from "./bildirim.js";
+import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { durum } from "./durum.js";
 import { openBook, pollBulk } from "./kitap.js";
 import { fetchBooks } from "./kutuphane.js";
@@ -7,6 +9,11 @@ import { chapterListFor } from "./okuyucu.js";
 import { ICONS, el } from "./temel.js";
 
 export let offlineStop = false;
+/* Elle "çevrimdışı indir" sürüyor mu. Otomatik tarama buna bakıp çekilir.
+   Eskiden ilerleme penceresinin GÖRÜNÜRLÜĞÜNE bakılıyordu; pencere artık Escape
+   ile kapatılabiliyor ve indirme arka planda sürüyor — görünürlük "sürüyor"
+   demek değil. */
+export let elleIndirmeSuruyor = false;
 
 /* ---------- bölüm silme ---------- */
 // SW, /api/chapter yanıtlarını kalıcı önbelleğe alır (çevrimdışı okuma). Sunucudan
@@ -116,7 +123,7 @@ export async function otoIndirmeTur() {
   if (otoIndirmeCalisiyor) return;
   // Elle indirme açıksa karışma: ikisi aynı bölümleri çekip sunucuyu iki katına
   // çıkarır ve ilerleme sayısı yanlış görünürdü.
-  if (!el("offlineProgress")?.hidden) return;
+  if (elleIndirmeSuruyor) return;
   if (navigator.onLine === false) return;
 
   // GÜVENLİ BAĞLAM ŞART ve bunu SÖYLEMEK de şart (2026-09-10).
@@ -160,7 +167,7 @@ export async function otoIndirmeTur() {
     let indi = 0;
     for (const url of eksikler) {
       // Çevrimdışına düşülürse ya da kullanıcı elle indirmeyi başlatırsa BIRAK.
-      if (navigator.onLine === false || !el("offlineProgress")?.hidden) break;
+      if (navigator.onLine === false || elleIndirmeSuruyor) break;
       otoIndirmeDurum(`${indi + 1}/${eksikler.length} bölüm çevrimdışına alınıyor…`);
       await warmOffline(url);
       indi++;
@@ -201,18 +208,19 @@ export async function runOfflineDownload(slugs) {
     total += chs.length;
   }
 
-  el("offlineProgress").hidden = false;
+  diyalogAc("offlineProgress");
   if (total === 0) {
     el("offlineStop").disabled = true;
     el("offlineProgressText").textContent = "İndirilecek çevrilmiş bölüm yok.";
     setTimeout(() => {
-      el("offlineProgress").hidden = true;
+      diyalogKapat("offlineProgress");
       el("offlineStop").disabled = false;
     }, 1800);
     return;
   }
 
   offlineStop = false;
+  elleIndirmeSuruyor = true;
   el("offlineStop").disabled = false;
   el("offlineProgressText").textContent = "Hazırlanıyor…";
 
@@ -232,13 +240,17 @@ export async function runOfflineDownload(slugs) {
     }
   }
 
+  elleIndirmeSuruyor = false;
   const tail = failed ? ` (${failed} başarısız)` : "";
-  el("offlineProgressText").textContent = offlineStop
+  const ozet = offlineStop
     ? `Durduruldu. ${done}/${total} bölüm telefonda.`
     : `Bitti — ${done}/${total} bölüm telefonda${tail}.`;
+  el("offlineProgressText").textContent = ozet;
+  // Pencere Escape ile kapatıldıysa sonuç yine SÖYLENİR.
+  if (!diyalogAcikMi("offlineProgress")) bildir(ozet);
   el("offlineStop").disabled = true;
   setTimeout(() => {
-    el("offlineProgress").hidden = true;
+    diyalogKapat("offlineProgress");
     el("offlineStop").disabled = false;
   }, 2200);
 }
