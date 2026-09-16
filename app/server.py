@@ -656,8 +656,10 @@ def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
 
 @app.delete("/api/book/{slug}/glossary")
 def delete_book_glossary(slug: str, source: str = Query(...)) -> dict:
-    glossary.delete_term(slug, source)
-    return {"terms": glossary.get_glossary(slug)}
+    # `silinen` GERİ ALMA içindir: okuyucu onu içe aktarma ucuyla (dosya
+    # stratejisi) geri yazar; koşul ve köken kaybolmaz. Terim yoksa null.
+    silinen = glossary.delete_term(slug, source)
+    return {"terms": glossary.get_glossary(slug), "silinen": silinen}
 
 
 @app.post("/api/book/{slug}/glossary/suggest")

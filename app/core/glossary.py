@@ -461,16 +461,45 @@ def kitaba_tasi(conn: sqlite3.Connection, kaynak_slug: str, hedef_slug: str) -> 
     conn.execute("DELETE FROM glossary WHERE book_slug = ?", (kaynak_slug,))
 
 
-def delete_term(book_slug: str, source: str) -> None:
+def delete_term(book_slug: str, source: str) -> dict | None:
+    """Terimi sil; silinen satırı TAM hâliyle döndür (yoksa None).
+
+    Dönüş değeri GERİ ALMA içindir: okuyucu silinen kaydı içe aktarma ucuyla
+    (dosya stratejisi) geri yazar ve koşul + köken kaybolmaz. Yalnız karşılık
+    geri gelseydi geri alınan kayıt "elle, şimdi eklendi" görünür ve prompt'taki
+    bağlam kuralı sessizce yok olurdu.
+
+    Eşleştirme `fold_term` ile: "OreEmpire" silme isteği "Ore Empire" kaydını
+    bulur — `set_term` de aynı kuralla yazıyor.
+    """
+    anahtar = fold_term(normalize_source(source) or source)
     conn = _connect()
     try:
+        bulunan = next(
+            (
+                r
+                for r in conn.execute(
+                    "SELECT source, target, created_at, origin, first_chapter, kosul, "
+                    "kaynak_cumle FROM glossary WHERE book_slug = ?",
+                    (book_slug,),
+                )
+                if fold_term(r[0]) == anahtar
+            ),
+            None,
+        )
+        if bulunan is None:
+            return None
         conn.execute(
             "DELETE FROM glossary WHERE book_slug = ? AND source = ?",
-            (book_slug, source),
+            (book_slug, bulunan[0]),
         )
         conn.commit()
     finally:
         conn.close()
+    return dict(zip(
+        ("source", "target", "created_at", "origin", "first_chapter", "kosul", "kaynak_cumle"),
+        bulunan,
+    ))
 
 
 # Yazım varyantı ayırıcıları. Aynı özel ad metinde "Ore Empire", "OreEmpire",
