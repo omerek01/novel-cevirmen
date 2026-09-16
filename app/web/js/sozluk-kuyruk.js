@@ -123,6 +123,7 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
     const d = oku();
     const anahtar = anahtarla(source);
     let kosul = alanlar.kosul;
+    let ornek = alanlar.ornek;
     const kalanlar = [];
     for (const op of d.islemler) {
       const ayniTerim = op.slug === slug && anahtarla(op.source) === anahtar;
@@ -135,12 +136,18 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
       if (alanlar.tur === "yaz" && kosul === undefined && op.tur === "yaz" && op.kosul !== undefined) {
         kosul = op.kosul;
       }
+      // Köken örneği de taşınır: okurken eklenip hemen düzeltilen terim, eklendiği
+      // bölümü ve cümleyi kaybetmemeli.
+      if (alanlar.tur === "yaz" && ornek === undefined && op.tur === "yaz" && op.ornek) {
+        ornek = op.ornek;
+      }
     }
     d.sayac += 1;
     const yeni = { id: d.sayac, slug, source, tur: alanlar.tur, zaman: simdi(), durum: "bekliyor", deneme: 0 };
     if (alanlar.tur === "yaz") {
       yeni.target = alanlar.target;
       if (kosul !== undefined) yeni.kosul = kosul;
+      if (ornek) yeni.ornek = ornek;
     } else if (alanlar.tur === "geri") {
       yeni.kayit = alanlar.kayit;
     }

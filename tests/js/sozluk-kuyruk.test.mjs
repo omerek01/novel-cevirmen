@@ -92,6 +92,16 @@ test("koşul verilmeyen düzeltme az önce yazılan koşulu taşır; boş koşul
   assert.equal(k.islemler()[0].kosul, "");
 });
 
+test("köken örneği olmayan düzeltme az önce eklenen terimin örneğini taşır", () => {
+  const k = kuyrukOlustur({ depo: bellekDepo(), gonder: elleGonderici().gonder });
+  const ornek = { bolum: 4, kaynak_cumle: "Great rank." };
+  k.ekle("kitap", "Great", { tur: "yaz", target: "Ulu", ornek });
+  k.ekle("kitap", "Great", { tur: "yaz", target: "Yüce" });
+  assert.equal(k.islemler().length, 1);
+  assert.deepEqual(k.islemler()[0].ornek, ornek);
+  assert.equal(k.islemler()[0].target, "Yüce");
+});
+
 test("koşul hiç verilmediyse işlem koşul ALANI taşımaz (sunucu mevcut koşulu korur)", () => {
   const k = kuyrukOlustur({ depo: bellekDepo(), gonder: elleGonderici().gonder });
   k.ekle("kitap", "Great", { tur: "yaz", target: "Ulu" });
