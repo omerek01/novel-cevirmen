@@ -90,6 +90,19 @@ def kota_ayrinti(hata: Exception) -> str:
     return " | ".join(parcalar) or "(ayrıntı yok)"
 
 
+def erisim_kesin_farkli(a: dict[str, set[str]], b: dict[str, set[str]]) -> bool:
+    """İki anahtarın model erişimi KESİN olarak farklı mı?
+
+    Girdi: {"acik": {...}, "yok": {...}} — yalnız KESİN cevaplar (AÇIK / 404).
+    Geçici hata (503, 429) erişim hakkında bir şey SÖYLEMEZ: ilk sürüm "açık
+    kümesi eşit mi" diye bakıyordu ve aynı anda birinde 503 verip ötekinde açık
+    dönen bir model, projeleri "kesinlikle ayrı" gösteriyordu (gerçek çıktı
+    2026-09-16: 3.5-flash'taki 503 dalgası 10 çiftin 10'unu ayrı saydı, oysa
+    kanıt yalnız 2.5-flash'ın 404 deseniydi).
+    """
+    return bool((a["acik"] & b["yok"]) or (b["acik"] & a["yok"]))
+
+
 def _pasifik_gece_yarisi() -> tuple[datetime, datetime]:
     """(Pasifik şimdi, bir sonraki Pasifik gece yarısı) — yaz saatine duyarlı."""
     simdi = datetime.now(timezone.utc)
@@ -127,11 +140,12 @@ def main() -> int:
     modeller = tuple(m for m in modeller if m.startswith("gemini"))
 
     print(f"Havuz: {len(anahtarlar)} anahtar — {', '.join(degiskenler)}\n")
-    erisim: dict[str, set[str]] = {}
+    erisim: dict[str, dict[str, set[str]]] = {}
     for ad, anahtar in zip(degiskenler, anahtarlar):
         print(f"--- {ad}  {maskele(anahtar)}")
         istemci = genai.Client(api_key=anahtar)
         acik: set[str] = set()
+        yok: set[str] = set()
         for model in modeller:
             try:
                 istemci.models.generate_content(model=model, contents="OK")
@@ -141,12 +155,13 @@ def main() -> int:
                     print(f"      {model:26} KOTA DOLU  {kota_ayrinti(hata)}")
                 elif kod == 404:
                     print(f"      {model:26} YOK (bu projede sunulmuyor)")
+                    yok.add(model)
                 else:
                     print(f"      {model:26} HATA {kod}  {str(hata)[:80]}")
             else:
                 print(f"      {model:26} AÇIK")
                 acik.add(model)
-        erisim[ad] = acik
+        erisim[ad] = {"acik": acik, "yok": yok}
         print()
 
     # Proje AYRILIĞI ipucu: model erişimi farklıysa projeler kesinlikle ayrıdır.
@@ -154,14 +169,14 @@ def main() -> int:
         (a1, a2)
         for i, a1 in enumerate(degiskenler)
         for a2 in degiskenler[i + 1:]
-        if erisim.get(a1) != erisim.get(a2)
+        if erisim_kesin_farkli(erisim[a1], erisim[a2])
     ]
     if farkli:
         print("Model erişimi FARKLI olan çiftler (projeleri kesinlikle ayrı):")
         for a1, a2 in farkli:
             print(f"   {a1} <-> {a2}")
     else:
-        print("Bütün anahtarların model erişimi AYNI — projelerinin ayrı olduğunu")
+        print("Kesin bir erişim farkı yok (geçici hatalar sayılmaz) — projelerin ayrı olduğunu")
         print("bu araç kanıtlayamaz. Kota PROJE başınadır: aynı projeden alınmış")
         print("anahtarlar aynı havuzdan içer ve ikincisi hiçbir şey kazandırmaz.")
 
@@ -173,6 +188,12 @@ def main() -> int:
     print("GÜNLÜK kota (RPD) Pasifik gece yarısı sıfırlanır:")
     print(f"   {ertesi.astimezone(yerel.tzinfo):%Y-%m-%d %H:%M} yerel saatle"
           f"  (~{kalan.total_seconds() / 3600:.1f} saat sonra)")
+    # Bulut sunucunun "yerel" saati UTC'dir; kullanıcı TSİ ile düşünüyor.
+    if ZoneInfo is not None:
+        try:
+            print(f"   {ertesi.astimezone(ZoneInfo('Europe/Istanbul')):%Y-%m-%d %H:%M} TSİ")
+        except Exception:  # tzdata yoksa
+            pass
     print("DAKİKALIK kota (RPM/TPM) bir dakika içinde kendiliğinden açılır;")
     print(f"   uygulama anahtarı {translate.ANAHTAR_SOGUMA_SN} sn soğumaya alır.")
     return 0
