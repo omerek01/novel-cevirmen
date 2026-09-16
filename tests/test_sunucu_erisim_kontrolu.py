@@ -9,18 +9,22 @@ asimina ugradi, IKINCISI 38 ms'de dondu.
 
 Tek atislik 4 sn'lik kontrol bu UYANMA ANINI "sunucu kapali" diye okuyup
 sifirlamayi reddediyordu. Bu testler yeniden denemenin sessizce kaldirilmasini
-tutar; app.js icin JS kosum ortami yok, o yuzden STATIK denetim.
+tutar; varsayilan test kosusunda JS kosum ortami yok, o yuzden STATIK denetim.
+
+Kod `app.js` ES modullerine bolundugunde (2026-09-16) bu testler dogru davranip
+GURULTULU dustu. Sifirlama ve erisim kontrolu artik `js/ayarlar.js`te; baska bir
+module tasinirsa ayni sekilde dusmeli, sessizce "bulunamadi, gecti" dememeli.
 """
 import pathlib
 
 import pytest
 
-APP_JS = pathlib.Path("app/web/app.js")
+AYARLAR_JS = pathlib.Path(__file__).resolve().parent.parent / "app" / "web" / "js" / "ayarlar.js"
 
 
 @pytest.fixture(scope="module")
 def kaynak() -> str:
-    return APP_JS.read_text(encoding="utf-8")
+    return AYARLAR_JS.read_text(encoding="utf-8")
 
 
 def test_yeniden_deneyen_yardimci_VAR(kaynak):

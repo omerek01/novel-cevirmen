@@ -24,6 +24,11 @@ mimetypes.add_type("image/svg+xml", ".svg")
 # .woff2 de ayni tuzakta: yanlis Content-Type ile gelen font sessizce YOK SAYILIR
 # ve yazi sistem fontuna duser — arizanin hicbir hata mesaji olmaz.
 mimetypes.add_type("font/woff2", ".woff2")
+# .js AÇIKÇA kaydedilir: okuyucu ES modülleriyle yükleniyor ve tarayıcı modül
+# betiğini yalnız JavaScript MIME türüyle kabul eder. Windows kayıt defterinde
+# `.js` bazı kurulumlarda `text/plain` görünür; o durumda uygulama HİÇ açılmaz
+# ("Expected a JavaScript module script") ve hata yalnız konsolda görünür.
+mimetypes.add_type("text/javascript", ".js")
 
 from dotenv import load_dotenv  # noqa: E402
 from fastapi import FastAPI, HTTPException, Query, Request, Response  # noqa: E402
