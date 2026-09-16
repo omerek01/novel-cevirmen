@@ -39,14 +39,17 @@ def _sunucu_terimleri(sayfa):
 def test_yaris_gonderim_surerken_yazilan_yeni_deger_sunucuya_ulasir(sayfa):
     sayfa.add_init_script(GECIKTIR % 1500)
     tohum.kitap()
-    tohum.sozluk(SLUG, {"Saint": "Saint"})
+    tohum.sozluk(SLUG, {"Saint": "Sen"})
     _sozluge_git(sayfa)
-    alan = sayfa.locator("#glossList .gloss-row .gloss-target").first
+    sayfa.locator("#glossList .gloss-row").first.click()
+    alan = sayfa.locator("#terimKarsilik")
+    expect(alan).to_have_value("Sen")
     alan.fill("Aziz")
-    alan.dispatch_event("change")
+    sayfa.locator("#terimKaydet").click()
     sayfa.wait_for_timeout(300)  # A uçuşta
     alan.fill("Ermiş")
-    alan.dispatch_event("change")
+    sayfa.locator("#terimKaydet").click()
+    expect(sayfa.locator("#terimDurum")).to_contain_text("Cihazda bekliyor")
     sayfa.wait_for_function(
         "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Saint === 'Ermiş'",
         timeout=15000,
@@ -144,7 +147,9 @@ def test_silme_geri_alinir_kosul_ve_koken_korunur(sayfa):
     glossary.merge_terms(SLUG, {"Great": "Ulu"}, "auto", 2, {"Great": "Ulu yaratık."})
     glossary.set_kosul(SLUG, "Great", "rütbe")
     _sozluge_git(sayfa)
-    sayfa.locator("#glossList .gloss-del").first.click()
+    sayfa.locator("#glossList .gloss-row").first.click()
+    expect(sayfa.locator("#terimKosul")).to_have_value("rütbe")
+    sayfa.locator("#terimSil").click()
     sayfa.wait_for_function(
         "async () => !('Great' in (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms)"
     )

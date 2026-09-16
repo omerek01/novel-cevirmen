@@ -107,7 +107,10 @@ def test_sozluk_silme_sunucuya_ulasir(sayfa):
     sayfa.locator("#shelves .spine[data-slug]").first.click()
     sayfa.locator("#openGlossaryBtn").click()
     expect(sayfa.locator("#glossList .gloss-row")).to_have_count(1)
-    sayfa.locator("#glossList .gloss-del").first.click()
+    sayfa.locator("#glossList .gloss-row").first.click()
+    expect(sayfa.locator("#terimPaneli")).to_be_visible()
+    sayfa.locator("#terimSil").click()
+    expect(sayfa.locator("#terimPaneli")).to_be_hidden()
     sayfa.wait_for_function(
         "async () => !('Silver Tower' in (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms)"
     )
@@ -172,13 +175,19 @@ def test_secimden_sozluge_ekle(sayfa):
     )
     expect(sayfa.locator("#selGlossBtn")).to_be_visible()
     sayfa.locator("#selGlossBtn").click()
-    expect(sayfa.locator("#glossQuickModal")).to_be_visible()
-    expect(sayfa.locator("#glossQuickSource")).to_have_value("Mira")
-    expect(sayfa.locator("#glossQuickTarget")).to_have_value("Mira")
-    sayfa.locator("#glossQuickSave").click()
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
+    expect(sayfa.locator("#terimPaneli")).to_be_visible()
+    expect(sayfa.locator("#terimKaynak")).to_have_value("Mira")
+    expect(sayfa.locator("#terimKarsilik")).to_have_value("Mira")
+    expect(sayfa.locator("#terimAynen")).to_be_checked()
+    sayfa.locator("#terimKaydet").click()
+    expect(sayfa.locator("#terimDurum")).to_contain_text("Sunucuya kaydedildi", timeout=10000)
+    satir = sayfa.evaluate(
+        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).rows"
+        ".find((r) => r.source === 'Mira')"
     )
+    assert satir["target"] == "Mira"
+    # Okurken eklenen terim geçtiği cümleyi KÖKEN olarak taşır.
+    assert "Mira" in (satir.get("kaynak_cumle") or "")
 
 
 def test_cevrimdisi_kabuk_acilir(tarayici, kapatilabilir_sunucu):

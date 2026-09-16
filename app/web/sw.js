@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v94"; // ortak <dialog> bileşeni
+const SHELL_CACHE = "novellink-shell-v95"; // terim paneli + kısa sözlük satırları
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -27,6 +27,8 @@ const SHELL = [
   "/js/sozluk-kuyruk.js",
   "/js/sozluk-secim.js",
   "/js/temel.js",
+  "/js/terim-paneli.js",
+  "/js/terim-yardimci.js",
   "/manifest.webmanifest",
   "/icon.svg",
   "/icon-192.png",
@@ -149,10 +151,14 @@ self.addEventListener("fetch", (event) => {
   if (url.origin !== self.location.origin) return;
 
   if (url.pathname === "/api/chapter") {
-    const refresh = url.searchParams.get("refresh") === "1";
+    const refresh =
+      url.searchParams.get("refresh") === "1" || url.searchParams.get("refetch") === "1";
     const key = new URL(url);
     key.searchParams.delete("refresh"); // refresh'li/refresh'siz aynı bölüm = aynı anahtar
     key.searchParams.delete("track"); // track (konum ilerlet) da aynı bölüm = aynı anahtar
+    // refetch (siteden yeniden çek) de aynı bölümdür: ayrı anahtara yazılsaydı okuma
+    // GET'i eski kopyayı bulmaya devam ederdi.
+    key.searchParams.delete("refetch");
     event.respondWith(chapterFirst(request, key.toString(), refresh));
     return;
   }

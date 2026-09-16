@@ -148,16 +148,20 @@
       <div class="gloss-tools">
         <input id="glossSearch" type="search" placeholder="Terim ara…"
                aria-label="Sözlükte ara" autocomplete="off" />
-        <div class="segmented gloss-filters" role="group" aria-label="Sözlük süzgeci">
-          <button class="seg" data-gloss-filter="all">Tümü</button>
-          <button class="seg" data-gloss-filter="en">İngilizce</button>
-          <button class="seg" data-gloss-filter="tr">Türkçe</button>
-          <button class="seg" data-gloss-filter="manual">Elle</button>
+        <div class="gloss-filters" role="group" aria-label="Sözlük süzgeci">
+          <button class="chip" data-gloss-filter="all">Tümü</button>
+          <button class="chip" data-gloss-filter="bolumde">Okuduğum bölümde</button>
+          <button class="chip" data-gloss-filter="en">İngilizce kalan</button>
+          <button class="chip" data-gloss-filter="tr">Türkçe</button>
+          <button class="chip" data-gloss-filter="manual">Elle</button>
+          <button class="chip" data-gloss-filter="auto">Otomatik</button>
+          <button class="chip" data-gloss-filter="kosullu">Koşullu</button>
+          <button class="chip" data-gloss-filter="esitlenmeyen">Eşitlenmeyen</button>
         </div>
       </div>
       <!-- Yazım hatası olabilecek çiftler (Orc/Ore). Otomatik birleştirme YOK. -->
       <p id="glossWarnNote" class="gloss-warn-note" hidden></p>
-      <p id="glossCount" class="gloss-hint gloss-count" hidden></p>
+      <p id="glossCount" class="gloss-hint gloss-count" aria-live="polite" hidden></p>
       <div id="glossList" class="gloss-list"></div>
     </div>
   </section>
@@ -366,21 +370,54 @@
   <!-- SEÇİMDEN SÖZLÜĞE: okurken metin seçilince beliren kısayol -->
   <button id="selGlossBtn" class="sel-gloss-btn" hidden>+ SÖZLÜĞE EKLE</button>
 
-  <dialog id="glossQuickModal" class="modal" aria-labelledby="glossQuickModal-baslik">
-    <div class="modal-card">
-      <h3 id="glossQuickModal-baslik" class="modal-title">SÖZLÜĞE EKLE</h3>
-      <p id="glossQuickHint" class="modal-hint"></p>
-      <div class="gloss-add gloss-add-stack">
-        <input id="glossQuickSource" type="text" placeholder="Kaynak (İngilizce)"
-               autocapitalize="words" autocomplete="off" />
-        <input id="glossQuickTarget" type="text" placeholder="Karşılık (boş = aynen kalsın)"
-               autocomplete="off" />
+  <!-- TERİM PANELİ: sözlük ayrıntısı + okurken terim düzenleme + etkilenen
+       bölümler tek bileşen (js/terim-paneli.js). Telefonda alttan açılır,
+       geniş ekranda sağda durur. -->
+  <dialog id="terimPaneli" class="modal terim-paneli" aria-labelledby="terimPaneli-baslik">
+    <div class="modal-card terim-kart">
+      <div class="terim-ust">
+        <h3 id="terimPaneli-baslik" class="modal-title" lang="en">TERİM</h3>
+        <button id="terimKapat" type="button" class="ghost-btn" aria-label="Paneli kapat">×</button>
       </div>
-      <p id="glossQuickState" class="modal-hint" aria-live="polite"></p>
-      <div class="modal-actions">
-        <button id="glossQuickCancel" class="pill">Vazgeç</button>
-        <button id="glossQuickSave" class="next-btn">Kaydet</button>
+      <section id="terimBaglam" class="terim-baglam" hidden>
+        <div id="terimSecilenSatir">
+          <p class="terim-etiket">SEÇTİĞİN METİN</p>
+          <p id="terimSecilen" class="terim-secilen"></p>
+        </div>
+        <p class="terim-etiket">İNGİLİZCE PARAGRAF</p>
+        <p id="terimEnParagraf" class="terim-en" lang="en"></p>
+        <p id="terimAdayBaslik" class="terim-etiket">KAYNAK TERİMİ SEÇ (otomatik seçilmez)</p>
+        <div id="terimAdaylar" class="terim-adaylar" role="group" aria-label="Kaynak terim adayları"></div>
+      </section>
+      <label class="terim-alan">
+        <span class="terim-etiket">KAYNAK (İNGİLİZCE)</span>
+        <input id="terimKaynak" type="text" autocapitalize="words" autocomplete="off" lang="en" />
+      </label>
+      <label class="terim-alan">
+        <span class="terim-etiket">KARŞILIK</span>
+        <input id="terimKarsilik" type="text" autocomplete="off" />
+      </label>
+      <label class="terim-onay">
+        <input id="terimAynen" type="checkbox" />
+        Aynen koru (İngilizce kalsın — karakter adları)
+      </label>
+      <label class="terim-alan">
+        <span class="terim-etiket">KOŞUL (isteğe bağlı)</span>
+        <textarea id="terimKosul" rows="2" autocomplete="off"
+                  placeholder="Örn. yalnız rütbe adı olarak geçtiğinde; gündelik 'great' çevrilmez"></textarea>
+      </label>
+      <div id="terimKoken" class="terim-koken" hidden></div>
+      <p id="terimDurum" class="modal-hint terim-durum" role="status" aria-live="polite"></p>
+      <div class="modal-actions terim-eylemler">
+        <button id="terimSil" type="button" class="pill terim-sil" hidden>Sil</button>
+        <button id="terimOner" type="button" class="pill">Öner</button>
+        <button id="terimKaydet" type="button" class="next-btn">Kaydet</button>
       </div>
+      <div id="terimSonrasi" class="terim-sonrasi" hidden>
+        <button id="terimBuBolum" type="button" class="pill" hidden>Bu bölümde uygula</button>
+        <button id="terimEtkiBtn" type="button" class="pill">Etkilenen bölümler</button>
+      </div>
+      <section id="terimEtki" class="terim-etki" hidden></section>
     </div>
   </dialog>
 

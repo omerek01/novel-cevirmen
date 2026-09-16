@@ -6,6 +6,7 @@ import { navigate, showView } from "./gezinme.js";
 import { fetchBooks } from "./kutuphane.js";
 import { chapterListFor, ensureChapterList } from "./okuyucu.js";
 import { anahtarla, kuyrukOlustur } from "./sozluk-kuyruk.js";
+import { terimPaneliAc } from "./terim-paneli.js";
 import { el, markSegment } from "./temel.js";
 
 /* ---------- sözlük: yazma kuyruğu ---------- */
@@ -233,10 +234,64 @@ export function glossSatirGecer(source, target) {
     const alanlar = source + " " + (target || "");
     if (!alanlar.toLocaleLowerCase("tr").includes(q)) return false;
   }
-  if (glossFilter === "en") return glossIngilizceKorunan(source, target);
-  if (glossFilter === "tr") return !glossIngilizceKorunan(source, target);
-  if (glossFilter === "manual") return (glossRows[source] || {}).origin === "manual";
-  return true;
+  const kok = glossRows[source] || {};
+  switch (glossFilter) {
+    case "en":
+      return glossIngilizceKorunan(source, target);
+    case "tr":
+      return !glossIngilizceKorunan(source, target);
+    case "manual":
+      return kok.origin === "manual";
+    case "auto":
+      return kok.origin === "auto";
+    case "kosullu":
+      return !!glossKosullarGorunen()[source];
+    case "bolumde":
+      return !!glossBolumde && glossBolumde.has(anahtarla(source));
+    case "esitlenmeyen": {
+      const d = kuyruk.kaynakDurumu(durum.currentBookSlug, source);
+      return d === "bekliyor" || d === "hata";
+    }
+    default:
+      return true;
+  }
+}
+
+function glossKosullarGorunen() {
+  return overlayGloss(durum.currentBookSlug, glossTermsSonHal, glossKosullarSonHal).kosullar;
+}
+
+/* "Bu bölümde geçenler": kitabın OKUMA KONUMUNDAKİ bölümün kaynak metninde geçen
+   terimler (sunucu `?bolum=` ile hesaplar — eşleştirme ölçütü çeviri yoluyla aynı).
+   Kümeye yazım varyantından bağımsız anahtarla girilir. */
+export let glossBolumde = null; // Set | null
+export let glossBolumdeNot = "";
+
+async function bolumdeGecenleriYukle() {
+  glossBolumde = null;
+  const slug = durum.currentBookSlug;
+  const url = durum.currentBook && durum.currentBook.current_url;
+  if (!url) {
+    glossBolumdeNot = "Bu kitapta okuma konumu yok — önce bir bölüm aç.";
+    return;
+  }
+  glossBolumdeNot = "Okuduğun bölümdeki terimler aranıyor…";
+  yenidenSuz();
+  try {
+    const res = await fetch(
+      `/api/book/${encodeURIComponent(slug)}/glossary?bolum=${encodeURIComponent(url)}`
+    );
+    const veri = await res.json();
+    if (slug !== durum.currentBookSlug || glossFilter !== "bolumde") return;
+    if (veri.bolumde == null) {
+      glossBolumdeNot = "Okuduğun bölümün İngilizce kaynağı saklı değil — süzülemiyor.";
+    } else {
+      glossBolumde = new Set(veri.bolumde.map(anahtarla));
+      glossBolumdeNot = `Okuduğun bölümde (${durum.currentBook.chapter_no ?? "?"}) geçenler.`;
+    }
+  } catch {
+    glossBolumdeNot = "Sunucuya ulaşılamadı — bu süzgeç çevrimdışı çalışmaz.";
+  }
 }
 
 export async function fetchGlossary(slug) {
@@ -384,6 +439,9 @@ export async function openGlossary(slug) {
   // başlık slug'a düşer.
   const books = (await fetchBooks()) || [];
   const book = books.find((b) => b.slug === slug) || null;
+  // "Okuduğum bölümde" süzgeci okuma konumunu buradan okur.
+  if (book) durum.currentBook = book;
+  glossBolumde = null;
   el("glossaryTitle").textContent = "SÖZLÜK — " + (book ? book.title : slug);
 
   const list = el("glossList");
@@ -498,9 +556,17 @@ export function updateGlossCount(gosterilen, toplam) {
   if (!note) return;
   const suzuluyor = gosterilen !== toplam;
   note.hidden = toplam === 0;
-  note.textContent = suzuluyor
-    ? `${toplam} terimden ${gosterilen} tanesi gösteriliyor`
-    : `${toplam} terim`;
+  note.textContent =
+    (glossFilter === "bolumde" && glossBolumdeNot ? glossBolumdeNot + " " : "") +
+    (suzuluyor ? `${toplam} terimden ${gosterilen} tanesi gösteriliyor` : `${toplam} terim`);
+}
+
+function cip(metin, sinif, baslik) {
+  const c = document.createElement("span");
+  c.className = "gloss-cip " + sinif;
+  c.textContent = metin;
+  if (baslik) c.title = baslik;
+  return c;
 }
 
 export function renderGlossary(terms) {
@@ -528,17 +594,21 @@ export function renderGlossary(terms) {
     return;
   }
   for (const [source, target] of entries) {
-    const row = document.createElement("div");
+    // KISA SATIR: kaynak → karşılık + durum çipleri. Dokununca terim paneli açılır
+    // (koşul, köken, örnek, etkilenen bölümler, silme). Her satırda bütün alanları
+    // açık tutmak 267 terimlik listeyi telefonda okunmaz kılıyordu (belge bulgusu).
+    const row = document.createElement("button");
+    row.type = "button";
     row.className = "gloss-row";
     row.dataset.sozlukSlug = durum.currentBookSlug;
     row.dataset.sozlukKaynak = source;
 
     const src = document.createElement("span");
     src.className = "gloss-source";
+    src.lang = "en";
     src.textContent = source;
     if (uyaranlar.has(source)) {
-      // Rozet satırın kendisinde: kullanıcı düzeltirken hangi kayda baktığını
-      // görmeli, listenin başındaki özet kaydırınca ekrandan çıkıyor.
+      // Rozet satırın kendisinde: listenin başındaki özet kaydırınca ekrandan çıkıyor.
       const uyari = document.createElement("span");
       uyari.className = "gloss-warn-chip";
       uyari.textContent = "?";
@@ -548,66 +618,25 @@ export function renderGlossary(terms) {
 
     const arrow = document.createElement("span");
     arrow.className = "gloss-arrow";
+    arrow.setAttribute("aria-hidden", "true");
     arrow.textContent = "→";
 
-    const tgt = document.createElement("input");
-    tgt.className = "gloss-target";
-    tgt.type = "text";
-    tgt.value = target;
-    tgt.setAttribute("aria-label", source + " karşılığı");
-    tgt.addEventListener("change", () => {
-      saveTerm(durum.currentBookSlug, source, tgt.value.trim() || source);
-      gosterTerimEtkisi(row, source);
-    });
+    const tgt = document.createElement("span");
+    tgt.className = "gloss-target-metin";
+    tgt.textContent = glossIngilizceKorunan(source, target) ? "aynen" : target;
 
-    const del = document.createElement("button");
-    del.className = "gloss-del";
-    del.textContent = "×";
-    del.setAttribute("aria-label", source + " sil");
-    del.addEventListener("click", () => {
-      row.remove();
-      terimiSilGeriAlinabilir(durum.currentBookSlug, source, { geriAlindi: yenidenSuz });
-    });
-
-    row.append(src, arrow, tgt, del);
-    // KOŞUL varsa ikinci satırda görünür. Görünmesi şart: koşul, karşılığın
-    // HANGİ BAĞLAMDA geçerli olduğunu belirleyen bir kural ve prompt'a çıkıyor —
-    // ekranda saklanırsa terim beklenmedik çevrildiğinde sebebi hiçbir yerde
-    // okunamaz. (Düzenleme uçtan yapılır; okuyucunun çevrimdışı kuyruğu yalnız
-    // karşılığı taşıyor ve koşulu ASLA silmiyor.)
-    const kosul = gorunenKosullar[source];
-    if (kosul) {
-      const not = document.createElement("span");
-      not.className = "gloss-kosul";
-      not.textContent = "KOŞUL: " + kosul;
-      row.appendChild(not);
-    }
-    // KÖKEN: kayıt hangi bölümden, hangi cümleden çıktı. Sözlük karşılığı
-    // prompt'ta KURAL olarak uygulanıyor; garip bir çeviri görüldüğünde
-    // "bu nereden geldi" sorusu ancak kaydın çıktığı cümleyle cevaplanabiliyor.
+    const cipler = document.createElement("span");
+    cipler.className = "gloss-cipler";
+    // KOŞUL görünür kalır: prompt'a çıkan bir kural; saklanırsa terim beklenmedik
+    // çevrildiğinde sebebi hiçbir yerde okunamaz. Tam metni panelde.
+    if (gorunenKosullar[source]) cipler.appendChild(cip("KOŞULLU", "gloss-cip-kosul", gorunenKosullar[source]));
     const kok = glossRows[source] || {};
-    if (kok.first_chapter || kok.kaynak_cumle) {
-      const koken = document.createElement("div");
-      koken.className = "gloss-koken";
-      if (kok.first_chapter) {
-        const git = document.createElement("button");
-        git.className = "gloss-koken-git";
-        git.type = "button";
-        git.textContent = "BÖLÜM " + kok.first_chapter;
-        git.title = "Terimin ilk geçtiği bölümü aç";
-        git.addEventListener("click", () =>
-          kokeneGit(kok.first_chapter, kok.kaynak_cumle, source,
-                    (glossRows[source] || {}).target));
-        koken.appendChild(git);
-      }
-      if (kok.kaynak_cumle) {
-        const c = document.createElement("span");
-        c.className = "gloss-koken-cumle";
-        c.textContent = "“" + kok.kaynak_cumle + "”";
-        koken.appendChild(c);
-      }
-      row.appendChild(koken);
-    }
+    if (kok.origin === "auto") cipler.appendChild(cip("OTO", "gloss-cip-oto", "Çeviri sırasında otomatik eklendi"));
+    if (kok.first_chapter) cipler.appendChild(cip("B" + kok.first_chapter, "gloss-cip-bolum", "İlk eklendiği bölüm"));
+
+    row.append(src, arrow, tgt, cipler);
+    row.setAttribute("aria-label", `${source} → ${tgt.textContent}. Ayrıntı için aç`);
+    row.addEventListener("click", () => terimPaneliAc({ slug: durum.currentBookSlug, source }));
     list.appendChild(row);
   }
   refreshGlossPendingUi();
@@ -663,38 +692,6 @@ export function refreshGlossExportLink(slug) {
   const link = el("glossExportBtn");
   if (!link) return;
   link.href = `/api/book/${encodeURIComponent(slug)}/glossary/export`;
-}
-
-/* Terim düzeltildikten SONRA: "bu terim çevrilmiş N bölümde geçiyor".
-   Ekranın ipucu satırı "eski bölüm için Yeniden çevir" diyordu ama HANGİ
-   bölümler olduğunu söylemiyordu; kullanıcı elle aramak zorundaydı. */
-export async function gosterTerimEtkisi(row, source) {
-  if (!durum.currentBookSlug) return;
-  let satir = row.nextElementSibling;
-  if (!satir || !satir.classList.contains("gloss-impact")) {
-    satir = document.createElement("p");
-    satir.className = "gloss-impact";
-    row.after(satir);
-  }
-  satir.textContent = "Etkilenen bölümler aranıyor…";
-  try {
-    const res = await fetch(
-      `/api/book/${encodeURIComponent(durum.currentBookSlug)}/glossary/impact` +
-        `?source=${encodeURIComponent(source)}`
-    );
-    if (!res.ok) throw new Error("sunucu " + res.status);
-    const veri = await res.json();
-    const [kapsanan, toplam] = veri.kapsama || [0, 0];
-    satir.textContent = veri.count
-      ? `Bu terim çevrilmiş ${veri.count} bölümde geçiyor — düzeltmenin oralarda ` +
-        `görünmesi için o bölümlerde "Yeniden çevir" gerekir.`
-      : kapsanan < toplam
-        ? `Çevrilmiş bölümlerde bulunamadı (yalnız ${kapsanan}/${toplam} bölümün ` +
-          `kaynak metni saklı — kesin değil).`
-        : "Çevrilmiş hiçbir bölümde geçmiyor; yalnız yeni bölümleri etkiler.";
-  } catch {
-    satir.remove(); // sunucu kapalı: sessizce vazgeç, düzenleme zaten kuyrukta
-  }
 }
 
 /* Arama ve süzgeç YEREL: sunucuya istek atmaz, tazeleme yapmaz — yalnız hâlihazırda
@@ -763,9 +760,10 @@ export function kur() {
     yenidenSuz();
   });
   for (const btn of document.querySelectorAll("[data-gloss-filter]")) {
-    btn.addEventListener("click", () => {
+    btn.addEventListener("click", async () => {
       glossFilter = btn.getAttribute("data-gloss-filter");
       markSegment("glossFilter", glossFilter, "data-gloss-filter");
+      if (glossFilter === "bolumde") await bolumdeGecenleriYukle();
       yenidenSuz();
     });
   }

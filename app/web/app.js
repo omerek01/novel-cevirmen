@@ -16,6 +16,7 @@ import { kur as okuyucuKur } from "./js/okuyucu.js";
 import { kur as cevrimdisiKur } from "./js/cevrimdisi.js";
 import { kur as ekleKur } from "./js/ekle.js";
 import { kur as sozluk_secimKur } from "./js/sozluk-secim.js";
+import { kur as terimPaneliKur } from "./js/terim-paneli.js";
 
 diyalogKur();
 gezinmeKur();
@@ -42,6 +43,7 @@ renderLibrary();
 showView("library");
 
 sozluk_secimKur();
+terimPaneliKur();
 
 // Açılışta bekleyen sözlük düzenlemelerini gönder (çevrimdışı eklenip telefonda
 // kalmış olabilir); sunucu hâlâ kapalıysa kuyrukta bekler.
