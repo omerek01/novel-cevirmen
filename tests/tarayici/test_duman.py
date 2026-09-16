@@ -90,7 +90,8 @@ def test_sozluk_ekle_ara_sil(sayfa):
     sayfa.locator("#glossSource").fill("Mira")
     sayfa.locator("#glossTarget").fill("Mira")
     sayfa.locator("#glossAddBtn").click()
-    expect(sayfa.locator("#glossList .gloss-row")).to_have_count(3)
+    # "Eklenen terim listede görünür" iddiası BİLEREK burada yok: bilinen yarış
+    # hatasının ta kendisi ve aşağıdaki xfail testi onu belirlenimci ölçüyor.
     sayfa.wait_for_function(
         "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
     )
@@ -105,6 +106,18 @@ def test_sozluk_ekle_ara_sil(sayfa):
     "kuyruktan düşünce listeden kaybolur (kuyruk v2 ile düzelecek)",
 )
 def test_eklenen_terim_gonderimden_sonra_suzgecte_kaybolmaz(sayfa):
+    # Hata bir YARIŞ: ekleme sonrası listeyi tazeleyen GET, POST'tan önce
+    # cevaplanırsa görünür. POST'u geciktirmek onu belirlenimci kılar — gerçek
+    # dünyada yavaş Tailscale bağlantısı tam olarak bunu yapıyor.
+    sayfa.add_init_script(
+        """(() => {
+          const asil = window.fetch.bind(window);
+          window.fetch = (url, opts = {}) =>
+            (opts.method || 'GET') === 'POST' && String(url).includes('/glossary')
+              ? new Promise((r) => setTimeout(r, 800)).then(() => asil(url, opts))
+              : asil(url, opts);
+        })()"""
+    )
     tohum.kitap()
     tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
     _ac(sayfa)
@@ -201,3 +214,31 @@ def test_secimden_sozluge_ekle(sayfa):
     sayfa.wait_for_function(
         "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
     )
+
+
+def test_cevrimdisi_kabuk_acilir(tarayici, kapatilabilir_sunucu):
+    """Sunucu KAPALIYKEN uygulama SW kabuğundan açılmalı: betikler + son raf verisi.
+
+    SHELL listesinde eksik tek bir betik çevrimiçi hiçbir şey bozmaz; ancak ağ
+    yokken uygulama hiç başlamaz. Statik tel tuzağı listeyi, bu test SONUCU tutar.
+    """
+    srv = kapatilabilir_sunucu
+    tohum.kitap()
+    baglam = tarayici.new_context(viewport={"width": 390, "height": 844})
+    hatalar: list[str] = []
+    try:
+        sayfa = baglam.new_page()
+        sayfa.on("pageerror", lambda e: hatalar.append(str(e)))
+        sayfa.goto(srv["taban"] + "/")
+        expect(sayfa.locator("#shelves .spine[data-slug]").first).to_be_visible()
+        sayfa.evaluate("navigator.serviceWorker.ready.then(() => true)")
+        sayfa.reload()  # sayfa artık SW denetiminde, /api/books de önbellekte
+        sayfa.wait_for_function("() => !!navigator.serviceWorker.controller")
+        expect(sayfa.locator("#shelves .spine[data-slug]").first).to_be_visible()
+
+        srv["durdur"]()
+        sayfa.reload()
+        expect(sayfa.locator(".spine-title").first).to_have_text("Gumus Kule", timeout=15000)
+    finally:
+        baglam.close()
+    assert not hatalar, "Yakalanmamış JS hatası: " + " | ".join(hatalar)

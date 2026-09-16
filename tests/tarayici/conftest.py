@@ -32,10 +32,7 @@ def _bos_port() -> int:
         return s.getsockname()[1]
 
 
-@pytest.fixture(scope="session")
-def sunucu(tmp_path_factory):
-    """Tek test sunucusu (oturum boyu). Her test kendi verisini `temiz_db` ile kurar."""
-    db_yolu = tmp_path_factory.mktemp("tarayici") / "chapters.db"
+def sunucu_baslat(db_yolu) -> tuple[subprocess.Popen, str]:
     port = _bos_port()
     ortam = dict(os.environ, NOVEL_DB_PATH=str(db_yolu), PYTHONIOENCODING="utf-8")
     surec = subprocess.Popen(
@@ -48,7 +45,7 @@ def sunucu(tmp_path_factory):
         try:
             with urllib.request.urlopen(taban + "/api/books", timeout=2) as r:
                 if r.status == 200:
-                    break
+                    return surec, taban
         except OSError:
             pass
         if surec.poll() is not None or time.time() > son:
@@ -56,12 +53,42 @@ def sunucu(tmp_path_factory):
             surec.kill()
             raise RuntimeError("test sunucusu açılmadı:\n" + cikti)
         time.sleep(0.25)
-    yield {"taban": taban, "db": str(db_yolu)}
+
+
+def sunucu_durdur(surec: subprocess.Popen) -> None:
+    if surec.poll() is not None:
+        return
     surec.terminate()
     try:
         surec.wait(timeout=10)
     except subprocess.TimeoutExpired:
         surec.kill()
+
+
+@pytest.fixture(scope="session")
+def sunucu(tmp_path_factory):
+    """Tek test sunucusu (oturum boyu). Her test kendi verisini `temiz_db` ile kurar."""
+    db_yolu = tmp_path_factory.mktemp("tarayici") / "chapters.db"
+    surec, taban = sunucu_baslat(db_yolu)
+    yield {"taban": taban, "db": str(db_yolu)}
+    sunucu_durdur(surec)
+
+
+@pytest.fixture
+def kapatilabilir_sunucu(tmp_path, monkeypatch):
+    """Test içinde ÖLDÜRÜLEBİLEN ayrı sunucu — gerçek çevrimdışılık için.
+
+    `context.set_offline(True)` service worker'ın KENDİ ağ isteklerini kesmiyor
+    (Chromium/Playwright sınırı): SW önbellekte bulamadığı bir modülü sunucudan
+    sessizce çekiyor ve çevrimdışı testi dişsiz kalıyordu (mutasyonla ölçüldü:
+    SHELL'den bir modül çıkarıldığında test yine geçiyordu). Sunucuyu fiilen
+    kapatmak, telefonun Tailscale'i koptuğunda yaşadığının aynısı.
+    """
+    db_yolu = tmp_path / "kapanan.db"
+    monkeypatch.setenv("NOVEL_DB_PATH", str(db_yolu))
+    surec, taban = sunucu_baslat(db_yolu)
+    yield {"taban": taban, "db": str(db_yolu), "durdur": lambda: sunucu_durdur(surec)}
+    sunucu_durdur(surec)
 
 
 @pytest.fixture
