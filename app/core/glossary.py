@@ -605,6 +605,49 @@ def merge_terms(
         conn.close()
 
 
+def ornek_doldur(book_slug: str, source: str, cumle: str | None, bolum: int | None) -> bool:
+    """Okurken eklenen terimin KÖKENİNİ (cümle + bölüm) YALNIZ boşsa yaz.
+
+    Elle eklenen kayıtta köken hiç yoktu: sözlük ekranındaki "BÖLÜM N" bağlantısı
+    ve köken cümlesi yalnız otomatik kayıtlarda çıkıyordu. Okuma panelinden
+    eklenen terimin geldiği bölüm ve cümle bilinir; kaydedilmemesi bilgi kaybıdır.
+    "İlk boş olana yaz" kuralı `merge_terms` ile aynı: köken "ilk nerede görüldü"
+    sorusunun cevabıdır, sonraki düzeltmeler onu değiştirmez. Eşleştirme
+    `fold_term` ile (yazım varyantı aynı kayıttır).
+    """
+    anahtar = fold_term(normalize_source(source) or source)
+    cumle = (cumle or "").strip()[: _METIN_SINIRI["kaynak_cumle"]]
+    conn = _connect()
+    try:
+        bulunan = next(
+            (
+                r[0]
+                for r in conn.execute("SELECT source FROM glossary WHERE book_slug = ?", (book_slug,))
+                if fold_term(r[0]) == anahtar
+            ),
+            None,
+        )
+        if bulunan is None:
+            return False
+        degisen = 0
+        if cumle:
+            degisen += conn.execute(
+                "UPDATE glossary SET kaynak_cumle = ? WHERE book_slug = ? AND source = ? "
+                "AND (kaynak_cumle IS NULL OR kaynak_cumle = '')",
+                (cumle, book_slug, bulunan),
+            ).rowcount
+        if isinstance(bolum, int) and not isinstance(bolum, bool):
+            degisen += conn.execute(
+                "UPDATE glossary SET first_chapter = ? WHERE book_slug = ? AND source = ? "
+                "AND first_chapter IS NULL",
+                (bolum, book_slug, bulunan),
+            ).rowcount
+        conn.commit()
+        return degisen > 0
+    finally:
+        conn.close()
+
+
 def set_kaynak_cumle(book_slug: str, source: str, cumle: str | None) -> bool:
     """Kaydın köken cümlesini YALNIZ boşsa yazar; doldurulduysa döner True.
 

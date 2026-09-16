@@ -1722,6 +1722,22 @@ def _paragraflari_yeniden_cevir(
     return True
 
 
+def metinde_gecen_terimler(glossary: dict[str, str] | None, metin: str) -> list[str]:
+    """Sözlük kayıtlarından metinde GEÇENLERİN kaynakları (sıralı).
+
+    "Bu bölümde geçen terimler" süzgeci için. Ölçüt prompt'a hangi terimlerin
+    gireceğini belirleyen ölçütle AYNI (`_terim_metinde`) ve süzgeç eşiğinden
+    bağımsızdır: küçük sözlükte de yalnız geçenler döner. Ucuz ön eleme `fold_term`.
+    """
+    if not glossary or not (metin or "").strip():
+        return []
+    katlanmis = fold_term(metin)
+    return sorted(
+        s for s, t in glossary.items()
+        if s and fold_term(s) in katlanmis and _terim_metinde(s, t, metin)
+    )
+
+
 def _relevant_glossary(glossary: dict[str, str], text: str) -> dict[str, str]:
     """Bu parçada fiilen geçen sözlük terimlerini süz (ek almış hâlleri dahil).
 

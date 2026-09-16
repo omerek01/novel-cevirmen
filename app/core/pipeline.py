@@ -108,7 +108,11 @@ def get_or_translate(
             # Eski bölümü iki-dilli için yükselt: yalnız kaynak istendiğinde, yoksa ve
             # anahtar varsa yeniden çevir; aksi halde önbelleği aynen döndür (hızlı).
             if not (want_source and not cached.get("source") and api_key):
-                return _finalize_cached(cached, url, advance_position=adv)
+                sonuc = _finalize_cached(cached, url, advance_position=adv)
+                sonuc["kosullu_denetlenmeyen"] = kosullu_denetlenmeyen(
+                    sonuc["book_slug"], sonuc.get("source")
+                )
+                return sonuc
 
     if not _translate_mod.ceviri_anahtari_var_mi(api_key):
         raise TranslateError(_translate_mod.ANAHTAR_YOK_MESAJI)
@@ -125,7 +129,32 @@ def get_or_translate(
         payload["title"], payload["chapter_no"],
         update_position=adv,
     )
+    payload["kosullu_denetlenmeyen"] = kosullu_denetlenmeyen(
+        payload["book_slug"], payload.get("source")
+    )
     return payload
+
+
+def kosullu_denetlenmeyen(book_slug: str | None, kaynak: str | None) -> list[str]:
+    """Bu bölümde geçen KOŞULLU sözlük kayıtları (otomatik denetim dışı kalanlar).
+
+    Koşullu kayıt uyum denetiminden ve otomatik onarımdan BİLİNÇLİ olarak çıkarılır
+    (`translate._denetlenebilir_terimler`): koşulun sağlanıp sağlanmadığı
+    deterministik olarak ölçülemez. Okuyucu künyesi bu yüzden "sözlüğe uyuldu"
+    DİYEMEZ; "bağlam nedeniyle otomatik denetlenmedi" der. Bilgi okuma anında
+    hesaplanır, saklanmaz: künyeye yeni bir sütun eklemek dört üretim noktasına
+    yayılırdı, oysa bu bir ölçüm değil bugünkü sözlüğün bir özelliği.
+    """
+    if not book_slug or not (kaynak or "").strip():
+        return []
+    kosullar = glossary.get_kosullar(book_slug)
+    if not kosullar:
+        return []
+    sozluk = glossary.get_glossary(book_slug)
+    return sorted(
+        s for s in kosullar if _translate_mod._terim_metinde(s, sozluk.get(s, s), kaynak)
+    )
+
 
 
 def _sozluge_isle(
@@ -605,10 +634,34 @@ def terim_etkisi(book_slug: str, source: str) -> dict:
     if not terim:
         return {"count": 0, "chapters": [], "kapsama": [kapsanan, toplam]}
     desen = _translate_mod._term_regex(terim)
-    eslesen = [
-        {"url": b["url"], "chapter_no": b["chapter_no"], "title": b["title"]}
-        for b in bolumler
-        if desen.search(b["source"])
-    ]
+    eslesen = []
+    for b in bolumler:
+        if not desen.search(b["source"]):
+            continue
+        # ÖRNEK: terimin geçtiği İngilizce cümle + HİZALI Türkçe paragraf. Kullanıcı
+        # yeniden çevirmeden önce bugünkü çeviride terimin nasıl durduğunu görmeli.
+        # Paragraf sayıları tutmuyorsa hangi Türkçe paragrafın karşılık olduğu
+        # BİLİNMEZ; uydurmak yerine boş bırakılır.
+        en_paras = b["source"].split("\n\n")
+        tr_paras = (b.get("translation") or "").split("\n\n")
+        idx = next((i for i, p in enumerate(en_paras) if desen.search(p)), None)
+        ornek_tr = None
+        if idx is not None and len(tr_paras) == len(en_paras):
+            ornek_tr = tr_paras[idx].strip()[:ETKI_ORNEK_MAX] or None
+        eslesen.append({
+            "url": b["url"],
+            "chapter_no": b["chapter_no"],
+            "title": b["title"],
+            "ornek_en": _translate_mod.cumle_bul(
+                en_paras[idx] if idx is not None else b["source"], terim
+            ),
+            "ornek_tr": ornek_tr,
+            "ceviri_zamani": b.get("ceviri_zamani"),
+        })
     return {"count": len(eslesen), "chapters": eslesen, "kapsama": [kapsanan, toplam]}
+
+
+# Etki listesindeki Türkçe örnek paragrafın üst sınırı: liste satırı bir alıntı değil,
+# "bugün nasıl çevrilmiş" sorusuna göz ucuyla bakmaktır.
+ETKI_ORNEK_MAX = 300
 

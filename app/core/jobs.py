@@ -517,8 +517,128 @@ def _run_bulk(job_id: str, api_key: str | None) -> None:
     )
 
 
+def start_retranslate(slug: str, urls: list[str], api_key: str | None) -> str:
+    """Seçili bölümleri yeniden çeviren arka plan işi başlat; kimliğini döndür.
+
+    Sözlük düzeltmesinin eski bölümlere yansıması için (belge: "yalnız seçtiği
+    bölümler çevrilir"). Zincir İZLENMEZ: yalnız verilen URL'ler çevrilir. Aynı
+    kitapta koşan bir yeniden çeviri işi varsa yenisi açılmaz, onun kimliği döner
+    — iki iş aynı bölümü iki kez çevirip kotayı ikiye katlardı.
+    """
+    with _LOCK:
+        existing = get_book_job(slug, job_type="retranslate")
+        if existing and existing["state"] == "running":
+            _start_thread(existing["id"], api_key)
+            return existing["id"]
+        job_id = uuid.uuid4().hex
+        job = {
+            "id": job_id,
+            "slug": slug,
+            "start_url": urls[0] if urls else None,
+            "count": len(urls),
+            "done": 0,
+            "translated": 0,
+            "state": "running",
+            "message": "Hazırlanıyor…",
+            "next_url": None,
+            "type": "retranslate",
+            "params": {"urls": list(urls), "sonuclar": {}},
+            "stop": False,
+            "updated_at": time.time(),
+        }
+        _JOBS[job_id] = job
+        _persist(job)
+        _prune()
+        _start_thread(job_id, api_key)
+    return job_id
+
+
+def _run_retranslate(job_id: str, api_key: str | None) -> None:
+    """Verilen bölümleri `refresh=True` ile sırayla yeniden çevir.
+
+    Her bölümün SONUCU kaydedilir (hizalama tuttu mu, kaç sözlük ihlali, kaç
+    İngilizce kalıntı, hangi model): belge "yeniden üretimde hizalama ve sözlük
+    uyumu denetlenmeli" diyor ve kullanıcı bunu işin sonunda görmeli. Tek bir
+    bölümün kalıcı hatası işi DURDURMAZ, o bölüme yazılır; geçici çeviri hatası
+    toplu çeviriyle aynı kuralla bekletilip yeniden denenir.
+    """
+    job = get_status(job_id)
+    if job is None:
+        return
+    params = dict(job.get("params") or {})
+    urls = list(params.get("urls") or [])
+    sonuclar = dict(params.get("sonuclar") or {})
+    done = job["done"]
+    translated = job["translated"]
+
+    def durdu() -> None:
+        _set(
+            job_id, state="stopped", done=done, translated=translated,
+            params={**params, "sonuclar": sonuclar},
+            message=f"Durduruldu. {translated} bölüm yeniden çevrildi.",
+            updated_at=time.time(),
+        )
+
+    while done < len(urls):
+        if _should_stop(job_id):
+            durdu()
+            return
+        url = urls[done]
+        _set(
+            job_id, message=f"Bölüm {done + 1} / {len(urls)} yeniden çevriliyor…",
+            updated_at=time.time(),
+        )
+        deneme = 0
+        while True:
+            try:
+                data = pipeline.get_or_translate(url, api_key, refresh=True, background=True)
+            except TranslateError as exc:
+                deneme += 1
+                if deneme >= BULK_GECICI_DENEME:
+                    sonuclar[url] = {"durum": "hata", "mesaj": str(exc)}
+                    break
+                bekleme = BULK_GECICI_BEKLEME[min(deneme - 1, len(BULK_GECICI_BEKLEME) - 1)]
+                _set(
+                    job_id,
+                    message=(
+                        f"Modeller meşgul; {int(bekleme)} sn sonra yeniden "
+                        f"denenecek ({deneme}/{BULK_GECICI_DENEME})…"
+                    ),
+                    updated_at=time.time(),
+                )
+                if not _bekle(job_id, bekleme):
+                    durdu()
+                    return
+                continue
+            except Exception as exc:  # çekim hatası dahil: bu bölüme yaz, işe devam
+                sonuclar[url] = {"durum": "hata", "mesaj": str(exc)}
+                break
+            sonuclar[url] = {
+                "durum": "tamam",
+                "hizali": bool(data.get("source")),
+                "ihlal": len(data.get("glossary_leaks") or {}),
+                "kalinti": len(data.get("ingilizce_kalinti") or {}),
+                "model": data.get("model"),
+            }
+            translated += 1
+            break
+        done += 1
+        _set(
+            job_id, done=done, translated=translated,
+            params={**params, "sonuclar": sonuclar},
+            message=f"{done} / {len(urls)} bitti ({translated} yeniden çevrildi)",
+            updated_at=time.time(),
+        )
+    hatali = sum(1 for s in sonuclar.values() if s.get("durum") == "hata")
+    _set(
+        job_id, state="done",
+        message=f"Bitti — {translated} bölüm yeniden çevrildi" + (f", {hatali} hata." if hatali else "."),
+        updated_at=time.time(),
+    )
+
+
 # Tip -> koşucu kayıt tablosu. Yeni iş tipleri (epub-import, check-updates, ...)
 # buraya eklenir; checkpoint/rozet/arka-plana-al davranışını miras alır.
 # paste-import da zincir gezicisidir: sahneli sentetik bölümler pipeline'ın
 # content yolundan (raw_source) çevrilir — _run_bulk aynen çalışır (DRY).
-_RUNNERS = {"bulk": _run_bulk, "paste-import": _run_bulk}
+_RUNNERS = {"bulk": _run_bulk, "paste-import": _run_bulk, "retranslate": _run_retranslate}

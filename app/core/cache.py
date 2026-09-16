@@ -137,15 +137,19 @@ def list_chapters(book_slug: str) -> list[dict]:
     try:
         rows = conn.execute(
             "SELECT url, title, chapter_no, "
-            "       (translation IS NOT NULL AND trim(translation) <> '') "
+            "       (translation IS NOT NULL AND trim(translation) <> ''), created_at "
             "  FROM chapters WHERE book_slug = ? "
             " ORDER BY chapter_no IS NULL, chapter_no",
             (book_slug,),
         ).fetchall()
     finally:
         conn.close()
+    # `ceviri_zamani`: satırın son yazıldığı an (`save_chapter` her yazımda tazeler).
+    # Telefonun önbelleğindeki kopyanın bayat olup olmadığı buna bakılarak anlaşılır:
+    # başka cihazdan yeniden çevrilen bölüm, telefona kendiliğinden inmez.
     return [
-        {"url": r[0], "title": r[1], "chapter_no": r[2], "translated": bool(r[3])}
+        {"url": r[0], "title": r[1], "chapter_no": r[2], "translated": bool(r[3]),
+         "ceviri_zamani": r[4]}
         for r in rows
     ]
 
@@ -213,7 +217,7 @@ def kaynak_bolumleri(book_slug: str) -> list[dict]:
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT url, chapter_no, title, source_text FROM chapters "
+            "SELECT url, chapter_no, title, source_text, translation, created_at FROM chapters "
             "WHERE book_slug = ? AND source_text IS NOT NULL "
             "ORDER BY chapter_no",
             (book_slug,),
@@ -221,8 +225,20 @@ def kaynak_bolumleri(book_slug: str) -> list[dict]:
     finally:
         conn.close()
     return [
-        {"url": r[0], "chapter_no": r[1], "title": r[2], "source": r[3]} for r in rows
+        {"url": r[0], "chapter_no": r[1], "title": r[2], "source": r[3],
+         "translation": r[4], "ceviri_zamani": r[5]}
+        for r in rows
     ]
+
+
+def bolum_kaynagi(url: str) -> str | None:
+    """Bölümün hizalı İngilizce kaynağı (yoksa None) — "bu bölümde geçen terimler" için."""
+    conn = _connect()
+    try:
+        row = conn.execute("SELECT source_text FROM chapters WHERE url = ?", (url,)).fetchone()
+    finally:
+        conn.close()
+    return row[0] if row and (row[0] or "").strip() else None
 
 
 def delete_chapter(url: str) -> bool:

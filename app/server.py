@@ -207,9 +207,21 @@ def book_chapters(slug: str) -> dict:
     return {"chapters": cache.list_chapters(slug)}
 
 
+class GlossaryOrnek(BaseModel):
+    # Okurken eklenen terimin kökeni: geçtiği cümle + bölüm numarası. YALNIZ boşsa
+    # yazılır (bkz. glossary.ornek_doldur).
+    kaynak_cumle: str | None = None
+    bolum: int | None = None
+
+
+class RetranslateRequest(BaseModel):
+    urls: list[str]  # yeniden çevrilecek, bu kitabın ÇEVRİLMİŞ bölümleri
+
+
 class GlossaryTerm(BaseModel):
     source: str
     target: str | None = None
+    ornek: GlossaryOrnek | None = None
     # KOSUL: karsiligin hangi baglamda gecerli oldugunu anlatan serbest metin.
     # None = ALAN GONDERILMEDI (mevcut kosul KORUNUR); "" = temizle. Ayrim
     # sart: okuyucunun cevrimdisi kuyrugu yalniz {source,target} gonderiyor ve
@@ -622,7 +634,10 @@ def clearance_refresh() -> dict:
 
 
 @app.get("/api/book/{slug}/glossary")
-def get_book_glossary(slug: str) -> dict:
+def get_book_glossary(
+    slug: str,
+    bolum: str | None = Query(None, description="Bu bölümün kaynağında geçen terimler de dönsün"),
+) -> dict:
     """Sözlük: sade eşleme (`terms`) + köken bilgili satırlar (`rows`).
 
     `terms` GERİYE DÖNÜK uyum için duruyor — çevrimdışı kuyruğu olan okuyucu ve
@@ -630,7 +645,7 @@ def get_book_glossary(slug: str) -> dict:
     (ne zaman, hangi yoldan, hangi bölümde girdi); sözlük ekranındaki süzme ve
     künye rozetindeki düzeltme bunu kullanır.
     """
-    return {
+    veri = {
         "terms": glossary.get_glossary(slug),
         "kosullar": glossary.get_kosullar(slug),
         "rows": glossary.get_glossary_rows(slug),
@@ -638,11 +653,21 @@ def get_book_glossary(slug: str) -> dict:
         # tek harf farkı gerçek bir anlam farkı olabilir; karar kullanıcınındır.
         "warnings": glossary.yakin_terimler(slug),
     }
+    if bolum is not None:
+        # "Bu bölümde geçenler" süzgeci. null = bölümün kaynağı yok (bilinmiyor).
+        kaynak = cache.bolum_kaynagi(bolum)
+        veri["bolumde"] = (
+            None if kaynak is None
+            else translate_mod.metinde_gecen_terimler(veri["terms"], kaynak)
+        )
+    return veri
 
 
 @app.post("/api/book/{slug}/glossary")
 def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
     glossary.set_term(slug, term.source, term.target)
+    if term.ornek is not None:
+        glossary.ornek_doldur(slug, term.source, term.ornek.kaynak_cumle, term.ornek.bolum)
     # KOŞUL yalnız ALANI GÖNDERİLDİĞİNDE yazılır. Okuyucunun çevrimdışı kuyruğu
     # {source, target} gönderiyor; `None` gelince koşulu silmek, kullanıcının
     # sıradan bir karşılık düzeltmesinin kuralı sessizce yok etmesi demekti.
@@ -735,6 +760,29 @@ def book_glossary_impact(slug: str, source: str = Query(...)) -> dict:
     kapsama düşükken "0 bölüm" yanıltıcı okunmasın.
     """
     return pipeline.terim_etkisi(library.resolve_slug(slug), source)
+
+
+@app.post("/api/book/{slug}/retranslate")
+def start_retranslate(slug: str, req: RetranslateRequest) -> dict:
+    """Seçili bölümleri arka planda yeniden çevir (sözlük düzeltmesi eski bölümlere).
+
+    Yalnız bu kitabın ÇEVRİLMİŞ bölümleri kabul edilir: adı "yeniden çevir" olan
+    bir uç, hiç çevrilmemiş bir bölümü ya da başka kitabın bölümünü sessizce
+    çevirmemeli (ücretli model seçiliyken para). İlerleme `/api/bulk/{job_id}`ten
+    okunur; her bölümün sonucu işin `params.sonuclar` alanındadır.
+    """
+    canonical = library.resolve_slug(slug)
+    urls = list(dict.fromkeys(u for u in req.urls if u))
+    if not urls or len(urls) > 500:
+        raise HTTPException(status_code=400, detail="1-500 arası bölüm seçilmeli.")
+    cevrili = {c["url"] for c in cache.list_chapters(canonical) if c["translated"]}
+    yabanci = [u for u in urls if u not in cevrili]
+    if yabanci:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Bu kitabın çevrilmiş bölümü olmayan {len(yabanci)} adres var.",
+        )
+    return {"job_id": jobs.start_retranslate(canonical, urls, API_KEY)}
 
 
 @app.get("/api/settings/model")
