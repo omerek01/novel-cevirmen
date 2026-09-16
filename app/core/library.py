@@ -397,6 +397,8 @@ def delete_book(slug: str) -> bool:
         for stmt, params in (
             ("DELETE FROM chapters WHERE book_slug = ?", (slug,)),
             ("DELETE FROM glossary WHERE book_slug = ?", (slug,)),
+            ("DELETE FROM sozluk_gecmis WHERE book_slug = ?", (slug,)),
+            ("DELETE FROM sozluk_surumu WHERE book_slug = ?", (slug,)),
             ("DELETE FROM reading_log WHERE slug = ?", (slug,)),
             ("DELETE FROM aliases WHERE alias = ? OR canonical = ?", (slug, slug)),
         ):

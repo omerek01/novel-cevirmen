@@ -57,7 +57,14 @@ def test_uc_silinen_kaydi_dondurur_ve_geri_alma_tam_geri_getirir():
                json={"kayitlar": [silinen], "strateji": "dosya"})
     assert r.status_code == 200
     sonra = {r["source"]: r for r in glossary.get_glossary_rows(KITAP)}["Great"]
-    assert sonra == once
+    # Geri alma bir DEĞİŞİKLİKTİR: sürüm artar (öteki cihaz eski tabanla yazamasın),
+    # ama kimlik aynı kalır — geçmiş kopmaz. Geri kalan her alan birebir döner.
+    assert sonra["kimlik"] == once["kimlik"]
+    assert sonra["surum"] > once["surum"]
+    haric = ("surum", "updated_at")
+    assert {k: v for k, v in sonra.items() if k not in haric} == {
+        k: v for k, v in once.items() if k not in haric
+    }
 
 
 def test_uc_olmayan_terim_silinen_null():

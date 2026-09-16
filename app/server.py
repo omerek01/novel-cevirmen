@@ -228,6 +228,11 @@ class GlossaryTerm(BaseModel):
     # None'i "sil" diye okumak, sıradan bir karsilik duzeltmesinin kurali
     # sessizce yok etmesi demekti.
     kosul: str | None = None
+    # ÇAKIŞMA TABANI: istemcinin düzenlemeye başlarken gördüğü kayıt sürümü
+    # (0 = "kayıt yok sanıyorum"). Uyuşmazsa 409 + güncel kayıt döner; öteki
+    # cihazın düzeltmesi sessizce ezilmez. None = denetleme yok (eski istemci,
+    # hızlı ekleme formu — orada üzerine yazmak bilinçli davranıştır).
+    taban_surum: int | None = None
 
 
 class GlossaryImportRequest(BaseModel):
@@ -663,28 +668,60 @@ def get_book_glossary(
     return veri
 
 
+def _surum_cakismasi(exc: glossary.SurumCakismasi) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail={
+            "message": (
+                "Bu terim başka bir cihazda değişti"
+                if exc.guncel else "Bu terim başka bir cihazda silindi"
+            ),
+            "error_class": "SurumCakismasi",
+            "guncel": exc.guncel,
+        },
+    )
+
+
 @app.post("/api/book/{slug}/glossary")
 def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
-    glossary.set_term(slug, term.source, term.target)
+    # Karşılık + koşul TEK işlemde yazılır: iki ayrı yazım iki sürüm artışı ve
+    # arada yarım bir kayıt demekti. KOŞUL yalnız ALANI GÖNDERİLDİĞİNDE yazılır —
+    # okuyucunun çevrimdışı kuyruğu çoğu zaman {source, target} gönderiyor.
+    try:
+        kayit = glossary.terimi_yaz(
+            slug, term.source, term.target,
+            kosul=glossary.KORU if term.kosul is None else term.kosul,
+            taban_surum=term.taban_surum,
+        )
+    except glossary.SurumCakismasi as exc:
+        raise _surum_cakismasi(exc) from exc
     if term.ornek is not None:
         glossary.ornek_doldur(slug, term.source, term.ornek.kaynak_cumle, term.ornek.bolum)
-    # KOŞUL yalnız ALANI GÖNDERİLDİĞİNDE yazılır. Okuyucunun çevrimdışı kuyruğu
-    # {source, target} gönderiyor; `None` gelince koşulu silmek, kullanıcının
-    # sıradan bir karşılık düzeltmesinin kuralı sessizce yok etmesi demekti.
-    if term.kosul is not None:
-        glossary.set_kosul(slug, term.source, term.kosul)
     return {
         "terms": glossary.get_glossary(slug),
         "kosullar": glossary.get_kosullar(slug),
+        # İstemci bir sonraki düzenlemenin tabanını buradan alır.
+        "kayit": kayit,
     }
 
 
 @app.delete("/api/book/{slug}/glossary")
-def delete_book_glossary(slug: str, source: str = Query(...)) -> dict:
+def delete_book_glossary(
+    slug: str, source: str = Query(...), taban_surum: int | None = Query(None)
+) -> dict:
     # `silinen` GERİ ALMA içindir: okuyucu onu içe aktarma ucuyla (dosya
-    # stratejisi) geri yazar; koşul ve köken kaybolmaz. Terim yoksa null.
-    silinen = glossary.delete_term(slug, source)
+    # stratejisi) geri yazar; koşul, köken ve kimlik kaybolmaz. Terim yoksa null.
+    try:
+        silinen = glossary.delete_term(slug, source, taban_surum=taban_surum)
+    except glossary.SurumCakismasi as exc:
+        raise _surum_cakismasi(exc) from exc
     return {"terms": glossary.get_glossary(slug), "silinen": silinen}
+
+
+@app.get("/api/book/{slug}/glossary/history")
+def book_glossary_history(slug: str, source: str = Query(...)) -> dict:
+    """Bir terimin değişiklik geçmişi (yeniden eskiye): kim, ne zaman, neyi neye."""
+    return {"gecmis": glossary.gecmis(library.resolve_slug(slug), source)}
 
 
 @app.post("/api/book/{slug}/glossary/suggest")
