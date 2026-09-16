@@ -171,6 +171,8 @@ def test_uc_gecmis():
 _GECMISSIZ_YAZABILIR = {
     "_connect", "ornek_doldur", "set_kaynak_cumle", "_satir_ekle", "_satiri_guncelle",
     "_gecmise_yaz", "_kitap_surumunu_artir",
+    # İnceleme onayı yalnız `inceleme` bayrağını yazar: prompt değişmez, sürüm artmaz.
+    "onayla",
 }
 
 

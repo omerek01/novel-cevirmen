@@ -53,7 +53,7 @@ def _sozlukler() -> dict[str, dict[str, str]]:
     for bolum in cache.denetim_bolumleri(None):
         slug = bolum["book_slug"]
         if slug not in out:
-            out[slug] = glossary.get_glossary(slug)
+            out[slug] = glossary.ceviri_sozlugu(slug)
     return out
 
 

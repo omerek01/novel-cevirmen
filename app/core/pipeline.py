@@ -147,10 +147,10 @@ def kosullu_denetlenmeyen(book_slug: str | None, kaynak: str | None) -> list[str
     """
     if not book_slug or not (kaynak or "").strip():
         return []
-    kosullar = glossary.get_kosullar(book_slug)
+    kosullar = glossary.ceviri_kosullari(book_slug)
     if not kosullar:
         return []
-    sozluk = glossary.get_glossary(book_slug)
+    sozluk = glossary.ceviri_sozlugu(book_slug)
     return sorted(
         s for s in kosullar if _translate_mod._terim_metinde(s, sozluk.get(s, s), kaynak)
     )
@@ -367,11 +367,11 @@ def _do_fetch_translate_save(
         if merged and merged.get("title"):
             book_title = merged["title"]
 
-    book_glossary = glossary.get_glossary(book_slug)
+    book_glossary = glossary.ceviri_sozlugu(book_slug)
     # KOŞULLU karşılıklar: aynı İngilizce sözcüğün bağlama göre farklı çevrildiği
     # kayıtlar. Ayrı çekilir çünkü `get_glossary` sade eşlemeyi döndürmeye devam
     # ediyor — sözleşmesini değiştirmek `translate_chapter`'a kadar sızardı.
-    book_kosullar = glossary.get_kosullar(book_slug)
+    book_kosullar = glossary.ceviri_kosullari(book_slug)
     # Çeviriden ÖNCE okunur: bu bölümün prompt'una giren sözlüğün sürümü. Çeviriden
     # sonra eklenen otomatik terimler bu prompt'ta YOKTU.
     sozluk_surumu = glossary.kitap_surumu(book_slug)
@@ -515,11 +515,11 @@ def fetch_into_book(
     host_slug = chapter.get("book_slug")
     if host_slug and host_slug != target_slug:
         library.set_alias(host_slug, target_slug)
-    book_glossary = glossary.get_glossary(target_slug)
+    book_glossary = glossary.ceviri_sozlugu(target_slug)
     # Koşullar `_fetch_translate_save` ile AYNI: sözlüğü okuyan her yol koşulları
     # da okumalı, yoksa "web'den devam" ile eklenen bölüm kuralın dışında kalır —
     # `model` künyesinde tam bu hata yaşandı.
-    book_kosullar = glossary.get_kosullar(target_slug)
+    book_kosullar = glossary.ceviri_kosullari(target_slug)
     sozluk_surumu = glossary.kitap_surumu(target_slug)  # `_fetch_translate_save` ile AYNI künye
     tail = cache.tail_chapter(target_slug)
     # NUMARA ÖNCELİĞİ (2026-09-02'de düzeltildi). Eskiden yalnız `tail+1` vardı ve

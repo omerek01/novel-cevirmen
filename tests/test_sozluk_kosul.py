@@ -199,6 +199,9 @@ def test_sozlugu_okuyan_her_yol_kosullari_da_OKUR():
     import pathlib
 
     kaynak = pathlib.Path("app/core/pipeline.py").read_text(encoding="utf-8")
-    assert kaynak.count("glossary.get_glossary(") == kaynak.count(
-        "glossary.get_kosullar("
+    assert kaynak.count("glossary.ceviri_sozlugu(") == kaynak.count(
+        "glossary.ceviri_kosullari("
     ), "sözlüğü okuyan bir yol koşulları okumuyor"
+    # Çeviri yolu EKRAN sözlüğünü okumamalı: alternatif yazımlar ve ek anlamlar
+    # yalnız `ceviri_*` fonksiyonlarında (4. aşama).
+    assert "glossary.get_glossary(" not in kaynak and "glossary.get_kosullar(" not in kaynak

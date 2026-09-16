@@ -1789,6 +1789,10 @@ def _translate_chunk(
     return out
 
 
+# `glossary.ceviri_kosullari` ek anlamları koşul metnine bu işaretle işler.
+EK_ANLAM_ISARETI = "BAŞKA ANLAM:"
+
+
 def _build_user_prompt(
     en_paras: list[str],
     glossary: dict[str, str],
@@ -1816,6 +1820,16 @@ def _build_user_prompt(
         if relevant
         else "(boş)"
     )
+    # EK ANLAM açıklaması YALNIZ bu istekteki sözlükte ek anlamlı bir terim varsa
+    # eklenir (2026-09-16). Sistem talimatına konsaydı HER isteğin prompt'u —
+    # ölçülmeden — değişirdi; böyle yapınca ek anlam tanımlamamış kitapların
+    # prompt'u bayt bayt aynı kalır. Koşul metni `glossary.ceviri_kosullari`'dan gelir.
+    if any(EK_ANLAM_ISARETI in (kosullar.get(s) or "") for s in relevant):
+        glossary_str += (
+            f"\n(Koşulda {EK_ANLAM_ISARETI} \"X\" — <bağlam> geçen kelimenin birden çok "
+            "kayıtlı karşılığı vardır: cümlenin bağlamı hangi koşula uyuyorsa O karşılığı "
+            "yaz; hiçbirine uymuyorsa bağlama göre normal çevir.)"
+        )
     numbered = "\n\n".join(f"[[{i + 1}]] {p}" for i, p in enumerate(en_paras))
     user = (
         f"SÖZLÜK — YALNIZ bu terimler için geçerli (kaynak -> karşılık); kaynağı "

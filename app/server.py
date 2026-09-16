@@ -233,6 +233,32 @@ class GlossaryTerm(BaseModel):
     # cihazın düzeltmesi sessizce ezilmez. None = denetleme yok (eski istemci,
     # hızlı ekleme formu — orada üzerine yazmak bilinçli davranıştır).
     taban_surum: int | None = None
+    # TÜR (kisi/yer/orgut/rutbe/yetenek/nesne/diger): yalnız saklama ve süzme,
+    # prompt'a girmez. None = dokunma.
+    tur: str | None = None
+
+
+class GlossaryYazim(BaseModel):
+    source: str
+    yazim: str
+    taban_surum: int | None = None
+
+
+class GlossaryAnlam(BaseModel):
+    target: str
+    kosul: str
+
+
+class GlossaryAnlamlar(BaseModel):
+    source: str
+    anlamlar: list[GlossaryAnlam]
+    taban_surum: int | None = None
+
+
+class GlossaryKarar(BaseModel):
+    source: str
+    karar: str  # onayla | reddet
+    taban_surum: int | None = None
 
 
 class GlossaryImportRequest(BaseModel):
@@ -659,6 +685,8 @@ def get_book_glossary(
         "warnings": glossary.yakin_terimler(slug),
         # Kitabın sözlük sürümü: bölüm künyesindeki `sozluk_surumu` ile kıyaslanır.
         "surum": glossary.kitap_surumu(slug),
+        # Alternatif yazımlar + ek anlamlar (yalnız eki olan kayıtlar).
+        "ekler": glossary.ekler(slug),
     }
     if bolum is not None:
         # "Bu bölümde geçenler" süzgeci. null = bölümün kaynağı yok (bilinmiyor).
@@ -694,6 +722,7 @@ def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
             slug, term.source, term.target,
             kosul=glossary.KORU if term.kosul is None else term.kosul,
             taban_surum=term.taban_surum,
+            tur=term.tur,
         )
     except glossary.SurumCakismasi as exc:
         raise _surum_cakismasi(exc) from exc
@@ -718,6 +747,94 @@ def delete_book_glossary(
     except glossary.SurumCakismasi as exc:
         raise _surum_cakismasi(exc) from exc
     return {"terms": glossary.get_glossary(slug), "silinen": silinen}
+
+
+def _kayit_bulunamadi() -> HTTPException:
+    return HTTPException(status_code=404, detail="Terim sözlükte yok.")
+
+
+def _kayit(slug: str, source: str) -> dict | None:
+    anahtar = glossary.fold_term(glossary.normalize_source(source) or source)
+    return next(
+        (r for r in glossary.get_glossary_rows(slug) if glossary.fold_term(r["source"]) == anahtar),
+        None,
+    )
+
+
+@app.post("/api/book/{slug}/glossary/yazim")
+def add_glossary_spelling(slug: str, req: GlossaryYazim) -> dict:
+    """Onaylı alternatif yazım ekle (aynı varlığın kaynak sitedeki öteki yazımı)."""
+    try:
+        yazimlar = glossary.yazim_ekle(slug, req.source, req.yazim, taban_surum=req.taban_surum)
+    except glossary.SurumCakismasi as exc:
+        raise _surum_cakismasi(exc) from exc
+    except glossary.YazimCakismasi as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if yazimlar is None:
+        raise _kayit_bulunamadi()
+    return {"yazimlar": yazimlar, "kayit": _kayit(slug, req.source)}
+
+
+@app.delete("/api/book/{slug}/glossary/yazim")
+def delete_glossary_spelling(
+    slug: str, source: str = Query(...), yazim: str = Query(...),
+    taban_surum: int | None = Query(None),
+) -> dict:
+    try:
+        yazimlar = glossary.yazim_sil(slug, source, yazim, taban_surum=taban_surum)
+    except glossary.SurumCakismasi as exc:
+        raise _surum_cakismasi(exc) from exc
+    if yazimlar is None:
+        raise _kayit_bulunamadi()
+    return {"yazimlar": yazimlar, "kayit": _kayit(slug, source)}
+
+
+@app.put("/api/book/{slug}/glossary/anlamlar")
+def set_glossary_senses(slug: str, req: GlossaryAnlamlar) -> dict:
+    """Kaydın EK anlamlarını (2., 3. …) tümüyle değiştir; her birinin koşulu zorunlu."""
+    try:
+        anlamlar = glossary.anlamlari_yaz(
+            slug, req.source, [a.model_dump() for a in req.anlamlar], taban_surum=req.taban_surum
+        )
+    except glossary.SurumCakismasi as exc:
+        raise _surum_cakismasi(exc) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if anlamlar is None:
+        raise _kayit_bulunamadi()
+    return {"anlamlar": anlamlar, "kayit": _kayit(slug, req.source)}
+
+
+@app.get("/api/book/{slug}/glossary/review")
+def glossary_review(slug: str) -> dict:
+    """İnceleme listesi (nedenleriyle) + reddedilen adaylar."""
+    canonical = library.resolve_slug(slug)
+    return {"liste": glossary.inceleme_listesi(canonical), "red": glossary.red_listesi(canonical)}
+
+
+@app.post("/api/book/{slug}/glossary/review")
+def glossary_review_decision(slug: str, req: GlossaryKarar) -> dict:
+    """Onayla: kayıt doğru (prompt değişmez). Reddet: kayıt silinir ve aday bir daha
+    otomatik eklenmez. Reddin yanıtı `silinen`i taşır (geri alma için)."""
+    if req.karar == "onayla":
+        if not glossary.onayla(slug, req.source):
+            raise _kayit_bulunamadi()
+        return {"ok": True}
+    if req.karar == "reddet":
+        try:
+            silinen = glossary.reddet(slug, req.source, taban_surum=req.taban_surum)
+        except glossary.SurumCakismasi as exc:
+            raise _surum_cakismasi(exc) from exc
+        if silinen is None:
+            raise _kayit_bulunamadi()
+        return {"ok": True, "silinen": silinen}
+    raise HTTPException(status_code=400, detail="karar: onayla | reddet")
+
+
+@app.delete("/api/book/{slug}/glossary/red")
+def glossary_unreject(slug: str, source: str = Query(...)) -> dict:
+    """Reddi kaldır: aday yeniden otomatik eklenebilir."""
+    return {"ok": glossary.reddi_kaldir(library.resolve_slug(slug), source)}
 
 
 @app.get("/api/book/{slug}/glossary/history")

@@ -61,7 +61,7 @@ def denetle(kitap: str | None) -> list[dict]:
     for bolum in cache.denetim_bolumleri(kitap):
         slug = bolum["book_slug"]
         if slug not in kosul_onbellegi:
-            kosul_onbellegi[slug] = glossary.get_kosullar(slug)
+            kosul_onbellegi[slug] = glossary.ceviri_kosullari(slug)
         bolum["ihlaller"] = translate.sozluk_ihlalleri(
             glossary.bolumdeki_sozluk(slug, bolum["chapter_no"]),
             bolum["source"],

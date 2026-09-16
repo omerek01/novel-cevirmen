@@ -402,6 +402,9 @@ def delete_book(slug: str) -> bool:
             ("DELETE FROM glossary WHERE book_slug = ?", (slug,)),
             ("DELETE FROM sozluk_gecmis WHERE book_slug = ?", (slug,)),
             ("DELETE FROM sozluk_surumu WHERE book_slug = ?", (slug,)),
+            ("DELETE FROM sozluk_red WHERE book_slug = ?", (slug,)),
+            ("DELETE FROM sozluk_yazim WHERE book_slug = ?", (slug,)),
+            ("DELETE FROM sozluk_anlam WHERE book_slug = ?", (slug,)),
             ("DELETE FROM reading_log WHERE slug = ?", (slug,)),
             ("DELETE FROM aliases WHERE alias = ? OR canonical = ?", (slug, slug)),
         ):
