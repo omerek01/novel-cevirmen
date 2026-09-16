@@ -13,6 +13,7 @@ import pytest
 from playwright.sync_api import expect
 
 import tohum
+from yardimci import js_bekle
 
 SLUG = "gumus-kule"
 
@@ -92,8 +93,7 @@ def test_sozluk_ekle_ara_sil(sayfa):
     sayfa.locator("#glossAddBtn").click()
     # "Eklenen terim listede görünür" iddiası BİLEREK burada yok: bilinen yarış
     # hatasının ta kendisiydi; test_sozluk_kuyruk.py onu belirlenimci ölçüyor.
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
     )
 
     sayfa.locator("#glossSearch").fill("gümüş")
@@ -111,8 +111,7 @@ def test_sozluk_silme_sunucuya_ulasir(sayfa):
     expect(sayfa.locator("#terimPaneli")).to_be_visible()
     sayfa.locator("#terimSil").click()
     expect(sayfa.locator("#terimPaneli")).to_be_hidden()
-    sayfa.wait_for_function(
-        "async () => !('Silver Tower' in (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms)"
+    js_bekle(sayfa, "async () => !('Silver Tower' in (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms)"
     )
 
 

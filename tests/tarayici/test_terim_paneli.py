@@ -13,6 +13,7 @@ import json
 from playwright.sync_api import expect
 
 import tohum
+from yardimci import js_bekle
 
 SLUG = "gumus-kule"
 
@@ -78,15 +79,13 @@ def test_kosul_panelde_duzenlenir_ve_koşullu_suzgeci(sayfa):
     sayfa.locator("#glossList .gloss-row", has_text="Great").click()
     sayfa.locator("#terimKosul").fill("yalnız rütbe adı olarak")
     sayfa.locator("#terimKaydet").click()
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json())"
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json())"
         ".kosullar.Great === 'yalnız rütbe adı olarak'"
     )
     # Karşılığa dokunmayan ikinci kayıt koşulu SİLMEZ.
     sayfa.locator("#terimKarsilik").fill("Yüce")
     sayfa.locator("#terimKaydet").click()
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Great === 'Yüce'"
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Great === 'Yüce'"
     )
     sayfa.keyboard.press("Escape")
     sayfa.locator("[data-gloss-filter=kosullu]").click()

@@ -12,6 +12,7 @@ import json
 from playwright.sync_api import expect
 
 import tohum
+from yardimci import js_bekle
 
 SLUG = "gumus-kule"
 GECIKTIR = """(() => {
@@ -50,8 +51,7 @@ def test_yaris_gonderim_surerken_yazilan_yeni_deger_sunucuya_ulasir(sayfa):
     alan.fill("Ermiş")
     sayfa.locator("#terimKaydet").click()
     expect(sayfa.locator("#terimDurum")).to_contain_text("Cihazda bekliyor")
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Saint === 'Ermiş'",
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Saint === 'Ermiş'",
         timeout=15000,
     )
     sayfa.wait_for_function("() => !document.querySelector('.gloss-row-pending')", timeout=15000)
@@ -65,8 +65,7 @@ def test_eklenen_terim_gonderimden_sonra_suzgecte_kaybolmaz(sayfa):
     _sozluge_git(sayfa)
     sayfa.locator("#glossSource").fill("Mira")
     sayfa.locator("#glossAddBtn").click()
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
     )
     sayfa.wait_for_function("() => !document.querySelector('#glossList .gloss-row-pending')")
     sayfa.locator("#glossSearch").fill("x")
@@ -93,8 +92,7 @@ def test_depolama_yazilamazsa_uyari_gorunur_ve_kayit_yine_gider(sayfa):
     sayfa.locator("#glossAddBtn").click()
     expect(sayfa.locator("#glossPending")).to_contain_text("YAZILAMADI")
     expect(sayfa.locator("#glossList .gloss-durum").first).to_have_text("KAYDEDİLMEDİ")
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Kaan === 'Kaan'"
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Kaan === 'Kaan'"
     )
 
 
@@ -135,8 +133,7 @@ def test_429_kaydi_bekletir_sonra_gonderir(sayfa):
     durum["red"] = False
     # Otomatik yeniden deneme (5 sn) beklenmeden bağlantı olayı da tetikler.
     sayfa.evaluate("window.dispatchEvent(new Event('online'))")
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Kaan === 'Kaan'"
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Kaan === 'Kaan'"
     )
 
 
@@ -150,12 +147,10 @@ def test_silme_geri_alinir_kosul_ve_koken_korunur(sayfa):
     sayfa.locator("#glossList .gloss-row").first.click()
     expect(sayfa.locator("#terimKosul")).to_have_value("rütbe")
     sayfa.locator("#terimSil").click()
-    sayfa.wait_for_function(
-        "async () => !('Great' in (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms)"
+    js_bekle(sayfa, "async () => !('Great' in (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms)"
     )
     sayfa.locator("#bildirim .bildirim-eylem").click()
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).kosullar.Great === 'rütbe'"
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).kosullar.Great === 'rütbe'"
     )
     satir = {r["source"]: r for r in glossary.get_glossary_rows(SLUG)}["Great"]
     assert satir["origin"] == "auto" and satir["first_chapter"] == 2
