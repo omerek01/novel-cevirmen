@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 
-from . import db, pipeline
+from . import cache, db, pipeline
 from .fetch import FetchError
 from .translate import TranslateError
 
@@ -619,6 +619,8 @@ def _run_retranslate(job_id: str, api_key: str | None) -> None:
                 "ihlal": len(data.get("glossary_leaks") or {}),
                 "kalinti": len(data.get("ingilizce_kalinti") or {}),
                 "model": data.get("model"),
+                # Eski çeviri arşive düştü: sonuç satırı "geri al" sunabilsin.
+                "arsiv_id": cache.son_arsiv_id(url),
             }
             translated += 1
             break

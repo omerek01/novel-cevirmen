@@ -372,6 +372,9 @@ def _do_fetch_translate_save(
     # kayıtlar. Ayrı çekilir çünkü `get_glossary` sade eşlemeyi döndürmeye devam
     # ediyor — sözleşmesini değiştirmek `translate_chapter`'a kadar sızardı.
     book_kosullar = glossary.get_kosullar(book_slug)
+    # Çeviriden ÖNCE okunur: bu bölümün prompt'una giren sözlüğün sürümü. Çeviriden
+    # sonra eklenen otomatik terimler bu prompt'ta YOKTU.
+    sozluk_surumu = glossary.kitap_surumu(book_slug)
     book = library.get_book(book_slug)
     # Bölüm sınırında bağlam sıfırlanmasın: önceki bölümün son Türkçe satırları
     # ilk parçaya bağlam olur (sahne ortasında biten bölümün devamı için).
@@ -425,6 +428,8 @@ def _do_fetch_translate_save(
         # İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş
         # paragraflar. Boş = temiz.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        # Bu çeviride kullanılan sözlüğün sürümü (künye).
+        "sozluk_surumu": sozluk_surumu,
         "cached": False,
     }
     cache.save_chapter(url, payload)
@@ -515,6 +520,7 @@ def fetch_into_book(
     # da okumalı, yoksa "web'den devam" ile eklenen bölüm kuralın dışında kalır —
     # `model` künyesinde tam bu hata yaşandı.
     book_kosullar = glossary.get_kosullar(target_slug)
+    sozluk_surumu = glossary.kitap_surumu(target_slug)  # `_fetch_translate_save` ile AYNI künye
     tail = cache.tail_chapter(target_slug)
     # NUMARA ÖNCELİĞİ (2026-09-02'de düzeltildi). Eskiden yalnız `tail+1` vardı ve
     # `fetch_chapter`'ın başlıktan/URL'den zaten çıkardığı numara yok sayılıyordu;
@@ -583,6 +589,7 @@ def fetch_into_book(
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        "sozluk_surumu": sozluk_surumu,
         "cached": False,
     }
     cache.save_chapter(url, payload)

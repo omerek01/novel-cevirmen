@@ -657,6 +657,8 @@ def get_book_glossary(
         # Yazım hatası olabilecek çiftler (`Orc`/`Ore`). Otomatik birleştirme YOK —
         # tek harf farkı gerçek bir anlam farkı olabilir; karar kullanıcınındır.
         "warnings": glossary.yakin_terimler(slug),
+        # Kitabın sözlük sürümü: bölüm künyesindeki `sozluk_surumu` ile kıyaslanır.
+        "surum": glossary.kitap_surumu(slug),
     }
     if bolum is not None:
         # "Bu bölümde geçenler" süzgeci. null = bölümün kaynağı yok (bilinmiyor).
@@ -820,6 +822,29 @@ def start_retranslate(slug: str, req: RetranslateRequest) -> dict:
             detail=f"Bu kitabın çevrilmiş bölümü olmayan {len(yabanci)} adres var.",
         )
     return {"job_id": jobs.start_retranslate(canonical, urls, API_KEY)}
+
+
+class ArsivGeriRequest(BaseModel):
+    url: str
+    id: int
+
+
+@app.get("/api/chapter/arsiv")
+def chapter_archive(url: str = Query(...)) -> dict:
+    """Bölümün arşivlenmiş (eski) çevirileri: model, sözlük sürümü, zaman, uyum."""
+    return {"arsiv": cache.arsiv_listesi(url)}
+
+
+@app.post("/api/chapter/arsiv/geri")
+def chapter_archive_restore(req: ArsivGeriRequest) -> dict:
+    """Arşivdeki çeviriye dön. Şu anki çeviri de arşive düşer (geri alma geri alınabilir).
+
+    Yanıt `ceviri_zamani` taşır: okuyucu telefondaki kopyayı tazelemesi gerektiğini
+    buradan bilir."""
+    if not cache.arsivden_geri_yukle(req.url, req.id):
+        raise HTTPException(status_code=404, detail="Arşiv kaydı bulunamadı.")
+    bolum = cache.get_chapter(req.url) or {}
+    return {"ok": True, "ceviri_zamani": bolum.get("ceviri_zamani")}
 
 
 @app.get("/api/settings/model")

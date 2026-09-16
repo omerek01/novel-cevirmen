@@ -73,7 +73,7 @@ def test_yalniz_verilen_bolumler_refresh_ile_cevrilir_zincir_izlenmez(monkeypatc
     assert s["type"] == "retranslate" and s["done"] == 2 and s["total"] == 2
     sonuc = s["params"]["sonuclar"]
     assert sonuc["u1"] == {"durum": "tamam", "hizali": True, "ihlal": 1, "kalinti": 0,
-                           "model": "gemini-3.6-flash"}
+                           "model": "gemini-3.6-flash", "arsiv_id": None}
     assert sonuc["u2"]["hizali"] is False
 
 

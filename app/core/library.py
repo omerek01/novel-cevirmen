@@ -395,6 +395,9 @@ def delete_book(slug: str) -> bool:
         # chapters/glossary/reading_log/aliases tembel oluşturulur — henüz yoksa
         # OperationalError'ı yut (taze DB'de tablo olmayabilir, merge_books ile aynı desen).
         for stmt, params in (
+            # Arşiv url ile bağlı: bölümler silinmeden ÖNCE temizlenir.
+            ("DELETE FROM ceviri_arsivi WHERE url IN "
+             "(SELECT url FROM chapters WHERE book_slug = ?)", (slug,)),
             ("DELETE FROM chapters WHERE book_slug = ?", (slug,)),
             ("DELETE FROM glossary WHERE book_slug = ?", (slug,)),
             ("DELETE FROM sozluk_gecmis WHERE book_slug = ?", (slug,)),

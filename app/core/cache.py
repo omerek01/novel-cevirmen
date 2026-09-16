@@ -72,7 +72,130 @@ def _connect() -> sqlite3.Connection:
     # — `_split_by_markers` yalnız YAPIYI, `glossary_leaks` yalnız KAYITLI terimleri
     # denetliyor. NULL = hiç denetlenmedi (eski satır), "{}" = denetlendi ve temiz.
     db.ensure_column(conn, "chapters", "ingilizce_kalinti", "ingilizce_kalinti TEXT")
+    # SÖZLÜK SÜRÜMÜ (2026-09-16): bölüm çevrilirken kitabın sözlüğü hangi
+    # sürümdeydi (`glossary.kitap_surumu`). `first_chapter` bunu söyleyemiyordu —
+    # eski bir bölüm sonradan yeniden çevrilmiş olabilir. NULL = bilinmiyor.
+    db.ensure_column(conn, "chapters", "sozluk_surumu", "sozluk_surumu INTEGER")
+    # ÇEVİRİ ARŞİVİ: yeniden çeviri (sözlük düzeltmesi sonrası) eski çeviriyi
+    # sessizce eziyordu; yeni çeviri daha kötü çıkarsa (hizalama kaybı, kalıntı)
+    # geri dönüş yoktu. Metin değişen HER yazımda eski hâl buraya düşer, url
+    # başına son `ARSIV_MAX` tutulur.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ceviri_arsivi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            url TEXT NOT NULL,
+            translation TEXT NOT NULL,
+            source_text TEXT,
+            engine TEXT,
+            model TEXT,
+            glossary_leaks TEXT,
+            ingilizce_kalinti TEXT,
+            sozluk_surumu INTEGER,
+            ceviri_zamani REAL,
+            arsiv_zamani REAL NOT NULL
+        )
+        """
+    )
+    conn.execute("CREATE INDEX IF NOT EXISTS ceviri_arsivi_url ON ceviri_arsivi (url, id)")
     return conn
+
+
+ARSIV_MAX = 3
+_ARSIV_SUTUNLARI = (
+    "translation", "source_text", "engine", "model", "glossary_leaks", "ingilizce_kalinti",
+    "sozluk_surumu",
+)
+
+
+def _arsivle(conn: sqlite3.Connection, url: str, yeni_ceviri: str | None) -> None:
+    """Satırın ŞU ANKİ çevirisi yenisinden farklıysa arşive koy (aynı bağlantıda).
+
+    Künye-yalnız güncellemeler (çeviri metni None ya da aynı) arşivlenmez: arşiv
+    "geri dönülebilecek çeviriler" listesidir, gürültü değil."""
+    if yeni_ceviri is None:
+        return
+    satir = conn.execute(
+        f"SELECT {', '.join(_ARSIV_SUTUNLARI)}, created_at FROM chapters WHERE url = ?", (url,)
+    ).fetchone()
+    if not satir or not satir[0] or satir[0] == yeni_ceviri:
+        return
+    conn.execute(
+        f"INSERT INTO ceviri_arsivi (url, {', '.join(_ARSIV_SUTUNLARI)}, ceviri_zamani, "
+        f"arsiv_zamani) VALUES (?, {', '.join('?' for _ in _ARSIV_SUTUNLARI)}, ?, ?)",
+        (url, *satir, time.time()),
+    )
+    conn.execute(
+        "DELETE FROM ceviri_arsivi WHERE url = ? AND id NOT IN "
+        "(SELECT id FROM ceviri_arsivi WHERE url = ? ORDER BY id DESC LIMIT ?)",
+        (url, url, ARSIV_MAX),
+    )
+
+
+def arsiv_listesi(url: str) -> list[dict]:
+    """Bölümün arşivlenmiş çevirileri, yeniden eskiye (metin YOK — yalnız künye)."""
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT id, model, engine, sozluk_surumu, ceviri_zamani, arsiv_zamani, "
+            "length(translation), glossary_leaks, ingilizce_kalinti, source_text IS NOT NULL "
+            "FROM ceviri_arsivi WHERE url = ? ORDER BY id DESC",
+            (url,),
+        ).fetchall()
+    finally:
+        conn.close()
+    return [
+        {
+            "id": r[0], "model": r[1], "engine": r[2], "sozluk_surumu": r[3],
+            "ceviri_zamani": r[4], "arsiv_zamani": r[5], "uzunluk": r[6],
+            "ihlal": len(json.loads(r[7] or "{}")), "kalinti": len(json.loads(r[8] or "{}")),
+            "hizali": bool(r[9]),
+        }
+        for r in rows
+    ]
+
+
+def son_arsiv_id(url: str) -> int | None:
+    conn = _connect()
+    try:
+        r = conn.execute(
+            "SELECT MAX(id) FROM ceviri_arsivi WHERE url = ?", (url,)
+        ).fetchone()
+    finally:
+        conn.close()
+    return r[0] if r else None
+
+
+def arsivden_geri_yukle(url: str, arsiv_id: int) -> bool:
+    """Arşivdeki çeviriyi geri koy; şu anki çeviri de arşive düşer (geri alma da
+    geri alınabilir). `created_at` TAZELENİR: telefonun önbelleği bu zamana
+    bakarak kopyasının bayat olduğunu anlar. Kayıt yoksa False."""
+    conn = _connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        satir = conn.execute(
+            f"SELECT {', '.join(_ARSIV_SUTUNLARI)} FROM ceviri_arsivi WHERE id = ? AND url = ?",
+            (arsiv_id, url),
+        ).fetchone()
+        if satir is None or conn.execute(
+            "SELECT 1 FROM chapters WHERE url = ?", (url,)
+        ).fetchone() is None:
+            conn.rollback()
+            return False
+        conn.execute("DELETE FROM ceviri_arsivi WHERE id = ?", (arsiv_id,))
+        _arsivle(conn, url, satir[0])
+        conn.execute(
+            f"UPDATE chapters SET {', '.join(a + ' = ?' for a in _ARSIV_SUTUNLARI)}, "
+            "created_at = ? WHERE url = ?",
+            (*satir, time.time(), url),
+        )
+        conn.commit()
+        return True
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
 
 
 def get_chapter(url: str) -> dict | None:
@@ -86,7 +209,8 @@ def get_chapter(url: str) -> dict | None:
         row = conn.execute(
             "SELECT book_slug, book_title, title, chapter_no, translation, "
             "next_url, detected_names, chunk_count, prev_url, source_text, content_type, "
-            "engine, added_terms, model, glossary_leaks, ingilizce_kalinti "
+            "engine, added_terms, model, glossary_leaks, ingilizce_kalinti, sozluk_surumu, "
+            "created_at "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -116,6 +240,8 @@ def get_chapter(url: str) -> dict | None:
         "glossary_leaks": json.loads(row[14] or "{}"),
         # Aynı kural: NULL da "{}" da okuyucuya boş gelir; ayrım DB'de durur.
         "ingilizce_kalinti": json.loads(row[15] or "{}"),
+        "sozluk_surumu": row[16],
+        "ceviri_zamani": row[17],
         "cached": True,
     }
 
@@ -245,6 +371,7 @@ def delete_chapter(url: str) -> bool:
     """Bölümü önbellekten sil (listeden kalkar). Kayıt silindiyse True döner."""
     conn = _connect()
     try:
+        conn.execute("DELETE FROM ceviri_arsivi WHERE url = ?", (url,))
         cur = conn.execute("DELETE FROM chapters WHERE url = ?", (url,))
         conn.commit()
         return cur.rowcount > 0
@@ -362,6 +489,7 @@ def set_translation(
     degerler.append(url)
     conn = _connect()
     try:
+        _arsivle(conn, url, translation)  # onarım da geri alınabilir
         cur = conn.execute(
             f"UPDATE chapters SET {', '.join(alanlar)} WHERE url = ?", degerler
         )
@@ -469,14 +597,15 @@ def save_chapter(url: str, data: dict) -> None:
     NULL'a düşmesin. Aynı E-16 sınıfı hata, farklı sütunlar."""
     conn = _connect()
     try:
+        _arsivle(conn, url, data.get("translation"))
         conn.execute(
             """
             INSERT INTO chapters
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text, content_type, engine, added_terms, model,
-                 glossary_leaks, ingilizce_kalinti)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 glossary_leaks, ingilizce_kalinti, sozluk_surumu)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -490,7 +619,8 @@ def save_chapter(url: str, data: dict) -> None:
                 model = COALESCE(excluded.model, model),
                 glossary_leaks = COALESCE(excluded.glossary_leaks, glossary_leaks),
                 ingilizce_kalinti = COALESCE(
-                    excluded.ingilizce_kalinti, ingilizce_kalinti)
+                    excluded.ingilizce_kalinti, ingilizce_kalinti),
+                sozluk_surumu = COALESCE(excluded.sozluk_surumu, sozluk_surumu)
             """,
             (
                 url,
@@ -523,6 +653,7 @@ def save_chapter(url: str, data: dict) -> None:
                 json.dumps(data["ingilizce_kalinti"], ensure_ascii=False)
                 if data.get("ingilizce_kalinti") is not None
                 else None,
+                data.get("sozluk_surumu"),
             ),
         )
         conn.commit()
