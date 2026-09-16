@@ -301,6 +301,7 @@ function kaydet() {
   const tur = el("terimTur").value;
   const terimTuru = tur !== (panel.eskiTur || "") ? tur : undefined;
   panel.eskiTur = tur;
+  panel.kaydetti = true;
   const { kalici } = saveTerm(panel.slug, ad, hedef, kosul, ornek, cakismaTabani(ad), terimTuru);
   panel.kayitli = ad;
   panel.eskiKosul = yeniKosul;
@@ -531,7 +532,8 @@ function durumuIzle(kaynak) {
     if (!panel) return;
     const d = terimDurumu(panel.slug, kaynak);
     if (!d) {
-      yaz("terimDurum", "Sunucuya kaydedildi.");
+      // Açılışta henüz bir şey kaydedilmedi: "kaydedildi" demek yanıltıcı olurdu.
+      yaz("terimDurum", panel.kaydetti ? "Sunucuya kaydedildi." : "Sunucuda kayıtlı.");
       return;
     }
     const metin = {

@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v98"; // inceleme, tür, alternatif yazım, ek anlam
+const SHELL_CACHE = "novellink-shell-v99"; // katlanır başlık işareti, panel eylem hizası
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",

@@ -2032,3 +2032,19 @@ html { scroll-padding-top: 5rem; }
 .terim-anlam .pill { min-height: var(--tap); }
 .terim-anlam { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-bottom: var(--s-sm); }
 .kunye-denetlenmedi { color: var(--ink-soft); font-style: italic; }
+.terim-eylem-sag { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: var(--s-sm); margin-left: auto; align-items: center; min-width: 0; }
+/* Katlanır başlıkların İŞARETİ: `display:flex` tarayıcının üçgenini siler; açık/kapalı
+   olduğu başka hiçbir yerden anlaşılmıyordu (görsel doğrulamada fark edildi). */
+.style-summary::after,
+.book-more-ozet::after {
+  content: "▾";
+  margin-left: auto;
+  padding-left: var(--s-sm);
+  transition: transform 0.15s ease;
+}
+details[open] > .style-summary::after,
+details[open] > .book-more-ozet::after { transform: rotate(180deg); }
+@media (prefers-reduced-motion: reduce) {
+  .style-summary::after,
+  .book-more-ozet::after { transition: none; }
+}
