@@ -1311,7 +1311,7 @@ export async function loadSourceForChapter(p, idx, url) {
   sourceLoading = true;
   const note = insertSourceLine(p, "İngilizce getiriliyor…", "source-loading");
   try {
-    const res = await fetch(`/api/chapter?url=${encodeURIComponent(url)}&source=1`);
+    const res = await fetch(`/api/chapter?url=${encodeURIComponent(url)}&source=1&track=0`);
     if (!res.ok) throw new Error();
     const data = await res.json();
     const src = data.source ? data.source.split(/\n\n+/).map((s) => s.trim()) : [];

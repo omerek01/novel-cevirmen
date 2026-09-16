@@ -231,7 +231,8 @@ export async function runOfflineDownload(slugs) {
       if (offlineStop) break outer;
       el("offlineProgressText").textContent = `${done + failed + 1} / ${total} indiriliyor…`;
       try {
-        const r = await fetch(`/api/chapter?url=${encodeURIComponent(ch.url)}`);
+        // track=0: indirmek OKUMAK değildir; konum son indirilen bölüme kaymasın.
+        const r = await fetch(`/api/chapter?url=${encodeURIComponent(ch.url)}&track=0`);
         if (r.ok) done++;
         else failed++;
       } catch {
