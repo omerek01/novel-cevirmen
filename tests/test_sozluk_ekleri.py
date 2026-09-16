@@ -252,3 +252,12 @@ def test_uclar():
     assert r.json()["silinen"]["target"] == "Ulu"
     assert c.get(f"/api/book/{KITAP}/glossary/review").json()["red"][0]["source"] == "Great"
     assert c.delete(f"/api/book/{KITAP}/glossary/red", params={"source": "Great"}).json()["ok"]
+
+
+def test_stil_uyarisi_yalniz_kaynagindan_ayrisan_uyeyi_isaretler():
+    glossary.set_term(KITAP, "dormant beast", "uykudaki mahluk")
+    glossary.set_term(KITAP, "bone beast", "kemik mahluk")
+    glossary.set_term(KITAP, "beast", "Mahluk")  # küçük harfli kaynak, büyük harfli karşılık
+    liste = {x["source"]: x for x in glossary.inceleme_listesi(KITAP)}
+    stil = {k for k, x in liste.items() if any(n["tur"] == "kardes_tutarsizligi" for n in x["nedenler"])}
+    assert stil == {"beast"}

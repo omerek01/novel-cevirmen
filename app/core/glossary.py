@@ -1430,7 +1430,11 @@ def inceleme_listesi(book_slug: str) -> list[dict]:
                  "Aynı varlıksa alternatif yazım yap; değilse karşılıklar ayrışmalı.", digerleri)
     for _kelime, aile in kardes_tutarsizliklari(book_slug):
         uyeler = [k for k, _ in aile]
-        for k in uyeler:
+        # YALNIZ büyük/küçük harfi KAYNAĞINDAN ayrışan üye işaretlenir. Ailenin tamamı
+        # işaretlenince (ölçüldü, sunucu 2026-09-16) shadow-slave'de 751 terimin 155'i
+        # listeye girdi — "bone colossus -> kemik dev" gibi TUTARLI küçük harfli cins
+        # isimler de. Her şeye uyaran liste görmezden gelinir; bu ölçütle 14 üye kaldı.
+        for k in [k for k, h in aile if k[:1].isupper() != (h or "")[:1].isupper()]:
             ekle(k, "kardes_tutarsizligi",
                  "Aynı ad ailesinde büyük harf/tire stili ayrışıyor: "
                  + ", ".join(f"{x} → {satirlar[x]['target']}" for x in uyeler if x in satirlar), [
