@@ -219,9 +219,13 @@ class GlossaryTerm(BaseModel):
 
 
 class GlossaryImportRequest(BaseModel):
-    terms: dict[str, str]
-    # "dosya" = dosyadaki karşılık kazanır (INSERT OR REPLACE);
-    # "mevcut" = yalnız boşluğu doldur (INSERT OR IGNORE, kullanıcı kaydı korunur).
+    # İKİ biçim kabul edilir. `kayitlar`: tam kayıtlı yedek (koşul + köken, biçim
+    # sürümü 2). `terms`: eski biçim (yalnız kaynak -> karşılık) — elde eski yedek
+    # dosyaları var ve önbellekteki eski okuyucu yalnız bunu gönderir.
+    terms: dict[str, str] | None = None
+    kayitlar: list | None = None
+    # "dosya" = dosyadaki alanlar kayıtlı terimin üzerine yazılır;
+    # "mevcut" = yalnız eksikler eklenir (kullanıcı kaydı korunur).
     strateji: str = "mevcut"
 
 
@@ -678,11 +682,9 @@ def export_book_glossary(slug: str) -> Response:
     telefon arayüzünde 267 satırı elden geçirmek pratik değil.
     """
     canonical = library.resolve_slug(slug)
-    govde = json.dumps(
-        {"book_slug": canonical, "terms": glossary.get_glossary(canonical)},
-        ensure_ascii=False,
-        indent=2,
-    )
+    # TAM kayıt: koşullar ve köken olmadan boş bir veritabanına geri yüklenen
+    # "yedek" sözlüğü geri getirmiyordu (bkz. glossary.disa_aktar).
+    govde = json.dumps(glossary.disa_aktar(canonical), ensure_ascii=False, indent=2)
     return Response(
         content=govde,
         media_type="application/json",
@@ -701,7 +703,14 @@ def import_book_glossary(slug: str, req: GlossaryImportRequest) -> dict:
     üzerine yazar — masaüstünde toplu düzeltme yapıp geri yüklemenin yolu budur.
     """
     canonical = library.resolve_slug(slug)
-    gelen = {k: v for k, v in (req.terms or {}).items() if (k or "").strip()}
+    if req.strateji not in glossary.IMPORT_STRATEJILERI:
+        raise HTTPException(status_code=400, detail="Bilinmeyen strateji.")
+    if req.kayitlar is not None:
+        sonuc = glossary.ice_aktar(canonical, req.kayitlar, req.strateji)
+        return {**sonuc, "terms": glossary.get_glossary(canonical)}
+    if req.terms is None:
+        raise HTTPException(status_code=400, detail="Dosyada ne 'kayitlar' ne 'terms' var.")
+    gelen = {k: v for k, v in req.terms.items() if (k or "").strip()}
     if req.strateji == "dosya":
         for kaynak, hedef in gelen.items():
             glossary.set_term(canonical, kaynak, hedef, "import")

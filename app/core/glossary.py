@@ -283,6 +283,184 @@ def set_term(
         conn.close()
 
 
+# ---------- yedek: tam kayıt dışa/içe aktarma ----------
+# Dışa aktarma eskiden yalnız `kaynak -> karşılık` taşıyordu: boş bir veritabanına
+# geri yüklenen "yedek" KOŞULLARI (prompt'ta kural olan bağlam bilgisi) ve kökeni
+# sessizce kaybediyordu. Biçim artık sürümlüdür; eski biçim (`terms` eşlemesi)
+# okunmaya devam eder ve yeni yedek de onu taşır — önbellekteki eski bir okuyucu
+# yeni dosyayı tümden reddetmesin.
+YEDEK_BICIMI = "novellink-sozluk"
+YEDEK_SURUMU = 2
+# Kayıt başına taşınan alanlar (kaynak hariç). Sıra dosyada okunaklılık içindir.
+YEDEK_ALANLARI = ("target", "kosul", "origin", "created_at", "first_chapter", "kaynak_cumle")
+IMPORT_STRATEJILERI = ("mevcut", "dosya")
+_METIN_SINIRI = {"source": 200, "target": 500, "kosul": 2000, "origin": 40, "kaynak_cumle": 2000}
+
+
+def disa_aktar(book_slug: str) -> dict:
+    """Kitabın sözlüğünü TAM kayıtlarıyla yedek sözlüğüne çevir (JSON'a hazır)."""
+    satirlar = get_glossary_rows(book_slug)
+    return {
+        "bicim": YEDEK_BICIMI,
+        "surum": YEDEK_SURUMU,
+        "book_slug": book_slug,
+        "disa_aktarim_zamani": time.time(),
+        "kayit_sayisi": len(satirlar),
+        "kayitlar": satirlar,
+        # GERİYE UYUM: eski okuyucu yalnız bu eşlemeyi okur.
+        "terms": {r["source"]: r["target"] for r in satirlar},
+    }
+
+
+def _yedek_kaydi(ham) -> dict | None:
+    """Dosyadan gelen tek kaydı doğrula; yalnız DOSYADA OLAN alanları döndür.
+
+    "Alan yok" ile "alan null" AYRIDIR: `dosya` stratejisinde yok olan alan mevcut
+    değeri korur, null olan temizler. Tip hatalı kayıt bütünüyle geçersizdir —
+    yarım doğru bir kaydı yazmak, dosyanın geri kalanının da doğru olduğu
+    izlenimini verirdi.
+    """
+    if not isinstance(ham, dict):
+        return None
+    kaynak = ham.get("source")
+    if not isinstance(kaynak, str) or len(kaynak) > _METIN_SINIRI["source"]:
+        return None
+    kaynak = normalize_source(kaynak)
+    if not kaynak:
+        return None
+    kayit: dict = {"source": kaynak}
+    for alan in ("target", "kosul", "origin", "kaynak_cumle"):
+        if alan in ham:
+            deger = ham[alan]
+            if deger is not None and (not isinstance(deger, str) or len(deger) > _METIN_SINIRI[alan]):
+                return None
+            kayit[alan] = deger.strip() if isinstance(deger, str) else None
+    if "created_at" in ham:
+        deger = ham["created_at"]
+        if deger is not None and (isinstance(deger, bool) or not isinstance(deger, (int, float))):
+            return None
+        kayit["created_at"] = float(deger) if deger is not None else None
+    if "first_chapter" in ham:
+        deger = ham["first_chapter"]
+        if deger is not None and (isinstance(deger, bool) or not isinstance(deger, int)):
+            return None
+        kayit["first_chapter"] = deger
+    return kayit
+
+
+def ice_aktar(book_slug: str, kayitlar: list, strateji: str = "mevcut") -> dict:
+    """Yedek kayıtlarını kitabın sözlüğüne yaz; sayımları döndür.
+
+    `mevcut`: kayıtlı terim (yazım varyantı dahil) HİÇ değişmez, yalnız eksikler
+    eklenir — sözlük kullanıcınındır. `dosya`: dosyadaki alanlar kayıtlı terimin
+    üzerine yazılır (masaüstünde toplu düzeltip geri yüklemenin yolu); dosyada
+    OLMAYAN alan korunur. Kayıtlı yazım korunur, değişen yalnız alanlardır.
+
+    Tek bağlantı ve tek işlem: yüzlerce kayıtlık bir yedek yarım yazılmasın.
+    """
+    if strateji not in IMPORT_STRATEJILERI:
+        raise ValueError(f"Bilinmeyen strateji: {strateji!r}")
+    sonuc = {"gelen": len(kayitlar), "eklenen": 0, "guncellenen": 0, "atlanan": 0, "gecersiz": 0}
+    conn = _connect()
+    try:
+        mevcut = {
+            fold_term(r[0]): r[0]
+            for r in conn.execute("SELECT source FROM glossary WHERE book_slug = ?", (book_slug,))
+        }
+        dosyada: set[str] = set()
+        for ham in kayitlar:
+            kayit = _yedek_kaydi(ham)
+            if kayit is None:
+                sonuc["gecersiz"] += 1
+                continue
+            anahtar = fold_term(kayit["source"])
+            if anahtar in dosyada:
+                sonuc["atlanan"] += 1  # dosyada aynı terimin ikinci yazımı: ilki kazanır
+                continue
+            dosyada.add(anahtar)
+            kayitli = mevcut.get(anahtar)
+            if kayitli is None:
+                conn.execute(
+                    "INSERT INTO glossary (book_slug, source, target, created_at, origin, "
+                    "first_chapter, kosul, kaynak_cumle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        book_slug,
+                        kayit["source"],
+                        kayit.get("target") or kayit["source"],  # boş karşılık = aynen koru
+                        kayit.get("created_at") or time.time(),
+                        kayit.get("origin") or "import",
+                        kayit.get("first_chapter"),
+                        kayit.get("kosul") or None,
+                        kayit.get("kaynak_cumle") or None,
+                    ),
+                )
+                mevcut[anahtar] = kayit["source"]
+                sonuc["eklenen"] += 1
+            elif strateji == "dosya":
+                alanlar = [a for a in YEDEK_ALANLARI if a in kayit]
+                if alanlar:
+                    degerler = []
+                    for a in alanlar:
+                        deger = kayit[a]
+                        if a == "target":
+                            deger = deger or kayitli
+                        elif a in ("kosul", "kaynak_cumle", "origin"):
+                            deger = deger or None
+                        degerler.append(deger)
+                    conn.execute(
+                        f"UPDATE glossary SET {', '.join(a + ' = ?' for a in alanlar)} "
+                        "WHERE book_slug = ? AND source = ?",
+                        (*degerler, book_slug, kayitli),
+                    )
+                sonuc["guncellenen"] += 1
+            else:
+                sonuc["atlanan"] += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return sonuc
+
+
+def semayi_hazirla() -> None:
+    """Sözlük tablosunu ve sütunlarını oluştur/göç et (başka modülün işleminden önce)."""
+    _connect().close()
+
+
+def kitaba_tasi(conn: sqlite3.Connection, kaynak_slug: str, hedef_slug: str) -> None:
+    """Bir kitabın sözlüğünü başka kitaba TAŞI (birleştirme), çağıranın bağlantısında.
+
+    Eskiden `INSERT OR IGNORE ... SELECT source, target` idi: koşul ve köken
+    sütunları kopyalanmıyordu, ve `(kitap, kaynak)` anahtarı birebir aynı olmayan
+    bir YAZIM VARYANTI hedefte ikinci satır açıyordu. Hedefteki kayıt her zaman
+    kazanır (kullanıcının oradaki düzenlemesi bozulmaz).
+
+    Commit ETMEZ: birleştirme bölümleri, alias'ları ve kitap satırını aynı işlemde
+    değiştiriyor; sözlük taşıması onun parçasıdır. ÖN KOŞUL: çağıran, işlemi
+    açmadan ÖNCE `semayi_hazirla()` çağırmış olmalı — tembel göç (ALTER TABLE)
+    açık bir yazma işleminin içinden ikinci bağlantıyla yapılırsa kilitlenir.
+    """
+    hedefte = {
+        fold_term(r[0])
+        for r in conn.execute("SELECT source FROM glossary WHERE book_slug = ?", (hedef_slug,))
+    }
+    satirlar = conn.execute(
+        "SELECT source, target, created_at, origin, first_chapter, kosul, kaynak_cumle "
+        "FROM glossary WHERE book_slug = ? ORDER BY created_at IS NULL, created_at",
+        (kaynak_slug,),
+    ).fetchall()
+    for satir in satirlar:
+        anahtar = fold_term(satir[0])
+        if anahtar in hedefte:
+            continue
+        hedefte.add(anahtar)
+        conn.execute(
+            "INSERT INTO glossary (book_slug, source, target, created_at, origin, "
+            "first_chapter, kosul, kaynak_cumle) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (hedef_slug, *satir),
+        )
+    conn.execute("DELETE FROM glossary WHERE book_slug = ?", (kaynak_slug,))
+
+
 def delete_term(book_slug: str, source: str) -> None:
     conn = _connect()
     try:

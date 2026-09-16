@@ -82,3 +82,33 @@ def test_delete_book_clears_alias():
     library.delete_book("s2")
     # Kanonik gidince alias da kalkar; s1 artık kendine çözülür (sarkık alias yok).
     assert library.resolve_slug("s1") == "s1"
+
+
+def test_merge_sozlugun_kosul_ve_kokenini_tasir():
+    """Birleştirme yalnız (kaynak, karşılık) taşıyordu: koşul (prompt'ta kural) ve
+    köken sessizce kayboluyordu — birleşen kitabın rütbe terimi ertesi bölümde
+    ünlemleri de "Ulu!" yapardı."""
+    _seed_book("src", "uSrc")
+    _seed_book("dst", "uDst")
+    glossary.merge_terms("src", {"Great": "Ulu"}, "auto", 12, {"Great": "Ulu bir canavar."})
+    glossary.set_kosul("src", "Great", "yalnız rütbe")
+
+    library.merge_books("src", "dst")
+
+    satir = {r["source"]: r for r in glossary.get_glossary_rows("dst")}["Great"]
+    assert satir["kosul"] == "yalnız rütbe"
+    assert satir["first_chapter"] == 12
+    assert satir["origin"] == "auto"
+    assert satir["kaynak_cumle"] == "Ulu bir canavar."
+
+
+def test_merge_yazim_varyanti_hedefte_ikinci_satir_acmaz():
+    _seed_book("src", "uSrc")
+    _seed_book("dst", "uDst")
+    glossary.set_term("dst", "Ore Empire", "Ork İmparatorluğu")
+    glossary.set_term("src", "OreEmpire", "Maden İmparatorluğu")
+
+    library.merge_books("src", "dst")
+
+    assert glossary.get_glossary("dst") == {"Ore Empire": "Ork İmparatorluğu"}
+    assert glossary.get_glossary("src") == {}

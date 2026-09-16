@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
-from . import db
+from . import db, glossary
 
 
 def _connect() -> sqlite3.Connection:
@@ -113,6 +113,9 @@ def merge_books(source: str, target: str) -> str:
     # tek seride toplayabilmeli. Merge yalnız book_slug'ı gruplar; next/prev URL
     # bazlı olduğundan zincir korunur. Bölüm no çakışması olursa liste ikisini de
     # gösterir (kişisel kullanım; kullanıcı bilinçli birleştirir).
+    # Sözlük şeması işlem AÇILMADAN hazırlanır: tembel göç ikinci bir bağlantıda
+    # ALTER TABLE yapar ve açık yazma işleminin içinden çağrılırsa kilitlenir.
+    glossary.semayi_hazirla()
     conn = _connect()
     try:
         # Hedef kendisi bir alias'sa kanonik köke in (alias zinciri olmasın).
@@ -130,16 +133,9 @@ def merge_books(source: str, target: str) -> str:
             )
         except sqlite3.OperationalError:
             pass
-        # Sözlüğü taşı; hedefteki kullanıcı düzenlemesini bozma (OR IGNORE).
-        try:
-            conn.execute(
-                "INSERT OR IGNORE INTO glossary (book_slug, source, target) "
-                "SELECT ?, source, target FROM glossary WHERE book_slug = ?",
-                (target, source),
-            )
-            conn.execute("DELETE FROM glossary WHERE book_slug = ?", (source,))
-        except sqlite3.OperationalError:
-            pass
+        # Sözlüğü TAM kayıtlarıyla taşı (koşul + köken); hedefteki kayıt ve onun
+        # yazım varyantı kazanır. Eskiden yalnız (kaynak, karşılık) kopyalanıyordu.
+        glossary.kitaba_tasi(conn, source, target)
         # source'a bağlı eski alias'ları target'a yönlendir, sonra source->target ekle.
         conn.execute(
             "UPDATE aliases SET canonical = ? WHERE canonical = ?", (target, source)
