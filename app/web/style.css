@@ -1984,3 +1984,51 @@ html { scroll-padding-top: 5rem; }
 .terim-gecmis-deger { margin: 0.15rem 0 0.3rem; overflow-wrap: anywhere; }
 .terim-gecmis-satir .pill,
 .terim-geri-al { min-height: var(--tap); margin-top: var(--s-xs); }
+
+/* ---------- 4. aşama: inceleme listesi, yazımlar, ek anlamlar ---------- */
+.gloss-review { margin-bottom: var(--s-md); }
+.gloss-review-list { padding: var(--s-sm) var(--s-md); }
+.inceleme-kart { padding: var(--s-sm) 0; border-bottom: 1px solid var(--border); }
+.inceleme-ust { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: var(--s-xs); }
+.inceleme-ust .gloss-source { max-width: none; }
+.inceleme-aciklama { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--ink-soft); }
+.inceleme-karsilik_cakismasi,
+.inceleme-yakin_yazim,
+.inceleme-kardes_tutarsizligi { color: var(--warn); border-color: var(--warn); }
+.inceleme-eylem { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-top: var(--s-xs); }
+.inceleme-eylem .pill,
+.inceleme-red .pill { min-height: var(--tap); }
+.inceleme-red { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--s-sm); padding: var(--s-xs) 0; }
+.gloss-cip-incele { color: var(--warn); border-color: var(--warn); }
+.gloss-tur-suz { display: inline-flex; align-items: center; gap: var(--s-xs); min-height: var(--tap); }
+.gloss-tur-suz .terim-etiket { margin: 0; }
+.gloss-tur-suz select,
+.terim-alan select {
+  min-height: var(--tap);
+  padding: 0.3rem 0.5rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+}
+.terim-alan select { width: 100%; }
+.terim-ekler { margin-top: var(--s-md); }
+.terim-ekler > :not(summary) { margin-left: var(--s-sm); margin-right: var(--s-sm); }
+.terim-satir-ekle { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin: var(--s-sm) 0; }
+.terim-satir-ekle input,
+.terim-anlam input {
+  flex: 1 1 8rem;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0.5rem 0.65rem;
+  font: inherit;
+  color: var(--ink);
+  background: var(--bg);
+  border: 2px solid var(--line);
+  border-radius: 5px;
+}
+.terim-satir-ekle .pill,
+.terim-anlam .pill { min-height: var(--tap); }
+.terim-anlam { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-bottom: var(--s-sm); }
+.kunye-denetlenmedi { color: var(--ink-soft); font-style: italic; }

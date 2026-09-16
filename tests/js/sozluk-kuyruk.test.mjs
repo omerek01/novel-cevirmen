@@ -364,3 +364,12 @@ test("reddedilmiş (hata) işlemle birleşen yeni yazım KENDİ tabanını kulla
   assert.equal(k.islemler().length, 1);
   assert.equal(k.islemler()[0].taban_surum, 0);
 });
+
+test("terim türü işlem türüyle karışmaz ve birleşmede taşınır", () => {
+  const k = kuyrukOlustur({ depo: bellekDepo(), gonder: elleGonderici().gonder });
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Aziz", terim_turu: "rutbe" });
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Ermiş" });
+  const [op] = k.islemler();
+  assert.equal(op.tur, "yaz");
+  assert.equal(op.terim_turu, "rutbe");
+});

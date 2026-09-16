@@ -128,6 +128,8 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
     let kosul = alanlar.kosul;
     let ornek = alanlar.ornek;
     let taban = alanlar.taban_surum;
+    // `terim_turu` (kisi/yer/…): işlem TÜRÜ olan `tur` alanıyla karışmasın diye ayrı ad.
+    let terimTuru = alanlar.terim_turu;
     const kalanlar = [];
     for (const op of d.islemler) {
       const ayniTerim = op.slug === slug && anahtarla(op.source) === anahtar;
@@ -145,6 +147,9 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
       if (alanlar.tur === "yaz" && ornek === undefined && op.tur === "yaz" && op.ornek) {
         ornek = op.ornek;
       }
+      if (alanlar.tur === "yaz" && terimTuru === undefined && op.tur === "yaz" && op.terim_turu !== undefined) {
+        terimTuru = op.terim_turu;
+      }
       // ÇAKIŞMA TABANI: bekleyen eski işlemin tabanı KAZANIR — kullanıcı düzenlemeye
       // o sürümü görerek başladı; birleşen ara yazımlar sunucuya hiç gitmedi.
       // Reddedilmiş (hata) işlemin tabanı ise bayattır: kullanıcı çakışmayı görüp
@@ -160,6 +165,7 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
       yeni.target = alanlar.target;
       if (kosul !== undefined) yeni.kosul = kosul;
       if (ornek) yeni.ornek = ornek;
+      if (terimTuru !== undefined) yeni.terim_turu = terimTuru;
     } else if (alanlar.tur === "geri") {
       yeni.kayit = alanlar.kayit;
     }

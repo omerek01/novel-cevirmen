@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v97"; // sözlük sürümü/çakışma/geçmiş + çeviri arşivi
+const SHELL_CACHE = "novellink-shell-v98"; // inceleme, tür, alternatif yazım, ek anlam
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -24,6 +24,7 @@ const SHELL = [
   "/js/kutuphane.js",
   "/js/okuyucu.js",
   "/js/sozluk.js",
+  "/js/sozluk-inceleme.js",
   "/js/sozluk-kuyruk.js",
   "/js/sozluk-secim.js",
   "/js/temel.js",

@@ -6,6 +6,7 @@ import { navigate, showView } from "./gezinme.js";
 import { fetchBooks } from "./kutuphane.js";
 import { chapterListFor, ensureChapterList } from "./okuyucu.js";
 import { anahtarla, kuyrukOlustur } from "./sozluk-kuyruk.js";
+import { incelemeyiYukle, incelenecekler } from "./sozluk-inceleme.js";
 import { terimPaneliAc } from "./terim-paneli.js";
 import { el, markSegment } from "./temel.js";
 
@@ -68,6 +69,7 @@ async function islemiGonder(op) {
     if (op.kosul !== undefined) govde.kosul = op.kosul; // yok = sunucu koşulu korur
     if (op.ornek) govde.ornek = op.ornek; // okurken eklenen terimin kökeni (boşsa yazılır)
     if (op.taban_surum !== undefined) govde.taban_surum = op.taban_surum; // çakışma denetimi
+    if (op.terim_turu !== undefined) govde.tur = op.terim_turu; // kisi/yer/… (prompt'a girmez)
     res = await fetchWithTimeout(`/api/book/${slug}/glossary`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -225,6 +227,8 @@ export let glossTermsSonHal = {}; // sunucudan gelen HAM eşleme (süzgeç yerel
 export let glossKosullarSonHal = {}; // sunucudan gelen HAM koşullar
 export let glossWarnPairs = [];  // [[a, b], …] yazım hatası olabilecek çiftler
 export let glossSurum = null; // kitabın sözlük sürümü (bölüm künyesiyle kıyaslanır)
+export let glossEkler = {}; // kaynak -> {yazimlar, anlamlar} (yalnız eki olanlar)
+export let glossTurSuzgeci = ""; // "" = hepsi
 
 /* `glossary.fold_term`'ün hafif JS eşi: yazım varyantından bağımsız karşılaştırma
    anahtarı. "İngilizce kalanlar" süzgeci sunucudaki tanımla AYNI olmalı — iki yerde
@@ -244,6 +248,7 @@ export function glossUyaranlar() {
 }
 
 export function glossSatirGecer(source, target) {
+  if (glossTurSuzgeci && (glossRows[source] || {}).tur !== glossTurSuzgeci) return false;
   if (glossQuery) {
     const q = glossQuery.toLocaleLowerCase("tr");
     const alanlar = source + " " + (target || "");
@@ -263,6 +268,8 @@ export function glossSatirGecer(source, target) {
       return !!glossKosullarGorunen()[source];
     case "bolumde":
       return !!glossBolumde && glossBolumde.has(anahtarla(source));
+    case "incelenecek":
+      return incelenecekler.has(anahtarla(source));
     case "esitlenmeyen": {
       const d = kuyruk.kaynakDurumu(durum.currentBookSlug, source);
       return d === "bekliyor" || d === "hata";
@@ -323,6 +330,7 @@ export async function fetchGlossary(slug) {
     for (const satir of data.rows || []) glossRows[satir.source] = satir;
     glossWarnPairs = data.warnings || [];
     glossSurum = Number.isFinite(data.surum) ? data.surum : null;
+    glossEkler = data.ekler || {};
   } catch {
     terms = {}; // çevrimdışı + hiç önbellek yok: yalnız bekleyen kayıtlar görünsün
   }
@@ -339,8 +347,9 @@ export async function fetchGlossary(slug) {
    "Ekle" düğmesini saniyelerce dondururdu — kayıt zaten kuyrukta güvende.
    Döner: { id, kalici } — çağıran bu işlemin durumunu izleyebilir.
    `kosul`: undefined = sunucudaki koşul korunur, "" = temizlenir. */
-export function saveTerm(slug, source, target, kosul, ornek, tabanSurum) {
+export function saveTerm(slug, source, target, kosul, ornek, tabanSurum, terimTuru) {
   const alanlar = { tur: "yaz", target };
+  if (terimTuru !== undefined) alanlar.terim_turu = terimTuru;
   if (kosul !== undefined) alanlar.kosul = kosul;
   if (ornek) alanlar.ornek = ornek;
   if (tabanSurum !== undefined) alanlar.taban_surum = tabanSurum;
@@ -450,6 +459,8 @@ export async function openGlossary(slug) {
   // listesini sebepsiz boş gösterirdi.
   glossFilter = "all";
   glossQuery = "";
+  glossTurSuzgeci = "";
+  if (el("glossTurSuz")) el("glossTurSuz").value = "";
   if (el("glossSearch")) el("glossSearch").value = "";
   markSegment("glossFilter", "all", "data-gloss-filter");
   refreshGlossExportLink(slug);
@@ -475,6 +486,10 @@ export async function openGlossary(slug) {
   // Liste ÖNCE çizilir (bekleyen kayıtlar overlay'den gelir), gönderim arka planda:
   // sunucu kapalıyken flush'ın zaman aşımını beklemek ekranı boş bırakırdı.
   renderGlossary(await fetchGlossary(slug));
+  // İnceleme listesi sunucu hesabıdır; beklenmez (çevrimdışıysa kutu gizli kalır).
+  incelemeyiYukle(slug).then(() => {
+    if (glossFilter === "incelenecek") yenidenSuz();
+  });
   flushGlossQueue().then(async (sent) => {
     if (!sent) return;
     // Kuyruk boşaldı: listeyi sunucudan tazele, yoksa gönderim sırasında alınmış
@@ -672,6 +687,14 @@ export function renderGlossary(terms) {
     const kok = glossRows[source] || {};
     if (kok.origin === "auto") cipler.appendChild(cip("OTO", "gloss-cip-oto", "Çeviri sırasında otomatik eklendi"));
     if (kok.first_chapter) cipler.appendChild(cip("B" + kok.first_chapter, "gloss-cip-bolum", "İlk eklendiği bölüm"));
+    const ek = glossEkler[source];
+    if (ek && ek.anlamlar.length) {
+      cipler.appendChild(cip(`${ek.anlamlar.length + 1} ANLAM`, "gloss-cip-kosul", "Bağlama göre birden çok karşılık"));
+    }
+    if (ek && ek.yazimlar.length) {
+      cipler.appendChild(cip(`+${ek.yazimlar.length} YAZIM`, "gloss-cip-yazim", ek.yazimlar.join(", ")));
+    }
+    if (incelenecekler.has(anahtarla(source))) cipler.appendChild(cip("İNCELE", "gloss-cip-incele", "İnceleme listesinde"));
 
     row.append(src, arrow, tgt, cipler);
     row.setAttribute("aria-label", `${source} → ${tgt.textContent}. Ayrıntı için aç`);
@@ -794,6 +817,10 @@ export function kur() {
       setGlossIoState("Yüklenemedi (" + err.message + ") — sunucu açıkken tekrar dene.");
     }
   });
+  el("glossTurSuz")?.addEventListener("change", (e) => {
+    glossTurSuzgeci = e.target.value;
+    yenidenSuz();
+  });
   el("glossSearch")?.addEventListener("input", (e) => {
     glossQuery = e.target.value.trim();
     yenidenSuz();
@@ -801,6 +828,7 @@ export function kur() {
   for (const btn of document.querySelectorAll("[data-gloss-filter]")) {
     btn.addEventListener("click", async () => {
       glossFilter = btn.getAttribute("data-gloss-filter");
+      if (glossFilter === "incelenecek") await incelemeyiYukle(durum.currentBookSlug);
       markSegment("glossFilter", glossFilter, "data-gloss-filter");
       if (glossFilter === "bolumde") await bolumdeGecenleriYukle();
       yenidenSuz();

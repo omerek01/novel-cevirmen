@@ -546,6 +546,9 @@ export function buildChapterEntry(url, data) {
     ingilizceKalinti: data.ingilizce_kalinti || null,
     // Bu çeviride kullanılan sözlüğün sürümü (eski bölümlerde yok).
     sozlukSurumu: data.sozluk_surumu ?? null,
+    // Bu bölümde geçen KOŞULLU / ek anlamlı kayıtlar: deterministik denetim dışı.
+    // Künye "sözlüğe uyuldu" DİYEMEZ; "bağlam nedeniyle denetlenmedi" der (belge).
+    kosulluDenetlenmeyen: data.kosullu_denetlenmeyen || [],
     el: null,
     loaded: false,
     empty: false,
@@ -688,12 +691,14 @@ export function kunyeKarti(entry) {
   // Çevrilmeden İngilizce kalan paragraflar (onarım turundan SONRA kalanlar).
   const kalinti = entry.ingilizceKalinti || {};
   const kalintiIndeksleri = Object.keys(kalinti);
+  const denetlenmeyen = entry.kosulluDenetlenmeyen || [];
   // Eski önbellekteki bölümde künye yok: "bilinmiyor" yazmak yanıltıcı olur, sessizce atla.
   if (
     !motor &&
     adlar.length === 0 &&
     ihlalAdlari.length === 0 &&
-    kalintiIndeksleri.length === 0
+    kalintiIndeksleri.length === 0 &&
+    denetlenmeyen.length === 0
   )
     return null;
 
@@ -757,6 +762,14 @@ export function kunyeKarti(entry) {
       satir.append(document.createTextNode(` · sözlük s.${entry.sozlukSurumu}`));
     }
     govde.appendChild(satir);
+  }
+  if (denetlenmeyen.length) {
+    const not = document.createElement("p");
+    not.className = "gloss-hint kunye-satir kunye-denetlenmedi";
+    not.textContent =
+      "Bağlam nedeniyle otomatik denetlenmedi: " + denetlenmeyen.join(", ") +
+      " (koşullu ya da çok anlamlı kayıt — hangi karşılığın geçerli olduğu ölçülemez).";
+    govde.appendChild(not);
   }
   if (kalintiIndeksleri.length) {
     const uyari = document.createElement("p");

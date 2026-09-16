@@ -30,6 +30,7 @@ import {
   fetchGlossary,
   fetchWithTimeout,
   glossKosullarSonHal,
+  glossEkler,
   glossRows,
   glossTermsSonHal,
   kokeneGit,
@@ -102,6 +103,11 @@ function formuSifirla() {
   el("terimEtki").replaceChildren();
   el("terimGecmis").hidden = true;
   el("terimGecmis").replaceChildren();
+  el("terimTur").value = "";
+  el("terimEkler").hidden = true;
+  el("terimEkler").open = false;
+  el("terimYazimYeni").value = "";
+  yaz("terimEkDurum", "");
   el("terimKoken").hidden = true;
   el("terimKoken").replaceChildren();
   yaz("terimDurum", "");
@@ -178,9 +184,14 @@ function kaynagiSec(kaynak, { oner = false } = {}) {
     el("terimSonrasi").hidden = false;
     yaz("terimPaneli-baslik", kayitli);
     kokeniCiz(kayitli);
+    el("terimTur").value = (glossRows[kayitli] || {}).tur || "";
+    panel.eskiTur = el("terimTur").value;
+    ekleriCiz(kayitli);
     durumuIzle(kayitli);
   } else {
     panel.eskiKosul = "";
+    panel.eskiTur = "";
+    el("terimEkler").hidden = true;
     el("terimSil").hidden = true;
     el("terimSonrasi").hidden = true;
     yaz("terimPaneli-baslik", "YENİ TERİM");
@@ -286,7 +297,11 @@ function kaydet() {
   const kosul = yeniKosul !== eskiKosul ? yeniKosul : undefined;
   const ornek =
     !kayitli && panel.ornek && panel.ornek.kaynak_cumle ? panel.ornek : undefined;
-  const { kalici } = saveTerm(panel.slug, ad, hedef, kosul, ornek, cakismaTabani(ad));
+  // Tür yalnız DEĞİŞTİYSE gönderilir ("" = temizle): prompt'a girmez, sürüm artırmaz.
+  const tur = el("terimTur").value;
+  const terimTuru = tur !== (panel.eskiTur || "") ? tur : undefined;
+  panel.eskiTur = tur;
+  const { kalici } = saveTerm(panel.slug, ad, hedef, kosul, ornek, cakismaTabani(ad), terimTuru);
   panel.kayitli = ad;
   panel.eskiKosul = yeniKosul;
   el("terimSil").hidden = false;
@@ -318,6 +333,120 @@ function sil() {
   diyalogKapat(PANEL);
   terimiSilGeriAlinabilir(slug, kayitli, { geriAlindi: yenidenSuz, tabanSurum: cakismaTabani(kayitli) });
   yenidenSuz();
+}
+
+/* ---------- alternatif yazımlar + ek anlamlar ----------
+   ÇEVRİMİÇİ yapılır (kuyruğa girmez): ikisi de prompt'u değiştiren, sürümlü ve nadir
+   düzenlemeler; çevrimdışı birikip sessizce uygulanmaları yerine sonucu anında söylenir. */
+
+function ekleriCiz(kaynak) {
+  const ek = glossEkler[kaynak] || { yazimlar: [], anlamlar: [] };
+  el("terimEkler").hidden = false;
+  if (ek.yazimlar.length || ek.anlamlar.length) el("terimEkler").open = true;
+  yazimlariCiz(kaynak, ek.yazimlar);
+  const kutu = el("terimAnlamlar");
+  kutu.replaceChildren();
+  for (const a of ek.anlamlar) kutu.appendChild(anlamSatiri(a));
+}
+
+function yazimlariCiz(kaynak, yazimlar) {
+  const kutu = el("terimYazimlar");
+  kutu.replaceChildren();
+  for (const y of yazimlar) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip terim-aday";
+    b.lang = "en";
+    b.textContent = `${y} ×`;
+    b.setAttribute("aria-label", `${y} yazımını kaldır`);
+    b.addEventListener("click", () => ekIstegi("DELETE", "yazim", kaynak, { yazim: y }));
+    kutu.appendChild(b);
+  }
+}
+
+function anlamSatiri(a = { target: "", kosul: "" }) {
+  const satir = document.createElement("div");
+  satir.className = "terim-anlam";
+  const hedef = document.createElement("input");
+  hedef.type = "text";
+  hedef.className = "terim-anlam-hedef";
+  hedef.placeholder = "Karşılık (örn. Harika)";
+  hedef.setAttribute("aria-label", "Ek anlam karşılığı");
+  hedef.value = a.target;
+  const kosul = document.createElement("input");
+  kosul.type = "text";
+  kosul.className = "terim-anlam-kosul";
+  kosul.placeholder = "Hangi bağlamda (örn. gündelik ünlem)";
+  kosul.setAttribute("aria-label", "Ek anlamın koşulu");
+  kosul.value = a.kosul || "";
+  const sil = document.createElement("button");
+  sil.type = "button";
+  sil.className = "pill";
+  sil.textContent = "×";
+  sil.setAttribute("aria-label", "Bu anlamı kaldır");
+  sil.addEventListener("click", () => satir.remove());
+  satir.append(hedef, kosul, sil);
+  return satir;
+}
+
+async function ekIstegi(yontem, tur, kaynak, alanlar) {
+  if (!panel) return;
+  const { slug } = panel;
+  const taban = cakismaTabani(kaynak);
+  let url = `/api/book/${encodeURIComponent(slug)}/glossary/${tur}`;
+  const secenek = { method: yontem, headers: { "Content-Type": "application/json" } };
+  if (yontem === "DELETE") {
+    const q = new URLSearchParams({ source: kaynak, ...alanlar });
+    if (taban !== undefined) q.set("taban_surum", taban);
+    url += "?" + q;
+  } else {
+    secenek.body = JSON.stringify({ source: kaynak, ...alanlar, taban_surum: taban });
+  }
+  yaz("terimEkDurum", "Kaydediliyor…");
+  let veri;
+  try {
+    const res = await fetchWithTimeout(url, secenek);
+    veri = await res.json().catch(() => ({}));
+    if (res.status === 409) {
+      yaz("terimEkDurum", "Bu terim başka bir cihazda değişti — paneli kapatıp yeniden aç.");
+      return;
+    }
+    if (!res.ok) {
+      const d = veri && veri.detail;
+      throw new Error(typeof d === "string" ? d : "sunucu " + res.status);
+    }
+  } catch (err) {
+    yaz("terimEkDurum", "Kaydedilemedi: " + err.message);
+    return;
+  }
+  if (!panel || panel.kayitli !== kaynak) return;
+  if (veri.kayit) glossRows[veri.kayit.source] = veri.kayit; // yeni çakışma tabanı
+  const ek = (glossEkler[kaynak] = glossEkler[kaynak] || { yazimlar: [], anlamlar: [] });
+  if (veri.yazimlar) {
+    ek.yazimlar = veri.yazimlar;
+    yazimlariCiz(kaynak, veri.yazimlar);
+    el("terimYazimYeni").value = "";
+  }
+  if (veri.anlamlar) {
+    ek.anlamlar = veri.anlamlar;
+    ekleriCiz(kaynak);
+  }
+  yaz("terimEkDurum", "Sunucuya kaydedildi. Yeni çevrilen bölümlerde geçerli.");
+}
+
+function anlamlariKaydet() {
+  if (!panel || !panel.kayitli) return;
+  const anlamlar = [...el("terimAnlamlar").querySelectorAll(".terim-anlam")]
+    .map((s) => ({
+      target: s.querySelector(".terim-anlam-hedef").value.trim(),
+      kosul: s.querySelector(".terim-anlam-kosul").value.trim(),
+    }))
+    .filter((a) => a.target);
+  if (anlamlar.some((a) => !a.kosul)) {
+    yaz("terimEkDurum", "Her ek anlamın koşulu olmalı: model hangisini ne zaman yazacağını ancak böyle bilir.");
+    return;
+  }
+  ekIstegi("PUT", "anlamlar", panel.kayitli, { anlamlar });
 }
 
 /* ---------- geçmiş ---------- */
@@ -676,6 +805,21 @@ export function kur() {
   el("terimBuBolum").addEventListener("click", buBolumdeUygula);
   el("terimEtkiBtn").addEventListener("click", etkiyiGoster);
   el("terimGecmisBtn").addEventListener("click", gecmisiGoster);
+  el("terimYazimEkle").addEventListener("click", () => {
+    const yazim = el("terimYazimYeni").value.trim();
+    if (panel && panel.kayitli && yazim) ekIstegi("POST", "yazim", panel.kayitli, { yazim });
+  });
+  el("terimYazimYeni").addEventListener("keydown", (e) => {
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    el("terimYazimEkle").click();
+  });
+  el("terimAnlamEkle").addEventListener("click", () => {
+    const satir = anlamSatiri();
+    el("terimAnlamlar").appendChild(satir);
+    satir.querySelector("input").focus();
+  });
+  el("terimAnlamKaydet").addEventListener("click", anlamlariKaydet);
   // Ayarlar → "Önceki çeviri — Geri dön": açık bölümün en son arşivlenen çevirisi.
   el("arsivGeri")?.addEventListener("click", async () => {
     const e = activeEntry();

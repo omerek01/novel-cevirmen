@@ -172,8 +172,28 @@
           <button class="chip" data-gloss-filter="auto">Otomatik</button>
           <button class="chip" data-gloss-filter="kosullu">Koşullu</button>
           <button class="chip" data-gloss-filter="esitlenmeyen">Eşitlenmeyen</button>
+          <button class="chip" data-gloss-filter="incelenecek">İncelenecek</button>
+          <label class="gloss-tur-suz">
+            <span class="terim-etiket">TÜR</span>
+            <select id="glossTurSuz" aria-label="Terim türüne göre süz">
+              <option value="">Hepsi</option>
+              <option value="kisi">Kişi</option>
+              <option value="yer">Yer</option>
+              <option value="orgut">Örgüt</option>
+              <option value="rutbe">Rütbe</option>
+              <option value="yetenek">Yetenek</option>
+              <option value="nesne">Nesne</option>
+              <option value="diger">Diğer</option>
+            </select>
+          </label>
         </div>
       </div>
+      <!-- İNCELEME: otomatik eklenen + çakışan/belirsiz kayıtlar, nedenleriyle.
+           Okumayı durduran zorunlu onay yok; kararlar sunucuda saklanır. -->
+      <details id="glossReviewBox" class="style-box gloss-review" hidden>
+        <summary id="glossReviewSayi" class="style-summary">İNCELENECEKLER</summary>
+        <div id="glossReviewList" class="gloss-review-list"></div>
+      </details>
       <!-- Yazım hatası olabilecek çiftler (Orc/Ore). Otomatik birleştirme YOK. -->
       <p id="glossWarnNote" class="gloss-warn-note" hidden></p>
       <p id="glossCount" class="gloss-hint gloss-count" aria-live="polite" hidden></p>
@@ -417,11 +437,42 @@
         Aynen koru (İngilizce kalsın — karakter adları)
       </label>
       <label class="terim-alan">
+        <span class="terim-etiket">TÜR (yalnız düzen için, çeviriyi etkilemez)</span>
+        <select id="terimTur">
+          <option value="">Belirtilmedi</option>
+          <option value="kisi">Kişi</option>
+          <option value="yer">Yer</option>
+          <option value="orgut">Örgüt</option>
+          <option value="rutbe">Rütbe</option>
+          <option value="yetenek">Yetenek</option>
+          <option value="nesne">Nesne</option>
+          <option value="diger">Diğer</option>
+        </select>
+      </label>
+      <label class="terim-alan">
         <span class="terim-etiket">KOŞUL (isteğe bağlı)</span>
         <textarea id="terimKosul" rows="2" autocomplete="off"
                   placeholder="Örn. yalnız rütbe adı olarak geçtiğinde; gündelik 'great' çevrilmez"></textarea>
       </label>
       <div id="terimKoken" class="terim-koken" hidden></div>
+      <!-- Kayıtlı terimde: onaylı alternatif yazımlar + ek anlamlar (çevrimiçi). -->
+      <details id="terimEkler" class="terim-ekler" hidden>
+        <summary class="style-summary">YAZIMLAR VE ANLAMLAR</summary>
+        <p class="terim-etiket">ALTERNATİF YAZIMLAR — aynı varlığın başka yazımı (otomatik birleştirilmez)</p>
+        <div id="terimYazimlar" class="terim-adaylar"></div>
+        <div class="terim-satir-ekle">
+          <input id="terimYazimYeni" type="text" autocomplete="off" lang="en"
+                 placeholder="Örn. Ore Empire" aria-label="Yeni alternatif yazım" />
+          <button id="terimYazimEkle" type="button" class="pill">Ekle</button>
+        </div>
+        <p class="terim-etiket">EK ANLAMLAR — aynı kelimenin bağlama göre başka karşılığı (koşul zorunlu)</p>
+        <div id="terimAnlamlar" class="terim-anlamlar"></div>
+        <div class="terim-satir-ekle">
+          <button id="terimAnlamEkle" type="button" class="pill">Anlam ekle</button>
+          <button id="terimAnlamKaydet" type="button" class="pill">Anlamları kaydet</button>
+        </div>
+        <p id="terimEkDurum" class="modal-hint" role="status" aria-live="polite"></p>
+      </details>
       <p id="terimDurum" class="modal-hint terim-durum" role="status" aria-live="polite"></p>
       <div class="modal-actions terim-eylemler">
         <button id="terimSil" type="button" class="pill terim-sil" hidden>Sil</button>
