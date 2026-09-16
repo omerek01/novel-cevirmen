@@ -544,6 +544,8 @@ export function buildChapterEntry(url, data) {
     // "bu paragrafı hiç çevirmedin" der; ikisini tek sayaçta toplamak, okuyucunun
     // hangisine baktığını belirsizleştirirdi.
     ingilizceKalinti: data.ingilizce_kalinti || null,
+    // Bu çeviride kullanılan sözlüğün sürümü (eski bölümlerde yok).
+    sozlukSurumu: data.sozluk_surumu ?? null,
     el: null,
     loaded: false,
     empty: false,
@@ -748,6 +750,11 @@ export function kunyeKarti(entry) {
         .map((m) => m.replace(/^[a-z0-9]+:/, "").replace(/^gemini-/, ""))
         .join(" + ");
       satir.append(document.createTextNode(` · ${kisa}`));
+    }
+    // Sözlük sürümü: bölüm çevrildikten sonra sözlük değiştiyse "bu bölümde eski
+    // karşılıklar olabilir" sorusu buradan okunur.
+    if (entry.sozlukSurumu != null) {
+      satir.append(document.createTextNode(` · sözlük s.${entry.sozlukSurumu}`));
     }
     govde.appendChild(satir);
   }

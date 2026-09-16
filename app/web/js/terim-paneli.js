@@ -20,6 +20,7 @@ import { purgeChapterFromSwCache, warmOffline } from "./cevrimdisi.js";
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { durum, views } from "./durum.js";
 import {
+  activeEntry,
   entryFor,
   fetchChapterData,
   renderHtmlContent,
@@ -99,6 +100,8 @@ function formuSifirla() {
   el("terimBuBolum").hidden = true;
   el("terimEtki").hidden = true;
   el("terimEtki").replaceChildren();
+  el("terimGecmis").hidden = true;
+  el("terimGecmis").replaceChildren();
   el("terimKoken").hidden = true;
   el("terimKoken").replaceChildren();
   yaz("terimDurum", "");
@@ -283,7 +286,7 @@ function kaydet() {
   const kosul = yeniKosul !== eskiKosul ? yeniKosul : undefined;
   const ornek =
     !kayitli && panel.ornek && panel.ornek.kaynak_cumle ? panel.ornek : undefined;
-  const { kalici } = saveTerm(panel.slug, ad, hedef, kosul, ornek);
+  const { kalici } = saveTerm(panel.slug, ad, hedef, kosul, ornek, cakismaTabani(ad));
   panel.kayitli = ad;
   panel.eskiKosul = yeniKosul;
   el("terimSil").hidden = false;
@@ -299,12 +302,97 @@ function kaydet() {
   durumuIzle(ad);
 }
 
+/* Çakışma tabanı: kullanıcının GÖRDÜĞÜ kayıt sürümü. Sunucuda kaydı olmayan terim
+   için 0 ("yok sanıyorum"); satır bilgisi hiç yüklenemediyse (çevrimdışı ilk açılış)
+   denetim istenmez — yanlış bir taban, kullanıcıyı kendi kaydıyla çakıştırırdı. */
+function cakismaTabani(ad) {
+  const satir = glossRows[ad];
+  if (satir && Number.isFinite(satir.surum)) return satir.surum;
+  if (kayitliAnahtar(glossTermsSonHal || {}, ad) !== undefined) return undefined;
+  return Object.keys(glossRows).length ? 0 : undefined;
+}
+
 function sil() {
   if (!panel || !panel.kayitli) return;
   const { slug, kayitli } = panel;
   diyalogKapat(PANEL);
-  terimiSilGeriAlinabilir(slug, kayitli, { geriAlindi: yenidenSuz });
+  terimiSilGeriAlinabilir(slug, kayitli, { geriAlindi: yenidenSuz, tabanSurum: cakismaTabani(kayitli) });
   yenidenSuz();
+}
+
+/* ---------- geçmiş ---------- */
+
+const ISLEM_ADI = { ekle: "Eklendi", guncelle: "Değişti", sil: "Silindi", tasi: "Kitap birleştirmede taşındı" };
+const YOL_ADI = { manual: "elle", auto: "otomatik", import: "yedekten", merge: "birleştirme" };
+
+function hal(x) {
+  if (!x) return "—";
+  return x.target + (x.kosul ? ` [koşul: ${x.kosul}]` : "");
+}
+
+async function gecmisiGoster() {
+  if (!panel || !panel.kayitli) return;
+  const { slug, kayitli } = panel;
+  const kutu = el("terimGecmis");
+  kutu.hidden = false;
+  kutu.replaceChildren();
+  const not = document.createElement("p");
+  not.className = "modal-hint";
+  not.textContent = "Geçmiş yükleniyor…";
+  kutu.appendChild(not);
+  let gecmis;
+  try {
+    const res = await fetch(
+      `/api/book/${encodeURIComponent(slug)}/glossary/history?source=${encodeURIComponent(kayitli)}`
+    );
+    if (!res.ok) throw new Error("sunucu " + res.status);
+    gecmis = (await res.json()).gecmis || [];
+  } catch (err) {
+    not.textContent = "Geçmiş alınamadı (" + err.message + ").";
+    return;
+  }
+  if (!panel || panel.kayitli !== kayitli) return;
+  not.textContent = gecmis.length
+    ? "Değişiklikler, yeniden eskiye. Bir önceki hâli forma alıp Kaydet ile geri dönebilirsin."
+    : "Bu kayıt için geçmiş yok (sürüm takibinden önce eklenmiş).";
+  const liste = document.createElement("ol");
+  liste.className = "terim-gecmis-liste";
+  for (const g of gecmis) {
+    const li = document.createElement("li");
+    li.className = "terim-gecmis-satir";
+    const ust = document.createElement("p");
+    ust.className = "terim-gecmis-ust";
+    ust.textContent = [
+      new Date(g.zaman * 1000).toLocaleString("tr-TR", {
+        day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+      }),
+      ISLEM_ADI[g.islem] || g.islem,
+      YOL_ADI[g.yol] || g.yol,
+    ].filter(Boolean).join(" · ");
+    const deger = document.createElement("p");
+    deger.className = "terim-gecmis-deger";
+    deger.textContent =
+      g.islem === "guncelle" ? `${hal(g.onceki)} → ${hal(g.sonraki)}` : hal(g.sonraki || g.onceki);
+    li.append(ust, deger);
+    const eski = g.islem === "guncelle" ? g.onceki : null;
+    if (eski) {
+      const don = document.createElement("button");
+      don.type = "button";
+      don.className = "pill";
+      don.textContent = "Bu hâli forma al";
+      don.addEventListener("click", () => {
+        el("terimAynen").checked = anahtarla(eski.target) === anahtarla(kayitli);
+        el("terimKarsilik").disabled = el("terimAynen").checked;
+        el("terimKarsilik").value = eski.target;
+        el("terimKosul").value = eski.kosul || "";
+        yaz("terimDurum", "Önceki değer forma alındı — uygulamak için Kaydet.");
+        el("terimKaydet").focus();
+      });
+      li.appendChild(don);
+    }
+    liste.appendChild(li);
+  }
+  kutu.appendChild(liste);
 }
 
 /* Kayıt durumu satırı: kuyruk olaylarıyla canlı. */
@@ -391,7 +479,11 @@ function etkiListesiCiz(kutu, slug, veri) {
 
   const liste = document.createElement("ul");
   liste.className = "terim-etki-liste";
+  const kayit = glossRows[panel && panel.kayitli] || {};
   for (const b of veri.chapters) {
+    // Terimin son değişikliğinden SONRA çevrilmiş bölüm zaten güncel sözlükle
+    // çevrildi: varsayılan olarak seçilmez (boşa çeviri isteği harcanmasın).
+    const guncel = !!(b.ceviri_zamani && kayit.updated_at && b.ceviri_zamani > kayit.updated_at);
     const li = document.createElement("li");
     li.className = "terim-etki-satir";
     li.dataset.url = b.url;
@@ -399,7 +491,7 @@ function etkiListesiCiz(kutu, slug, veri) {
     etiket.className = "terim-etki-baslik";
     const kutucuk = document.createElement("input");
     kutucuk.type = "checkbox";
-    kutucuk.checked = true;
+    kutucuk.checked = !guncel;
     kutucuk.value = b.url;
     const ad = document.createElement("span");
     ad.textContent =
@@ -409,7 +501,9 @@ function etkiListesiCiz(kutu, slug, veri) {
     if (b.ceviri_zamani) {
       const z = document.createElement("span");
       z.className = "terim-etki-zaman";
-      z.textContent = "çeviri: " + new Date(b.ceviri_zamani * 1000).toLocaleDateString("tr-TR");
+      z.textContent =
+        "çeviri: " + new Date(b.ceviri_zamani * 1000).toLocaleDateString("tr-TR") +
+        (guncel ? " · düzeltmeden sonra çevrilmiş (güncel)" : "");
       li.appendChild(z);
     }
     for (const [alan, dil] of [["ornek_en", "en"], ["ornek_tr", "tr"]]) {
@@ -494,7 +588,10 @@ export async function yenidenCevir(slug, urls, kutu) {
       if (islenen.has(url)) continue;
       islenen.add(url);
       const satir = kutu && kutu.querySelector(`li[data-url="${CSS.escape(url)}"] .terim-etki-sonuc`);
-      if (satir) satir.textContent = sonucEtiketi(sonuc);
+      if (satir) {
+        satir.textContent = sonucEtiketi(sonuc);
+        if (sonuc.arsiv_id) satir.appendChild(geriAlDugmesi(url, sonuc.arsiv_id, satir));
+      }
       if (sonuc.durum === "tamam") await bolumuTazele(url);
     }
     if (is.state !== "running" && is.state !== "queued") {
@@ -503,6 +600,39 @@ export async function yenidenCevir(slug, urls, kutu) {
     }
     await new Promise((c) => setTimeout(c, IS_YOKLAMA_MS));
   }
+}
+
+/* Yeni çeviri daha kötü çıktıysa (hizalama kaybı, kalıntı) eski çeviriye dönüş. */
+function geriAlDugmesi(url, arsivId, satir) {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "pill terim-geri-al";
+  b.textContent = "Eski çeviriye dön";
+  b.addEventListener("click", async () => {
+    b.disabled = true;
+    if (await arsivdenGeriYukle(url, arsivId)) {
+      satir.textContent = "ESKİ ÇEVİRİYE DÖNÜLDÜ";
+    } else {
+      b.disabled = false;
+    }
+  });
+  return b;
+}
+
+export async function arsivdenGeriYukle(url, arsivId) {
+  try {
+    const res = await fetch("/api/chapter/arsiv/geri", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, id: arsivId }),
+    });
+    if (!res.ok) throw new Error("sunucu " + res.status);
+  } catch (err) {
+    bildir("Eski çeviriye dönülemedi: " + err.message);
+    return false;
+  }
+  await bolumuTazele(url);
+  return true;
 }
 
 /* Sunucuda yeniden çevrilmiş bölümü telefona indir. `refresh=1` KULLANILMAZ: o
@@ -527,6 +657,7 @@ export async function bolumuTazele(url) {
       entry.glossaryLeaks = data.glossary_leaks || null;
       entry.ingilizceKalinti = data.ingilizce_kalinti || null;
       entry.model = data.model || entry.model;
+      entry.sozlukSurumu = data.sozluk_surumu ?? entry.sozlukSurumu;
       renderParagraphs(entry, "");
     }
     window.scrollTo(0, y); // okuma konumu korunur
@@ -544,6 +675,34 @@ export function kur() {
   el("terimKapat").addEventListener("click", () => diyalogKapat(PANEL));
   el("terimBuBolum").addEventListener("click", buBolumdeUygula);
   el("terimEtkiBtn").addEventListener("click", etkiyiGoster);
+  el("terimGecmisBtn").addEventListener("click", gecmisiGoster);
+  // Ayarlar → "Önceki çeviri — Geri dön": açık bölümün en son arşivlenen çevirisi.
+  el("arsivGeri")?.addEventListener("click", async () => {
+    const e = activeEntry();
+    if (!e) return;
+    let arsiv = [];
+    try {
+      const res = await fetch(`/api/chapter/arsiv?url=${encodeURIComponent(e.url)}`);
+      if (!res.ok) throw new Error();
+      arsiv = (await res.json()).arsiv || [];
+    } catch {
+      bildir("Arşiv okunamadı (sunucuya ulaşılamadı).");
+      return;
+    }
+    if (!arsiv.length) {
+      bildir("Bu bölümün önceki bir çevirisi yok.");
+      return;
+    }
+    const a = arsiv[0];
+    const ne = [
+      a.model || "model bilinmiyor",
+      a.ceviri_zamani ? new Date(a.ceviri_zamani * 1000).toLocaleString("tr-TR") : null,
+      a.hizali ? null : "hizalama yok",
+      a.ihlal ? `${a.ihlal} sözlük ihlali` : null,
+    ].filter(Boolean).join(", ");
+    if (!window.confirm(`Önceki çeviriye dönülsün mü? (${ne})\nŞu anki çeviri de arşive konur.`)) return;
+    if (await arsivdenGeriYukle(e.url, a.id)) bildir("Önceki çeviriye dönüldü.");
+  });
   el("terimAynen").addEventListener("change", () => {
     const aynen = el("terimAynen").checked;
     el("terimKarsilik").disabled = aynen;

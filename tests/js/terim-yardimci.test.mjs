@@ -54,3 +54,13 @@ test("sonucEtiketi hizalama/ihlal/hata bilgisini söyler", () => {
     "YENİLENDİ · hizalama tutmadı · 2 sözlük ihlali · gemini-3.6-flash"
   );
 });
+
+test("onbellekBayatMi: sonradan yeniden çevrilen bölüm bayattır, bilinmeyen değil", async () => {
+  const { onbellekBayatMi } = await import("../../app/web/js/terim-yardimci.js");
+  const indirildi = Date.parse("2026-09-16T10:00:00Z");
+  assert.equal(onbellekBayatMi(indirildi, indirildi / 1000 - 5), false);
+  assert.equal(onbellekBayatMi(indirildi, indirildi / 1000 + 1), false, "aynı istek payı");
+  assert.equal(onbellekBayatMi(indirildi, indirildi / 1000 + 3600), true);
+  assert.equal(onbellekBayatMi(NaN, indirildi / 1000 + 3600), false);
+  assert.equal(onbellekBayatMi(indirildi, null), false);
+});

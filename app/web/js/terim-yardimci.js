@@ -108,3 +108,13 @@ export function sonucEtiketi(sonuc) {
   if (sonuc.model) parcalar.push(sonuc.model);
   return parcalar.join(" · ");
 }
+
+/* Telefondaki bölüm kopyası bayat mı: sunucudaki çeviri (ceviri_zamani, sn) kopyanın
+   indirildiği andan (Date başlığı, ms) SONRA mı yazıldı. Date saniye çözünürlüklüdür;
+   2 sn pay, aynı istekte çevrilip indirilen bölümü "bayat" saymamak için. Bilinmeyen
+   değerde bayat DENMEZ — gereksiz yeniden indirme, eksik tazelemeden pahalı değil
+   ama sonsuz döngüye dönebilirdi. */
+export function onbellekBayatMi(indirilmeMs, ceviriZamaniSn) {
+  if (!Number.isFinite(indirilmeMs) || !Number.isFinite(ceviriZamaniSn)) return false;
+  return ceviriZamaniSn * 1000 > indirilmeMs + 2000;
+}

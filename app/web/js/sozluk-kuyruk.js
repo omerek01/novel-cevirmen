@@ -117,6 +117,9 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
        { tur: "sil" }
        { tur: "geri", kayit }         — silinen kaydı TAM hâliyle geri yaz
                                         (koşul + köken; sunucunun döndürdüğü satır)
+       `taban_surum` (yaz/sil): kullanıcının düzenlemeye başlarken gördüğü kayıt
+       sürümü; sunucu uyuşmazlıkta 409 döner (öteki cihazın düzeltmesi ezilmez).
+       Verilmezse denetim yok.
      Aynı terimin henüz gönderilmemiş işlemi YENİSİYLE birleşir (yazarken her
      tuşa ayrı istek gitmesin); UÇUŞTAKİ işleme DOKUNULMAZ — yarışın kaynağı buydu. */
   function ekle(slug, source, alanlar) {
@@ -124,6 +127,7 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
     const anahtar = anahtarla(source);
     let kosul = alanlar.kosul;
     let ornek = alanlar.ornek;
+    let taban = alanlar.taban_surum;
     const kalanlar = [];
     for (const op of d.islemler) {
       const ayniTerim = op.slug === slug && anahtarla(op.source) === anahtar;
@@ -141,9 +145,17 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
       if (alanlar.tur === "yaz" && ornek === undefined && op.tur === "yaz" && op.ornek) {
         ornek = op.ornek;
       }
+      // ÇAKIŞMA TABANI: bekleyen eski işlemin tabanı KAZANIR — kullanıcı düzenlemeye
+      // o sürümü görerek başladı; birleşen ara yazımlar sunucuya hiç gitmedi.
+      // Reddedilmiş (hata) işlemin tabanı ise bayattır: kullanıcı çakışmayı görüp
+      // yeniden yazdı, yeni taban geçerlidir.
+      if (op.durum === "bekliyor" && op.taban_surum !== undefined && alanlar.tur !== "geri") {
+        taban = op.taban_surum;
+      }
     }
     d.sayac += 1;
     const yeni = { id: d.sayac, slug, source, tur: alanlar.tur, zaman: simdi(), durum: "bekliyor", deneme: 0 };
+    if (alanlar.tur !== "geri" && taban !== undefined) yeni.taban_surum = taban;
     if (alanlar.tur === "yaz") {
       yeni.target = alanlar.target;
       if (kosul !== undefined) yeni.kosul = kosul;
@@ -254,6 +266,19 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
             o.id !== op.id &&
             !(o.durum === "hata" && o.id < op.id && o.slug === op.slug && anahtarla(o.source) === anahtar)
         );
+        // Bu işlem uçuştayken aynı terime yazılan SONRAKİ işlemler, onun etkisini
+        // yerelde görerek oluşturuldu: tabanları sunucunun yeni sürümüne taşınır.
+        // Taşınmasaydı kullanıcı KENDİ önceki kaydıyla çakışırdı.
+        const yeniSurum =
+          op.tur === "sil" ? 0 : yanit.govde && yanit.govde.kayit ? yanit.govde.kayit.surum : undefined;
+        if (yeniSurum !== undefined) {
+          for (const o of d.islemler) {
+            if (o.id > op.id && o.slug === op.slug && anahtarla(o.source) === anahtar &&
+                o.taban_surum !== undefined) {
+              o.taban_surum = yeniSurum;
+            }
+          }
+        }
         yaz(d);
         sonuc.gonderilen += 1;
         olay("gonderildi", { islem: op, govde: yanit.govde });
@@ -271,6 +296,9 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
       guncelle(op.id, (o) => {
         o.durum = "hata";
         o.hata = { kod, mesaj: yanit.mesaj || "" };
+        // 409: sunucudaki güncel kayıt (silinmişse null) — kullanıcı iki değeri
+        // yan yana görüp karar verir.
+        if (yanit.guncel !== undefined) o.hata.guncel = yanit.guncel;
       });
       sonuc.hatali += 1;
       olay("hata", { islem: op, kod, mesaj: yanit.mesaj || "" });
@@ -298,6 +326,17 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
     olay("eklendi", { islem: { id }, kalici });
   }
 
+  /* Çakışmada "benimkini yaz": tabanı sunucudaki güncel sürüme çek ve yeniden dene.
+     Kullanıcı öteki değeri GÖREREK üzerine yazmayı seçti. */
+  function tabaniYenile(id, surum) {
+    guncelle(id, (o) => {
+      o.taban_surum = surum;
+      o.durum = "bekliyor";
+      delete o.hata;
+    });
+    olay("eklendi", { islem: { id }, kalici });
+  }
+
   function vazgec(id) {
     cikar(id);
     olay("vazgecildi", { id });
@@ -311,6 +350,7 @@ export function kuyrukOlustur({ depo, gonder, simdi = () => Date.now(), olay = (
     bindir,
     bosalt,
     yenidenDene,
+    tabaniYenile,
     vazgec,
     eskiKuyruguTasi,
     kalici: () => kalici,

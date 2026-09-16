@@ -51,8 +51,9 @@ async function islemiGonder(op) {
   const slug = encodeURIComponent(op.slug);
   let res;
   if (op.tur === "sil") {
+    const taban = op.taban_surum !== undefined ? `&taban_surum=${op.taban_surum}` : "";
     res = await fetchWithTimeout(
-      `/api/book/${slug}/glossary?source=${encodeURIComponent(op.source)}`,
+      `/api/book/${slug}/glossary?source=${encodeURIComponent(op.source)}${taban}`,
       { method: "DELETE" }
     );
   } else if (op.tur === "geri") {
@@ -66,6 +67,7 @@ async function islemiGonder(op) {
     const govde = { source: op.source, target: op.target };
     if (op.kosul !== undefined) govde.kosul = op.kosul; // yok = sunucu koşulu korur
     if (op.ornek) govde.ornek = op.ornek; // okurken eklenen terimin kökeni (boşsa yazılır)
+    if (op.taban_surum !== undefined) govde.taban_surum = op.taban_surum; // çakışma denetimi
     res = await fetchWithTimeout(`/api/book/${slug}/glossary`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -76,7 +78,12 @@ async function islemiGonder(op) {
   try {
     govde = await res.json();
   } catch {}
-  return { durum: res.status, govde, mesaj: res.ok ? "" : hataMesaji(govde, res.status) };
+  const sonuc = { durum: res.status, govde, mesaj: res.ok ? "" : hataMesaji(govde, res.status) };
+  // 409: sunucudaki güncel kayıt kuyruğa taşınır, kullanıcı iki değeri yan yana görür.
+  if (res.status === 409 && govde && govde.detail && typeof govde.detail === "object") {
+    sonuc.guncel = govde.detail.guncel ?? null;
+  }
+  return sonuc;
 }
 
 // localStorage erişimi bazı gizlilik kiplerinde getter'da bile FIRLATIR; kuyruk
@@ -136,6 +143,13 @@ function kuyrukOlayi(ad, veri) {
     // Sunucu hâli TAZELENİR: gönderim bitip işlem kuyruktan düşünce süzgeç eski
     // listeden çizerse eklenen terim ekrandan kayboluyordu (duman testi buldu).
     if (op.slug === durum.currentBookSlug) {
+      // Yazılan kaydın SÜRÜMÜ yerelde tazelenir: bir sonraki düzenlemenin çakışma
+      // tabanı buradan okunur, eski tabanla kullanıcı kendi kaydıyla çakışırdı.
+      if (veri.govde && veri.govde.kayit) glossRows[veri.govde.kayit.source] = veri.govde.kayit;
+      if (op.tur === "sil") {
+        const ad = Object.keys(glossRows).find((s) => anahtarla(s) === anahtarla(op.source));
+        if (ad !== undefined) delete glossRows[ad];
+      }
       if (veri.govde && veri.govde.terms) {
         glossTermsSonHal = veri.govde.terms;
         if (veri.govde.kosullar) glossKosullarSonHal = veri.govde.kosullar;
@@ -210,6 +224,7 @@ export let glossRows = {};       // kaynak -> {origin, created_at, first_chapter
 export let glossTermsSonHal = {}; // sunucudan gelen HAM eşleme (süzgeç yerelde yeniden çizer)
 export let glossKosullarSonHal = {}; // sunucudan gelen HAM koşullar
 export let glossWarnPairs = [];  // [[a, b], …] yazım hatası olabilecek çiftler
+export let glossSurum = null; // kitabın sözlük sürümü (bölüm künyesiyle kıyaslanır)
 
 /* `glossary.fold_term`'ün hafif JS eşi: yazım varyantından bağımsız karşılaştırma
    anahtarı. "İngilizce kalanlar" süzgeci sunucudaki tanımla AYNI olmalı — iki yerde
@@ -307,6 +322,7 @@ export async function fetchGlossary(slug) {
     kosullar = data.kosullar || {};
     for (const satir of data.rows || []) glossRows[satir.source] = satir;
     glossWarnPairs = data.warnings || [];
+    glossSurum = Number.isFinite(data.surum) ? data.surum : null;
   } catch {
     terms = {}; // çevrimdışı + hiç önbellek yok: yalnız bekleyen kayıtlar görünsün
   }
@@ -323,17 +339,20 @@ export async function fetchGlossary(slug) {
    "Ekle" düğmesini saniyelerce dondururdu — kayıt zaten kuyrukta güvende.
    Döner: { id, kalici } — çağıran bu işlemin durumunu izleyebilir.
    `kosul`: undefined = sunucudaki koşul korunur, "" = temizlenir. */
-export function saveTerm(slug, source, target, kosul, ornek) {
+export function saveTerm(slug, source, target, kosul, ornek, tabanSurum) {
   const alanlar = { tur: "yaz", target };
   if (kosul !== undefined) alanlar.kosul = kosul;
   if (ornek) alanlar.ornek = ornek;
+  if (tabanSurum !== undefined) alanlar.taban_surum = tabanSurum;
   const sonuc = kuyruk.ekle(slug, source, alanlar);
   refreshGlossPendingUi();
   flushGlossQueue();
   return sonuc;
 }
-export function deleteTerm(slug, source) {
-  const sonuc = kuyruk.ekle(slug, source, { tur: "sil" });
+export function deleteTerm(slug, source, tabanSurum) {
+  const alanlar = { tur: "sil" };
+  if (tabanSurum !== undefined) alanlar.taban_surum = tabanSurum;
+  const sonuc = kuyruk.ekle(slug, source, alanlar);
   refreshGlossPendingUi();
   flushGlossQueue();
   return sonuc;
@@ -344,8 +363,8 @@ export function deleteTerm(slug, source) {
      * silme uçuşta              -> bitmesi beklenir, sonra kayıt geri yazılır
      * silme gönderildi          -> sunucunun döndürdüğü TAM satır geri yazılır
    `geriAlindi`: ekranı eski hâline getiren geri çağrı (satırı geri koymak vb.). */
-export function terimiSilGeriAlinabilir(slug, source, { geriAlindi = () => {} } = {}) {
-  const { id } = deleteTerm(slug, source);
+export function terimiSilGeriAlinabilir(slug, source, { geriAlindi = () => {}, tabanSurum } = {}) {
+  const { id } = deleteTerm(slug, source, tabanSurum);
   bildir(`${source} sözlükten silindi.`, {
     eylem: { etiket: "GERİ AL", fn: () => silmeyiGeriAl(slug, source, id, geriAlindi) },
   });
@@ -512,22 +531,42 @@ export function updateGlossPendingNote() {
         : op.tur === "geri"
           ? `${op.source} geri alınması`
           : `${op.source} → ${op.target}`;
-    metin.textContent = `Gönderilemedi: ${ne} (${op.hata.kod}${op.hata.mesaj ? " — " + op.hata.mesaj : ""})`;
+    const cakisma = op.hata.kod === 409;
     const dene = document.createElement("button");
     dene.type = "button";
     dene.className = "pill";
-    dene.textContent = "Tekrar dene";
-    dene.addEventListener("click", () => {
-      kuyruk.yenidenDene(op.id);
-      flushGlossQueue();
-    });
+    if (cakisma) {
+      // ÇAKIŞMA: öteki cihazın değeri SESSİZCE ezilmez. İki değer yan yana
+      // görünür, karar kullanıcınındır.
+      const g = op.hata.guncel;
+      const sunucuda = g
+        ? `sunucuda şu an: ${g.target}${g.kosul ? " [koşul: " + g.kosul + "]" : ""}`
+        : "sunucuda silinmiş";
+      metin.textContent = `Başka bir cihazda değişti — senin değişikliğin: ${ne}; ${sunucuda}.`;
+      dene.textContent = op.tur === "sil" ? "Yine de sil" : "Benimkini yaz";
+      dene.addEventListener("click", () => {
+        kuyruk.tabaniYenile(op.id, g ? g.surum : 0);
+        flushGlossQueue();
+      });
+    } else {
+      metin.textContent = `Gönderilemedi: ${ne} (${op.hata.kod}${op.hata.mesaj ? " — " + op.hata.mesaj : ""})`;
+      dene.textContent = "Tekrar dene";
+      dene.addEventListener("click", () => {
+        kuyruk.yenidenDene(op.id);
+        flushGlossQueue();
+      });
+    }
     const vazgec = document.createElement("button");
     vazgec.type = "button";
     vazgec.className = "pill";
-    vazgec.textContent = "Vazgeç";
-    vazgec.addEventListener("click", () => {
+    vazgec.textContent = cakisma ? "Sunucudakini kullan" : "Vazgeç";
+    vazgec.addEventListener("click", async () => {
       kuyruk.vazgec(op.id);
-      yenidenSuz();
+      if (cakisma && durum.currentBookSlug === op.slug && !views.glossary.hidden) {
+        renderGlossary(await fetchGlossary(op.slug)); // güncel değer ekrana gelsin
+      } else {
+        yenidenSuz();
+      }
     });
     satir.append(metin, dene, vazgec);
     note.appendChild(satir);

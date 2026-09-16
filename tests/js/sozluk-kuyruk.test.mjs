@@ -307,3 +307,60 @@ test("uçuştaki silmenin kimliği okunabilir (geri alma uçuştaki işleme doku
   await ucus;
   assert.equal(k.ucustakiKimlik(), null);
 });
+
+test("ÇAKIŞMA TABANI: bekleyen eski işlemin tabanı birleşmede korunur", () => {
+  const k = kuyrukOlustur({ depo: bellekDepo(), gonder: elleGonderici().gonder });
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Aziz", taban_surum: 3 });
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Ermiş", taban_surum: 4 });
+  assert.equal(k.islemler()[0].taban_surum, 3);
+});
+
+test("ÇAKIŞMA TABANI: gönderilen işlemden sonra yazılanın tabanı yeni sürüme taşınır", async () => {
+  const g = elleGonderici();
+  const k = kuyrukOlustur({ depo: bellekDepo(), gonder: g.gonder });
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Aziz", taban_surum: 1 });
+  const ucus = k.bosalt();
+  await bekle();
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Ermiş", taban_surum: 1 }); // uçuşta: birleşmez
+  g.bekleyen[0].coz(tamam({ kayit: { source: "Saint", surum: 2 } }));
+  await bekle();
+  await bekle();
+  assert.equal(g.bekleyen[1].op.taban_surum, 2, "kendi önceki kaydıyla çakışmamalı");
+  g.bekleyen[1].coz(tamam({ kayit: { source: "Saint", surum: 3 } }));
+  await ucus;
+  assert.equal(k.islemler().length, 0);
+});
+
+test("409 işlemi SİLMEZ, güncel kaydı saklar; tabaniYenile ile yeniden gider", async () => {
+  let cevap = { durum: 409, mesaj: "başka cihazda değişti", guncel: { target: "Evliya", surum: 5 } };
+  const gonderilen = [];
+  const k = kuyrukOlustur({
+    depo: bellekDepo(),
+    gonder: async (op) => {
+      gonderilen.push(structuredClone(op));
+      return cevap;
+    },
+  });
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Aziz", taban_surum: 4 });
+  await k.bosalt();
+  const [op] = k.islemler();
+  assert.equal(op.durum, "hata");
+  assert.deepEqual(op.hata.guncel, { target: "Evliya", surum: 5 });
+  cevap = tamam();
+  k.tabaniYenile(op.id, 5);
+  await k.bosalt();
+  assert.equal(gonderilen.at(-1).taban_surum, 5);
+  assert.equal(k.islemler().length, 0);
+});
+
+test("reddedilmiş (hata) işlemle birleşen yeni yazım KENDİ tabanını kullanır", async () => {
+  const k = kuyrukOlustur({
+    depo: bellekDepo(),
+    gonder: async () => ({ durum: 409, mesaj: "", guncel: null }),
+  });
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Aziz", taban_surum: 1 });
+  await k.bosalt();
+  k.ekle("kitap", "Saint", { tur: "yaz", target: "Ermiş", taban_surum: 0 });
+  assert.equal(k.islemler().length, 1);
+  assert.equal(k.islemler()[0].taban_surum, 0);
+});

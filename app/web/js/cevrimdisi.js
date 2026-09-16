@@ -7,6 +7,7 @@ import { openBook, pollBulk } from "./kitap.js";
 import { fetchBooks } from "./kutuphane.js";
 import { chapterListFor } from "./okuyucu.js";
 import { ICONS, el } from "./temel.js";
+import { onbellekBayatMi } from "./terim-yardimci.js";
 
 export let offlineStop = false;
 /* Elle "çevrimdışı indir" sürüyor mu. Otomatik tarama buna bakıp çekilir.
@@ -48,27 +49,37 @@ export async function purgeChapterFromSwCache(url) {
        GET'i okuma GET'iyle AYNI girdiye yazar. Silinmeseydi her bölüm önbellekte iki
        kopya tutar ve çevrimdışı okuma yanlış kopyaya düşebilirdi. */
 
-// Önbellekte hâlihazırda duran bölüm url'leri. TÜM cache'ler gezilir (tek bir ada
-// bağlanmak yerine): DATA_CACHE adı sw.js'de tanımlı ve burada kopyalamak, ad
-// değişince sessizce boş küme döndüren bir hataya dönerdi. `purgeChapterFromSwCache`
-// da aynı deseni kullanıyor.
-export async function cachedChapterUrls() {
+/* Önbellekteki her bölüm kopyasının İNDİRİLDİĞİ an (yanıtın Date başlığı, ms).
+   TAZELİK için: bölüm başka bir cihazdan (ya da toplu yeniden çeviriyle) sunucuda
+   yeniden çevrilince telefondaki kopya kendiliğinden değişmiyordu — kullanıcı
+   düzeltilmiş bölümün ESKİ hâlini okumaya devam ediyordu. */
+export async function onbellekTarihleri() {
   if (!("caches" in window)) return null;
   try {
-    const out = new Set();
+    const out = new Map();
     for (const key of await caches.keys()) {
       const c = await caches.open(key);
       for (const req of await c.keys()) {
         const u = new URL(req.url);
-        if (u.pathname !== "/api/chapter") continue;
-        const v = u.searchParams.get("url");
-        if (v) out.add(v);
+        const v = u.pathname === "/api/chapter" ? u.searchParams.get("url") : null;
+        if (!v) continue;
+        const res = await c.match(req);
+        const t = res ? Date.parse(res.headers.get("date") || "") : NaN;
+        // Aynı bölümün birden çok girdisi (source=1) olabilir: EN ESKİSİ belirleyicidir.
+        const onceki = out.get(v);
+        out.set(v, onceki === undefined ? t : Math.min(onceki, t) || onceki);
       }
     }
     return out;
   } catch {
-    return null; // caches yoksa/erişilemezse: otomatik kayıt sessizce devre dışı
+    return null;
   }
+}
+
+/* Kopyası bayat bölümü sil ve yeniden indir. */
+async function tazele(url) {
+  await purgeChapterFromSwCache(url);
+  await warmOffline(url);
 }
 
 // Tek bölümü önbelleğe çek. Yanıt gövdesi okunmaz — tek amaç SW'nin girdiyi
@@ -87,12 +98,13 @@ export async function warmOffline(url) {
 export async function otoCevrimdisiKaydet(slug, liste) {
   const list = liste || chapterListFor(slug);
   if (!list || !list.length) return;
-  const kayitli = await cachedChapterUrls();
-  if (!kayitli) return;
+  const tarihler = await onbellekTarihleri();
+  if (!tarihler) return;
   for (const ch of list) {
     if (durum.currentBookSlug !== slug) return; // başka kitaba geçildi: peşine düşme
-    if (!ch.url || ch.translated === false || kayitli.has(ch.url)) continue;
-    await warmOffline(ch.url);
+    if (!ch.url || ch.translated === false) continue;
+    if (!tarihler.has(ch.url)) await warmOffline(ch.url);
+    else if (onbellekBayatMi(tarihler.get(ch.url), ch.ceviri_zamani)) await tazele(ch.url);
   }
 }
 
@@ -146,8 +158,8 @@ export async function otoIndirmeTur() {
   try {
     const books = await fetchBooks();
     if (!books || !books.length) return;
-    const kayitli = await cachedChapterUrls();
-    if (!kayitli) return; // caches API yok: otomatik kayıt sessizce devre dışı
+    const tarihler = await onbellekTarihleri();
+    if (!tarihler) return; // caches API yok: otomatik kayıt sessizce devre dışı
 
     // ÖNCE eksikleri say, sonra indir: "3/48" diyebilmek için toplamı bilmek
     // gerekiyor ve sayım, önbellek isabetleri olduğu için ucuz.
@@ -157,7 +169,9 @@ export async function otoIndirmeTur() {
         // `translated` LOAD-BEARING: cevirisi olmayan bolumu GET'lemek CEVIRI
         // TETIKLER ve ucretli model seciliyken PARA harcar. Otomatik bir tarama
         // bunu asla yapmamali — dugmenin adi da isin adi da "indir".
-        if (ch.url && ch.translated !== false && !kayitli.has(ch.url)) {
+        if (!ch.url || ch.translated === false) continue;
+        // Eksik YA DA bayat (sunucuda sonradan yeniden çevrilmiş) kopya.
+        if (!tarihler.has(ch.url) || onbellekBayatMi(tarihler.get(ch.url), ch.ceviri_zamani)) {
           eksikler.push(ch.url);
         }
       }
@@ -169,7 +183,8 @@ export async function otoIndirmeTur() {
       // Çevrimdışına düşülürse ya da kullanıcı elle indirmeyi başlatırsa BIRAK.
       if (navigator.onLine === false || elleIndirmeSuruyor) break;
       otoIndirmeDurum(`${indi + 1}/${eksikler.length} bölüm çevrimdışına alınıyor…`);
-      await warmOffline(url);
+      if (tarihler.has(url)) await tazele(url);
+      else await warmOffline(url);
       indi++;
     }
     otoIndirmeDurum(indi ? `${indi} bölüm çevrimdışına alındı.` : "");

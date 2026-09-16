@@ -431,8 +431,10 @@
       <div id="terimSonrasi" class="terim-sonrasi" hidden>
         <button id="terimBuBolum" type="button" class="pill" hidden>Bu bölümde uygula</button>
         <button id="terimEtkiBtn" type="button" class="pill">Etkilenen bölümler</button>
+        <button id="terimGecmisBtn" type="button" class="pill">Geçmiş</button>
       </div>
       <section id="terimEtki" class="terim-etki" hidden></section>
+      <section id="terimGecmis" class="terim-gecmis" hidden></section>
     </div>
   </dialog>
 
@@ -497,6 +499,11 @@
     <div class="setting-row">
       <span>Bu bölüm</span>
       <button id="retranslate" class="pill">Yeniden çevir</button>
+    </div>
+    <!-- Yeniden çeviri eski çeviriyi ARŞİVE koyar (son 3); daha kötü çıktıysa dönülür. -->
+    <div class="setting-row">
+      <span>Önceki çeviri</span>
+      <button id="arsivGeri" class="pill">Geri dön</button>
     </div>
     <div class="setting-row">
       <span>Cloudflare oturumu</span>

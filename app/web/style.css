@@ -1975,3 +1975,12 @@ html { scroll-padding-top: 5rem; }
 .gloss-tools input[type="search"],
 .gloss-io-strateji { min-height: var(--tap); }
 .gloss-io-strateji input { width: 1.25rem; height: 1.25rem; accent-color: var(--accent); }
+
+/* ---------- terim paneli: geçmiş ---------- */
+.terim-gecmis { margin-top: var(--s-md); }
+.terim-gecmis-liste { list-style: none; margin: 0; padding: 0; }
+.terim-gecmis-satir { padding: var(--s-sm) 0; border-bottom: 1px solid var(--border); }
+.terim-gecmis-ust { margin: 0; font-size: 0.75rem; color: var(--ink-soft); }
+.terim-gecmis-deger { margin: 0.15rem 0 0.3rem; overflow-wrap: anywhere; }
+.terim-gecmis-satir .pill,
+.terim-geri-al { min-height: var(--tap); margin-top: var(--s-xs); }
