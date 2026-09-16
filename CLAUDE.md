@@ -30,9 +30,14 @@ start.bat
 # Çalıştırma — sadece sunucu
 .\.venv\Scripts\python.exe app\server.py      # uvicorn, 0.0.0.0:8000
 
-# Test (kök dizinden; ağ/Playwright/Gemini çağırmaz, hepsi çevrimdışı ~2sn)
-.\.venv\Scripts\python.exe -m pytest
+# Test (kök dizinden; ağ/Gemini çağırmaz, çevrimdışı ~20 sn). `tests` VER: kökte
+# koşunca takip dışı scratch/ klasöründeki betikler toplanıp çöküyor.
+.\.venv\Scripts\python.exe -m pytest tests
 .\.venv\Scripts\python.exe -m pytest tests\test_api.py::test_books_empty   # tek test
+# Arayüz modüllerinin saf mantığı (Node; pytest de test_js_birim.py ile çağırır)
+node --test "tests/js/*.test.mjs"        # klasör değil DESEN ver
+# Gerçek tarayıcı testleri (Playwright, isteğe bağlı; kendi test sunucusunu açar)
+$env:NOVEL_TARAYICI_TEST=1; .\.venv\Scripts\python.exe -m pytest tests\tarayici
 ```
 
 Lint/format adımı **yok** (ruff/flake8/black yapılandırması yok). Kod kalitesi
@@ -768,17 +773,29 @@ gönder (balon metni + bbox + Türkçe), PIL ile orijinali kapat + Türkçe'yi k
 PDF, render'lı sayfa PNG'leri, EPUB resimleri). `GET /media/<yol>` ile YALNIZ çevrimiçi
 servis (SW DATA_CACHE'ine girmez); path-traversal korumalı.
 
-**`app/web/`** — Çerçevesiz (vanilla JS) PWA, **build adımı yok**: `app.js`, `index.html`,
-`style.css`, `sw.js`. **`scripts/start_chrome_cdp.py`** — gerçek Chrome'u `:9222` debug
+**`app/web/`** — Çerçevesiz (vanilla JS) PWA, **build adımı yok**: `index.html`,
+`style.css`, `sw.js` ve **ES modülleri** (2026-09-16'da tek 170 KB'lık `app.js`
+bölündü). `app.js` yalnız giriş noktasıdır: modülleri içe aktarır ve sırayla
+`kur()` çağırır — olay kayıtları modül YÜKLENİRKEN değil `kur()`da kurulur
+(döngüsel içe aktarmada yarım değerlendirilmiş modüle erken dokunulmasın).
+`js/`: `temel` · `durum` (modüller arası PAYLAŞILAN değişken durum tek nesnede —
+içe aktarılan bağlamaya atama yapılamaz) · `konum` · `ayarlar` · `gezinme` ·
+`kutuphane` · `kitap` · `cevrimdisi` · `okuyucu` · `sozluk` (kuyruk bağdaştırıcısı +
+sözlük ekranı) · `sozluk-kuyruk` (SAF, Node testli) · `sozluk-secim` (okurken seçim) ·
+`sozluk-inceleme` · `terim-paneli` · `terim-yardimci` (SAF) · `bildirim` · `diyalog`
+(ortak `<dialog>`). **Yeni modül = `sw.js` SHELL listesine ekle** (`tests/test_modul_kabugu.py`
+tutar): listede olmayan modül çevrimdışı açılışta indirilemez ve uygulama HİÇ başlamaz.
+**`scripts/start_chrome_cdp.py`** — gerçek Chrome'u `:9222` debug
 portu + ayrı profil (`cache/.chrome-cdp`) ile açar. **`faz0/`** — eski kavram-kanıtı
 (bağımsız; `app/` bunun yerini aldı, dokunma).
 
 ## Tek veritabanı
 
-Her şey **tek SQLite dosyasında**: `cache/chapters.db` (WAL modu). Beş mantıksal depo:
-`chapters` (cache), `books`+`aliases` (kütüphane), `glossary`, `settings` (sunucu-taraflı
-genel ayarlar — bugün yalnız çeviri modeli seçimi) ve `kullanim` (ücretli model token
-sayacı). **Merkezi şema/migration
+Her şey **tek SQLite dosyasında**: `cache/chapters.db` (WAL modu). Mantıksal depolar:
+`chapters` (cache) + `ceviri_arsivi`, `books`+`aliases` (kütüphane), `glossary` +
+`sozluk_gecmis` / `sozluk_surumu` / `sozluk_red` / `sozluk_yazim` / `sozluk_anlam`,
+`settings` (sunucu-taraflı genel ayarlar — bugün yalnız çeviri modeli seçimi) ve
+`kullanim` (ücretli model token sayacı). **Merkezi şema/migration
 dosyası yoktur** — her modülün `_connect()`'i kendi tablosunu `CREATE TABLE IF NOT EXISTS`
 ile tembel oluşturur. **Yeni sütun eklerken `db.ensure_column()` kullan** (idempotent;
 SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştirir;
@@ -786,7 +803,7 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 
 ## Kritik kararlar & tuzaklar
 
-- **PWA service worker sürümü**: kabuk varlıkları (`app.js`/`index.html`/`style.css`)
+- **PWA service worker sürümü**: kabuk varlıkları (`app.js`/`js/*.js`/`index.html`/`style.css`)
   değişince `app/web/sw.js` içindeki `SHELL_CACHE = "novellink-shell-vNN"` **artırılmalı**,
   yoksa telefonlar bayat kabuğu servis eder. `DATA_CACHE` **sabit** isimlidir (bölüm
   `/api` yanıtlarını tutar; sürümle silinmez). Bu tekrarlayan, elle yapılan bir adımdır.
@@ -1000,6 +1017,53 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 - Durum dökümanları: `PLAN-dayaniklilik.md` (Faz 5, kısmen sevk edildi — bulk kalıcılığı
   bilinçle düşürüldü), `progress.md`, `TODOS.md`.
 
+## Sözlük düzenleme sistemi (2026-09-16, `FRONTEND-SOZLUK-ARASTIRMA.md` uygulaması)
+
+- **Yazma kuyruğu v2** (`js/sozluk-kuyruk.js`, saf, Node testli): her işlemin KİMLİĞİ
+  var, yalnız gönderilen kimlik düşer (eskiden terim anahtarıyla siliniyor, uçuştayken
+  yazılan yeni değer de kayboluyordu). Depolama yazma hatası YUTULMAZ, görünür durumdur.
+  4xx işlemi SİLMEZ ("hata"), 408/425/429/5xx/ağ yeniden denenir. Kural: kaydedilmemiş
+  değer asla kaydedilmiş gibi görünmez. İşlem alanı `tur` İŞLEM türüdür (yaz/sil/geri);
+  terim türü `terim_turu` adıyla taşınır.
+- **Sürüm ve çakışma**: `glossary.kimlik/surum/updated_at` (EKLEMELİ göç — tablo yeniden
+  kurulmadı). `surum` yalnız PROMPT alanları (karşılık, koşul, yazım, ek anlam) değişince
+  artar. İstemci gördüğü sürümü `taban_surum` ile gönderir; uyuşmazsa **409 + güncel kayıt**,
+  arayüz iki değeri yan yana gösterir ("Benimkini yaz" / "Sunucudakini kullan").
+  Uçuştaki işlem dönünce aynı terimin sonraki işlemlerinin tabanı yeni sürüme taşınır —
+  yoksa kullanıcı KENDİ kaydıyla çakışır. `taban_surum` yok = denetim yok (eski istemci,
+  hızlı ekleme formu, bakım araçları).
+- **Geçmiş**: sözlüğe YAZAN her fonksiyon `_gecmise_yaz` çağırır; `tests/test_sozluk_surum.py`
+  statik tel tuzağı atlayanı yakalar. Yeni bir yazma yolu eklerken ya geçmişe yaz ya da
+  (yalnız prompt dışı alan yazıyorsa) istisna listesine gerekçesiyle ekle.
+- **Kitap sözlük sürümü** `sozluk_surumu` tablosunda; bölüm çevrilirken ÇEVİRİDEN ÖNCE
+  okunup `chapters.sozluk_surumu` künyesine yazılır (iki metin yolu, tel tuzağı).
+- **Çeviri arşivi**: çeviri METNİ değişen her yazımda eski hâl `ceviri_arsivi`ne (url başına
+  son 3). Geri yükleme `created_at`'i tazeler — telefon kopyasının bayatladığı buradan anlaşılır.
+- **Telefon kopyası tazeliği**: SW önbelleğindeki yanıtın `Date`'i `ceviri_zamani`ndan
+  eskiyse kopya silinip yeniden indirilir (kitap açılışı + kütüphane taraması). Sunucuda
+  yeniden çevrilen bölümü telefona indirmek için `refresh=1` KULLANMA — ikinci çeviri
+  tetikler; önce SW kopyasını sil, sonra düz GET.
+- **Çeviri yolu ekran sözlüğünü OKUMAZ**: `pipeline` `glossary.ceviri_sozlugu` +
+  `ceviri_kosullari` okur (alternatif yazımlar + ek anlamlar dahil); ekran `get_glossary`.
+  Ek anlam koşul metnine `BAŞKA ANLAM:` işaretiyle işlenir, denetimden çıkar ve açıklaması
+  prompt'a YALNIZ o istekte ek anlamlı terim varsa girer (öteki prompt'lar bayt bayt aynı).
+  Terim TÜRÜ prompt'a girmez (ölçülmedi).
+- **İnceleme**: yeni otomatik kayıt `inceleme='bekliyor'`; eski kayıtlardan yalnız
+  çakışan/belirsiz olanlar nedenleriyle hesaplanır (mevcut bakım fonksiyonları). Ret
+  kaydı siler ve `sozluk_red`'e yazar; `merge_terms` reddedileni ve alternatif yazımı atlar.
+- **Değerlendirme seti**: `scripts/degerlendirme.py` — kuru kip API'siz (önbellekteki
+  çevirileri ölçer), `--calistir` kota harcar ve önbelleğe YAZMAZ, ücretli modeli reddeder.
+  Çıktılar `cache/degerlendirme/` (depoya girmez).
+
+**Test tuzakları (ölçüldü):**
+- **`page.wait_for_function` ASYNC yüklemi BEKLEMEZ** — dönen Promise truthy, anında geçer
+  (`"async () => false"` 0,03 sn). Sunucu durumunu fetch ile bekleyen her iddia için
+  `tests/tarayici/yardimci.js_bekle`. Statik tel tuzağı var. Yeni tarayıcı testini
+  MUTASYONLA sına: bu projede ilk seferde geçen testlerin ikisi dişsiz çıktı.
+- **Okuyucu dışındaki bölüm GET'leri `track=0` taşır** (indirme, kaynak getirme): yoksa
+  sunucu okuma konumunu o bölüme taşır. `tests/test_konum_izleme_js.py` tutar.
+- Commit'i pytest ÇIKIŞ KODUNA bağla; `| tail` zincirinde kod kaybolur.
+
 ## Ortam değişkenleri (`.env`, kök dizinde)
 
 | Değişken | Zorunlu | Ne işe yarar |
@@ -1078,14 +1142,17 @@ yetmeyebilir.
 `~/novel-cevirmen` gerçek bir çalışma ağacıdır. Sunucu depoya SALT-OKUNUR bir
 **deploy key** ile bağlanır (`~/.ssh/novel-cevirmen-deploy`, `~/.ssh/config`'te
 `github.com` kaydı): sunucuda yazma yetkisi olan bir token durmaz, ve anahtar
-yalnız BU depoyu açar. Erişim `ssh OMEREK@100.75.105.102` (Tailscale; GCP
-anahtarı `~/.ssh/google_compute_engine`).
+yalnız BU depoyu açar. Erişim `ssh -i ~/.ssh/google_compute_engine OMEREK@100.75.105.102`
+(Tailscale). `-i` ŞART: varsayılan anahtarla bağlantı reddediliyor.
 
 ```bash
-ssh OMEREK@100.75.105.102 'cd ~/novel-cevirmen && git pull && sudo systemctl restart novel-cevirmen'
+ssh -i ~/.ssh/google_compute_engine OMEREK@100.75.105.102 'cd ~/novel-cevirmen && git pull && sudo systemctl restart novel-cevirmen'
 ```
 
-Üç kural:
+Dört kural:
+* **Şema değiştiren sürümden ÖNCE sunucu DB'sini yedekle** (`cp cache/chapters.db
+  cache/chapters.db.yedek-<tarih>`; WAL açıkken `sqlite3 ... ".backup ..."` daha
+  güvenli). Göçler tembel ve eklemelidir ama ilk bağlantıda canlı veriye yazar.
 * **Restart'tan ÖNCE koşan toplu çeviri işi var mı bak.** İşler BELLEK-İÇİ
   (`jobs.py`), restart onları öldürür: `curl -s localhost:8000/api/book/<slug>/job`.
 * **Yalnız `app/web/` değiştiyse restart GEREKMEZ** — statikler her istekte
