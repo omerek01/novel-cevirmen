@@ -1,7 +1,13 @@
 /* Kitap sayfası: bölüm listesi, toplu çeviri, birleştirme, silme, bölüm ekleme, ePub. */
 
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
-import { chaptersOf, otoCevrimdisiKaydet, otoIndirmeTur, purgeChapterFromSwCache } from "./cevrimdisi.js";
+import {
+  cevrimdisiKartiCiz,
+  chaptersOf,
+  otoCevrimdisiKaydet,
+  otoIndirmeTur,
+  purgeChapterFromSwCache,
+} from "./cevrimdisi.js";
 import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
 import { resolveResume } from "./konum.js";
@@ -17,6 +23,8 @@ export async function openBook(slug) {
   const books = await fetchBooks();
   durum.currentBook = (books || []).find((b) => b.slug === slug) || null;
   el("bookTitle").textContent = durum.currentBook ? durum.currentBook.title : slug;
+  el("offlineCard").hidden = true; // önceki kitabın sayıları görünmesin
+  el("bookMore").open = false;
   markSegment("status", (durum.currentBook && durum.currentBook.status) || "okunuyor", "data-status-opt");
 
   const resume = el("resumeBtn");
@@ -50,7 +58,10 @@ export async function openBook(slug) {
     // Beklemeden: toplu çeviriyle hazırlanmış bölümler de "çevrimdışı indir"
     // düğmesine basılmadan telefona insin. Toplu iş bitince openBook zaten
     // yeniden çağrılıyor, yani yeni bölümler o turda yakalanır.
-    otoCevrimdisiKaydet(slug, durum.currentChapters);
+    cevrimdisiKartiCiz(slug, durum.currentChapters);
+    otoCevrimdisiKaydet(slug, durum.currentChapters).then(() =>
+      cevrimdisiKartiCiz(slug, durum.currentChapters)
+    );
   } catch {
     list.replaceChildren();
     const err = document.createElement("p");

@@ -66,6 +66,7 @@ def test_pencere_basligi_aria_labelledby_ile_bagli(sayfa):
 def test_perdeye_dokunmak_kapatir(sayfa):
     _ac(sayfa)
     sayfa.locator("#shelves .spine[data-slug]").first.click()
+    sayfa.locator("#bookMore > summary").click()
     sayfa.locator("#epubBtn").click()
     expect(sayfa.locator("#epubModal")).to_be_visible()
     sayfa.mouse.click(5, 5)  # kartın dışı

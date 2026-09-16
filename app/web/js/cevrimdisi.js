@@ -2,7 +2,7 @@
 
 import { bildir } from "./bildirim.js";
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
-import { durum } from "./durum.js";
+import { durum, views } from "./durum.js";
 import { openBook, pollBulk } from "./kitap.js";
 import { fetchBooks } from "./kutuphane.js";
 import { chapterListFor } from "./okuyucu.js";
@@ -181,6 +181,102 @@ export async function otoIndirmeTur() {
   }
 }
 
+/* ---------- kitap sayfası: çevrimdışı durum kartı ----------
+   Belge bulgusu: telefona kaç bölümün indiği, ne kadar yer tuttuğu ve tarayıcının
+   onları silip silemeyeceği hiçbir yerde görünmüyordu. Sayılar SW önbelleğinden
+   okunur (sunucuya gitmez, çevrimdışı da çalışır). Boyut `content-length`
+   başlığından gelir: gövdeyi okumak yüzlerce bölümde belleği şişirirdi. */
+export async function kitapOnbellekOzeti(urller) {
+  if (!("caches" in window)) return null;
+  const hedef = new Set(urller);
+  const bulunan = new Set();
+  let bayt = 0;
+  let bilinmeyen = 0;
+  let son = 0;
+  try {
+    for (const key of await caches.keys()) {
+      const c = await caches.open(key);
+      for (const req of await c.keys()) {
+        const u = new URL(req.url);
+        const v = u.pathname === "/api/chapter" ? u.searchParams.get("url") : null;
+        if (!v || !hedef.has(v)) continue;
+        const res = await c.match(req);
+        if (!res) continue;
+        const uzunluk = Number(res.headers.get("content-length"));
+        if (uzunluk > 0) bayt += uzunluk;
+        else bilinmeyen++;
+        const zaman = Date.parse(res.headers.get("date") || "");
+        if (zaman > son) son = zaman;
+        bulunan.add(v);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return { adet: bulunan.size, bayt, bilinmeyen, son: son || null };
+}
+
+function boyutYaz(bayt) {
+  if (bayt < 1048576) return Math.max(1, Math.round(bayt / 1024)) + " KB";
+  return (bayt / 1048576).toLocaleString("tr-TR", { maximumFractionDigits: 1 }) + " MB";
+}
+
+/* `navigator.storage.persist()` bir İSTEKTİR, garanti değil: tarayıcı reddedebilir
+   ve sonucu olduğu gibi söylenir. */
+async function kaliciDurumuYaz(istekSonucu) {
+  const satir = el("offlineCardKalici");
+  const btn = el("offlinePersistBtn");
+  if (!satir || !btn) return;
+  if (!navigator.storage || !navigator.storage.persisted) {
+    satir.textContent = "";
+    btn.hidden = true;
+    return;
+  }
+  let kalici = false;
+  try {
+    kalici = await navigator.storage.persisted();
+  } catch {}
+  satir.textContent = kalici
+    ? "Kalıcı depolama açık: tarayıcı yer daralınca indirilen bölümleri kendiliğinden silmez."
+    : istekSonucu === false
+      ? "Tarayıcı kalıcı depolamayı vermedi (istek garanti değil) — yer daralırsa bölümler silinebilir."
+      : "Kalıcı depolama kapalı — tarayıcı yer daralınca indirilen bölümleri silebilir.";
+  btn.hidden = kalici || !navigator.storage.persist;
+}
+
+export async function cevrimdisiKartiCiz(slug, chapters) {
+  const kart = el("offlineCard");
+  if (!kart) return;
+  if (!window.isSecureContext || !("caches" in window)) {
+    kart.hidden = false;
+    el("offlineCardOzet").textContent =
+      "Bu adreste çevrimdışı kayıt yok: güvenli bağlantı (https://…ts.net) gerekiyor.";
+    el("offlineCardKalici").textContent = "";
+    el("offlinePersistBtn").hidden = true;
+    return;
+  }
+  const cevrili = (chapters || []).filter((c) => c.url && c.translated !== false);
+  const ozet = await kitapOnbellekOzeti(cevrili.map((c) => c.url));
+  if (durum.currentBookSlug !== slug) return;
+  if (!ozet) {
+    kart.hidden = true;
+    return;
+  }
+  const parcalar = [`Telefonda ${ozet.adet}/${cevrili.length} çevrilmiş bölüm`];
+  if (ozet.bayt) parcalar.push("≈ " + boyutYaz(ozet.bayt) + (ozet.bilinmeyen ? "+" : ""));
+  if (ozet.son) {
+    parcalar.push(
+      "son indirme " +
+        new Date(ozet.son).toLocaleString("tr-TR", {
+          day: "numeric", month: "short", hour: "2-digit", minute: "2-digit",
+        })
+    );
+  }
+  el("offlineCardOzet").textContent = parcalar.join(" · ");
+  kart.hidden = false;
+  await kaliciDurumuYaz();
+}
+
 export async function chaptersOf(slug) {
   try {
     const res = await fetch(`/api/book/${encodeURIComponent(slug)}/chapters`);
@@ -247,6 +343,9 @@ export async function runOfflineDownload(slugs) {
     ? `Durduruldu. ${done}/${total} bölüm telefonda.`
     : `Bitti — ${done}/${total} bölüm telefonda${tail}.`;
   el("offlineProgressText").textContent = ozet;
+  if (durum.currentBookSlug && !views.book.hidden) {
+    cevrimdisiKartiCiz(durum.currentBookSlug, durum.currentChapters);
+  }
   // Pencere Escape ile kapatıldıysa sonuç yine SÖYLENİR.
   if (!diyalogAcikMi("offlineProgress")) bildir(ozet);
   el("offlineStop").disabled = true;
@@ -266,6 +365,13 @@ export function kur() {
     if (durum.currentBookSlug) runOfflineDownload([durum.currentBookSlug]);
   });
   el("offlineAllBtn")?.addEventListener("click", startOfflineDownloadAll);
+  el("offlinePersistBtn")?.addEventListener("click", async () => {
+    let sonuc = false;
+    try {
+      sonuc = await navigator.storage.persist();
+    } catch {}
+    kaliciDurumuYaz(sonuc);
+  });
   el("offlineStop")?.addEventListener("click", () => {
     offlineStop = true;
   });

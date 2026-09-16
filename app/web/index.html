@@ -73,22 +73,37 @@
     </header>
     <div class="book-body">
       <button id="resumeBtn" class="next-btn" hidden>KALDIĞIN YERDEN DEVAM ET</button>
-      <!-- D-B12: durum düzenleme yalnız burada; rafta sadece filtre çipleri. -->
-      <div class="book-status-row">
-        <span class="book-status-label">DURUM</span>
-        <div id="bookStatusSeg" class="segmented" role="group" aria-label="Kitap durumu">
-          <button class="seg" data-status-opt="okunuyor">Okunuyor</button>
-          <button class="seg" data-status-opt="beklemede">Beklemede</button>
-          <button class="seg" data-status-opt="bitti">Bitti</button>
-        </div>
+      <!-- İŞLEM HİYERARŞİSİ (belge 2026-09-16): telefonda bölüm listesine inmeden
+           yedi düğme geçiliyordu. Sık kullanılanlar tek sırada; birleştirme,
+           dışa aktarım, silme gibi seyrek/yıkıcı işlemler "Diğer işlemler"de. -->
+      <div class="book-actions" role="group" aria-label="Kitap işlemleri">
+        <button id="openGlossaryBtn" class="book-action">SÖZLÜK</button>
+        <button id="offlineBtn" class="book-action">İNDİR</button>
+        <button id="bulkBtn" class="book-action">TOPLU ÇEVİR</button>
       </div>
-      <button id="addChapterBtn" class="ghost-line-btn">BÖLÜM EKLE (METİN / URL) →</button>
-      <button id="openGlossaryBtn" class="ghost-line-btn">SÖZLÜK / TERİMLER →</button>
-      <button id="bulkBtn" class="ghost-line-btn">TOPLU ÇEVİR (İLERİ HAZIRLA) →</button>
-      <button id="epubBtn" class="ghost-line-btn">ePub İNDİR →</button>
-      <button id="offlineBtn" class="ghost-line-btn">ÇEVRİMDIŞI İNDİR (TELEFONA) →</button>
-      <button id="mergeBtn" class="ghost-line-btn">BAŞKA KİTAPLA BİRLEŞTİR →</button>
-      <button id="deleteBookBtn" class="ghost-line-btn danger-line">KİTABI SİL →</button>
+      <!-- Çevrimdışı durum: telefonda kaç bölüm, ne kadar yer, son indirme,
+           kalıcı depolama. Sayılar SW önbelleğinden okunur (sunucuya gitmez). -->
+      <div id="offlineCard" class="offline-card" aria-live="polite" hidden>
+        <p id="offlineCardOzet" class="offline-card-ozet"></p>
+        <p id="offlineCardKalici" class="offline-card-kalici"></p>
+        <button id="offlinePersistBtn" class="pill" hidden>Kalıcı depolama iste</button>
+      </div>
+      <details id="bookMore" class="book-more">
+        <summary class="book-more-ozet">DİĞER İŞLEMLER</summary>
+        <!-- D-B12: durum düzenleme yalnız burada; rafta sadece filtre çipleri. -->
+        <div class="book-status-row">
+          <span class="book-status-label">DURUM</span>
+          <div id="bookStatusSeg" class="segmented" role="group" aria-label="Kitap durumu">
+            <button class="seg" data-status-opt="okunuyor">Okunuyor</button>
+            <button class="seg" data-status-opt="beklemede">Beklemede</button>
+            <button class="seg" data-status-opt="bitti">Bitti</button>
+          </div>
+        </div>
+        <button id="addChapterBtn" class="ghost-line-btn">BÖLÜM EKLE (METİN / URL) →</button>
+        <button id="epubBtn" class="ghost-line-btn">ePub İNDİR →</button>
+        <button id="mergeBtn" class="ghost-line-btn">BAŞKA KİTAPLA BİRLEŞTİR →</button>
+        <button id="deleteBookBtn" class="ghost-line-btn danger-line">KİTABI SİL →</button>
+      </details>
       <h2 class="section-label small">BÖLÜMLER</h2>
       <input id="chapterSearch" class="chapter-search" type="search" inputmode="search"
              autocomplete="off" placeholder="Bölüm ara (başlık veya numara)…"

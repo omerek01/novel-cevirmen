@@ -138,6 +138,8 @@ def test_kitap_sayfasi_modallari(sayfa):
     tohum.kitap()
     _ac(sayfa)
     sayfa.locator("#shelves .spine[data-slug]").first.click()
+    # Seyrek işlemler "Diğer işlemler" altında: önce açılır.
+    sayfa.locator("#bookMore > summary").click()
     for dugme, modal, kapat in (
         ("#bulkBtn", "#bulkModal", "#bulkCancel"),
         ("#epubBtn", "#epubModal", "#epubCancel"),
