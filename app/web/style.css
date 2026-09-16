@@ -1273,7 +1273,8 @@ a.pill { text-decoration: none; text-align: center; cursor: pointer; }
   cursor: help;
 }
 
-/* Çevrimdışı eklenip henüz sunucuya gitmemiş kayıtlar. */
+/* Çevrimdışı eklenip henüz sunucuya gitmemiş, reddedilen ya da cihaza yazılamayan
+   kayıtlar. İçinde paragraflar ve eylemli hata satırları olabilir. */
 .gloss-pending-note {
   margin: 0 0 1rem;
   padding: 0.55rem 0.7rem;
@@ -1284,6 +1285,54 @@ a.pill { text-decoration: none; text-align: center; cursor: pointer; }
   background: color-mix(in oklab, var(--accent) 9%, transparent);
   border-radius: 0 5px 5px 0;
 }
+.gloss-pending-note p { margin: 0 0 0.35rem; }
+.gloss-pending-note p:last-child { margin-bottom: 0; }
+.gloss-pending-uyari { color: var(--warn); font-weight: 700; }
+.gloss-pending-hata {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.35rem 0;
+  color: var(--warn);
+}
+.gloss-pending-hata > span { flex: 1 1 12rem; }
+
+/* Kısa bildirim (GERİ AL): alt gezinmenin ÜSTÜNDE, okurken ekranın dibinde. */
+.bildirim {
+  position: fixed;
+  left: 50%;
+  bottom: calc(var(--nav-h) + env(safe-area-inset-bottom) + var(--s-md));
+  z-index: 70;
+  transform: translateX(-50%);
+  width: min(calc(100% - 2rem), 30rem);
+  display: flex;
+  align-items: center;
+  gap: var(--s-sm);
+  padding: var(--s-xs) var(--s-xs) var(--s-xs) var(--s-base);
+  font-family: var(--sans);
+  font-size: 0.88rem;
+  color: var(--bg);
+  background: var(--ink);
+  border-radius: var(--r-md);
+  box-shadow: 0 6px 20px rgb(0 0 0 / 0.3);
+}
+body.reading .bildirim { bottom: calc(env(safe-area-inset-bottom) + var(--s-base)); }
+.bildirim-metin { flex: 1; padding: var(--s-sm) 0; }
+.bildirim-eylem {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 0 var(--s-base);
+  border: 0;
+  border-radius: var(--r);
+  background: transparent;
+  color: var(--accent-soft);
+  font: inherit;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  cursor: pointer;
+}
+.bildirim-eylem:focus-visible { outline: 2.5px solid var(--accent-soft); outline-offset: -2px; }
 
 .gloss-list { border-top: 3px solid var(--line); }
 .gloss-row {
@@ -1302,6 +1351,34 @@ a.pill { text-decoration: none; text-align: center; cursor: pointer; }
   padding-left: 0.55rem;
 }
 .gloss-row-pending .gloss-source { color: var(--accent); }
+/* Sunucunun REDDETTİĞİ kayıt: uyarı rengiyle şerit. Sessizce silinmez; bekleyen
+   notunda sebebi ve "Tekrar dene / Vazgeç" eylemleri durur. */
+.gloss-row-hata {
+  box-shadow: inset 3px 0 0 var(--warn);
+  padding-left: 0.55rem;
+}
+.gloss-row-hata .gloss-source { color: var(--warn); }
+/* Kayıt durumu rozeti: CİHAZDA BEKLİYOR / KAYDEDİLMEDİ / GÖNDERİLEMEDİ / KAYDEDİLDİ.
+   Metin taşır, yalnız renkle anlatmaz (renk körlüğü + ekran okuyucu). */
+.gloss-durum {
+  flex: 0 0 auto;
+  padding: 0.1rem 0.45rem;
+  font-family: var(--sans);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  border-radius: var(--r-full);
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.gloss-durum[data-durum="hata"],
+.gloss-durum[data-durum="bellekte"] {
+  color: var(--warn);
+  background: color-mix(in oklab, var(--warn) 14%, transparent);
+}
+.gloss-durum[data-durum="kaydedildi"] { color: var(--ink-soft); background: transparent; }
+.kunye-terim-silindi .gloss-source { text-decoration: line-through; opacity: 0.6; }
+.kunye-terim-silindi .gloss-target { opacity: 0.5; }
 
 /* Sozluk kaydinin KOSULU: karsiligin hangi baglamda gecerli oldugu.
    Satirin altina tam genislikte duser, sonuk ve kucuk - uyari degil, kunye. */

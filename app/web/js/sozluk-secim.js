@@ -1,7 +1,7 @@
 /* Okurken seçimden sözlüğe ekleme kısayolu. */
 
 import { durum, views } from "./durum.js";
-import { fetchGlossary, fetchWithTimeout, saveTerm } from "./sozluk.js";
+import { fetchGlossary, fetchWithTimeout, kuyruk, kuyrukDinle, saveTerm } from "./sozluk.js";
 import { el } from "./temel.js";
 
 /* ---------- seçimden sözlüğe ekleme ----------
@@ -81,6 +81,7 @@ export function updateSelGloss() {
 export function openGlossQuick() {
   const secim = selGlossLast;
   if (!secim) return;
+  hizliKaydiBirak();
   const { terim, kaynaktan } = secim;
   el("glossQuickSource").value = kaynaktan ? terim : "";
   el("glossQuickTarget").value = kaynaktan ? "" : terim;
@@ -149,10 +150,55 @@ export function saveGlossQuick() {
     return;
   }
   const target = el("glossQuickTarget").value.trim() || source;
-  saveTerm(durum.currentBookSlug, source, target); // çevrimdışıysa kuyrukta bekler
-  el("glossQuickState").textContent = `Eklendi: ${source} → ${target}`;
+  const { id, kalici } = saveTerm(durum.currentBookSlug, source, target);
   selGlossLast = null;
-  setTimeout(() => (el("glossQuickModal").hidden = true), 700);
+  hizliKaydiIzle(id, source, target, kalici);
+}
+
+/* Kayıt durumu DÜRÜST söylenir. Eskiden kuyruğa yazar yazmaz "Eklendi" deyip
+   pencereyi kapatıyordu; gönderim reddedilse ya da depolama yazılamasa bile
+   kullanıcı kaydın sunucuya ulaştığını sanıyordu. Artık işlemin kimliği izlenir:
+   "cihazda bekliyor" -> "sunucuya kaydedildi" ya da "gönderilemedi". */
+let hizliKayitDinleyici = null;
+
+function hizliKaydiBirak() {
+  if (hizliKayitDinleyici) hizliKayitDinleyici();
+  hizliKayitDinleyici = null;
+}
+
+function hizliKaydiIzle(id, source, target, kalici) {
+  hizliKaydiBirak();
+  const yaz = (metin) => (el("glossQuickState").textContent = metin);
+  yaz(
+    kalici
+      ? `Cihazda bekliyor: ${source} → ${target} — sunucuya gönderiliyor…`
+      : `Cihaza yazılamadı (depolama dolu ya da kapalı): ${source} → ${target} yalnız bu oturumda bekliyor, gönderiliyor…`
+  );
+  hizliKayitDinleyici = kuyrukDinle((ad, veri) => {
+    if (!veri || !veri.islem || veri.islem.id !== id) return;
+    if (ad === "gonderildi") {
+      hizliKaydiBirak();
+      yaz(`Sunucuya kaydedildi: ${source} → ${target}`);
+      setTimeout(() => (el("glossQuickModal").hidden = true), 900);
+    } else if (ad === "hata") {
+      hizliKaydiBirak();
+      yaz(
+        `Gönderilemedi (${veri.kod}${veri.mesaj ? " — " + veri.mesaj : ""}). ` +
+          "Kayıt silinmedi: sözlük ekranından tekrar deneyebilir ya da vazgeçebilirsin."
+      );
+    } else if (ad === "bekliyor") {
+      hizliKaydiBirak();
+      if (kuyruk.kalici()) {
+        yaz(`Cihazda bekliyor: ${source} → ${target} — sunucuya ulaşınca kendiliğinden kaydedilecek.`);
+        setTimeout(() => (el("glossQuickModal").hidden = true), 1800);
+      } else {
+        yaz(
+          `Sunucuya ulaşılamadı ve cihaza da yazılamadı: uygulamayı kapatırsan ${source} kaybolur. ` +
+            "Bağlantı gelince yeniden denenecek."
+        );
+      }
+    }
+  });
 }
 
 /* Olay kayıtları: modül yüklenirken DEĞİL, giriş noktası (`app.js`) sırayla
@@ -171,7 +217,10 @@ export function kur() {
 
   el("selGlossBtn")?.addEventListener("click", openGlossQuick);
   el("glossQuickSave")?.addEventListener("click", saveGlossQuick);
-  el("glossQuickCancel")?.addEventListener("click", () => (el("glossQuickModal").hidden = true));
+  el("glossQuickCancel")?.addEventListener("click", () => {
+    hizliKaydiBirak();
+    el("glossQuickModal").hidden = true;
+  });
   el("glossQuickModal")?.addEventListener("click", (e) => {
     if (e.target === el("glossQuickModal")) el("glossQuickModal").hidden = true;
   });

@@ -91,48 +91,13 @@ def test_sozluk_ekle_ara_sil(sayfa):
     sayfa.locator("#glossTarget").fill("Mira")
     sayfa.locator("#glossAddBtn").click()
     # "Eklenen terim listede görünür" iddiası BİLEREK burada yok: bilinen yarış
-    # hatasının ta kendisi ve aşağıdaki xfail testi onu belirlenimci ölçüyor.
+    # hatasının ta kendisiydi; test_sozluk_kuyruk.py onu belirlenimci ölçüyor.
     sayfa.wait_for_function(
         "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
     )
 
     sayfa.locator("#glossSearch").fill("gümüş")
     expect(sayfa.locator("#glossList .gloss-row")).to_have_count(1)
-
-
-@pytest.mark.xfail(
-    strict=True,
-    reason="BİLİNEN HATA: süzgeç eski sunucu listesinden çizer; gönderilen terim "
-    "kuyruktan düşünce listeden kaybolur (kuyruk v2 ile düzelecek)",
-)
-def test_eklenen_terim_gonderimden_sonra_suzgecte_kaybolmaz(sayfa):
-    # Hata bir YARIŞ: ekleme sonrası listeyi tazeleyen GET, POST'tan önce
-    # cevaplanırsa görünür. POST'u geciktirmek onu belirlenimci kılar — gerçek
-    # dünyada yavaş Tailscale bağlantısı tam olarak bunu yapıyor.
-    sayfa.add_init_script(
-        """(() => {
-          const asil = window.fetch.bind(window);
-          window.fetch = (url, opts = {}) =>
-            (opts.method || 'GET') === 'POST' && String(url).includes('/glossary')
-              ? new Promise((r) => setTimeout(r, 800)).then(() => asil(url, opts))
-              : asil(url, opts);
-        })()"""
-    )
-    tohum.kitap()
-    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
-    _ac(sayfa)
-    sayfa.locator("#shelves .spine[data-slug]").first.click()
-    sayfa.locator("#openGlossaryBtn").click()
-    expect(sayfa.locator("#glossList .gloss-row")).to_have_count(1)
-    sayfa.locator("#glossSource").fill("Mira")
-    sayfa.locator("#glossAddBtn").click()
-    sayfa.wait_for_function(
-        "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json()).terms.Mira === 'Mira'"
-    )
-    sayfa.wait_for_function("() => !document.querySelector('#glossList .gloss-row-pending')")
-    sayfa.locator("#glossSearch").fill("x")
-    sayfa.locator("#glossSearch").fill("")
-    expect(sayfa.locator("#glossList .gloss-row")).to_have_count(2)
 
 
 def test_sozluk_silme_sunucuya_ulasir(sayfa):

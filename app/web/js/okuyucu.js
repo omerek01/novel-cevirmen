@@ -7,7 +7,7 @@ import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
 import { openBook } from "./kitap.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
-import { deleteTerm, saveTerm } from "./sozluk.js";
+import { saveTerm, tazelemeyiPlanla, terimiSilGeriAlinabilir } from "./sozluk.js";
 import { ICONS, SVG, el, escapeHtml, localDay } from "./temel.js";
 
 // --- Sonsuz okuma v2 (D-B9v2): tek-bölüm singleton yerine bölüm AKIŞI ---
@@ -819,13 +819,18 @@ export function kunyeKarti(entry) {
    düzeltmek için okumayı bırakıp sözlük ekranında terimi aramak gerekiyordu — yani
    onay anı okuma akışının dışındaydı ve pratikte hiç gelmiyordu.
 
-   Yazma yolu sözlük ekranıyla AYNI kuyruk (`saveTerm`/`deleteTerm`) → sunucu
-   kapalıyken de çalışır, bağlanınca gönderilir. */
+   Yazma yolu sözlük ekranıyla AYNI kuyruk (`saveTerm`/`terimiSilGeriAlinabilir`)
+   → sunucu kapalıyken de çalışır, bağlanınca gönderilir. Kayıt durumu rozeti de
+   aynı yerden çizilir (`data-sozluk-*` → `refreshGlossPendingUi`). */
 export function kunyeTerimSatiri(entry, kaynak, karsilik) {
   const slug = entry.bookSlug || durum.currentBookSlug;
   const korunuyor = !karsilik || karsilik === kaynak;
   const li = document.createElement("li");
   li.className = "kunye-terim";
+  if (slug) {
+    li.dataset.sozlukSlug = slug;
+    li.dataset.sozlukKaynak = kaynak;
+  }
   li.title = korunuyor
     ? `${kaynak} İngilizce korunuyor`
     : `${kaynak} → ${karsilik}`;
@@ -846,20 +851,26 @@ export function kunyeTerimSatiri(entry, kaynak, karsilik) {
   alan.addEventListener("change", () => {
     if (!slug) return;
     saveTerm(slug, kaynak, alan.value.trim() || kaynak);
-    li.classList.add("gloss-row-pending"); // gönderim bitince kalkar
   });
 
   const sil = document.createElement("button");
   sil.className = "gloss-del";
   sil.textContent = "×";
   sil.setAttribute("aria-label", kaynak + " terimini sözlükten sil");
+  const silindiIsaretle = (silindi) => {
+    // Satır KALDIRILMAZ, üstü çizilir: GERİ AL basılınca yerinde geri gelebilsin.
+    li.classList.toggle("kunye-terim-silindi", silindi);
+    alan.disabled = silindi;
+    sil.disabled = silindi;
+  };
   sil.addEventListener("click", () => {
     if (!slug) return;
-    li.remove();
-    deleteTerm(slug, kaynak);
+    silindiIsaretle(true);
+    terimiSilGeriAlinabilir(slug, kaynak, { geriAlindi: () => silindiIsaretle(false) });
   });
 
   li.append(ad, ok, alan, sil);
+  if (slug) tazelemeyiPlanla(); // bekleyen/hatalı kayıt rozeti
   return li;
 }
 

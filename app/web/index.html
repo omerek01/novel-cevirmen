@@ -140,7 +140,9 @@
         <input id="glossTarget" type="text" placeholder="Karşılık (boş = aynı kalsın)" />
         <button id="glossAddBtn" class="pill">Ekle</button>
       </div>
-      <p id="glossPending" class="gloss-pending-note" hidden></p>
+      <!-- Bekleyen / reddedilen / cihaza yazılamayan değişiklikler. Reddedilen
+           işlem sessizce silinmez: burada sebebiyle ve eylemleriyle görünür. -->
+      <div id="glossPending" class="gloss-pending-note" role="status" hidden></div>
       <!-- ARAMA + SÜZGEÇ: sözlük 267 satıra çıkabiliyor; telefonda parmakla
            kaydırarak terim bulmak pratik değil. Süzme tamamen istemci tarafında. -->
       <div class="gloss-tools">
@@ -357,6 +359,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Kısa bildirim (GERİ AL vb.). Tek alan: yeni bildirim eskisinin yerini alır. -->
+  <div id="bildirim" class="bildirim" role="status" aria-live="polite" hidden></div>
 
   <!-- SEÇİMDEN SÖZLÜĞE: okurken metin seçilince beliren kısayol -->
   <button id="selGlossBtn" class="sel-gloss-btn" hidden>+ SÖZLÜĞE EKLE</button>

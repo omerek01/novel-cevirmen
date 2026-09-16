@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v92"; // app.js ES modüllerine bölündü
+const SHELL_CACHE = "novellink-shell-v93"; // sözlük kuyruğu v2 + geri alma bildirimi
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -13,6 +13,7 @@ const SHELL = [
   // modül çevrimdışı açılışta ağdan istenir ve düşer.
   // tests/test_modul_kabugu.py her `js/*.js` dosyasının burada olduğunu tutar.
   "/js/ayarlar.js",
+  "/js/bildirim.js",
   "/js/cevrimdisi.js",
   "/js/durum.js",
   "/js/ekle.js",
@@ -22,6 +23,7 @@ const SHELL = [
   "/js/kutuphane.js",
   "/js/okuyucu.js",
   "/js/sozluk.js",
+  "/js/sozluk-kuyruk.js",
   "/js/sozluk-secim.js",
   "/js/temel.js",
   "/manifest.webmanifest",
