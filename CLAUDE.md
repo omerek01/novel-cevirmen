@@ -263,8 +263,45 @@ Daralan kapasitenin karşılığı anahtar tarafında ödendi (aşağıdaki iki 
    dördü çalışıyordu ve hiçbiri denenmedi. Bu, 503 dalında 2026-09-09'da düzeltilen
    hatanın AYNISIDIR; o tur 404'ü atlamıştı. **Yeni bir hata sınıfı eklerken sor:
    bu arıza anahtara mı bağlı, modele mi — ölç, varsayma.**
-4. **Kalan her arıza → sıradaki MODEL.** Boş/engellenmiş yanıt (safety)
+4. **Anahtar reddi (401/403, 400 `API_KEY_INVALID`) → aynı MODELDE sıradaki
+   ANAHTAR** (2026-09-18, kullanıcı kararı). 404 ile aynı muamele: soğutma yok, tur
+   tekrarı yok. Eskiden bu dal `TranslateError` ile zinciri TÜMDEN öldürüyordu;
+   rotasyon açıkken tek bir iptal edilmiş anahtar her beş bölümden birini
+   çevrilemez kılardı. Sıradan 400 (bozuk istek) hâlâ çeviri hatasıdır — her
+   anahtarda aynı cevabı verir. Havuzun tamamı yalnız erişim/red verdiyse mesaj
+   "meşgul" DEMEZ, "anahtarlar kabul edilmedi" der (`_zincir_hatasi`).
+5. **Kalan her arıza → sıradaki MODEL.** Boş/engellenmiş yanıt (safety)
    deterministiktir → bir alt model (başkası çevirebilir).
+
+**API GÖZLEM KAYDI** (2026-09-18, `app/core/api_durum.py`). "3.6 seçiliyken neden
+3.5?" sorusu bir dönem TAHMİNLE cevaplanıyordu: veritabanında yalnız bölümü fiilen
+çeviren model vardı, zincirin NEDEN indiği hiçbir yerde yoktu, çeviri yolunda tek
+satır log yoktu. Sunucu verisinde iki desen görüldü (dakikalar içinde geri dönen tek
+tük düşüşler + gece yarısı 8 bölümlük düşüş) ve ikisi ayırt EDİLEMEDİ. Artık her
+GERÇEK Gemini çağrısı `_tek_anahtarla_uret`te TEK kez kaydedilir (sınıf, HTTP kodu,
+süre, token, kota türü/sınırı), soğuma atlamaları ayrı olay olarak yazılır (sayaca
+GİRMEZ) ve ilk halka dışına her iniş nedeniyle kaydedilir (`gecis_kaydet`, anahtar
+başına SON sonuç). Okuma: `scripts/api_durum_rapor.py` (Google'a istek ATMAZ;
+`kota_durum.py` atar). Kurallar:
+* **Anahtar değeri yazılmaz** — kimlik SHA-256 özetinin başı; sıra kimlik DEĞİLDİR.
+* **Kayıt hatası çeviriyi başarısız kılmaz** (`_sessiz`); ham gövde/istem saklanmaz.
+* **Yazım `BEGIN IMMEDIATE`** (`_yazim`): örtük ertelenmiş işlem WAL'da paralel
+  yazarlar arasında BEKLEMEDEN "database is locked" veriyordu — ölçüldü, iki
+  eşzamanlı istekten birinin kaydı kayboluyordu.
+* **Bağlam `contextvars` ile** (`islem`/`baglam`): amaç giriş noktasında (server
+  okuma/prefetch/web'den ekleme/sözlük önerisi, jobs toplu/yeniden çeviri), URL
+  pipeline'da, onarım turları `asama` ile. `threading.Thread` bağlamı KOPYALAMAZ —
+  elle açılan iş parçacığı bağlamı kendi içinde kurar. Yeni bir çeviri giriş
+  noktası eklerken `api_durum.islem(...)` ile sar, yoksa kayıt "diger" der.
+* **Soğuma yeniden başlatmaya dayanır**: bitiş UTC epoch olarak `api_son`'da durur,
+  süreç anahtar listesini ilk gördüğünde (`_gemini_fabrikasi`) anahtar KİMLİĞİYLE
+  eşlenip geri yüklenir; geçmiş bitiş engel sayılmaz, çıkarılan anahtarın soğuması
+  yenisine taşınmaz.
+* **Gün Pasifik günüdür** (kota orada sıfırlanır). Windows'ta `tzdata` paketi ŞART
+  (requirements'ta): yoksa `ZoneInfo` patlar, sabit UTC-8'e düşülür ve yaz saatinde
+  bir saat şaşar — testler bunu yakaladı.
+Manga görsel yolu (`import_translate._manga_regions`) havuzu kullanmaz ve kayda
+GİRMEZ (kullanıcı kararı: kapsam dışı).
 
 **404'TE MESAJ "MEŞGUL" DEMEZ** (2026-09-15). Zincirin tamamı 404'ten düştüğünde eski
 mesaj "Tüm modeller şu anda meşgul (geçici). Biraz sonra tekrar deneyin." diyordu ve bu
