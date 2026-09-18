@@ -303,6 +303,35 @@ başına SON sonuç). Okuma: `scripts/api_durum_rapor.py` (Google'a istek ATMAZ;
 Manga görsel yolu (`import_translate._manga_regions`) havuzu kullanmaz ve kayda
 GİRMEZ (kullanıcı kararı: kapsam dışı).
 
+**API DURUM PANELİ** (2026-09-18, `js/api-durum.js` + saf `js/api-durum-yardimci.js`).
+Ayarlar → "API durumu" ayrı bir GÖRÜNÜMDE açılır (`view: "apidurum"`, iç içe modal
+yok); geri düğmesi ve telefonun geri tuşu ayarlara döner. Üç salt-okunur uç:
+`GET /api/settings/api-status` (kartlar, sayaçlar, soğuma), `/api-events` (sayfalı
+geçiş listesi, `cursor`), `/api-neden?url=` (künye rozetindeki "Neden bu model?").
+Kurallar:
+* **Uçlar Google'a istek ATMAZ**, rotasyonu ilerletmez, anahtar değeri ya da
+  KİMLİĞİ döndürmez (yalnız "Anahtar N"; `.env`'den çıkarılan anahtar "Çıkarılmış
+  anahtar"). `Cache-Control: no-store` ve **SW bu yolları önbelleğe ALMAZ**
+  (`sw.js`'de genel `/api/` dalından ÖNCE) — çevrimdışı bayat "başarılı" yanlış bilgidir.
+* **Soğuma panelde çeviri yolunun BELLEĞİNDEN okunur** (`translate.aktif_soguma_bitisleri`,
+  önce kayıttan geri yükler): ikinci bir kaynak "soğumada" derken çeviri o anahtarı
+  deniyor olurdu. Kart durumu ve "neden" kararı SUNUCUDA (`kart_durumu`,
+  `model_nedeni`); arayüz yalnız biçimler. Soğuma bitince durum "yeniden
+  denenebilir"dir, başarılı istek olmadan "başarılı" DEĞİL.
+* **"Neden" penceresi** (`NEDEN_PENCERESI_SN`): geçiş çeviri SIRASINDA, bölüm satırı
+  çeviri BİTİNCE yazılır; bu pencerenin dışındaki geçiş ÖNCEKİ bir çeviriye aittir.
+  Kayıt başlamadan çevrilmiş bölüm "geçmiş neden kaydedilmemiş" der — geriye dönük uydurma yok.
+* **Yenileme** yalnız panel görünürken 15 sn'de bir, uçuşta olan varken yenisi
+  atılmaz, bağlantı kopunca eski veri zamanıyla kalır ve "bayat" denir.
+* **`popstate` SIRASI (ölçüldü):** Chromium pencere üzerindeki popstate
+  dinleyicilerini capture/bubble ayrımına bakmadan KAYIT SIRASIYLA çağırıyor —
+  `{capture: true}` "önce koş" demek DEĞİL. Panelin dinleyicisi görünüm değişmeden
+  önce koşmalı; bu yüzden `app.js`'de `apiDurumKur()` `gezinmeKur()`'dan ÖNCE.
+* Tarayıcı testleri (`tests/tarayici/test_api_durum.py`) beş anahtarlı görünümü
+  `page.route` ile, 15 sn'lik aralığı `page.clock` ile sınar (test sunucusu
+  anahtarsız). Sahte saati istek zaman aşımından (8 sn) uzun sarmak bekleyen
+  isteği iptal eder.
+
 **404'TE MESAJ "MEŞGUL" DEMEZ** (2026-09-15). Zincirin tamamı 404'ten düştüğünde eski
 mesaj "Tüm modeller şu anda meşgul (geçici). Biraz sonra tekrar deneyin." diyordu ve bu
 YANLIŞ TEŞHİSTİR: erişim beklemekle ASLA açılmaz. Kullanıcı mesaja uyup arızayı kota
@@ -820,7 +849,8 @@ içe aktarılan bağlamaya atama yapılamaz) · `konum` · `ayarlar` · `gezinme
 `kutuphane` · `kitap` · `cevrimdisi` · `okuyucu` · `sozluk` (kuyruk bağdaştırıcısı +
 sözlük ekranı) · `sozluk-kuyruk` (SAF, Node testli) · `sozluk-secim` (okurken seçim) ·
 `sozluk-inceleme` · `terim-paneli` · `terim-yardimci` (SAF) · `bildirim` · `diyalog`
-(ortak `<dialog>`). **Yeni modül = `sw.js` SHELL listesine ekle** (`tests/test_modul_kabugu.py`
+(ortak `<dialog>`) · `api-durum` (API durum paneli + künye "neden bu model?") ·
+`api-durum-yardimci` (SAF). **Yeni modül = `sw.js` SHELL listesine ekle** (`tests/test_modul_kabugu.py`
 tutar): listede olmayan modül çevrimdışı açılışta indirilemez ve uygulama HİÇ başlamaz.
 **`scripts/start_chrome_cdp.py`** — gerçek Chrome'u `:9222` debug
 portu + ayrı profil (`cache/.chrome-cdp`) ile açar. **`faz0/`** — eski kavram-kanıtı
