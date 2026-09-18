@@ -202,6 +202,37 @@
   </section>
 
   <!-- OKUYUCU -->
+  <!-- API DURUMU: beş Gemini anahtarının son gözlemi, bugünkü istekler, model
+       geçişleri. Yalnız sunucunun KAYDINI okur (Google'a istek atmaz). -->
+  <section id="apiDurumView" class="view" hidden>
+    <header class="reader-bar">
+      <button id="apiDurumGeri" class="ghost-btn" aria-label="Ayarlara dön">←</button>
+      <div class="reader-titles">
+        <div class="book-view-title">API DURUMU</div>
+      </div>
+      <span class="ghost-btn bar-spacer" aria-hidden="true">←</span>
+    </header>
+    <div class="book-body api-durum">
+      <div class="api-ust">
+        <p id="apiBaglanti" class="gloss-hint api-baglanti" role="status" aria-live="polite"></p>
+        <button id="apiYenile" class="pill">Yenile</button>
+      </div>
+      <p id="apiNot" class="gloss-hint api-not" hidden></p>
+      <dl id="apiOzet" class="api-ozet"></dl>
+      <p class="gloss-hint">
+        Kalan kota gösterilmez: bu uygulamanın dışındaki kullanım bilinmiyor ve aynı
+        Google projesinden alınmış anahtarlar ortak kota kullanır. Kartlar yalnız
+        uygulamanın yaptığı isteklerin SON gözlemidir; "başarılı" kalan kotanın
+        garantisi değildir.
+      </p>
+      <h2 class="api-bolum-baslik">Anahtarlar</h2>
+      <div id="apiKartlar" class="api-kartlar"></div>
+      <h2 class="api-bolum-baslik">Son model geçişleri</h2>
+      <ol id="apiGecisler" class="api-gecisler"></ol>
+      <button id="apiDahaEski" class="pill" hidden>Daha eski</button>
+    </div>
+  </section>
+
   <section id="readerView" class="view" hidden>
     <header class="reader-bar">
       <button id="backBtn" class="ghost-btn" aria-label="Kütüphaneye dön">←</button>
@@ -548,6 +579,9 @@
            ucretsiz zincir asla ucretliye inmiyor, yani surpriz harcamanin
            kaynagi zaten kapali. Pencere AYLIK, cunku fatura da oyle okunuyor. -->
       <p id="modelHarcama" class="gloss-hint model-harcama" hidden></p>
+      <!-- API durumu AYRI bir görünümde açılır (iç içe modal yok): anahtarların son
+           gözlemi ve zincirin neden aşağı indiği. Kota TÜKETMEZ, yalnız kaydı okur. -->
+      <button id="apiDurumAc" class="pill api-durum-ac">API durumu</button>
     </div>
     <div class="setting-row">
       <span>Bu bölüm</span>

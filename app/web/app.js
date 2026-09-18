@@ -17,8 +17,12 @@ import { kur as cevrimdisiKur } from "./js/cevrimdisi.js";
 import { kur as ekleKur } from "./js/ekle.js";
 import { kur as sozluk_secimKur } from "./js/sozluk-secim.js";
 import { kur as terimPaneliKur } from "./js/terim-paneli.js";
+import { kur as apiDurumKur } from "./js/api-durum.js";
 
 diyalogKur();
+// `gezinme`den ÖNCE: panelin popstate dinleyicisi görünüm DEĞİŞMEDEN önce koşmalı
+// (Chromium pencere dinleyicilerini kayıt sırasıyla çağırıyor — ölçüldü).
+apiDurumKur();
 gezinmeKur();
 kutuphaneKur();
 kitapKur();

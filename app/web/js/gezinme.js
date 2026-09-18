@@ -1,5 +1,6 @@
 /* Görünüm değişimi ve geçmiş (history) tabanlı uygulama-içi geri; alt gezinme. */
 
+import { apiDurumGoster } from "./api-durum.js";
 import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { settings } from "./ayarlar.js";
 import { startOfflineDownloadAll } from "./cevrimdisi.js";
@@ -61,6 +62,9 @@ export function applyNavState(state) {
       break;
     case "glossary":
       openGlossary(state.slug);
+      break;
+    case "apidurum":
+      apiDurumGoster();
       break;
     case "reader":
       // Köken varken KAYITLI KONUM geri yüklenmez: kullanıcı "kaldığın yere"

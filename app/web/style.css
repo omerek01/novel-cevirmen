@@ -2036,15 +2036,132 @@ html { scroll-padding-top: 5rem; }
 /* Katlanır başlıkların İŞARETİ: `display:flex` tarayıcının üçgenini siler; açık/kapalı
    olduğu başka hiçbir yerden anlaşılmıyordu (görsel doğrulamada fark edildi). */
 .style-summary::after,
-.book-more-ozet::after {
+.book-more-ozet::after,
+.api-yedek-ozet::after {
   content: "▾";
   margin-left: auto;
   padding-left: var(--s-sm);
   transition: transform 0.15s ease;
 }
 details[open] > .style-summary::after,
-details[open] > .book-more-ozet::after { transform: rotate(180deg); }
+details[open] > .book-more-ozet::after,
+details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 @media (prefers-reduced-motion: reduce) {
   .style-summary::after,
-  .book-more-ozet::after { transition: none; }
+  .book-more-ozet::after,
+  .api-yedek-ozet::after { transition: none; }
 }
+
+/* ---------- API durum paneli ----------
+   Durum ASLA yalnız renkle anlatılmaz: rozetin metni ve işareti (✓ ◷ ! ✕ –)
+   anlamı taşır, ton yalnız destekler. Yeni renk jetonu açılmadı: sorun tonları
+   kontrastı ölçülmüş `--warn`u, başarı `--accent`i kullanır; ayrımı kenar biçimi
+   ve kalınlık yapar (her temada AA). */
+.api-durum-ac { margin-top: 0.6rem; align-self: flex-start; }
+.api-ust {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--s-sm);
+}
+.api-ust .gloss-hint { margin: 0; flex: 1 1 12rem; min-width: 0; }
+.api-ust .pill { min-height: var(--tap); }
+.api-bayat { color: var(--warn); font-weight: 600; }
+.api-not { color: var(--accent); font-weight: 600; }
+.api-ozet {
+  display: grid;
+  grid-template-columns: minmax(7.5rem, max-content) 1fr;
+  gap: 0.35rem var(--s-md);
+  margin: 0 0 var(--s-base);
+  font-family: var(--sans);
+  font-size: 0.86rem;
+}
+.api-ozet dt { color: var(--ink-soft); }
+.api-ozet dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.api-bolum-baslik {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: var(--s-xl) 0 var(--s-sm);
+}
+.api-kartlar { display: grid; gap: var(--s-md); }
+.api-kart {
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface);
+  padding: var(--s-md);
+  min-width: 0;
+}
+.api-kart-baslik {
+  font-family: var(--sans);
+  font-size: 0.95rem;
+  font-weight: 800;
+  margin: 0 0 var(--s-sm);
+}
+.api-model {
+  border-left: 3px solid var(--border);
+  padding: 0.15rem 0 0.15rem var(--s-sm);
+  margin: 0 0 var(--s-sm);
+}
+.api-model-baslik {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.25rem var(--s-sm);
+  font-family: var(--sans);
+  font-size: 0.86rem;
+}
+.api-model-ad { font-weight: 700; }
+.api-rozet {
+  font-size: 0.78rem;
+  font-weight: 700;
+  border: 1px solid currentColor;
+  border-radius: var(--r-full);
+  padding: 0.05rem 0.5rem;
+}
+.api-model-bilgi {
+  margin: 0.2rem 0 0;
+  font-family: var(--sans);
+  font-size: 0.8rem;
+  line-height: 1.45;
+  color: var(--ink-soft);
+  overflow-wrap: anywhere;
+}
+.api-soguma { color: var(--warn); font-weight: 600; }
+.api-ton-iyi .api-rozet { color: var(--accent); }
+.api-ton-iyi { border-left-color: var(--accent); }
+.api-ton-bekle .api-rozet,
+.api-ton-uyari .api-rozet { color: var(--warn); border-style: dashed; }
+.api-ton-bekle,
+.api-ton-uyari { border-left-color: var(--warn); border-left-style: dashed; }
+.api-ton-hata .api-rozet { color: var(--warn); border-width: 2px; }
+.api-ton-hata { border-left-color: var(--warn); border-left-width: 5px; }
+.api-ton-notr .api-rozet { color: var(--ink-soft); }
+.api-yedekler { margin-top: var(--s-xs); }
+.api-yedek-ozet {
+  font-family: var(--sans);
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+  cursor: pointer;
+  min-height: var(--tap);
+  display: flex;
+  align-items: center;
+}
+.api-yedek-ozet:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.api-gecisler { list-style: none; margin: 0 0 var(--s-base); padding: 0; }
+.api-gecis {
+  border-bottom: 1px solid var(--border);
+  padding: var(--s-sm) 0;
+  min-width: 0;
+}
+.api-gecis-ust { font-family: var(--sans); font-size: 0.78rem; color: var(--ink-soft); }
+.api-gecis-yon { font-family: var(--sans); font-size: 0.9rem; font-weight: 700; margin-top: 0.1rem; }
+.api-gecis-yon.api-ton-hata { color: var(--warn); border: 0; }
+.api-bos { list-style: none; }
+.kunye-neden { display: block; }
+.kunye-neden-baslik { font-weight: 700; color: var(--ink); }

@@ -345,6 +345,10 @@ def test_sayaclar_yeniden_baslatmaya_dayanir():
 # ---------------------------------------------------------------- bağlam
 
 def test_paralel_islemler_birbirinin_kaydina_KARISMAZ():
+    # Veritabanı ÖNCEDEN var (sunucudaki gibi, WAL kipinde). Sıfırdan dosyada iki
+    # bağlantının aynı anda WAL'a geçmesi SQLite'ta beklemeden reddedilir; bu
+    # yalnız ilk kurulumda bir kez olur ve bu testin ölçtüğü şey değildir.
+    api_durum._connect().close()
     engel = threading.Barrier(2, timeout=5)
     sonuc = {}
 

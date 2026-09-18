@@ -1,6 +1,7 @@
 /* Okuyucu: sonsuz okuma akışı, bölüm çizimi, künye, prefetch, iki-dilli satır,
    bölümde arama, köken odağı. */
 
+import { modelNedeniniBagla } from "./api-durum.js";
 import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { settings } from "./ayarlar.js";
 import { warmOffline } from "./cevrimdisi.js";
@@ -762,6 +763,8 @@ export function kunyeKarti(entry) {
       satir.append(document.createTextNode(` · sözlük s.${entry.sozlukSurumu}`));
     }
     govde.appendChild(satir);
+    // "3.6 seçiliyken neden 3.5?" — rozet açılınca sunucunun kaydından sorulur.
+    if (entry.model) modelNedeniniBagla(kutu, govde, entry.url);
   }
   if (denetlenmeyen.length) {
     const not = document.createElement("p");

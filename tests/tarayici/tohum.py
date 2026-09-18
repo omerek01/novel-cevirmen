@@ -13,6 +13,10 @@ TABLOLAR = (
     "chapters", "books", "aliases", "glossary", "reading_log", "settings",
     "jobs", "kullanim", "sozluk_gecmis", "sozluk_red", "sozluk_yazim",
     "ceviri_arsivi",
+    # API gözlem kaydı: testler birbirinin geçiş/istek kaydını görmesin.
+    # `api_meta` (kayıt başlangıcı) BİLEREK temizlenmez: sunucu süreci tabloları
+    # kurduğunu hatırlıyor ve başlangıç satırını yeniden yazmaz.
+    "api_gunluk", "api_son", "api_olay",
 )
 
 TR = [

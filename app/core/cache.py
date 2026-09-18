@@ -246,6 +246,30 @@ def get_chapter(url: str) -> dict | None:
     }
 
 
+def bolum_ozetleri(urls: list[str]) -> dict[str, dict]:
+    """URL'ler için yalnız başlık bilgisi (API durum panelinin geçiş listesi).
+
+    `get_chapter` her satırda çeviri METNİNİ de okur; elli olaylık bir liste için
+    megabaytlarca metni okuyup atmak gereksizdi.
+    """
+    urls = [u for u in dict.fromkeys(urls) if u]
+    if not urls:
+        return {}
+    conn = _connect()
+    try:
+        satirlar = conn.execute(
+            "SELECT url, title, chapter_no, book_slug, book_title FROM chapters "
+            f"WHERE url IN ({', '.join('?' * len(urls))})",
+            urls,
+        ).fetchall()
+    finally:
+        conn.close()
+    return {
+        r[0]: {"baslik": r[1], "no": r[2], "kitap": r[3], "kitap_adi": r[4]}
+        for r in satirlar
+    }
+
+
 def list_chapters(book_slug: str) -> list[dict]:
     """Bir kitabın bölümleri, numaraya göre sıralı. `translated` = çevirisi HAZIR mı.
 

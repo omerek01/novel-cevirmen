@@ -12,6 +12,7 @@ export const views = {
   book: el("bookView"),
   glossary: el("glossaryView"),
   reader: el("readerView"),
+  apidurum: el("apiDurumView"),
 };
 
 export const durum = {

@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v99"; // katlanır başlık işareti, panel eylem hizası
+const SHELL_CACHE = "novellink-shell-v100"; // API durum paneli + künyede "neden bu model?"
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -12,6 +12,8 @@ const SHELL = [
   // aktarır ve biri indirilemezse uygulama HİÇ başlamaz. Listede olmayan bir
   // modül çevrimdışı açılışta ağdan istenir ve düşer.
   // tests/test_modul_kabugu.py her `js/*.js` dosyasının burada olduğunu tutar.
+  "/js/api-durum.js",
+  "/js/api-durum-yardimci.js",
   "/js/ayarlar.js",
   "/js/bildirim.js",
   "/js/cevrimdisi.js",
@@ -163,6 +165,12 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(chapterFirst(request, key.toString(), refresh));
     return;
   }
+
+  // API durum paneli CANLI durumdur: önbelleğe ALINMAZ. Çevrimdışıyken önbellekten
+  // gelen eski bir "Son istek başarılı" yanlış bilgidir; arayüz zaten son başarılı
+  // yanıtı zamanıyla tutup "bayat" diye işaretliyor. Kural genel /api/ dalından
+  // ÖNCE durmalı (tests/test_api_durum_uclar.py tutar).
+  if (url.pathname.startsWith("/api/settings/api-")) return;
 
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(request)); // /api/books, /chapters, /glossary (GET)

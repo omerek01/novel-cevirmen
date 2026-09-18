@@ -1004,6 +1004,79 @@ def set_ceviri_modeli(req: CeviriModeliRequest) -> dict:
     return {"secili": req.model, "zincir": list(translate_mod.zincir_kur(req.model))}
 
 
+# ---------- API durum paneli (salt okunur) ----------
+# Üç uç da yalnız KAYDI okur: Google'a istek atmaz, rotasyon sayacını ilerletmez,
+# anahtar değeri ya da kimliği döndürmez (arayüze "Anahtar N" etiketi gider).
+# `no-store` ŞART: yanıt canlı durumdur; Service Worker da bu yolları önbelleğe
+# almaz (sw.js), yoksa çevrimdışıyken bayat bir "başarılı" gösterilirdi.
+_API_OLAY_TURLERI = {"gecis": ("gecis", "tukendi"), "istek": ("istek", "atlama")}
+
+
+def _anahtar_kimlikleri() -> list[str]:
+    return [
+        api_durum.anahtar_kimligi(a) for a in translate_mod.gemini_anahtarlari(API_KEY)
+    ]
+
+
+def _gemini_zinciri() -> tuple[tuple[str, ...], bool]:
+    """Panelin gösterdiği zincir. Claude seçiliyse Gemini havuzu KULLANILMIYOR;
+    kartlar yine varsayılan Gemini zincirini gösterir ve bu açıkça söylenir."""
+    zincir = translate_mod.secili_zincir()
+    if zincir and translate_mod._claude_modeli(zincir[0]):
+        return tuple(translate_mod.DEFAULT_MODELS), True
+    return tuple(zincir), False
+
+
+@app.get("/api/settings/api-status")
+def get_api_durumu(response: Response) -> dict:
+    """Anahtar kartları, sayaçlar, soğumalar. Kota TÜKETMEZ."""
+    response.headers["Cache-Control"] = "no-store"
+    kimlikler = _anahtar_kimlikleri()
+    zincir, claude_secili = _gemini_zinciri()
+    veri = api_durum.panel_verisi(
+        kimlikler, zincir, translate_mod.aktif_soguma_bitisleri(kimlikler)
+    )
+    veri["claude_secili"] = claude_secili
+    return veri
+
+
+@app.get("/api/settings/api-events")
+def get_api_olaylari(
+    response: Response,
+    limit: int = Query(50, ge=1, le=200),
+    cursor: int | None = Query(None, description="Bu olay id'sinden ESKİLER"),
+    tur: str = Query("gecis", description="gecis | istek | hepsi"),
+) -> dict:
+    """Sayfalı olay geçmişi (en yeniden eskiye). `sonraki` = bir sonraki imleç."""
+    response.headers["Cache-Control"] = "no-store"
+    turler = _API_OLAY_TURLERI.get(tur)
+    if tur != "hepsi" and turler is None:
+        raise HTTPException(status_code=400, detail="Bilinmeyen olay türü.")
+    olaylar = api_durum.son_olaylar(limit + 1, turler=turler, once=cursor)
+    devam = len(olaylar) > limit
+    olaylar = olaylar[:limit]
+    bolumler = cache.bolum_ozetleri([o.get("url") for o in olaylar])
+    return {
+        "olaylar": api_durum.olaylari_disa_ver(olaylar, _anahtar_kimlikleri(), bolumler),
+        "sonraki": olaylar[-1]["id"] if devam and olaylar else None,
+    }
+
+
+@app.get("/api/settings/api-neden")
+def get_model_nedeni(
+    response: Response, url: str = Query(..., description="Bölümün URL'i")
+) -> dict:
+    """Künye rozeti: bu bölüm NEDEN bu modelle çevrildi? Kota TÜKETMEZ."""
+    response.headers["Cache-Control"] = "no-store"
+    zincir = translate_mod.secili_zincir()
+    return api_durum.model_nedeni(
+        cache.get_chapter(url),
+        zincir[0] if zincir else None,
+        api_durum.bolum_gecisleri(url, limit=20),
+        api_durum.kayit_baslangici(),
+    )
+
+
 @app.get("/api/book/{slug}/epub")
 def book_epub(
     slug: str,

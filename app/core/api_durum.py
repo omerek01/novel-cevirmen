@@ -215,6 +215,11 @@ def _connect() -> sqlite3.Connection:
     if yol in _KURULAN:
         return conn
     with _KURULUM_KILIDI:
+        # Çift kontrol: kilidi bekleyen ikinci iş parçacığı kurulumu YENİDEN
+        # yapmasın (ölçüldü: iki eşzamanlı ilk yazımdan biri "database is locked"
+        # alıp kaydı kaybediyordu).
+        if yol in _KURULAN:
+            return conn
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS api_gunluk (
@@ -272,11 +277,11 @@ def _connect() -> sqlite3.Connection:
             );
             """
         )
-        conn.execute(
-            "INSERT OR IGNORE INTO api_meta (ad, deger) VALUES ('baslangic', ?)",
-            (str(time.time()),),
-        )
-        conn.commit()
+        with _yazim(conn):
+            conn.execute(
+                "INSERT OR IGNORE INTO api_meta (ad, deger) VALUES ('baslangic', ?)",
+                (str(time.time()),),
+            )
         _KURULAN.add(yol)
     return conn
 
@@ -619,3 +624,251 @@ def bolum_gecisleri(url: str, limit: int = 5) -> list[dict]:
 def sifirla_temizlik_zamani() -> None:
     """Testler için: saatlik temizlik kilidini kaldır."""
     _SON_TEMIZLIK.clear()
+
+
+# ---------------------------------------------------------------------------
+# Panel (salt okunur): kartlar, geçiş listesi, "neden bu model?"
+# ---------------------------------------------------------------------------
+# Kart durumu planın tablosundan gelir ve ASLA yalnız renkle anlatılmaz: her
+# durumun metni var, renk (`ton`) yalnız destekler.
+YENIDEN_DENENEBILIR = "yeniden_denenebilir"
+GOZLENMEDI = "gozlenmedi"
+BASARILI = "basarili"
+
+DURUM = {
+    GOZLENMEDI: ("Henüz gözlenmedi", "notr"),
+    BASARILI: ("Son istek başarılı", "iyi"),
+    KOTA_DAKIKALIK: ("Dakikalık kota", "bekle"),
+    KOTA_GUNLUK: ("Günlük kota", "bekle"),
+    KOTA_BELIRSIZ: ("Kota türü belirsiz", "bekle"),
+    YENIDEN_DENENEBILIR: ("Yeniden denenebilir", "notr"),
+    GECICI: ("Geçici hata", "uyari"),
+    ERISIM: ("Model erişilemiyor", "hata"),
+    ANAHTAR: ("Anahtar/izin hatası", "hata"),
+    BOS: ("Son yanıt boş/engellenmiş", "notr"),
+    DIGER: ("Beklenmeyen hata", "hata"),
+}
+
+AMAC = {
+    "okuma": "okuma",
+    "prefetch": "ön yükleme",
+    "toplu": "toplu çeviri",
+    "yeniden_ceviri": "yeniden çeviri",
+    "webden_ekle": "web'den ekleme",
+    "sozluk_onerisi": "sözlük önerisi",
+    "diger": "diğer",
+}
+
+# Türkiye 2016'dan beri kalıcı UTC+3: sabit ofset TAM doğrudur ve Windows'ta
+# `tzdata` olmadan da çalışır.
+_TSI = timezone(timedelta(hours=3))
+
+
+def tsi(ts: float | None, bicim: str = "%d.%m %H:%M") -> str:
+    if not ts:
+        return "-"
+    return datetime.fromtimestamp(ts, _TSI).strftime(bicim)
+
+
+def kart_durumu(son: dict | None, soguma_bitis: float | None, simdi: float) -> str:
+    """Anahtar x model kartının durumu.
+
+    Soğuma bitince kota durumu "yeniden denenebilir"e döner, "başarılı"ya DEĞİL:
+    başarılı bir istek olmadan anahtar çalışıyor sayılmaz. Geçici hata son
+    gözlemdir, kalıcı bir etiket değil.
+    """
+    if not son or not son.get("sonuc"):
+        return GOZLENMEDI
+    sonuc = son["sonuc"]
+    if sonuc in KOTA_SINIFLARI:
+        return sonuc if soguma_bitis and soguma_bitis > simdi else YENIDEN_DENENEBILIR
+    if sonuc == BASARI:
+        return BASARILI
+    if sonuc in (GECICI, BAGLANTI):
+        return GECICI
+    return sonuc if sonuc in DURUM else DIGER
+
+
+def panel_verisi(
+    kimlikler: list[str],
+    zincir: tuple[str, ...] | list[str],
+    sogumalar: dict[tuple[str, str], float],
+    simdi: float | None = None,
+) -> dict:
+    """`GET /api/settings/api-status` gövdesi. Google'a istek ATMAZ.
+
+    ``kimlikler`` bugünkü `.env` sırasıyla anahtar kimlikleri; arayüze yalnız
+    "Anahtar N" etiketi gider. ``sogumalar`` çeviri yolunun KENDİ bellek
+    soğumasıdır (`translate.aktif_soguma_bitisleri`): panel ile çeviri yolu
+    aynı kaynağa bakar, ikinci bir kural doğmaz.
+    """
+    simdi = time.time() if simdi is None else simdi
+    gun = pasifik_gunu(simdi)
+    son = {(d["anahtar"], d["model"]): d for d in son_durumlar()}
+    sayac = {(s["anahtar"], s["model"]): s for s in gunluk_sayaclar(gun)}
+    tercih = zincir[0] if zincir else None
+    kartlar = []
+    for i, kimlik in enumerate(kimlikler):
+        modeller = []
+        for model in zincir:
+            d = son.get((kimlik, model))
+            bitis = sogumalar.get((kimlik, model))
+            durum = kart_durumu(d, bitis, simdi)
+            etiket, ton = DURUM[durum]
+            s = sayac.get((kimlik, model)) or {}
+            d = d or {}
+            modeller.append({
+                "model": model,
+                "durum": durum,
+                "etiket": etiket,
+                "ton": ton,
+                "son_deneme": d.get("son_deneme"),
+                "son_basari": d.get("son_basari"),
+                "son_hata": d.get("son_hata"),
+                "hata_etiketi": ETIKET.get(d["hata_sinifi"]) if d.get("hata_sinifi") else None,
+                "http_kodu": d.get("http_kodu"),
+                "kota_turu": d.get("kota_turu"),
+                "kota_sinir": d.get("kota_sinir"),
+                "soguma_bitis": bitis if bitis and bitis > simdi else None,
+                "bugun": {k: s.get(k, 0) for k in ("deneme", "basari", "hata", "kota")},
+            })
+        kartlar.append({"etiket": f"Anahtar {i + 1}", "sira": i + 1, "modeller": modeller})
+    toplam = {
+        k: sum(s[k] for s in sayac.values() if s["model"] in zincir)
+        for k in ("deneme", "basari", "hata")
+    }
+    return {
+        "guncelleme": simdi,
+        "kayit_baslangici": kayit_baslangici(),
+        "gun": gun,
+        "sifirlama": sonraki_sifirlama(simdi),
+        "tercih": tercih,
+        "zincir": list(zincir),
+        "rotasyon": "Her istekte sonraki anahtar",
+        "anahtar_sayisi": len(kimlikler),
+        "sogumada": sum(1 for k in kimlikler if (sogumalar.get((k, tercih)) or 0) > simdi),
+        "bugun_toplam": toplam,
+        "anahtarlar": kartlar,
+    }
+
+
+def olaylari_disa_ver(
+    olaylar: list[dict], kimlikler: list[str], bolumler: dict[str, dict] | None = None
+) -> list[dict]:
+    """Olayları arayüze hazırla: anahtar KİMLİĞİ çıkar, yerine etiket girer.
+
+    Kimlik `.env`'de artık yoksa "çıkarılmış anahtar" denir: kullanımı yeni bir
+    anahtara taşımak, silinen anahtarın hatasını sağlam anahtara yazardı.
+    """
+    etiket = {k: f"Anahtar {i + 1}" for i, k in enumerate(kimlikler)}
+    bolumler = bolumler or {}
+    cikti = []
+    for o in olaylar:
+        ayrinti = o.get("ayrinti") if isinstance(o.get("ayrinti"), dict) else {}
+        denemeler = ayrinti.get("denemeler") or []
+        kimlik = o.get("anahtar")
+        if kimlik is None:
+            anahtar = None
+        else:
+            anahtar = etiket.get(kimlik, "Çıkarılmış anahtar")
+        url = o.get("url")
+        cikti.append({
+            "id": o["id"],
+            "zaman": o["zaman"],
+            "tur": o["tur"],
+            "amac": o.get("amac"),
+            "amac_etiketi": AMAC.get(o.get("amac") or "diger", o.get("amac")),
+            "asama": o.get("asama"),
+            "url": url,
+            "bolum": bolumler.get(url) if url else None,
+            "anahtar": anahtar,
+            "model": o.get("model"),
+            "hedef": o.get("hedef"),
+            "sonuc": o.get("sonuc"),
+            "sonuc_etiketi": ETIKET.get(o["sonuc"]) if o.get("sonuc") else None,
+            "http_kodu": o.get("http_kodu"),
+            "sure_ms": o.get("sure_ms"),
+            "ozet": ayrinti.get("ozet"),
+            # O ANKİ sırayla (kayıt anındaki `.env` sırası): denemeler yalnız sıra taşır.
+            "denenen": sorted({d.get("sira") for d in denemeler if d.get("sira")}),
+        })
+    return cikti
+
+
+# Bir bölümün çevirisi ile o çeviriye ait geçiş kayıtlarını eşleyen pencere:
+# geçiş çeviri SIRASINDA yazılır, bölüm satırı çeviri BİTİNCE. Toplu çeviride
+# geçici hata beklemeleri (30 + 90 sn) ve geri-çekilme turları eklense de bir
+# bölümün çevirisi yarım saati aşmaz; daha eski kayıt ÖNCEKİ bir çeviriye aittir.
+NEDEN_PENCERESI_SN = 1800
+
+
+def _olay_ozeti(olay: dict) -> str:
+    """Geçişin insan okuyacak özeti. Kayıtta `ayrinti` (JSON) içinde durur;
+    dışa verilmiş olayda (`olaylari_disa_ver`) üst düzey `ozet` alanındadır."""
+    ayrinti = olay.get("ayrinti")
+    if isinstance(ayrinti, dict) and ayrinti.get("ozet"):
+        return ayrinti["ozet"]
+    return olay.get("ozet") or ""
+
+
+def _kisa_model(model: str | None) -> str:
+    return " + ".join(_kisa(m) for m in (model or "").split(" + ") if m) or "?"
+
+
+def model_nedeni(
+    bolum: dict | None,
+    tercih: str | None,
+    gecisler: list[dict],
+    baslangic: float | None,
+) -> dict:
+    """Künye rozetindeki "neden bu model?" satırının KARARI.
+
+    Karar ve metin burada kurulur: kural tek yerde durmalı. Dört durum:
+      * çeviriye ait geçiş kaydı var: nedenler listelenir;
+      * bölüm tercih edilen TEK modelle çevrilmiş: söylenecek bir şey yok;
+      * kayıt başlamadan önce çevrilmiş: "geçmiş neden kaydedilmemiş";
+      * kayıttan sonra çevrilmiş ve geçiş YOK: o sırada tercih edilen model buydu.
+    Eski bir olay GERİYE DÖNÜK uydurulmaz.
+    """
+    if not bolum:
+        return {"durum": "yok", "aciklama": "Bu bölüm önbellekte yok.", "nedenler": []}
+    model = bolum.get("model")
+    zaman = bolum.get("ceviri_zamani")
+    temel = {"bolum_modeli": model, "tercih": tercih, "ceviri_zamani": zaman}
+    if not model:
+        return {**temel, "durum": "bilinmiyor", "nedenler": [], "aciklama": (
+            "Bu bölümün hangi modelle çevrildiği kaydedilmemiş (eski bölüm)."
+        )}
+    ilgili = sorted(
+        (
+            g for g in gecisler
+            if g.get("tur") == "gecis" and zaman
+            and zaman - NEDEN_PENCERESI_SN <= g["zaman"] <= zaman + 60
+        ),
+        key=lambda g: g["zaman"],
+    )
+    if ilgili:
+        return {**temel, "durum": "gecis", "aciklama": (
+            "Bu bölüm çevrilirken tercih edilen modelden inildi:"
+        ), "nedenler": [f"{tsi(g['zaman'], '%H:%M')} · {_olay_ozeti(g)}" for g in ilgili]}
+    parcalar = [m for m in model.split(" + ") if m]
+    if tercih and parcalar == [tercih]:
+        return {**temel, "durum": "tercih", "nedenler": [], "aciklama": (
+            f"Bu bölüm tercih edilen modelle ({_kisa(tercih)}) çevrildi."
+        )}
+    ne_zaman = tsi(zaman, "%d.%m.%Y %H:%M") if zaman else "bilinmeyen bir tarihte"
+    if not baslangic or not zaman or zaman < baslangic:
+        kapsam = (
+            f"{tsi(baslangic, '%d.%m.%Y %H:%M')} tarihinden beri" if baslangic
+            else "yalnız kayıt başladıktan sonra"
+        )
+        return {**temel, "durum": "kayitsiz", "nedenler": [], "aciklama": (
+            f"Bu bölüm daha önce ({ne_zaman}) {_kisa_model(model)} ile kaydedildi. "
+            f"Geçmiş neden kaydedilmemiş: model geçişleri {kapsam} tutuluyor."
+        )}
+    return {**temel, "durum": "onceki_secim", "nedenler": [], "aciklama": (
+        f"Bu bölüm daha önce ({ne_zaman}) {_kisa_model(model)} ile kaydedildi ve o "
+        "çeviride zincirden inilmedi, yani o sırada tercih edilen model buydu. Model "
+        "seçimi yalnız yeni çevrilen bölümlerde geçerli; Yeniden çevir ile güncel "
+        "seçimle çevrilir."
+    )}

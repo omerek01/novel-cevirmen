@@ -534,6 +534,23 @@ def _sogumalari_geri_yukle(kimlikler: list[str]) -> None:
             _ANAHTAR_SOGUMA[yer] = hedef
 
 
+def aktif_soguma_bitisleri(kimlikler: list[str]) -> dict[tuple[str, str], float]:
+    """API durum paneli için: ÇEVİRİ YOLUNUN kendi soğumaları, UTC epoch olarak.
+
+    Panel ayrı bir kaynağa (yalnız veritabanına) baksaydı iki yer ayrışabilirdi:
+    panel "soğumada" derken çeviri o anahtarı deniyor olurdu. Süreç yeni açıldıysa
+    ve henüz çeviri yapılmadıysa bellek boştur; önce kayıttan geri yüklenir
+    (Google'a istek atmaz).
+    """
+    _sogumalari_geri_yukle(kimlikler)
+    duvar, mono = time.time(), time.monotonic()
+    return {
+        (kimlikler[i], model): duvar + (bitis - mono)
+        for (i, model), bitis in list(_ANAHTAR_SOGUMA.items())
+        if bitis > mono and 0 <= i < len(kimlikler)
+    }
+
+
 # ---------------------------------------------------------------------------
 # ANAHTAR ROTASYONU — her istek SONRAKİ anahtardan başlar (2026-09-09)
 # ---------------------------------------------------------------------------
