@@ -320,6 +320,29 @@ def test_istekler_anahtarlar_arasinda_DONUSUMLU_dagitilir(monkeypatch):
     assert [len(c.models.cagrilar) for c in istemciler] == [1, 1, 1]
 
 
+def test_bes_anahtarin_yuz_hakki_bitmeden_yedek_modele_gecilmez(monkeypatch):
+    """Beş bağımsız 20 istek kotası önce seçilen modelde tamamen kullanılır."""
+    _api_hatasi_yakalansin(monkeypatch)
+    monkeypatch.setattr(translate, "pasifik_gece_yarisina_kalan", lambda: 3600)
+    birincil, yedek = "gemini-3.6-flash", "gemini-3.5-flash"
+    istemciler = [
+        _SahteClient(['{"translation": "ok"}'] * 20 + [_kota_hatasi(gunluk=True)])
+        for _ in range(5)
+    ]
+    fabrika = _fabrika(*istemciler)
+    for istek in range(100):
+        _, model = translate._generate_with_fallback(fabrika, (birincil, yedek), "p")
+        assert model == birincil
+        # Her beş istekte bütün anahtarlar aynı sayıda kullanılmış olmalı.
+        if (istek + 1) % 5 == 0:
+            assert [len(c.models.cagrilar) for c in istemciler] == [(istek + 1) // 5] * 5
+
+    _, model = translate._generate_with_fallback(fabrika, (birincil, yedek), "p")
+    assert model == yedek
+    assert all(c.models.cagrilar.count(birincil) == 21 for c in istemciler)
+    assert sum(c.models.cagrilar.count(yedek) for c in istemciler) == 1
+
+
 def test_rotasyon_soguyan_anahtari_yine_de_atlar(monkeypatch):
     """Rotasyon soğumanın YERİNE geçmez, onunla birlikte çalışır.
 
