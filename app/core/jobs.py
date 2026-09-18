@@ -12,7 +12,7 @@ import threading
 import time
 import uuid
 
-from . import cache, db, pipeline
+from . import api_durum, cache, db, pipeline
 from .fetch import FetchError
 from .translate import TranslateError
 
@@ -441,7 +441,8 @@ def _run_bulk(job_id: str, api_key: str | None) -> None:
             try:
                 # background=True: çekim düşük öncelikli (okuyucu kapıda öne
                 # geçer) ve kitabın "kaldığın yer" konumu ilerletilmez.
-                data = pipeline.get_or_translate(url, api_key, background=True)
+                with api_durum.islem("toplu", url):
+                    data = pipeline.get_or_translate(url, api_key, background=True)
             except TranslateError as exc:
                 deneme += 1
                 if deneme >= BULK_GECICI_DENEME:
@@ -591,7 +592,10 @@ def _run_retranslate(job_id: str, api_key: str | None) -> None:
         deneme = 0
         while True:
             try:
-                data = pipeline.get_or_translate(url, api_key, refresh=True, background=True)
+                with api_durum.islem("yeniden_ceviri", url):
+                    data = pipeline.get_or_translate(
+                        url, api_key, refresh=True, background=True
+                    )
             except TranslateError as exc:
                 deneme += 1
                 if deneme >= BULK_GECICI_DENEME:

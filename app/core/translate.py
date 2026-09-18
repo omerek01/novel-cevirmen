@@ -28,7 +28,7 @@ from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
-from . import kullanim
+from . import api_durum, kullanim
 from . import settings as _ayarlar
 from .glossary import fold_term
 
@@ -391,22 +391,77 @@ def gunluk_kota_mi(hata: Exception) -> bool:
         quotaId: GenerateRequestsPerDayPerProjectPerModel-FreeTier
         quotaValue: 20
     """
+    return kota_ayrintisi(hata)["tur"] == "gunluk"
+
+
+def _hata_ayrintilari(hata: Exception) -> list[dict]:
     govde = _hata_govdesi(hata)
     err = govde.get("error", govde) if isinstance(govde, dict) else {}
     if not isinstance(err, dict):
+        return []
+    return [a for a in (err.get("details") or []) if isinstance(a, dict)]
+
+
+def kota_ayrintisi(hata: Exception) -> dict:
+    """429 gövdesinin YAPILANDIRILMIŞ kısmı: tür, sınır, kota kimliği, bekleme.
+
+    ``tur``: "gunluk" (quotaId'de PerDay) · "dakikalik" (PerMinute) · None (gövde
+    okunamadı ya da ikisi de yok). Üçüncü durum AYRI tutulur: çeviri yolu onu
+    dakikalık sayar (bir dakika erken denemek ucuzdur), ama API durum paneli
+    "belirsiz" demeli — tahmini gözlem gibi sunmak, 2026-09-18'de tam olarak
+    ayıklamaya çalıştığımız belirsizliği yeniden üretirdi.
+    Ham gövde SAKLANMAZ; yalnız bu alanlar kayda girer.
+    """
+    sonuc: dict = {"tur": None, "sinir": None, "kimlik": None, "yeniden_sn": None}
+    ihlaller: list[dict] = []
+    for ayrinti in _hata_ayrintilari(hata):
+        tip = (ayrinti.get("@type") or "").split(".")[-1]
+        if tip == "QuotaFailure":
+            ihlaller += [i for i in ayrinti.get("violations") or [] if isinstance(i, dict)]
+        elif tip == "RetryInfo":
+            try:
+                sonuc["yeniden_sn"] = float(str(ayrinti.get("retryDelay") or "").rstrip("s"))
+            except ValueError:
+                pass
+
+    def _kimlik(ihlal: dict) -> str:
+        return ihlal.get("quotaId") or ihlal.get("quotaMetric") or ""
+
+    # Birden çok ihlal gelirse GÜNLÜK kazanır: açılma süresini o belirler.
+    secilen = (
+        next((i for i in ihlaller if "PerDay" in _kimlik(i)), None)
+        or next((i for i in ihlaller if "PerMinute" in _kimlik(i)), None)
+        or (ihlaller[0] if ihlaller else None)
+    )
+    if secilen is not None:
+        kimlik = _kimlik(secilen)
+        sonuc["kimlik"] = kimlik or None
+        if "PerDay" in kimlik:
+            sonuc["tur"] = "gunluk"
+        elif "PerMinute" in kimlik:
+            sonuc["tur"] = "dakikalik"
+        try:
+            sonuc["sinir"] = int(secilen.get("quotaValue"))
+        except (TypeError, ValueError):
+            pass
+    return sonuc
+
+
+def anahtar_reddi_mi(kod: int | None, hata: Exception) -> bool:
+    """Hata ANAHTARA mı bağlı (geçersiz/iptal/izinsiz)? Öyleyse sıradaki anahtar.
+
+    401/403 her zaman anahtara bağlıdır. 400 ise İKİ ayrı şeydir: Gemini geçersiz
+    anahtarı 400 INVALID_ARGUMENT + ``reason: API_KEY_INVALID`` ile bildirir, ama
+    gerçek bir istek hatası da (bozuk parametre) 400 döner ve o her anahtarda aynı
+    sonucu verir. Yalnız ilki anahtara bağlıdır.
+    """
+    if kod in (401, 403):
+        return True
+    if kod != 400:
         return False
-    for ayrinti in err.get("details") or []:
-        if not isinstance(ayrinti, dict):
-            continue
-        if (ayrinti.get("@type") or "").split(".")[-1] != "QuotaFailure":
-            continue
-        for ihlal in ayrinti.get("violations") or []:
-            if not isinstance(ihlal, dict):
-                continue
-            kimlik = ihlal.get("quotaId") or ihlal.get("quotaMetric") or ""
-            if "PerDay" in kimlik:
-                return True
-    return False
+    if any(a.get("reason") == "API_KEY_INVALID" for a in _hata_ayrintilari(hata)):
+        return True
+    return "API_KEY_INVALID" in str(hata) or "API key not valid" in str(hata)
 
 
 def pasifik_gece_yarisina_kalan() -> float:
@@ -451,6 +506,32 @@ def _sogut(indeks: int, model: str, sure: float | None = None) -> None:
 def anahtar_sogumalarini_temizle() -> None:
     """Soğuma hafızası modül düzeyinde ve SÜREÇ ÖMÜRLÜDÜR; testler sıfırlamalı."""
     _ANAHTAR_SOGUMA.clear()
+    _GERI_YUKLENEN.clear()
+
+
+# Soğuma YENİDEN BAŞLATMAYA dayanır (2026-09-18). Bellekteki soğuma monotonic saate
+# bağlı ve süreçle birlikte ölüyordu: günlük kotası dolan anahtar her restart'tan
+# sonra yeniden deneniyor, her model için bir boş 429 daha yiyordu. Bitiş kayıtta
+# UTC epoch olarak durur (`api_durum.api_son.soguma_bitis`) ve süreç o anahtar
+# listesini İLK kez gördüğünde monotonic saate çevrilerek geri yüklenir. Eşleme
+# anahtar KİMLİĞİYLE yapılır, sırayla değil: `.env` yeniden sıralanırsa soğuma yanlış
+# anahtara taşınmasın. Geçmiş bitişler aktif engel sayılmaz.
+_GERI_YUKLENEN: set[tuple[str, ...]] = set()
+
+
+def _sogumalari_geri_yukle(kimlikler: list[str]) -> None:
+    anahtar = tuple(kimlikler)
+    if not anahtar or anahtar in _GERI_YUKLENEN:
+        return
+    _GERI_YUKLENEN.add(anahtar)
+    duvar, mono = time.time(), time.monotonic()
+    for kimlik, model, bitis in api_durum.aktif_sogumalar(duvar):
+        if kimlik not in kimlikler:
+            continue  # anahtar .env'den çıkarılmış: kullanımı yeni anahtara TAŞINMAZ
+        yer = (kimlikler.index(kimlik), model)
+        hedef = mono + (bitis - duvar)
+        if _ANAHTAR_SOGUMA.get(yer, 0.0) < hedef:
+            _ANAHTAR_SOGUMA[yer] = hedef
 
 
 # ---------------------------------------------------------------------------
@@ -510,6 +591,9 @@ def _gemini_fabrikasi(api_key: str | None):
     """
     anahtarlar = gemini_anahtarlari(api_key)
     tutulan: dict[int, genai.Client] = {}
+    # Kayıt için kalıcı kimlikler (değer değil, özet) — bkz. `api_durum`.
+    kimlikler = [api_durum.anahtar_kimligi(a) for a in anahtarlar]
+    _sogumalari_geri_yukle(kimlikler)
 
     def fabrika(indeks: int = 0) -> genai.Client:
         if indeks >= len(anahtarlar):
@@ -519,7 +603,16 @@ def _gemini_fabrikasi(api_key: str | None):
         return tutulan[indeks]
 
     fabrika.anahtar_sayisi = len(anahtarlar)
+    fabrika.anahtar_kimlikleri = kimlikler
     return fabrika
+
+
+def _anahtar_kimligi(client_factory, indeks: int) -> str:
+    """Kayıttaki anahtar kimliği; kimlik taşımayan (test) fabrikada sıra adı."""
+    kimlikler = getattr(client_factory, "anahtar_kimlikleri", None)
+    if kimlikler and 0 <= indeks < len(kimlikler):
+        return kimlikler[indeks]
+    return f"sira{indeks + 1}"
 
 
 def motor_adi(model: str | None) -> str | None:
@@ -871,10 +964,13 @@ def translate_chapter(
     if aligned:
         kalinti = ingilizce_kalinti(tr_paras, en_paras, glossary)
         if kalinti:
-            kalinti = _kalintiyi_onar(
-                client_factory, models, tr_paras, en_paras, kalinti,
-                glossary, used_models, new_names, new_terms, kosullar,
-            )
+            # Onarım turu AYRI aşama olarak kaydedilir: "bölüm başına kaç istek"
+            # sorusu ancak böyle cevaplanır (onarım da kotadan düşer).
+            with api_durum.baglam(asama="kalinti_onarimi"):
+                kalinti = _kalintiyi_onar(
+                    client_factory, models, tr_paras, en_paras, kalinti,
+                    glossary, used_models, new_names, new_terms, kosullar,
+                )
         # SÖZLÜK ihlalini de onar. Tespit tek başına yetmiyordu: bayrak künyeye
         # yazılıp okuyucuda ⚠ çıkıyor ama çeviri kalıcı önbelleğe bozuk giriyor
         # ve önbellek isabeti bir daha çeviri tetiklemediği için kullanıcı o
@@ -883,10 +979,11 @@ def translate_chapter(
         # olabilir, önce ölçmek boşa bir istek attırırdı.
         ihlalli = sozluk_ihlali_paragraflari(glossary, tr_paras, en_paras, kosullar)
         if ihlalli:
-            _paragraflari_yeniden_cevir(
-                client_factory, models, tr_paras, en_paras, sorted(ihlalli),
-                glossary, used_models, new_names, new_terms, kosullar,
-            )
+            with api_durum.baglam(asama="sozluk_onarimi"):
+                _paragraflari_yeniden_cevir(
+                    client_factory, models, tr_paras, en_paras, sorted(ihlalli),
+                    glossary, used_models, new_names, new_terms, kosullar,
+                )
 
     new_terms = ayikla_terim_anahtarlari(new_terms, text)
     translation = "\n\n".join(tr_paras)
@@ -1980,6 +2077,11 @@ def _generate_with_fallback(
     Döner: ``(response, model)`` — FİİLEN çeviren modelin adı künyeye kadar taşınır.
     Yalnız `response` dönseydi zincirin hangi halkasının çevirdiği kaybolurdu; kalite
     şikâyetlerinde "bunu hangi model çevirdi" sorusu tahminle cevaplanıyordu.
+
+    Zincirin ilk halkası dışında bir modele inilirse (ya da zincir tükenirse) NEDENİ
+    kaydedilir (`api_durum.gecis_kaydet`): hangi anahtar hangi sonucu verdi. 2026-09-18'e
+    kadar bu bilgi hiçbir yerde yoktu ve "3.6 seçiliyken neden 3.5?" sorusu tahminle
+    cevaplanıyordu. İlk halka başarılıysa geçiş kaydı OLUŞMAZ.
     """
     # Ofset istek başına BİR kez alınır ve zincirdeki BÜTÜN modellere aynısı
     # uygulanır: aynı isteğin 3.6'da #2, 3.5'te #4'ten başlaması izi okunamaz
@@ -1999,43 +2101,79 @@ def _generate_with_fallback(
     # beklemeye iter, oysa beklemek bunu ASLA açmaz — gerçek vaka 2026-09-15:
     # 3.x halkalarının ikisi de 404 verirken kullanıcı "kotanın dolması imkânsız,
     # 5 anahtarım var" diye arıza aradı ve mesaj onu kota tarafına yönlendirdi.
+    # Reddedilen anahtar (401/403) aynı aileden: beklemek onu da açmaz.
     modelsiz = True
-    for model in models:
-        try:
-            return (
-                _generate_once_with_retry(
+    yok_goruldu = red_goruldu = False
+    with api_durum.cagri() as denemeler:
+        for model in models:
+            try:
+                yanit = _generate_once_with_retry(
                     client_factory, model, user, system, max_tokens, baslangic
-                ),
-                model,
-            )
-        except _Retryable as exc:
-            last_exc = exc
-            blocked = blocked or getattr(exc, "blocked", False)
-            if not getattr(exc, "anahtarsiz", False):
-                anahtarsiz = False
-            if not getattr(exc, "yok", False):
-                modelsiz = False
-            continue
+                )
+            except _Retryable as exc:
+                last_exc = exc
+                blocked = blocked or getattr(exc, "blocked", False)
+                if not getattr(exc, "anahtarsiz", False):
+                    anahtarsiz = False
+                if getattr(exc, "erisimsiz", False) or getattr(exc, "yok", False):
+                    yok_goruldu = yok_goruldu or getattr(exc, "yok", False)
+                    red_goruldu = red_goruldu or getattr(exc, "anahtar_red", False)
+                else:
+                    modelsiz = False
+                continue
+            if models and model != models[0]:
+                api_durum.gecis_kaydet(models[0], model, list(denemeler))
+            return yanit, model
+        hata = _zincir_hatasi(
+            models, anahtarsiz, modelsiz, blocked, yok_goruldu, red_goruldu, last_exc
+        )
+        if denemeler:
+            api_durum.gecis_kaydet(models[0], None, list(denemeler))
+    raise hata from last_exc
+
+
+def _zincir_hatasi(
+    models, anahtarsiz, modelsiz, blocked, yok_goruldu, red_goruldu, last_exc
+) -> TranslateError:
+    """Zincir tükendiğinde kullanıcıya gidecek DÜRÜST mesaj.
+
+    Her dal "kullanıcı bu mesaja uyarsa ne yapar" sorusuyla yazıldı: beklemek
+    yalnız GEÇİCİ arızada doğru cevaptır.
+    """
     if anahtarsiz and models and not blocked:
-        raise TranslateError(ANAHTAR_YOK_MESAJI) from last_exc
+        return TranslateError(ANAHTAR_YOK_MESAJI)
     if modelsiz and models and not blocked:
-        raise TranslateError(
+        if red_goruldu and not yok_goruldu:
+            return TranslateError(
+                "Anahtarların hiçbiri kabul edilmedi (HTTP 401/403 ya da geçersiz "
+                "anahtar). Beklemek bunu açmaz — .env'deki Gemini anahtarlarını "
+                "kontrol edin; hangisinin çalıştığını `scripts/kota_durum.py` yazar."
+            )
+        if red_goruldu:
+            return TranslateError(
+                "Zincirdeki modeller bu anahtarlarla kullanılamıyor: bazı anahtarlar "
+                "reddedildi (401/403), bazılarında model sunulmuyor (404): "
+                + ", ".join(models)
+                + ". Beklemek bunu açmaz; `scripts/kota_durum.py` anahtar-model "
+                "erişimini yazar."
+            )
+        return TranslateError(
             "Zincirdeki modellerin hiçbiri bu anahtarlarda sunulmuyor (HTTP 404): "
             + ", ".join(models)
             + ". Anahtarlar sağlam — beklemek bunu açmaz. Hangi anahtarın hangi "
             "modele eriştiğini `scripts/kota_durum.py` yazar; okuyucunun ayarlar "
             "panelinden erişilebilen bir model seçin."
-        ) from last_exc
+        )
     if blocked:
-        raise TranslateError(
+        return TranslateError(
             "Bu bölümün içeriği hiçbir model tarafından çevrilemedi (içerik filtresi); "
             "metin engellenmiş olabilir."
-        ) from last_exc
+        )
     detay = getattr(last_exc, "detay", "")
-    raise TranslateError(
+    return TranslateError(
         "Tüm modeller şu anda meşgul (geçici). Biraz sonra tekrar deneyin."
         + (f" Son hata — {detay}" if detay else "")
-    ) from last_exc
+    )
 
 
 def _generate_once_with_retry(
@@ -2051,23 +2189,22 @@ def _generate_once_with_retry(
     Döngü ``baslangic`` indeksinden başlar ve havuzu dolanır (rotasyon), ama
     her zaman TÜM anahtarları gezer — rotasyon sırayı kaydırır, kapsamı değil.
 
-    Anahtar döngüsü İKİ hata sınıfında döner, çünkü ikisinde de başka bir
+    Anahtar döngüsü DÖRT hata sınıfında döner, çünkü dördünde de başka bir
     anahtar İŞE YARAR:
       - 429 kota → başka anahtar (ayrı projedense) çalışır  → sıradaki anahtar,
         ve bu anahtar soğumaya alınır (kota kalıcıdır, tekrar denemek boşa gider)
       - 500/503/taşıma → ÖLÇÜLDÜ (2026-09-09): 503 tek bir anahtarda çıkarken
-        diğerleri AYNI ANDA açık dönüyor  → aynı anahtarda geri-çekilmeli tekrar,
-        sonra sıradaki anahtar. SOĞUTMA YOK: arıza geçici, anahtar sağlam.
+        diğerleri AYNI ANDA açık dönüyor  → sıradaki anahtar, havuz tükenirse
+        geri-çekilmeli tur tekrarı. SOĞUTMA YOK: arıza geçici, anahtar sağlam.
+      - 404 erişim → model erişimi PROJE başınadır (ölçüldü 2026-09-06)
+                                                          → sıradaki anahtar
+      - 401/403 anahtar reddi → yalnız O anahtar geçersiz  → sıradaki anahtar
     Kalan sınıflarda anahtar değiştirmek yalnız maliyeti ikiye katlar:
-      - 404 model yok → ad yanlış ya da katmanda kapalı; ikinci anahtar da aynı
-        cevabı verir                                              → sıradaki model
       - boş/engellenmiş → içerik filtresi deterministik            → sıradaki model
       - anahtar yok → hiçbir indekste anahtar yok                  → sıradaki model
 
-    Eski kural 503'ü de "sıradaki model" dalına koyuyordu ve o varsayım
-    ("arıza Google tarafında, anahtar fark etmez") ölçümle çürüdü: tek geçici
-    503, o modeldeki kalan bütün sağlam anahtarları iptal ediyordu. İki model
-    üst üste böyle atlanınca okuma zincirin dibine iniyordu.
+    Havuzun TAMAMI yalnız erişim/red verdiyse fırlatılan istisna ``erisimsiz``
+    taşır: zincir o zaman "meşgul" değil "erişim yok / anahtar reddedildi" der.
     """
     if _claude_modeli(model):
         # Claude'un TEK anahtari var. Gemini anahtar havuzu uzerinde donmek ayni
@@ -2091,6 +2228,10 @@ def _generate_once_with_retry(
     # Tur tekrarı YALNIZ geçici arızaya özgüdür: kota beklemekle açılmaz, orada
     # tekrar saf kayıp olur ve okumayı sebepsiz geciktirirdi.
     son: Exception | None = None
+    # Havuzda görülen sonuç sınıfları: yalnız erişim/red ise zincir "meşgul"
+    # DEMEMELİ. Tek bir kota/geçici/soğuma bile beklemenin işe yarayabileceğini
+    # gösterir.
+    siniflar: set[str] = set()
     delay = 2.0
     for tur in range(MAX_RETRIES):
         turda_gecici = False
@@ -2099,6 +2240,12 @@ def _generate_once_with_retry(
             if _sogumada(indeks, model):
                 # Bu anahtar bu modelde az önce 429 yedi; boşuna gitme. Sebep yine
                 # de TAŞINIR: zincir tükenirse mesaj "meşgul" değil "kota" demeli.
+                siniflar.add("soguma")
+                if tur == 0:
+                    # İstek ATILMADI: sayaca girmez, ama geçişin nedeni olabilir.
+                    api_durum.atlama_kaydet(
+                        _anahtar_kimligi(client_factory, indeks), indeks + 1, model
+                    )
                 if son is None:
                     son = _Retryable()
                     son.detay = f"{model}: anahtar #{indeks + 1} kota soğumasında"
@@ -2110,19 +2257,22 @@ def _generate_once_with_retry(
             except _Retryable as exc:
                 son = exc
                 if getattr(exc, "kota", False):
+                    siniflar.add("kota")
                     _sogut(indeks, model, getattr(exc, "kota_sn", None))
                     continue  # KOTA → sıradaki anahtar, model aynı kalır
                 if getattr(exc, "gecici", False):
                     # GEÇİCİ (500/503/taşıma) → sıradaki anahtar. SOĞUTMA YOK:
                     # soğuma kotaya özgüdür ve 503 alan anahtar ölçümde bir
                     # sonraki turda AÇIK dönüyor.
+                    siniflar.add("gecici")
                     turda_gecici = True
                     continue
-                if getattr(exc, "yok", False):
-                    # 404 → sıradaki ANAHTAR. Soğutma YOK (anahtar sağlam) ve
-                    # `turda_gecici` de İŞARETLENMEZ: erişim beklemekle açılmaz,
-                    # tur tekrarı burada saf kayıp olurdu. Havuz tükenirse `son`
-                    # `yok` bayrağını yukarı taşır ve zincir sıradaki MODELe iner.
+                if getattr(exc, "yok", False) or getattr(exc, "anahtar_red", False):
+                    # 404 / 401-403 → sıradaki ANAHTAR. Soğutma YOK (kota değil)
+                    # ve `turda_gecici` de İŞARETLENMEZ: erişim beklemekle açılmaz,
+                    # tur tekrarı burada saf kayıp olurdu. Havuz tükenirse zincir
+                    # sıradaki MODELe iner.
+                    siniflar.add("yok" if getattr(exc, "yok", False) else "red")
                     continue
                 raise  # engellenmiş / anahtarsız → sıradaki model
         if not turda_gecici:
@@ -2130,7 +2280,12 @@ def _generate_once_with_retry(
         if tur < MAX_RETRIES - 1:
             time.sleep(delay)
             delay *= 2
-    raise son or _Retryable()
+    son = son or _Retryable()
+    if siniflar and siniflar <= {"yok", "red"}:
+        son.erisimsiz = True
+        son.yok = "yok" in siniflar
+        son.anahtar_red = "red" in siniflar
+    raise son
 
 
 def _tek_anahtarla_uret(
@@ -2146,9 +2301,24 @@ def _tek_anahtarla_uret(
 
     ``tekrar_sayisi`` çağırandan gelir: anahtar havuzu varsa 1 (sıradaki anahtar
     zaten yeni bir deneme), tek anahtarlı kurulumda `MAX_RETRIES`.
+
+    Her GERÇEK Gemini çağrısı burada TEK kez kaydedilir (`api_durum.istek_kaydet`):
+    sonuç sınıfı, HTTP kodu, süre, token, kota ayrıntısı. Anahtarsızlık bir çağrı
+    değildir ve kaydedilmez. Claude'un kendi harcama göstergesi var (`kullanim`).
     """
+    kaydet = not _claude_modeli(model)
+    kimlik = _anahtar_kimligi(client_factory, indeks)
+
+    def _kayit(sonuc: str, bas: float, kod: int | None = None, **kw) -> None:
+        if kaydet:
+            api_durum.istek_kaydet(
+                kimlik, indeks + 1, model, sonuc, kod,
+                int((time.monotonic() - bas) * 1000), **kw,
+            )
+
     delay = 2.0
     for attempt in range(max(1, tekrar_sayisi)):
+        bas = time.monotonic()
         try:
             if _claude_modeli(model):
                 response = _claude_uret(model, user, system, max_tokens)
@@ -2166,6 +2336,7 @@ def _tek_anahtarla_uret(
                 atla = _Retryable()
                 atla.anahtarsiz = True
                 raise atla from exc
+            bas = time.monotonic()
             response = client.models.generate_content(
                 model=model,
                 contents=user,
@@ -2200,11 +2371,20 @@ def _tek_anahtarla_uret(
                     # mı); tek sabit süre günlük kotada anahtarı dakikada bir
                     # boşuna denetiyordu.
                     atla.kota_sn = _kota_soguma_suresi(exc)
+                    kota = kota_ayrintisi(exc)
+                    sinif = {
+                        "gunluk": api_durum.KOTA_GUNLUK,
+                        "dakikalik": api_durum.KOTA_DAKIKALIK,
+                    }.get(kota["tur"], api_durum.KOTA_BELIRSIZ)
+                    _kayit(sinif, bas, code, kota=kota, soguma_sn=atla.kota_sn)
+                else:
+                    _kayit(api_durum.ERISIM, bas, code)
                 # Sebep TAŞINIR: "tüm modeller meşgul" tek başına teşhis edilemez bir
                 # mesajdı ve yapılandırma hatasını geçici arıza gibi gösteriyordu.
                 atla.detay = f"{model} (anahtar #{indeks + 1}): {exc}"
                 raise atla from exc
             if code in RETRY_CODES:
+                _kayit(api_durum.GECICI, bas, code)
                 if attempt < tekrar_sayisi - 1:
                     time.sleep(delay)
                     delay *= 2
@@ -2216,6 +2396,22 @@ def _tek_anahtarla_uret(
                 atla.gecici = True
                 atla.detay = f"{model} (anahtar #{indeks + 1}): {exc}"
                 raise atla from exc
+            if kaydet and anahtar_reddi_mi(code, exc):
+                # ANAHTAR reddedildi (iptal/geçersiz/izinsiz) → sıradaki ANAHTAR
+                # (2026-09-18, kullanıcı kararı). Eskiden bu dal çeviriyi TÜMDEN
+                # öldürüyordu: rotasyon açıkken tek bir iptal edilmiş anahtar her
+                # beş bölümden birini çevrilemez kılardı, dört anahtar sağlamken.
+                # 404 dersinin aynısı — arıza ANAHTARA bağlı, modele değil.
+                # Soğutma YOK: kota değil. Tur tekrarı da YOK: beklemek açmaz.
+                # (Claude'da 401/403 `_claude_uret`te kurulum hatası sayılır.)
+                _kayit(api_durum.ANAHTAR, bas, code)
+                atla = _Retryable()
+                atla.anahtar_red = True
+                atla.detay = (
+                    f"{model} (anahtar #{indeks + 1}): anahtar reddedildi (HTTP {code})"
+                )
+                raise atla from exc
+            _kayit(api_durum.DIGER, bas, code)
             raise TranslateError(f"Çeviri hatası: {exc}") from exc
         except (_Retryable, TranslateError):
             raise  # kendi sinyalimiz (anahtar yok) — aşağıdaki dala düşmesin
@@ -2228,6 +2424,7 @@ def _tek_anahtarla_uret(
             # (geçici, anahtar fark etmez) → aynı muamele: geri-çekilmeli tekrar,
             # sonra sıradaki model. Tek motor kaldığından bu yolun dayanıklılığı
             # artık çevirinin TAMAMININ dayanıklılığıdır.
+            _kayit(api_durum.BAGLANTI, bas)
             if attempt < tekrar_sayisi - 1:
                 time.sleep(delay)
                 delay *= 2
@@ -2244,10 +2441,32 @@ def _tek_anahtarla_uret(
         except Exception:  # bazı engellenmiş yanıtlarda .text istisna fırlatır
             txt = ""
         if txt.strip():
+            giris, cikis = _token_sayilari(response)
+            _kayit(api_durum.BASARI, bas, 200, giris=giris, cikis=cikis)
             return response
+        _kayit(api_durum.BOS, bas, 200)
         exc = _Retryable()
         exc.blocked = True
         raise exc
+
+
+def _token_sayilari(response) -> tuple[int, int]:
+    """Gemini yanıtının (giriş, çıkış) tokenları; yoksa (0, 0).
+
+    Çıkışa düşünme tokenları da eklenir: kotadan ve TPM'den onlar da düşer.
+    """
+    meta = getattr(response, "usage_metadata", None)
+    if meta is None:
+        return 0, 0
+
+    def _sayi(ad: str) -> int:
+        deger = getattr(meta, ad, None)
+        return deger if isinstance(deger, int) else 0
+
+    return (
+        _sayi("prompt_token_count"),
+        _sayi("candidates_token_count") + _sayi("thoughts_token_count"),
+    )
 
 
 def _BOS_AYRISTIRMA() -> dict:

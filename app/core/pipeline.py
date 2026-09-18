@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 
-from . import budget, cache, glossary, library, synthetic
+from . import api_durum, budget, cache, glossary, library, synthetic
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
 # `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
@@ -267,9 +267,12 @@ def _fetch_translate_save(
             raise flight.exc
         return dict(flight.result)
     try:
-        flight.result = _do_fetch_translate_save(
-            url, api_key, background, flight.ticket, refetch
-        )
+        # URL bağlama burada girer: çeviriyi FİİLEN yapan uçuşu açandır, katılanlar
+        # istek atmaz. Amaç (okuma/prefetch/toplu) giriş noktasından gelir.
+        with api_durum.baglam(url=url):
+            flight.result = _do_fetch_translate_save(
+                url, api_key, background, flight.ticket, refetch
+            )
         return dict(flight.result)
     except BaseException as exc:
         # E-14: uçuş ölürse girdi silinir + hata bekleyenlere yayılır; sonraki
@@ -557,11 +560,12 @@ def fetch_into_book(
     kuyruga_ekleniyor = tail is None or no > (tail["chapter_no"] or 0)
     prev_url = (tail["url"] if tail else None) if kuyruga_ekleniyor else chapter.get("prev_url")
     book = library.get_book(target_slug)
-    result = translate_chapter(
-        chapter["text"], api_key=api_key, glossary=book_glossary,
-        prev_context=cache.prev_translation(target_slug, prev_url, no),
-        kosullar=book_kosullar,
-    )
+    with api_durum.baglam(url=url):
+        result = translate_chapter(
+            chapter["text"], api_key=api_key, glossary=book_glossary,
+            prev_context=cache.prev_translation(target_slug, prev_url, no),
+            kosullar=book_kosullar,
+        )
     book_title = (book and book.get("title")) or chapter["book_title"]
     eklenen = _sozluge_isle(target_slug, result, no)  # künyeye girecek, kayıttan ÖNCE
     payload = {

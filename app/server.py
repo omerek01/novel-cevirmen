@@ -38,7 +38,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import cache, epub_export, glossary, import_book, jobs, kullanim, library, media, pipeline, reading_log, settings, synthetic  # noqa: E402
+from core import api_durum, cache, epub_export, glossary, import_book, jobs, kullanim, library, media, pipeline, reading_log, settings, synthetic  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -109,10 +109,11 @@ def get_chapter(
     genellikle sözlüğü/üslubu değiştirmiş oluyor; İngilizce kaynak aynı kalıyor.
     """
     try:
-        return pipeline.get_or_translate(
-            url, API_KEY, refresh, want_source=source, advance_position=track,
-            refetch=refetch,
-        )
+        with api_durum.islem("yeniden_ceviri" if refresh else "okuma", url):
+            return pipeline.get_or_translate(
+                url, API_KEY, refresh, want_source=source, advance_position=track,
+                refetch=refetch,
+            )
     except MangaTranslating as exc:
         # Manga bölümü arka planda çevriliyor → sayfa henüz hazır değil. Okuyucu
         # "çevriliyor N/total" gösterip poll eder (hata değil, 200). no-store ŞART:
@@ -170,7 +171,9 @@ def prefetch_chapter(req: PrefetchRequest) -> dict:
 
     def _run() -> None:
         try:
-            pipeline.get_or_translate(url, API_KEY, background=True)
+            # Elle açılan iş parçacığı bağlamı KOPYALAMAZ; amaç burada kurulur.
+            with api_durum.islem("prefetch", url):
+                pipeline.get_or_translate(url, API_KEY, background=True)
         except Exception:
             pass  # prefetch en iyi çabadır; okuyucu bölümü açınca yeniden dener
         finally:
@@ -567,7 +570,8 @@ def fetch_next(slug: str, req: FetchNextRequest) -> dict:
     if library.get_book(canon) is None:
         raise HTTPException(status_code=404, detail="Kitap bulunamadı.")
     try:
-        payload = pipeline.fetch_into_book(url, canon, API_KEY, req.chapter_no)
+        with api_durum.islem("webden_ekle", url):
+            payload = pipeline.fetch_into_book(url, canon, API_KEY, req.chapter_no)
     except (CloudflareChallenge, FetchError, TranslateError) as exc:
         raise _pipeline_http_error(exc)
     return {"ok": True, "slug": canon, "url": url, "chapter_no": payload["chapter_no"]}
@@ -852,7 +856,8 @@ def suggest_book_glossary(slug: str, req: GlossarySuggestRequest) -> dict:
     yanlış bir KURAL yazılmış olurdu (model sözlüğü birebir uygular).
     """
     try:
-        return suggest_term(req.source, req.context or "", API_KEY)
+        with api_durum.islem("sozluk_onerisi"):
+            return suggest_term(req.source, req.context or "", API_KEY)
     except TranslateError as exc:
         raise _pipeline_http_error(exc) from exc
 
