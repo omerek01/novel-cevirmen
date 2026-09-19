@@ -116,6 +116,61 @@ def _fabrika(*istemciler):
     return fabrika
 
 
+def test_uzun_503_dalgasi_butcede_yedek_modele_gecer(monkeypatch):
+    """Beş anahtar x üç uzun tur yerine süre dolunca çalışan yedek denenir."""
+    _api_hatasi_yakalansin(monkeypatch)
+    saat = [0.0]
+    cagrilar = []
+    monkeypatch.setattr(translate.time, "monotonic", lambda: saat[0])
+
+    class Modeller:
+        def generate_content(self, **kw):
+            cagrilar.append(kw["model"])
+            if kw["model"] == "gemini-3.6-flash":
+                saat[0] += 30
+                raise _APIHatasi(503)
+            return type("Y", (), {"text": '{"translation": "yedek"}'})()
+
+    istemci = type("I", (), {"models": Modeller()})()
+    yanit, model = translate._generate_with_fallback(
+        _fabrika(*([istemci] * 5)),
+        ("gemini-3.6-flash", "gemini-3.5-flash"), "metin",
+    )
+    assert model == "gemini-3.5-flash"
+    assert "yedek" in yanit.text
+    assert cagrilar == ["gemini-3.6-flash"] * 2 + ["gemini-3.5-flash"]
+
+
+def test_butceyi_asan_basarili_yanit_atilmaz(monkeypatch):
+    """Bütçe yalnız yeni denemeleri sınırlar, gelen çeviriyi kaybettirmez."""
+    saat = [0.0]
+    monkeypatch.setattr(translate.time, "monotonic", lambda: saat[0])
+    istemci = _SahteClient()
+    uret = istemci.models.generate_content
+
+    def yavas(**kw):
+        saat[0] += 75
+        return uret(**kw)
+
+    monkeypatch.setattr(istemci.models, "generate_content", yavas)
+    _, model = translate._generate_with_fallback(
+        _fabrika(istemci), ("gemini-3.6-flash", "gemini-3.5-flash"), "metin",
+    )
+    assert model == "gemini-3.6-flash"
+    assert len(istemci.models.cagrilar) == 1
+
+
+def test_istemci_zaman_asimi_ve_tek_deneme(monkeypatch):
+    """Gerçek SDK yapılandırması sınırsız beklemeyi ve iç içe tekrarı önler."""
+    yakalanan = []
+    monkeypatch.setattr(translate.genai, "Client", lambda **kw: yakalanan.append(kw))
+    fabrika = translate._gemini_fabrikasi("sahte-anahtar")
+    fabrika(0)
+    secenek = yakalanan[0]["http_options"]
+    assert secenek.timeout == 90_000
+    assert secenek.retry_options.attempts == 1
+
+
 # ---------- zincir: GEMINI-TEK ----------
 
 def test_zincir_yalniz_gemini_modelleri():

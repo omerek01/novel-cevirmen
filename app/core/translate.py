@@ -616,7 +616,14 @@ def _gemini_fabrikasi(api_key: str | None):
         if indeks >= len(anahtarlar):
             raise TranslateError(ANAHTAR_YOK_MESAJI)
         if indeks not in tutulan:
-            tutulan[indeks] = genai.Client(api_key=anahtarlar[indeks])
+            tutulan[indeks] = genai.Client(
+                api_key=anahtarlar[indeks],
+                http_options=types.HttpOptions(
+                    timeout=GEMINI_ISTEK_ZAMAN_ASIMI_MS,
+                    # Tekrarı havuz yönetir; SDK içinde gizli tekrar yapılmasın.
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                ),
+            )
         return tutulan[indeks]
 
     fabrika.anahtar_sayisi = len(anahtarlar)
@@ -681,6 +688,11 @@ PREV_CHAPTER_CONTEXT_WORDS = 160
 RETRY_CODES = {500, 503}  # geçici sunucu hatası: aynı modelde tekrar dene
 FALLBACK_CODES = {404, 429}  # model yok / kota doldu: bekleme, sıradaki modele geç
 MAX_RETRIES = 3
+# Canlı kayıtta başarılı çeviriler 30–55 sn; 503 denemeleri ise 29 sn'ye
+# çıkıyor. Beş anahtar x üç tur, yedek modele geçmeden dakikalar harcatıyordu.
+# Devam eden üretimi kesmeyiz; bütçe dolunca YENİ bir deneme başlatmayız.
+GEMINI_ISTEK_ZAMAN_ASIMI_MS = 90_000
+MODEL_DENEME_BUTCESI_SN = 60.0
 # Sözlük bu boyutun altındaysa parçaya süzme yapılmadan tamamı gönderilir.
 GLOSSARY_FILTER_MIN = 40
 
@@ -2204,7 +2216,8 @@ def _generate_once_with_retry(
     """Tek modelde ANAHTARLARI SIRAYLA dener; hepsi tükenirse _Retryable.
 
     Döngü ``baslangic`` indeksinden başlar ve havuzu dolanır (rotasyon), ama
-    her zaman TÜM anahtarları gezer — rotasyon sırayı kaydırır, kapsamı değil.
+    süre bütçesi içinde tüm anahtarları gezer. Bütçe dolarsa yeni deneme
+    başlatmadan yedek modele geçer; devam eden başarılı yanıt korunur.
 
     Anahtar döngüsü DÖRT hata sınıfında döner, çünkü dördünde de başka bir
     anahtar İŞE YARAR:
@@ -2249,10 +2262,15 @@ def _generate_once_with_retry(
     # DEMEMELİ. Tek bir kota/geçici/soğuma bile beklemenin işe yarayabileceğini
     # gösterir.
     siniflar: set[str] = set()
+    son_tarih = time.monotonic() + MODEL_DENEME_BUTCESI_SN
     delay = 2.0
     for tur in range(MAX_RETRIES):
         turda_gecici = False
         for adim in range(sayi):
+            if son is not None and time.monotonic() >= son_tarih:
+                # Son hata sınıfını koru: yedek zincir ve gözlem kaydı gerçek
+                # nedeni (503/bağlantı/kota) görmeye devam etsin.
+                raise son
             indeks = (baslangic + adim) % sayi
             if _sogumada(indeks, model):
                 # Bu anahtar bu modelde az önce 429 yedi; boşuna gitme. Sebep yine
@@ -2295,6 +2313,8 @@ def _generate_once_with_retry(
         if not turda_gecici:
             break  # kota / anahtarsızlık: beklemek hiçbir şeyi değiştirmez
         if tur < MAX_RETRIES - 1:
+            if time.monotonic() + delay >= son_tarih:
+                break
             time.sleep(delay)
             delay *= 2
     son = son or _Retryable()
