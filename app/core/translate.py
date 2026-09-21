@@ -363,6 +363,13 @@ def gemini_anahtarlari(birincil: str | None = None) -> list[str]:
 # bayrağı, çalışan halkaları da kapatırdı.
 ANAHTAR_SOGUMA_SN = 60.0
 _ANAHTAR_SOGUMA: dict[tuple[int, str], float] = {}
+# Ardışık TÜKENİŞ sayacı, MODEL başına: doygunluk modele aittir (503 beş anahtarda
+# aynı anda çıkıyor), anahtara değil. Başarılı bir yanıt sayacı sıfırlar.
+_GECICI_SAYAC: dict[str, int] = {}
+# Soğumanın SEBEBİ, yalnız hata mesajı için. İki sebep ayırt edilmezse mesaj
+# "kota soğumasında" der ve kullanıcı arızayı kota tarafında arar — bu projede
+# yanlış teşhis eden mesajın bedeli bir kez ödendi (404 dalı, 2026-09-15).
+_SOGUMA_SEBEBI: dict[tuple[int, str], str] = {}
 
 
 def _hata_govdesi(hata: Exception) -> dict:
@@ -497,15 +504,42 @@ def _sogumada(indeks: int, model: str) -> bool:
     return _ANAHTAR_SOGUMA.get((indeks, model), 0.0) > time.monotonic()
 
 
-def _sogut(indeks: int, model: str, sure: float | None = None) -> None:
+def _sogut(
+    indeks: int, model: str, sure: float | None = None, sebep: str = "kota"
+) -> None:
     _ANAHTAR_SOGUMA[(indeks, model)] = time.monotonic() + (
         ANAHTAR_SOGUMA_SN if sure is None else sure
     )
+    _SOGUMA_SEBEBI[(indeks, model)] = sebep
+
+
+def _gecici_soguma_suresi(model: str) -> float:
+    """Ardışık tükeniş sayısına göre üstel süre; sayacı ARTIRIR (tükeniş başına bir kez)."""
+    sayi = _GECICI_SAYAC.get(model, 0) + 1
+    _GECICI_SAYAC[model] = sayi
+    return min(GECICI_SOGUMA_TABAN_SN * (2 ** (sayi - 1)), GECICI_SOGUMA_TAVAN_SN)
+
+
+def _gecici_sogut(indeksler: set[int], model: str) -> None:
+    """Model bu çağrıda HİÇ çeviremedi → 503 veren anahtarları o modelde soğut.
+
+    Soğutma tek bir 503'e değil, modelin TÜKENMESİNE bağlıdır: ölçüm (2026-09-09)
+    503'ün bir anahtarda çıkarken diğerlerinin AYNI ANDA açık dönebildiğini
+    gösterdi, orada soğutmak sağlam anahtarı sebepsiz kaybetmek olurdu. Havuz
+    çeviriyi tamamladıysa doygunluk yok demektir ve buraya hiç gelinmez.
+    """
+    if not indeksler:
+        return
+    sure = _gecici_soguma_suresi(model)
+    for indeks in indeksler:
+        _sogut(indeks, model, sure, sebep="gecici")
 
 
 def anahtar_sogumalarini_temizle() -> None:
     """Soğuma hafızası modül düzeyinde ve SÜREÇ ÖMÜRLÜDÜR; testler sıfırlamalı."""
     _ANAHTAR_SOGUMA.clear()
+    _GECICI_SAYAC.clear()
+    _SOGUMA_SEBEBI.clear()
     _GERI_YUKLENEN.clear()
 
 
@@ -693,6 +727,20 @@ MAX_RETRIES = 3
 # Devam eden üretimi kesmeyiz; bütçe dolunca YENİ bir deneme başlatmayız.
 GEMINI_ISTEK_ZAMAN_ASIMI_MS = 90_000
 MODEL_DENEME_BUTCESI_SN = 60.0
+# 503 SOĞUTMASI (2026-09-21, ölçüldü). 503'ün BEDAVA olduğu varsayılıyordu ve
+# doygun model ısrarla deneniyordu. Sunucu verisi tersini söyledi: `gemini-3.6-flash`
+# beş anahtarın BEŞİNDE de tam 20 denemede 429'a çarptı (ücretsiz günlük sınır
+# 20/proje/model) ve o denemelerin neredeyse tamamı 503'tü — gün boyu 103 deneme
+# harcandı, 2 bölüm çevrildi. Yani 503 dönen istek de günlük kotadan SAYILIYOR:
+# doygun model kendi kotasını yakıyor ve akşam toparladığında kullanılamıyor.
+#
+# Süre ÜSTEL artar, çünkü doygunluk saatlerce sürebiliyor ama ara ara açılıyor
+# (aynı gün 09:44-19:38 sürekli 503, arada 13:31'de bir başarı). Sabit kısa süre
+# kotayı yakar, sabit uzun süre toparlanma anını kaçırır; üstel artış ilk denemeyi
+# yakın tutar, ısrar eden doygunlukta aralığı açar. BAŞARIDA sayaç sıfırlanır —
+# tek bir kötü dalga günün kalanında modeli sebepsiz uzakta tutmamalı.
+GECICI_SOGUMA_TABAN_SN = 60.0
+GECICI_SOGUMA_TAVAN_SN = 900.0
 # Sözlük bu boyutun altındaysa parçaya süzme yapılmadan tamamı gönderilir.
 GLOSSARY_FILTER_MIN = 40
 
@@ -2262,6 +2310,10 @@ def _generate_once_with_retry(
     # DEMEMELİ. Tek bir kota/geçici/soğuma bile beklemenin işe yarayabileceğini
     # gösterir.
     siniflar: set[str] = set()
+    # Bu çağrıda 503/taşıma veren anahtarlar. Model HİÇ çeviremeden çıkılırsa
+    # (turlar ya da süre bütçesi tükenince) bunlar o modelde soğumaya alınır;
+    # 503 de günlük kotadan sayıldığı için ısrar etmek kotayı yakıyor.
+    gecici_indeksler: set[int] = set()
     son_tarih = time.monotonic() + MODEL_DENEME_BUTCESI_SN
     delay = 2.0
     for tur in range(MAX_RETRIES):
@@ -2270,6 +2322,7 @@ def _generate_once_with_retry(
             if son is not None and time.monotonic() >= son_tarih:
                 # Son hata sınıfını koru: yedek zincir ve gözlem kaydı gerçek
                 # nedeni (503/bağlantı/kota) görmeye devam etsin.
+                _gecici_sogut(gecici_indeksler, model)
                 raise son
             indeks = (baslangic + adim) % sayi
             if _sogumada(indeks, model):
@@ -2283,10 +2336,19 @@ def _generate_once_with_retry(
                     )
                 if son is None:
                     son = _Retryable()
-                    son.detay = f"{model}: anahtar #{indeks + 1} kota soğumasında"
+                    # Sebep AYIRT EDİLİR: "kota soğumasında" diyen bir mesaj,
+                    # yoğunluktan soğuyan anahtarda kullanıcıyı arızayı kota
+                    # tarafında aramaya iter (ölçülen vaka 2026-09-21).
+                    neden = (
+                        "yoğunluk" if _SOGUMA_SEBEBI.get((indeks, model)) == "gecici"
+                        else "kota"
+                    )
+                    son.detay = (
+                        f"{model}: anahtar #{indeks + 1} {neden} soğumasında"
+                    )
                 continue
             try:
-                return _tek_anahtarla_uret(
+                yanit = _tek_anahtarla_uret(
                     client_factory, indeks, model, user, system, max_tokens, 1
                 )
             except _Retryable as exc:
@@ -2301,6 +2363,7 @@ def _generate_once_with_retry(
                     # sonraki turda AÇIK dönüyor.
                     siniflar.add("gecici")
                     turda_gecici = True
+                    gecici_indeksler.add(indeks)
                     continue
                 if getattr(exc, "yok", False) or getattr(exc, "anahtar_red", False):
                     # 404 / 401-403 → sıradaki ANAHTAR. Soğutma YOK (kota değil)
@@ -2310,6 +2373,11 @@ def _generate_once_with_retry(
                     siniflar.add("yok" if getattr(exc, "yok", False) else "red")
                     continue
                 raise  # engellenmiş / anahtarsız → sıradaki model
+            else:
+                # Model çevirdi: geçmiş doygunluk cezası taşınmaz, sonraki
+                # tökezleme yine en kısa aralıkla denenir.
+                _GECICI_SAYAC.pop(model, None)
+                return yanit
         if not turda_gecici:
             break  # kota / anahtarsızlık: beklemek hiçbir şeyi değiştirmez
         if tur < MAX_RETRIES - 1:
@@ -2317,6 +2385,7 @@ def _generate_once_with_retry(
                 break
             time.sleep(delay)
             delay *= 2
+    _gecici_sogut(gecici_indeksler, model)
     son = son or _Retryable()
     if siniflar and siniflar <= {"yok", "red"}:
         son.erisimsiz = True

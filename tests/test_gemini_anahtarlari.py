@@ -630,10 +630,139 @@ def test_503_tum_anahtarlarda_cikarsa_alt_modele_inilir(monkeypatch):
     assert model == "gemini-3.5-flash"
 
 
-def test_503_anahtari_SOGUMAYA_ALMAZ(monkeypatch):
-    """Soğuma KOTAYA özgüdür. 503 geçici sunucu yüküdür ve ölçümde aynı anahtar
-    bir sonraki turda AÇIK dönüyor — soğutmak sağlam bir anahtarı 60 sn boyunca
-    sebepsiz kaybetmek olurdu."""
+def _soguma_kayitlari(monkeypatch):
+    """`_sogut` çağrılarını (indeks, model, süre, sebep) olarak yakalar; gerçeği de çağırır."""
+    kayit = []
+    gercek = translate._sogut
+
+    def sar(indeks, model, sure=None, sebep="kota"):
+        kayit.append((indeks, model, sure, sebep))
+        gercek(indeks, model, sure, sebep)
+
+    monkeypatch.setattr(translate, "_sogut", sar)
+    return kayit
+
+
+def test_gecici_TUKENINCE_model_sogumaya_alinir(monkeypatch):
+    """503 dönen istek de GÜNLÜK KOTADAN sayılır (ölçüldü 2026-09-21).
+
+    O güne kadar 503'ün bedava olduğu varsayılıyordu ve doygun model ısrarla
+    deneniyordu. Sunucu verisi tersini gösterdi: `gemini-3.6-flash` beş anahtarın
+    BEŞİNDE de tam 20 denemede 429'a çarptı (ücretsiz günlük sınır 20/proje/model)
+    ve o denemelerin neredeyse tamamı 503'tü — gün boyu 103 deneme harcandı, 2
+    bölüm çevrildi. Model akşam toparlasa bile kotası bittiği için kullanılamaz
+    hâle geliyordu. Zarar iki katlı: boşa geçen süre + geri gelmeyen kota.
+    """
+    _api_hatasi_yakalansin(monkeypatch)
+    kayit = _soguma_kayitlari(monkeypatch)
+    tuketen = [_APIHatasi(503)] * (translate.MAX_RETRIES + 1)
+    a1, a2 = _SahteClient(list(tuketen)), _SahteClient(list(tuketen))
+    with pytest.raises(translate.TranslateError):
+        translate._generate_with_fallback(_fabrika(a1, a2), ("gemini-3.6-flash",), "p")
+    assert translate._sogumada(0, "gemini-3.6-flash")
+    assert translate._sogumada(1, "gemini-3.6-flash")
+    assert {(i, m) for i, m, _s, _n in kayit} == {
+        (0, "gemini-3.6-flash"), (1, "gemini-3.6-flash")}
+    # Sebep AYIRT EDİLİR: mesaj "kota soğumasında" derse kullanıcı arızayı kota
+    # tarafında arar — oysa kota dolu değil, model yoğun.
+    assert {n for _i, _m, _s, n in kayit} == {"gecici"}
+
+
+def test_gecici_soguma_YALNIZ_o_modele_yazilir(monkeypatch):
+    """Doygunluk MODELE aittir. 3.6'da tükenen anahtar 3.5'te hâlâ çalışır —
+    tek bir "anahtar bitti" işareti ayakta duran halkaları da kapatırdı."""
+    _api_hatasi_yakalansin(monkeypatch)
+    tuketen = [_APIHatasi(503)] * (translate.MAX_RETRIES + 1)
+    tek = _SahteClient(tuketen + ['{"translation": "alt halka"}'])
+    _yanit, model = translate._generate_with_fallback(
+        _fabrika(tek), ("gemini-3.6-flash", "gemini-3.5-flash"), "p"
+    )
+    assert model == "gemini-3.5-flash"
+    assert translate._sogumada(0, "gemini-3.6-flash")
+    assert not translate._sogumada(0, "gemini-3.5-flash")
+
+
+def test_gecici_soguma_ARDISIK_tukeniste_uzar(monkeypatch):
+    """Doygunluk saatlerce sürebiliyor ama ara ara açılıyor (3.6, 2026-09-21:
+    09:44-19:38 arası sürekli 503, arada 13:31'de bir başarı). Sabit kısa süre
+    kotayı yakar, sabit uzun süre modelin toparladığı anı kaçırır. Üstel artış
+    ikisini de karşılar: ilk deneme yakındır, ısrar eden doygunlukta aralık açılır."""
+    _api_hatasi_yakalansin(monkeypatch)
+    kayit = _soguma_kayitlari(monkeypatch)
+    for _ in range(3):
+        translate._ANAHTAR_SOGUMA.clear()  # soğumayı sil, ARDIŞIKLIK sayacını koru
+        tek = _SahteClient([_APIHatasi(503)] * (translate.MAX_RETRIES + 1))
+        with pytest.raises(translate.TranslateError):
+            translate._generate_with_fallback(_fabrika(tek), ("gemini-3.6-flash",), "p")
+    assert [s for _i, _m, s, _n in kayit] == [
+        translate.GECICI_SOGUMA_TABAN_SN,
+        translate.GECICI_SOGUMA_TABAN_SN * 2,
+        translate.GECICI_SOGUMA_TABAN_SN * 4,
+    ]
+
+
+def test_gecici_soguma_BASARIDAN_sonra_tabana_doner(monkeypatch):
+    """Model toparladıysa geçmiş doygunluk cezası taşınmaz: sonraki tökezleme
+    yine en kısa aralıkla denenir. Yoksa tek bir kötü dalga, günün kalanında
+    modeli sebepsiz uzakta tutardı."""
+    _api_hatasi_yakalansin(monkeypatch)
+    kayit = _soguma_kayitlari(monkeypatch)
+    tuketen = [_APIHatasi(503)] * (translate.MAX_RETRIES + 1)
+    with pytest.raises(translate.TranslateError):
+        translate._generate_with_fallback(
+            _fabrika(_SahteClient(list(tuketen))), ("gemini-3.6-flash",), "p")
+    translate._ANAHTAR_SOGUMA.clear()
+    translate._generate_with_fallback(
+        _fabrika(_SahteClient(['{"a": 1}'])), ("gemini-3.6-flash",), "p")
+    translate._ANAHTAR_SOGUMA.clear()
+    with pytest.raises(translate.TranslateError):
+        translate._generate_with_fallback(
+            _fabrika(_SahteClient(list(tuketen))), ("gemini-3.6-flash",), "p")
+    assert [s for _i, _m, s, _n in kayit] == [translate.GECICI_SOGUMA_TABAN_SN] * 2
+
+
+def test_gecici_soguma_TAVANI_asmaz(monkeypatch):
+    """Üstel artış sınırsız olsaydı birkaç tükenişten sonra model gün boyu
+    kapanır ve toparlanması hiçbir zaman fark edilmezdi."""
+    _api_hatasi_yakalansin(monkeypatch)
+    kayit = _soguma_kayitlari(monkeypatch)
+    for _ in range(12):
+        translate._ANAHTAR_SOGUMA.clear()
+        tek = _SahteClient([_APIHatasi(503)] * (translate.MAX_RETRIES + 1))
+        with pytest.raises(translate.TranslateError):
+            translate._generate_with_fallback(_fabrika(tek), ("gemini-3.6-flash",), "p")
+    assert max(s for _i, _m, s, _n in kayit) == translate.GECICI_SOGUMA_TAVAN_SN
+
+
+def test_butce_dolunca_da_gecici_soguma_yazilir(monkeypatch):
+    """Süre bütçesi dolduğunda da model o an çeviremiyordur. Soğutma yalnız
+    turların tükenmesine bağlansaydı, uzun 503'lerde (deneme başına 29 sn)
+    bütçe ÖNCE dolar ve kota koruması hiç devreye girmezdi — ölçülen günde en
+    çok kota yakan yol tam olarak budur."""
+    _api_hatasi_yakalansin(monkeypatch)
+    kayit = _soguma_kayitlari(monkeypatch)
+    saat = [0.0]
+    monkeypatch.setattr(translate.time, "monotonic", lambda: saat[0])
+
+    class Modeller:
+        def generate_content(self, **kw):
+            if kw["model"] == "gemini-3.6-flash":
+                saat[0] += 30
+                raise _APIHatasi(503)
+            return type("Y", (), {"text": '{"translation": "yedek"}'})()
+
+    istemci = type("I", (), {"models": Modeller()})()
+    _yanit, model = translate._generate_with_fallback(
+        _fabrika(*([istemci] * 5)), ("gemini-3.6-flash", "gemini-3.5-flash"), "p")
+    assert model == "gemini-3.5-flash"
+    assert kayit and all(m == "gemini-3.6-flash" for _i, m, _s, _n in kayit)
+
+
+def test_503_BASKA_anahtar_calisiyorsa_SOGUTMAZ(monkeypatch):
+    """Soğutma modelin TÜKENMESİNE bağlıdır, tek bir 503'e değil. Ölçüm
+    (2026-09-09) 503'ün tek anahtarda çıkarken diğerlerinin AYNI ANDA açık
+    dönebildiğini gösterdi; orada soğutmak sağlam bir anahtarı sebepsiz
+    kaybetmek olurdu. Havuz çeviriyi tamamladıysa doygunluk yok demektir."""
     _api_hatasi_yakalansin(monkeypatch)
     birinci = _SahteClient([_APIHatasi(503)] * translate.MAX_RETRIES)
     ikinci = _SahteClient(['{"a": 1}'])
@@ -641,6 +770,7 @@ def test_503_anahtari_SOGUMAYA_ALMAZ(monkeypatch):
         _fabrika(birinci, ikinci), ("gemini-3.6-flash",), "p"
     )
     assert not translate._sogumada(0, "gemini-3.6-flash")
+    assert not translate._sogumada(1, "gemini-3.6-flash")
 
 
 def test_gecici_hatada_uyku_ANAHTAR_basina_DEGIL_TUR_basina(monkeypatch):

@@ -224,11 +224,33 @@ Daralan kapasitenin karşılığı anahtar tarafında ödendi (aşağıdaki iki 
 1. **Kota (429) → aynı MODELDE sıradaki ANAHTAR**, ve o anahtar soğumaya alınır. Model
    sabit kalır: kota bir kalite kusuru değildir, kaliteden ödün vermek için de sebep
    değildir.
-2. **Geçici arıza (500/503/taşıma) → İKİ KATMAN.** SOĞUTMA YOK — arıza geçici, anahtar
-   sağlam. İÇ katman havuzu **uykusuz** dolaşır (sağlam anahtar ara); hiçbiri
-   çeviremediyse DIŞ katman geri-çekilerek **turu tekrarlar** (`MAX_RETRIES` tur,
-   2s→4s). Tur tekrarı yalnız geçici arızaya özgüdür: kota beklemekle açılmaz, orada
-   tekrar saf kayıptır (`turda_gecici` bayrağı bunu ayırır).
+2. **Geçici arıza (500/503/taşıma) → İKİ KATMAN.** İÇ katman havuzu **uykusuz**
+   dolaşır (sağlam anahtar ara); hiçbiri çeviremediyse DIŞ katman geri-çekilerek
+   **turu tekrarlar** (`MAX_RETRIES` tur, 2s→4s). Tur tekrarı yalnız geçici arızaya
+   özgüdür: kota beklemekle açılmaz, orada tekrar saf kayıptır (`turda_gecici`
+   bayrağı bunu ayırır).
+
+   **Model TÜKENİRSE soğumaya alınır** (2026-09-21, ölçümle EKLENDİ — eski kural
+   "503 soğutmaz" diyordu). Gerekçe: **503 dönen istek de GÜNLÜK KOTADAN sayılıyor.**
+   Ölçülen gün: `gemini-3.6-flash` beş anahtarın BEŞİNDE de tam 20 denemede 429'a
+   çarptı (ücretsiz sınır 20/proje/model) ve o denemelerin neredeyse tamamı 503'tü —
+   103 deneme harcandı, 2 bölüm çevrildi. Model akşam toparlasa bile kotası bittiği
+   için kullanılamaz hâle geliyordu. Zarar iki katlı: boşa geçen süre + geri gelmeyen
+   kota.
+
+   Soğutma tek bir 503'e DEĞİL, modelin TÜKENMESİNE bağlıdır (`_gecici_sogut`, hem
+   tur tükenişinde hem süre bütçesi dolduğunda): havuzdan biri çevirebildiyse
+   doygunluk yok demektir ve 2026-09-09 ölçümü 503'ün tek anahtarda çıkarken
+   diğerlerinin AYNI ANDA açık dönebildiğini göstermişti. Süre ÜSTEL artar
+   (`GECICI_SOGUMA_TABAN_SN` 60 sn → `GECICI_SOGUMA_TAVAN_SN` 900 sn), çünkü
+   doygunluk saatlerce sürüyor ama ara ara açılıyor (aynı gün 09:44-19:38 sürekli
+   503, arada 13:31'de bir başarı): sabit kısa süre kotayı yakar, sabit uzun süre
+   toparlanma anını kaçırır. **BAŞARIDA sayaç sıfırlanır** — tek bir kötü dalga
+   günün kalanında modeli sebepsiz uzakta tutmamalı. Sayaç MODEL başınadır
+   (doygunluk modele ait), soğuma ise kota soğumasıyla aynı (anahtar, model)
+   kabında durur. Soğumanın SEBEBİ (`_SOGUMA_SEBEBI`) hata mesajında ayırt edilir:
+   "kota soğumasında" diyen bir mesaj, yoğunluktan soğuyan anahtarda kullanıcıyı
+   arızayı kota tarafında aramaya iterdi.
 
    Denge iki ayrı yanlıştan sonra bulundu, ikisi de ölçüldü:
    * **Anahtar başına 3 deneme + uyku** → zincirin tamamı 503 verdiğinde 5 anahtar x
