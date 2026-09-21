@@ -530,6 +530,30 @@ bir İLK halka yapıyor: kazanç belirsiz, maliyet düzenli. Geri eklenecekse Ö
 ölçülmeli; `tests/test_ceviri_yolu.py` ve `tests/test_gemini_anahtarlari.py` kazara geri
 gelmelerini tutan tel tuzakları taşıyor.
 
+**PARÇA BOYUTUNU DÜŞÜRMEK 503'Ü ÇÖZMEZ** (2026-09-21, ölçüldü). 3.x ailesi
+doygunken "istek küçülürse model kabul eder mi" diye soruldu. `gemini-3.7-flash`
+ile gerçek prompt kullanılarak altı boyut ölçüldü: 152 · 442 · 808 · 1210 · 1631 ·
+2263 kelime (prompt 9.788 → 152.383 karakter). **ALTISI DA 503**, üstelik red
+süreleri 0-10 sn — model isteği içeriğine bakmadan reddediyor, kuyruğa bile
+almıyor. Ölçümden önceki hipotez tersiydi ve dayanağı yanıltıcı bir kıyastı:
+çıplak `contents="hi"` isteği (~5 token, sözlüksüz) geçiyordu, ondan "küçük istek
+geçiyor" sonucu çıkarılmıştı. Oysa GERÇEK prompt taşıyan en küçük istek bile
+eşiğin üstünde: sabit yük (sistem talimatı 8.098 karakter + sözlük) tek başına
+~8.800 giriş token'ı demek. **`MAX_WORDS_PER_CHUNK` düşürmek bu arızayı çözmez**,
+yalnız kaliteyi düşürür (aşağıdaki parçalama ölçümü) — bir daha önerilirse bu
+kayda bak.
+
+**YENİ ANAHTAR ALMAK DAYANIKLILIK KAZANDIRMAZ** (2026-09-21, ölçüldü). Havuzdaki
+beş anahtarın ikisi (1-2) hem 3.x hem 2.5 ailesini görüyor; **üçü (3-4-5) YALNIZ
+3.x görüyor** — `gemini-2.5-flash`, `gemini-2.5-pro` ve `gemini-2.5-flash-lite`
+üçünde de 404 ve sebep kalıcı: *"This model ... is no longer available"*, yani
+2.x artık YENİ projelere sunulmuyor. Model `/v1/models` LİSTESİNDE beş anahtarda
+da görünüyor, o liste genel katalogdur ve erişimi göstermez — "adı listeye bakarak
+seçme, YOKLA" kuralının bir kez daha doğrulandığı yer. Sonuç: bugün açılan bir
+Google Cloud projesinden alınan anahtar, 3.x doygunken HİÇBİR ŞEY çeviremez.
+Havuzu büyütmek kota genişletir ama aynı kaderi paylaşan halkalar eklediği için
+dayanıklılık eklemez; 2.5 erişimi olan ESKİ projeler bu yüzden değerlidir.
+
 **PARÇALAMA KALİTEYİ İYİLEŞTİRMİYOR** (ölçüldü 2026-09-02). "Bölümü 3'e bölsek model daha
 az atlar mı" hipotezi sınandı: aynı model, aynı bölüm, üç parça → oran 0,922'den 0,912'ye
 DÜŞTÜ, süre 51'den 76 sn'ye çıktı, token ~1,8 kat arttı. Sebep prompt anatomisinde:
