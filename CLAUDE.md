@@ -187,6 +187,26 @@ Claude yolunun üç özel kuralı var, üçü de ÖLÇÜLEREK bulundu:
   faturalanıyor ($5-10/M) ve çeviri mekanik bir iş. Sonnet 5'te `thinking` HİÇ
   verilmezse adaptif düşünme AÇIK gelir, yani kapatmak açıkça yapılmalı.
 
+**GEMİNİ YOLUNDA DÜŞÜNME KAPALI** (2026-09-22, ölçüldü; `GEMINI_DUSUNME_BUTCESI`).
+Claude yolunda düşünme başından beri kapalıydı, Gemini yolunda ise hiç verilmiyordu —
+yani varsayılan olarak AÇIK geliyordu. Ölçüm (`gemini-2.5-flash`, iki gerçek bölüm,
+tek değişken): **faturalanan çıkışın ~%75'i DÜŞÜNME** — bölüm başına ~10.800 düşünme
+tokenine karşılık yalnız ~3.500-3.900 token gerçek çeviri. Bölüm maliyeti $0,039 ->
+**$0,011** (2.5-flash fiyatıyla), bir bölümde süre 65 sn -> 19 sn.
+
+Kalite bedeli ÖLÇÜLDÜ ve dar: **hizalama, sözlük ihlali ve İngilizce kalıntı HİÇ
+değişmedi**, paragraf sayıları birebir korundu (77/77 ve 114/114). Yalnız uzunluk
+oranı düştü — 0,948 -> 0,924 ve 0,939 -> 0,923 — ve metne bakınca fark cümle ATLAMA
+değil, sıfat/fiil eleme. Bu, zincirden kalite gerekçesiyle elenen minimax'ın
+sistematik kısaltmasıyla AYNI ŞEY DEĞİLDİR. İki bölümde de aynı yönde çıktığı için
+etki gerçek ama küçük; akıcılık bu dört ölçütle ölçülmez, okunarak değerlendirilmeli.
+
+Sabit `None` yapılırsa istek eski hâline döner (ACİL ÇIKIŞ): `thinking_config`
+desteklemeyen bir model zincire girerse istek 400 alır ve çeviri durur — 400 ne
+`RETRY_CODES` ne `FALLBACK_CODES` içinde olduğu için zincir bunu KURTARMAZ. Ara değer
+de kabul edilir (ör. 2048): tümden kapatmak ile açık bırakmak arasındaki orta yol
+ölçülmek istenirse yalnız bu sabit değişir. Manga görsel yolu bu daldan geçmez.
+
 **MALİYET ÖLÇÜLDÜ** (`scratch/claude_maliyet.py`, gerçek prompt + gerçek bölümler;
 token sayımı Anthropic'in ücretsiz `count_tokens` ucuyla). Ortalama bölüm **8.284 giriş
 + 4.952 çıkış** token → Haiku 4.5 ~$0,033 · Sonnet 5 ~$0,066. **Maliyetin ~%75'i

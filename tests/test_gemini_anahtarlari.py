@@ -944,3 +944,57 @@ def test_ceviren_model_kunyeye_yazilir(monkeypatch):
     )
     assert s["engine"] == "gemini"
     assert s["model"] == "gemini-3.6-flash"  # 429 sonrası İKİNCİ ANAHTAR çevirdi
+
+
+def _config_yakala(istemci_sonuclari=('{"translation": "ok"}',)):
+    """`generate_content`e giden config'i yakalayan asgari istemci."""
+    kutu = {}
+
+    class _Modeller:
+        def generate_content(self, **kw):
+            kutu.update(kw)
+            return type("Y", (), {"text": istemci_sonuclari[0]})()
+
+    return type("I", (), {"models": _Modeller()})(), kutu
+
+
+def test_gemini_isteginde_DUSUNME_KAPALI_gider(monkeypatch):
+    """Düşünme çıktısı da ÇIKIŞ tokeni olarak faturalanır ve çeviri mekanik bir iş.
+
+    Ölçüldü (2026-09-22, gemini-2.5-flash, iki gerçek bölüm): faturalanan çıkışın
+    ~%75'i DÜŞÜNME — bölüm başına ~10.800 düşünme tokenine karşılık yalnız
+    ~3.500-3.900 token gerçek çeviri. Kapatınca bölüm maliyeti $0,039 -> $0,011.
+    Kalite bedeli ölçüldü ve dar: hizalama, sözlük ihlali ve İngilizce kalıntı
+    HİÇ değişmedi (paragraf sayıları birebir korundu), yalnız uzunluk oranı
+    0,948->0,924 ve 0,939->0,923 düştü — cümle atlama değil, sıfat/fiil eleme.
+
+    Claude yolu bu daldan GEÇMEZ (`_claude_uret` ayrı) ve orada düşünme zaten
+    kapalıydı; bu kural Gemini tarafını onunla hizalar.
+    """
+    istemci, kutu = _config_yakala()
+    translate._generate_with_fallback(_fabrika(istemci), ("gemini-3.6-flash",), "p")
+    cfg = kutu["config"]
+    assert cfg.thinking_config is not None
+    assert cfg.thinking_config.thinking_budget == translate.GEMINI_DUSUNME_BUTCESI == 0
+
+
+def test_dusunme_butcesi_None_ise_HIC_gonderilmez(monkeypatch):
+    """Acil çıkış: bütçe None yapılınca istek eski hâline döner.
+
+    Gerekçe, bu projede bir kez ödenmiş bir ders sınıfı: `thinking_config`
+    desteklemeyen bir model zincire girerse istek 400 alır ve çeviri durur.
+    Tek satırlık geri alma yolu olmasaydı düzeltme sürüm beklerdi.
+    """
+    monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", None)
+    istemci, kutu = _config_yakala()
+    translate._generate_with_fallback(_fabrika(istemci), ("gemini-3.6-flash",), "p")
+    assert kutu["config"].thinking_config is None
+
+
+def test_dusunme_butcesi_ayarlanabilir(monkeypatch):
+    """Tümden kapatmak ile açık bırakmak arasındaki ORTA YOL kapalı kalmasın:
+    sınırlı bütçe (ör. 2048) ölçülmek istenirse tek sabit değişir."""
+    monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", 2048)
+    istemci, kutu = _config_yakala()
+    translate._generate_with_fallback(_fabrika(istemci), ("gemini-3.6-flash",), "p")
+    assert kutu["config"].thinking_config.thinking_budget == 2048

@@ -716,6 +716,26 @@ MAX_WORDS_PER_CHUNK = 2800
 # JSON bozulur ve kurtarma ayrıştırıcısına düşeriz (hizalama kaybı). Türkçe çeviri
 # İngilizce kaynaktan ~1.4x token tutar; 2800 kelimelik parça için bolca pay bırakır.
 MAX_OUTPUT_TOKENS = 32768
+# DÜŞÜNME (thinking) KAPALI (2026-09-22, ölçüldü). Düşünme çıktısı da ÇIKIŞ
+# tokeni olarak faturalanır ve çeviri mekanik bir iştir. Ölçüm (gemini-2.5-flash,
+# iki gerçek bölüm, tek değişken): faturalanan çıkışın ~%75'i DÜŞÜNME — bölüm
+# başına ~10.800 düşünme tokenine karşılık yalnız ~3.500-3.900 token gerçek
+# çeviri. Kapatınca bölüm maliyeti $0,039 -> $0,011 (2.5-flash fiyatıyla), bir
+# bölümde süre 65 sn -> 19 sn.
+#
+# Kalite bedeli ÖLÇÜLDÜ ve dar: hizalama, sözlük ihlali ve İngilizce kalıntı HİÇ
+# değişmedi, paragraf sayıları birebir korundu (77/77 ve 114/114). Yalnız uzunluk
+# oranı düştü (0,948->0,924 ve 0,939->0,923) ve fark cümle ATLAMA değil, sıfat/fiil
+# eleme. Bu, zincirden elenen minimax'ın sistematik kısaltmasıyla AYNI ŞEY DEĞİL.
+#
+# `None` yapmak isteği eski hâline döndürür (acil çıkış): `thinking_config`
+# desteklemeyen bir model zincire girerse istek 400 alır ve çeviri durur.
+# Ara değer de kabul edilir (ör. 2048) — tümden kapatmak ile açık bırakmak
+# arasındaki orta yol ölçülmek istenirse bu sabit değişir.
+#
+# Claude yolu bu daldan GEÇMEZ (`_claude_uret` ayrı) ve orada düşünme zaten
+# kapalıydı; bu kural Gemini tarafını onunla hizalar.
+GEMINI_DUSUNME_BUTCESI: int | None = 0
 # Bölümler arası bağlam: önceki bölümün son kaç kelimelik Türkçesi yeni bölümün ilk
 # parçasına verilir (zamir/hitap/sahne sürekliliği bölüm sınırında kopmasın).
 PREV_CHAPTER_CONTEXT_WORDS = 160
@@ -2452,6 +2472,13 @@ def _tek_anahtarla_uret(
                     temperature=0.3,
                     max_output_tokens=max_tokens,
                     safety_settings=SAFETY_SETTINGS,
+                    thinking_config=(
+                        types.ThinkingConfig(
+                            thinking_budget=GEMINI_DUSUNME_BUTCESI
+                        )
+                        if GEMINI_DUSUNME_BUTCESI is not None
+                        else None
+                    ),
                 ),
             )
         except (genai_errors.APIError, _KodluHata) as exc:
