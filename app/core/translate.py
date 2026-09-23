@@ -1568,6 +1568,36 @@ def _ingilizce_korunan(source: str, target: str) -> bool:
     return fold_term(source) == fold_term(target or "")
 
 
+def _cogul_esnek_mi(
+    source: str, target: str, tekili_kayitli: frozenset[str] = frozenset()
+) -> bool:
+    """Bu kayıtta çoğul esnekliği açık mı? Desen de ön eleme de bu TEK karardan türer.
+
+    Kapalı olduğu iki durum: İngilizce korunan kayıt (`Nephis` -> `Nephi` bulaşması)
+    ve tekili sözlükte ayrıca kayıtlı çoğul (`_tekili_kayitli_cogullar`).
+    """
+    return not _ingilizce_korunan(source, target) and source not in tekili_kayitli
+
+
+def _on_eleme_anahtari(
+    source: str, target: str, tekili_kayitli: frozenset[str] = frozenset()
+) -> str:
+    """Ucuz ön elemenin katlanmış metinde arayacağı dizgi — desenle AYNI parçalardan.
+
+    Ön eleme yalnız hız içindir ve sonucu DEĞİŞTİRMEMELİ: desenin eşleştiği her
+    metinde bu dizgi de geçmeli. Esnek kayıtta desen tekili arar, dizgi de tekil
+    olmalı. Tam anahtarı ("tyrants") aramak esnekliği prompt tarafında sessizce
+    etkisiz bırakıyordu; ölçüm (2026-09-23, sunucu kopyası): 838 bölümün 115'inde
+    124 kayıt prompt'a girmesi gerekirken girmedi, denetim ise onları eşleşmiş
+    sayıyordu (`Warriors` 39 bölüm, `Trials` 24, `Return Scrolls` <- "Return Scroll").
+    """
+    if _cogul_esnek_mi(source, target, tekili_kayitli):
+        tekil = _cogul_tekil_parcalari(_term_parts(source))
+        if tekil:
+            return fold_term("".join(tekil))
+    return fold_term(source)
+
+
 def _terim_metinde(
     source: str,
     target: str,
@@ -1604,7 +1634,7 @@ def _terim_metinde(
     # Çoğul esnekliği YALNIZ Türkçe karşılıklı kayıtlarda: risk sınıfı İngilizce
     # korunan kişi adlarıdır (`Nephis` -> `Nephi`) ve orada yanlış eşleşme sıradan
     # bir sözcüğü İngilizce bıraktırır — pahalı yön.
-    desen = _term_regex(source, not korunan and source not in tekili_kayitli)
+    desen = _term_regex(source, _cogul_esnek_mi(source, target, tekili_kayitli))
     if not (korunan and not source.islower()):
         return bool(desen.search(text))
     return any(not m.group(0).islower() for m in desen.finditer(text))
@@ -1998,7 +2028,9 @@ def metinde_gecen_terimler(glossary: dict[str, str] | None, metin: str) -> list[
     tekili = _tekili_kayitli_cogullar(glossary)
     return sorted(
         s for s, t in glossary.items()
-        if s and fold_term(s) in katlanmis and _terim_metinde(s, t, metin, tekili)
+        if s
+        and _on_eleme_anahtari(s, t, tekili) in katlanmis
+        and _terim_metinde(s, t, metin, tekili)
     )
 
 
@@ -2018,7 +2050,10 @@ def _relevant_glossary(
     Ön eleme `fold_term` üzerinden yapılır (boşluk/tire/kesme atılmış hâl). Düz
     ``term.lower() in text.lower()`` kontrolü, metinde ``OreEmpire`` yazan bir adı
     ``Ore Empire`` kaydıyla eşleştiremiyordu: terim daha regex'e VARMADAN eleniyor,
-    sözlükte kayıtlı olmasına rağmen prompt'a girmiyordu.
+    sözlükte kayıtlı olmasına rağmen prompt'a girmiyordu. Aynı sınıf hata çoğul
+    esnekliğinde tekrarlandı (ön eleme "tyrants" ararken desen "Tyrant" arıyordu);
+    anahtar bu yüzden desenle aynı parçalardan gelir (`_on_eleme_anahtari`) ve ön
+    eleme SONUCU DEĞİŞTİRMEZ — `tests/test_glossary_terms.py` bunu tutar.
     """
     if not glossary or len(glossary) < GLOSSARY_FILTER_MIN:
         return dict(glossary or {})
@@ -2028,7 +2063,8 @@ def _relevant_glossary(
     out: dict[str, str] = {}
     for source, target in glossary.items():
         term = (source or "").strip()
-        if not term or fold_term(term) not in folded:  # ucuz ön eleme
+        # Ucuz ön eleme; anahtar desenle AYNI parçalardan (`_on_eleme_anahtari`).
+        if not term or _on_eleme_anahtari(term, target, tekili_kayitli) not in folded:
             continue
         if _terim_metinde(term, target, text, tekili_kayitli):
             out[source] = target

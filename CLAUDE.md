@@ -1100,6 +1100,17 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
   Koşulsuz çiftte aynı sızıntı iki kez sayılıyordu (`Nightmare` + `Nightmares`).
   Etki alanı shadow-slave'de 85 çift. `_terim_metinde`'yi çağıran HER yer kümeyi
   geçirir; `tests/test_glossary_terms.py` statik tel tuzağıyla tutar.
+  **Ucuz ön eleme sonucu DEĞİŞTİRMEZ** (2026-09-23, `_on_eleme_anahtari`): prompt
+  süzgeci ve "bu bölümde geçenler" listesi regex'ten önce `fold_term` ile ön eleme
+  yapar. O eleme TAM anahtarı ("tyrants") arıyordu, desen ise tekili ("Tyrant") —
+  yani yukarıdaki **14 → 59** kazancı yalnız DENETİMDE gerçekleşti, esneklik
+  girdiğinden (09-10) beri prompt'a hiç ulaşmadı. Ölçüm (sunucu kopyası): 838
+  bölümün 115'inde 124 kayıt prompt'a girmesi gerekirken girmedi (`Warriors` 39,
+  `Trials` 24, `Dolls` 20, `Return Scrolls` <- "Return Scroll"). Anahtar artık
+  desenle AYNI parçalardan türer; bir özellik testi iki kümenin eşitliğini tutar.
+  Çoğul karşılığın tekil cümleye çoğul dayatma riski ölçüldü: kayıt zaten
+  prompt'tayken yalnız-tekil 42 paragrafın 41'i tekil çevrilmiş, kalan biri de
+  çoğul özneli ("their trial, Aspirants" -> "Sınavlarını") ve doğru.
 - **Hiyerarşi basamakları küçük harfli de olsa terimdir** (`SYSTEM_INSTRUCTION`,
   HİYERARŞİ İSTİSNASI): `detected_terms` ÖLÇÜTÜ "metinde BÜYÜK HARFLE başlayarak
   adlandıran" diyordu; canavar rütbeleri kaynakta çoğunlukla küçük harfli geçiyor

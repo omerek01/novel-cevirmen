@@ -543,7 +543,8 @@ def test_bolumde_gecen_terimler_tekil_geciste_coguli_listelemez():
 
 
 def test_terim_metinde_her_cagrisi_tekil_kumesini_gecirir():
-    """Statik tel tuzağı: `_terim_metinde`'yi çağıran her yer tekil kümesini geçirmeli.
+    """Statik tel tuzağı: `_terim_metinde`'yi (ve ön eleme anahtarını) çağıran her
+    yer tekil kümesini geçirmeli.
 
     Biri unutursa o yol çoğul esnekliğini eskisi gibi uygular; prompt süzgeci,
     uyum denetimi ve künye aynı terim için farklı karar verir. Bu projede künye
@@ -555,7 +556,7 @@ def test_terim_metinde_her_cagrisi_tekil_kumesini_gecirir():
     eksik = []
     for yol in sorted(pathlib.Path("app").rglob("*.py")):
         kaynak = yol.read_text(encoding="utf-8")
-        for m in re.finditer(r"(?<!def )_terim_metinde\(", kaynak):
+        for m in re.finditer(r"(?<!def )(?:_terim_metinde|_on_eleme_anahtari)\(", kaynak):
             derinlik, i = 1, m.end()
             while derinlik and i < len(kaynak):
                 derinlik += {"(": 1, ")": -1}.get(kaynak[i], 0)
@@ -563,6 +564,74 @@ def test_terim_metinde_her_cagrisi_tekil_kumesini_gecirir():
             if "tekili" not in kaynak[m.end():i]:
                 eksik.append(f"{yol}:{kaynak.count(chr(10), 0, m.start()) + 1}")
     assert not eksik, f"tekil kümesini geçirmeyen çağrılar: {eksik}"
+
+
+# ---------- ucuz ön eleme sonucu DEĞİŞTİRMEZ ----------
+# `_relevant_glossary` ve `metinde_gecen_terimler` regex'e gitmeden önce
+# `fold_term(kaynak) in fold_term(metin)` diye eliyordu. Çoğul esnekliği girince
+# (2026-09-10) bu eleme TAM anahtarı ("tyrants") aradı, desen ise tekili ("Tyrant")
+# arıyor: esneklik prompt tarafında HİÇ çalışmadı, denetim ise eşleşme saydı.
+# Ölçüm (2026-09-23, sunucu kopyası): 838 bölümün 115'inde 124 kayıt prompt'a
+# girmesi gerekirken girmedi — `Warriors` 39 bölüm, `Trials` 24, `Dolls` 20,
+# `Return Scrolls` ("Return Scroll"), `Apostles` ("Apostle")...
+
+
+def test_on_eleme_yalniz_cogul_kaydi_tekil_geciste_tutar(monkeypatch):
+    monkeypatch.setattr(translate, "GLOSSARY_FILTER_MIN", 2)
+    terms = {"tyrants": "Tiranlar", "Nightmare": "Kabus"}
+    assert translate._relevant_glossary(terms, "The Tyrant roared.") == {
+        "tyrants": "Tiranlar"
+    }
+
+
+def test_prompt_tekil_geciste_yalniz_cogul_kaydi_tasir(monkeypatch):
+    """Asıl vaka (2026-08-23): kayıt prompt'a girmeyince model `the Tyrant`ı
+    serbestçe "hükümdar" çevirdi. Esneklik bunun için eklendi, ama prompt'a hiç
+    ulaşmadı."""
+    monkeypatch.setattr(translate, "GLOSSARY_FILTER_MIN", 2)
+    sozluk = {"tyrants": "Tiranlar", "Nightmare": "Kabus"}
+    user = translate._build_user_prompt(["The Tyrant roared."], sozluk, "")
+    assert "tyrants -> Tiranlar" in user
+    assert "Nightmare -> Kabus" not in user
+
+
+def test_bolumde_gecen_terimler_yalniz_cogul_kaydi_tekilde_listeler():
+    """Sözlük ekranındaki "bu bölümde geçenler" süzgeci de aynı ön elemeyi kullanıyor."""
+    assert translate.metinde_gecen_terimler(
+        {"Return Scrolls": "Dönüş Parşömenleri"}, "He tore a Return Scroll in half."
+    ) == ["Return Scrolls"]
+
+
+def test_on_eleme_sonucu_degistirmez(monkeypatch):
+    """Ön eleme yalnız HIZ içindir: denetimin ölçütünün (`_terim_metinde`) seçtiği
+    her kaydı geçirmeli. Ayrışırsa prompt'a girmeyen bir terim yine de ihlal
+    sayılır ve onarım turu da onu prompt'a sokamaz (aynı süzgeçten geçer)."""
+    monkeypatch.setattr(translate, "GLOSSARY_FILTER_MIN", 2)
+    sozluk = {
+        "tyrants": "Tiranlar",                   # yalnız çoğul: esnek
+        "Return Scrolls": "Dönüş Parşömenleri",  # çok kelimeli, yalnız çoğul
+        "Saint": "Aziz", "Saints": "Azizler",    # tekili kayıtlı çift: esneklik kapalı
+        "Nephis": "Nephis",                      # İngilizce korunan: esneklik kapalı
+        "Ore Empire": "Cevher İmparatorluğu",    # yazım varyantı
+        "Heaven’s Burial": "Cennetin Gömüsü",  # kıvrık kesme
+        "Os": "Oz",                              # kısa kök: esnetilmez
+    }
+    metinler = [
+        "The Tyrant roared at the tyrants.",
+        "He tore a Return Scroll in half.",
+        "She studied Saint's motionless figure.",
+        "Many Saints gathered below.",
+        "Nephi walked alone; Nephis followed.",
+        "The OreEmpire fell, and Heaven's Burial was drawn.",
+        "O ran away from Os.",
+    ]
+    tekili = translate._tekili_kayitli_cogullar(sozluk)
+    for metin in metinler:
+        beklenen = {
+            s for s, t in sozluk.items() if translate._terim_metinde(s, t, metin, tekili)
+        }
+        assert set(translate._relevant_glossary(sozluk, metin)) == beklenen, metin
+        assert set(translate.metinde_gecen_terimler(sozluk, metin)) == beklenen, metin
 
 
 # ---------- hiyerarşi basamağı küçük harfli de olsa terimdir ----------
