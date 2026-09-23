@@ -716,26 +716,32 @@ MAX_WORDS_PER_CHUNK = 2800
 # JSON bozulur ve kurtarma ayrıştırıcısına düşeriz (hizalama kaybı). Türkçe çeviri
 # İngilizce kaynaktan ~1.4x token tutar; 2800 kelimelik parça için bolca pay bırakır.
 MAX_OUTPUT_TOKENS = 32768
-# DÜŞÜNME (thinking) KAPALI (2026-09-22, ölçüldü). Düşünme çıktısı da ÇIKIŞ
-# tokeni olarak faturalanır ve çeviri mekanik bir iştir. Ölçüm (gemini-2.5-flash,
-# iki gerçek bölüm, tek değişken): faturalanan çıkışın ~%75'i DÜŞÜNME — bölüm
-# başına ~10.800 düşünme tokenine karşılık yalnız ~3.500-3.900 token gerçek
-# çeviri. Kapatınca bölüm maliyeti $0,039 -> $0,011 (2.5-flash fiyatıyla), bir
-# bölümde süre 65 sn -> 19 sn.
+# DÜŞÜNME (thinking) MODELİN VARSAYILANINDA (2026-09-23, sunucu verisiyle ölçüldü).
+# `None` = `thinking_config` HİÇ gönderilmez. 2026-09-22'de 0 yapılmıştı: ölçüm
+# (yalnız gemini-2.5-flash, iki bölüm) hizalama, sözlük ihlali ve kalıntıyı
+# değişmemiş, süreyi 65 -> 19 sn bulmuştu. Bir gün sonra iki arıza çıktı ve
+# ikisini de o ölçüm GÖREMEZDİ:
 #
-# Kalite bedeli ÖLÇÜLDÜ ve dar: hizalama, sözlük ihlali ve İngilizce kalıntı HİÇ
-# değişmedi, paragraf sayıları birebir korundu (77/77 ve 114/114). Yalnız uzunluk
-# oranı düştü (0,948->0,924 ve 0,939->0,923) ve fark cümle ATLAMA değil, sıfat/fiil
-# eleme. Bu, zincirden elenen minimax'ın sistematik kısaltmasıyla AYNI ŞEY DEĞİL.
+#   * KOŞULLU kayıt uygulanamıyor. `Saint -> Aziz [KOŞUL: yalnız rütbe; gölgenin
+#     ADI ise İngilizce kalır]` — 2.5-flash'ta gölgenin adı düşünme açıkken 44
+#     paragrafın 44'ünde korunmuş, kapalıyken 21'in 5'inde "Aziz" olmuş. Kontrollü
+#     A/B (bölüm 667, aynı prompt, tek değişken): bütçe 0 -> beş adın BEŞİ "Aziz",
+#     varsayılan -> beşi de "Saint". Uyum denetimi koşullu kayıtları BİLEREK
+#     ölçmüyor (`_denetlenebilir_terimler`), yani bu arıza hiçbir sayıya yansımadı.
+#   * 3.x ailesinde sözlük uyumu ÇÖKEBİLİYOR — ölçülen model 2.5'ti, zincirin başı
+#     3.6. Düşünme kapalıyken 3.6-flash bir bölümde 22 kayıtlı terimi İngilizce
+#     bıraktı ("Sanctuary'ye", "Transcendent'a"), 3.5-flash aynı bölümün iki
+#     koşusunda 5 ve 33 (rün bloğunu çevirmeden kopyaladı). Düşünme açıkken 3.6'nın
+#     209 bölümünde yalnız biri ihlalliydi. Arıza OLASILIKSAL (aynı bölümün
+#     kontrollü iki koşusu temiz çıktı), ama tek bozuk koşu kalıcı önbelleğe yazılır.
 #
-# `None` yapmak isteği eski hâline döndürür (acil çıkış): `thinking_config`
-# desteklemeyen bir model zincire girerse istek 400 alır ve çeviri durur.
-# Ara değer de kabul edilir (ör. 2048) — tümden kapatmak ile açık bırakmak
-# arasındaki orta yol ölçülmek istenirse bu sabit değişir.
+# Bedeli: bölüm başına ~40-60 sn (kapalıyken 12-18 sn) ve çıkışın ~%75'i düşünme
+# tokeni. Okumanın gövdesi prefetch'ten geldiği için süre çoğunlukla görünmez.
 #
-# Claude yolu bu daldan GEÇMEZ (`_claude_uret` ayrı) ve orada düşünme zaten
-# kapalıydı; bu kural Gemini tarafını onunla hizalar.
-GEMINI_DUSUNME_BUTCESI: int | None = 0
+# Sayı verilirse gönderilir (0 = kapalı). Ara değer (ör. 2048) ÖLÇÜLMEDEN
+# kullanılmaz: ölçüm KOŞULLU kaydı ve 3.x modelini İÇERMELİ — ilk kapatma tam
+# olarak bu iki boşluktan geçti. Claude yolu bu daldan geçmez (`_claude_uret`).
+GEMINI_DUSUNME_BUTCESI: int | None = None
 # Bölümler arası bağlam: önceki bölümün son kaç kelimelik Türkçesi yeni bölümün ilk
 # parçasına verilir (zamir/hitap/sahne sürekliliği bölüm sınırında kopmasın).
 PREV_CHAPTER_CONTEXT_WORDS = 160

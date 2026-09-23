@@ -958,36 +958,30 @@ def _config_yakala(istemci_sonuclari=('{"translation": "ok"}',)):
     return type("I", (), {"models": _Modeller()})(), kutu
 
 
-def test_gemini_isteginde_DUSUNME_KAPALI_gider(monkeypatch):
-    """Düşünme çıktısı da ÇIKIŞ tokeni olarak faturalanır ve çeviri mekanik bir iş.
+def test_gemini_isteginde_dusunme_KAPATILMAZ():
+    """Düşünme MODELİN VARSAYILANINDA kalır: `thinking_config` HİÇ gönderilmez.
 
-    Ölçüldü (2026-09-22, gemini-2.5-flash, iki gerçek bölüm): faturalanan çıkışın
-    ~%75'i DÜŞÜNME — bölüm başına ~10.800 düşünme tokenine karşılık yalnız
-    ~3.500-3.900 token gerçek çeviri. Kapatınca bölüm maliyeti $0,039 -> $0,011.
-    Kalite bedeli ölçüldü ve dar: hizalama, sözlük ihlali ve İngilizce kalıntı
-    HİÇ değişmedi (paragraf sayıları birebir korundu), yalnız uzunluk oranı
-    0,948->0,924 ve 0,939->0,923 düştü — cümle atlama değil, sıfat/fiil eleme.
+    2026-09-22'de kapatılmıştı (yalnız `gemini-2.5-flash`, iki bölüm ölçülerek:
+    hizalama, sözlük ihlali ve kalıntı değişmedi; süre 65 -> 19 sn). Ertesi gün
+    sunucu verisi o ölçümün GÖREMEDİĞİ iki arıza gösterdi ve karar geri alındı:
 
-    Claude yolu bu daldan GEÇMEZ (`_claude_uret` ayrı) ve orada düşünme zaten
-    kapalıydı; bu kural Gemini tarafını onunla hizalar.
+    * KOŞULLU sözlük kaydı uygulanamıyor. `Saint -> Aziz [KOŞUL: yalnız rütbe;
+      gölgenin ADI ise İngilizce kalır]`: gölgenin adı olan "Saint" 2.5-flash'ta
+      düşünme açıkken 44 paragrafın 44'ünde korunmuş, kapalıyken 21'in 5'inde
+      "Aziz"e çevrilmiş. Kontrollü A/B (bölüm 667, aynı prompt, tek değişken):
+      bütçe 0 -> beş adın BEŞİ "Aziz"; varsayılan -> beşi de "Saint". Eski ölçüm
+      bunu göremezdi: uyum denetimi koşullu kayıtları bilerek dışarıda bırakıyor.
+    * 3.x ailesinde sözlük uyumu ÇÖKEBİLİYOR (ölçülen model 2.5'ti, zincirin başı
+      3.6). Düşünme kapalıyken 3.6-flash bir bölümde 22 kayıtlı terimi İngilizce
+      bıraktı ("Sanctuary'ye", "Transcendent'a"); 3.5-flash aynı bölümün iki
+      koşusunda 5 ve 33 (rün bloğunu çevirmeden kopyaladı). Düşünme açıkken
+      3.6'nın 209 bölümünde yalnız biri ihlalliydi. Arıza olasılıksaldır (aynı
+      bölümün kontrollü iki koşusu temiz çıktı) ama tek bozuk koşu bile kalıcı
+      önbelleğe yazılır ve bir daha çeviri tetiklemez.
     """
     istemci, kutu = _config_yakala()
     translate._generate_with_fallback(_fabrika(istemci), ("gemini-3.6-flash",), "p")
-    cfg = kutu["config"]
-    assert cfg.thinking_config is not None
-    assert cfg.thinking_config.thinking_budget == translate.GEMINI_DUSUNME_BUTCESI == 0
-
-
-def test_dusunme_butcesi_None_ise_HIC_gonderilmez(monkeypatch):
-    """Acil çıkış: bütçe None yapılınca istek eski hâline döner.
-
-    Gerekçe, bu projede bir kez ödenmiş bir ders sınıfı: `thinking_config`
-    desteklemeyen bir model zincire girerse istek 400 alır ve çeviri durur.
-    Tek satırlık geri alma yolu olmasaydı düzeltme sürüm beklerdi.
-    """
-    monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", None)
-    istemci, kutu = _config_yakala()
-    translate._generate_with_fallback(_fabrika(istemci), ("gemini-3.6-flash",), "p")
+    assert translate.GEMINI_DUSUNME_BUTCESI is None
     assert kutu["config"].thinking_config is None
 
 
