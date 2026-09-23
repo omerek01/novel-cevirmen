@@ -151,8 +151,10 @@ def kosullu_denetlenmeyen(book_slug: str | None, kaynak: str | None) -> list[str
     if not kosullar:
         return []
     sozluk = glossary.ceviri_sozlugu(book_slug)
+    tekili = _translate_mod._tekili_kayitli_cogullar(sozluk)
     return sorted(
-        s for s in kosullar if _translate_mod._terim_metinde(s, sozluk.get(s, s), kaynak)
+        s for s in kosullar
+        if _translate_mod._terim_metinde(s, sozluk.get(s, s), kaynak, tekili)
     )
 
 

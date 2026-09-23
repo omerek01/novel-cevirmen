@@ -224,6 +224,72 @@ def test_kosullu_terim_icin_onarim_turu_atilmaz(monkeypatch):
     assert out["translation"].split("\n\n")[0] == "Saint elini kaldırdı."
 
 
+# --- Koşulsuz ÇOĞUL kayıt, koşullu TEKİLİN yerine geçmez ---------------------
+# Ölçülen arıza (2026-09-23, sunucu): `Saints -> Azizler` (koşulsuz, otomatik)
+# çoğul esnekliğiyle tekil "Saint"i de yakalıyordu. `Saints` bayrağı taşıyan 44
+# bölümün 44'ünde çeviride gerçek bir "Saints" YOKTU — hepsi koşula uyularak
+# DOĞRU korunmuş gölge adıydı. Her biri okuyucuda sahte ⚠ ve kotadan düşen
+# gereksiz bir onarım isteği demekti; onarım da adı "Aziz"e zorlayabilirdi.
+
+SOZLUK_CIFT = {"Saint": "Aziz", "Saints": "Azizler"}
+KAYNAK_AD = (
+    "She studied Saint's motionless figure.\n\n"
+    "Sunny watched the empty sky."
+)
+
+
+def test_korunan_tekil_ad_cogul_kaydin_ihlali_sayilmaz():
+    ihlal = translate.sozluk_ihlalleri(
+        SOZLUK_CIFT,
+        kaynak="She studied Saint's motionless figure.",
+        ceviri="Saint'in hareketsiz bedenini inceledi.",
+        kosullar=KOSUL,
+    )
+    assert ihlal == {}
+
+
+def test_gercek_cogul_hala_denetlenir():
+    """Düzeltme çoğul kaydı SUSTURMAZ: çoğul gerçekten İngilizce kaldıysa ihlaldir."""
+    ihlal = translate.sozluk_ihlalleri(
+        SOZLUK_CIFT,
+        kaynak="Many Saints gathered below.",
+        ceviri="Aşağıda birçok Saints toplandı.",
+        kosullar=KOSUL,
+    )
+    assert ihlal == {"Saints": "Azizler"}
+
+
+def test_tekil_sizinti_cift_kayitta_bir_kez_sayilir():
+    """Koşulsuz çiftte de tekil sızıntı ÇOĞUL kaydına yazılmaz (ölçülen vaka:
+    bölüm 654-655'te aynı sızıntı hem `Nightmare` hem `Nightmares` diye sayıldı)."""
+    ihlal = translate.sozluk_ihlalleri(
+        {"Nightmare": "Kabus", "Nightmares": "Kabuslar"},
+        kaynak="In this harrowing Nightmare, it felt like home.",
+        ceviri="Bu korkunç Nightmare içinde evinde gibiydi.",
+    )
+    assert ihlal == {"Nightmare": "Kabus"}
+
+
+def test_korunan_tekil_ad_onarim_turu_tetiklemez(monkeypatch):
+    """Uçtan uca: ad DOĞRU korunduysa ikinci istek ATILMAZ."""
+    cagrilar: list[str] = []
+    _kur(
+        monkeypatch,
+        [
+            "[[1]] Saint'in hareketsiz bedenini inceledi.\n\n"
+            "[[2]] Sunny boş gökyüzünü izledi."
+        ],
+        cagrilar,
+    )
+
+    out = translate.translate_chapter(
+        KAYNAK_AD, api_key="k", glossary=SOZLUK_CIFT, kosullar=KOSUL,
+    )
+
+    assert out["glossary_leaks"] == {}
+    assert len(cagrilar) == 1, "korunan ad sahte ihlalle onarım turu TETİKLEMEMELİ"
+
+
 # --- Geriye dönük araç da AYNI ölçütü kullanır -----------------------------
 
 def test_geriye_donuk_denetim_araci_kosullari_gecirir():

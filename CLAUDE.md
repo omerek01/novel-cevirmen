@@ -1090,6 +1090,16 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
   53 kaydın 17'sinin kökü metinde geçiyor ve 17'si de meşru tekil/çoğul çifti.
   **Sözlüğe terim TEKİL yazılmalı** — karşılık da tekil olmalı, yoksa tekil cümlede
   modele çoğul karşılık dayatılır.
+  **Tekili AYRICA kayıtlıysa çoğul esnekliği KAPALI** (2026-09-23,
+  `_tekili_kayitli_cogullar`): tekil geçişin sahibi tekil kayıttır. Esneklik tekili
+  kayıtsız çoğul içindi; tekil de kayıtlıyken çoğul kayıt tekili yakalayınca
+  tekilin KOŞULUNU eziyordu. Ölçülen vaka: koşullu `Saint -> Aziz` yanında koşulsuz,
+  otomatik `Saints -> Azizler` — gölgenin adı geçen bölümlerde prompt'a koşulsuz
+  çoğul satırı giriyor, adı DOĞRU koruyan çeviri de sahte `Saints` ihlali alıp
+  gereksiz bir onarım isteği tetikliyordu (saklı bayrakların 44'ünün 44'ü sahte).
+  Koşulsuz çiftte aynı sızıntı iki kez sayılıyordu (`Nightmare` + `Nightmares`).
+  Etki alanı shadow-slave'de 85 çift. `_terim_metinde`'yi çağıran HER yer kümeyi
+  geçirir; `tests/test_glossary_terms.py` statik tel tuzağıyla tutar.
 - **Hiyerarşi basamakları küçük harfli de olsa terimdir** (`SYSTEM_INSTRUCTION`,
   HİYERARŞİ İSTİSNASI): `detected_terms` ÖLÇÜTÜ "metinde BÜYÜK HARFLE başlayarak
   adlandıran" diyordu; canavar rütbeleri kaynakta çoğunlukla küçük harfli geçiyor

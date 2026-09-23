@@ -485,6 +485,86 @@ def test_terim_anahtari_suzgeci_cogula_toleransli():
     ) == {"Evil Beasts": "Kötü Canavarlar"}
 
 
+# ---------- tekili AYRICA kayıtlı çoğul kayıt tekili YAKALAMAZ ----------
+# Çoğul esnekliği, tekili sözlükte OLMAYAN çoğul kayıt içindir (`tyrants` vakası).
+# Tekil de kayıtlıysa tekil geçişin sahibi TEKİL kayıttır; çoğul kayıt onu da
+# yakalayınca tekilin KOŞULUNU ezer. Ölçülen arıza (2026-09-23, sunucu): koşullu
+# `Saint -> Aziz [gölgenin ADI ise İngilizce kalır]` yanında koşulsuz
+# `Saints -> Azizler` vardı. Gölgenin adı geçen her bölümde prompt'a koşulsuz
+# "Saints -> Azizler" satırı giriyordu ve adı DOĞRU koruyan çeviri 44 bölümün
+# 44'ünde sahte `Saints` ihlali alıp gereksiz bir onarım isteği tetikliyordu.
+# Etki alanı geniş: shadow-slave sözlüğünde tekili de kayıtlı 85 çoğul var.
+
+CIFT = {"Saint": "Aziz", "Saints": "Azizler"}
+
+
+def test_tekili_kayitli_cogullar_bulunur():
+    assert translate._tekili_kayitli_cogullar(CIFT) == {"Saints"}
+    # Yazım varyantı da tekil sayılır (karşılaştırma `fold_term` ile).
+    assert translate._tekili_kayitli_cogullar(
+        {"Sailor-Doll": "Denizci Bebek", "Sailor Dolls": "Denizci Bebekler"}
+    ) == {"Sailor Dolls"}
+    # Tekili kayıtlı DEĞİLSE esneklik yerinde kalır (`tyrants` vakası).
+    assert translate._tekili_kayitli_cogullar({"tyrants": "Tiranlar"}) == frozenset()
+
+
+def test_tekili_kayitli_cogul_kayit_tekili_yakalamaz():
+    tekili = translate._tekili_kayitli_cogullar(CIFT)
+    assert not translate._terim_metinde("Saints", "Azizler", "Saint raised her sword.", tekili)
+    assert not translate._terim_metinde("Saints", "Azizler", "She studied Saint's figure.", tekili)
+    # Gerçek çoğul geçiş çoğul kaydındır.
+    assert translate._terim_metinde("Saints", "Azizler", "Many Saints gathered.", tekili)
+
+
+# İyelik ŞART: `fold_term` kesme işaretini attığı için "Saint's" katlanınca
+# "saints" olur ve süzgecin ucuz ön elemesini geçer — üretimde çoğul satırını
+# prompt'a sokan tam olarak buydu (bölüm 667: "She studied Saint's motionless
+# figure"). "Saint raised..." ön elemede zaten düştüğü için ayırt edici değil.
+TEKIL_IYELIK = "She studied Saint's motionless figure."
+
+
+def test_tekil_gecen_metinde_cogul_satiri_prompta_girmez():
+    """Süzgeç ancak `GLOSSARY_FILTER_MIN` kayıttan sonra devreye girer."""
+    sozluk = {**CIFT, **{f"Dolgu{i}": f"Doldurma{i}" for i in range(40)}}
+    kosul = {"Saint": "yalnız rütbe; gölgenin ADI ise İngilizce kalır"}
+    user = translate._build_user_prompt([TEKIL_IYELIK], sozluk, "", kosul)
+    assert "Saint -> Aziz  [KOŞUL:" in user
+    assert "Saints -> Azizler" not in user
+    # Çoğul geçen metinde çoğul satırı yine girer.
+    user = translate._build_user_prompt(["Many Saints gathered."], sozluk, "", kosul)
+    assert "Saints -> Azizler" in user
+
+
+def test_bolumde_gecen_terimler_tekil_geciste_coguli_listelemez():
+    assert translate.metinde_gecen_terimler(CIFT, TEKIL_IYELIK) == ["Saint"]
+    assert translate.metinde_gecen_terimler(CIFT, "Many Saints gathered.") == [
+        "Saint", "Saints",
+    ]
+
+
+def test_terim_metinde_her_cagrisi_tekil_kumesini_gecirir():
+    """Statik tel tuzağı: `_terim_metinde`'yi çağıran her yer tekil kümesini geçirmeli.
+
+    Biri unutursa o yol çoğul esnekliğini eskisi gibi uygular; prompt süzgeci,
+    uyum denetimi ve künye aynı terim için farklı karar verir. Bu projede künye
+    alanları tam olarak böyle, bir yol güncellenmeyi unutunca ayrışmıştı.
+    """
+    import pathlib
+    import re
+
+    eksik = []
+    for yol in sorted(pathlib.Path("app").rglob("*.py")):
+        kaynak = yol.read_text(encoding="utf-8")
+        for m in re.finditer(r"(?<!def )_terim_metinde\(", kaynak):
+            derinlik, i = 1, m.end()
+            while derinlik and i < len(kaynak):
+                derinlik += {"(": 1, ")": -1}.get(kaynak[i], 0)
+                i += 1
+            if "tekili" not in kaynak[m.end():i]:
+                eksik.append(f"{yol}:{kaynak.count(chr(10), 0, m.start()) + 1}")
+    assert not eksik, f"tekil kümesini geçirmeyen çağrılar: {eksik}"
+
+
 # ---------- hiyerarşi basamağı küçük harfli de olsa terimdir ----------
 
 

@@ -1443,6 +1443,49 @@ def _term_parts(term: str) -> list[str]:
 MIN_COGUL_KOK = 3
 
 
+def _cogul_tekil_parcalari(parts: list[str]) -> list[str] | None:
+    """Çoğul esnekliğinin SOYDUĞU biçim: son parçanın sonundaki `s` atılmış hâli.
+
+    Esnetilemiyorsa None (`s` ile bitmiyor ya da kök `MIN_COGUL_KOK`'tan kısa).
+    `_term_regex` ile `_tekili_kayitli_cogullar` bu TEK tanımı kullanır: ayrışırlarsa
+    esnekliği kapatılan kayıt ile fiilen esnetilen biçim farklı şeyler olurdu.
+    """
+    if not parts or parts[-1][-1:].lower() != "s":
+        return None
+    kok = parts[-1][:-1]
+    if len(kok) < MIN_COGUL_KOK:
+        return None
+    return parts[:-1] + [kok]
+
+
+def _tekili_kayitli_cogullar(glossary: dict[str, str] | None) -> frozenset[str]:
+    """Tekil biçimi sözlükte AYRICA kayıtlı olan çoğul kayıtlar: esneklikleri KAPALI.
+
+    Çoğul esnekliği, tekili sözlükte OLMAYAN çoğul kayıt içindir (`tyrants` vakası).
+    Tekil de kayıtlıysa tekil geçişin sahibi TEKİL kayıttır; çoğul kayıt onu da
+    yakalarsa tekilin KOŞULUNU ezer. Ölçülen arıza (2026-09-23, sunucu): koşullu
+    `Saint -> Aziz [gölgenin ADI ise İngilizce kalır]` yanında koşulsuz, otomatik
+    eklenmiş `Saints -> Azizler`. Gölgenin adı geçen bölümlerde prompt'a koşulsuz
+    çoğul satırı giriyor, adı DOĞRU koruyan çeviri de sahte `Saints` ihlali alıp
+    gereksiz bir onarım isteği tetikliyordu: `Saints` bayrağı taşıyan 44 bölümün
+    44'ünde çeviride gerçek bir "Saints" YOKTU. Koşulsuz çiftte de aynı sızıntı iki
+    kez sayılıyordu (`Nightmare` + `Nightmares`). Etki alanı geniş: shadow-slave
+    sözlüğünde tekili de kayıtlı 85 çoğul var.
+
+    Sözlük başına BİR kez hesaplanıp `_terim_metinde`'ye geçirilir; kayıt başına
+    sözlüğün tamamını katlamak paragraf döngüsünde karesel olurdu.
+    """
+    if not glossary:
+        return frozenset()
+    anahtarlar = {fold_term(k) for k in glossary if k}
+    kume: set[str] = set()
+    for kaynak in glossary:
+        tekil = _cogul_tekil_parcalari(_term_parts(kaynak or ""))
+        if tekil and fold_term("".join(tekil)) in anahtarlar:
+            kume.add(kaynak)
+    return frozenset(kume)
+
+
 # Cumle ayirici: nokta/unlem/soru/uc-nokta + bosluk. Kisaltma ("Dr.") yanlis
 # bolebilir ama koken cumlesi bir KUNYE bilgisidir, bir cumle bir fazla ya da
 # eksik olmasi bilgiyi bozmaz — karmasik bir cumle ayirici bu is icin fazla.
@@ -1494,8 +1537,9 @@ def _term_regex(term: str, cogul_esnek: bool = False) -> re.Pattern[str]:
     ve **17'si de meşru tekil/çoğul çifti** (``Evil Beast``/``Evil Beasts``,
     ``Hell Tank``/``Hell Tanks``) — bu veride yanlış eşleşme yok.
 
-    Yine de VARSAYILAN KAPALI ve çağıran yalnız TÜRKÇE KARŞILIKLI kayıtlarda açar
-    (bkz. `_terim_metinde`): risk sınıfı İngilizce korunan KİŞİ adlarıdır (``Nephis``
+    Yine de VARSAYILAN KAPALI ve çağıran yalnız TÜRKÇE KARŞILIKLI ve tekili sözlükte
+    AYRICA kayıtlı olmayan kayıtlarda açar (bkz. `_terim_metinde`,
+    `_tekili_kayitli_cogullar`): risk sınıfı İngilizce korunan KİŞİ adlarıdır (``Nephis``
     -> ``Nephi``), ve orada yanlış eşleşmenin bedeli sıradan bir sözcüğü İngilizce
     bırakmaktır. Yalnız SON ``s`` düşürülür; ``es`` çoğulları (``Witches`` -> ``Witch``)
     kapsam dışıdır — fazla soymak gerçek bir kökü bozardı, eksik soymak yalnız
@@ -1504,10 +1548,9 @@ def _term_regex(term: str, cogul_esnek: bool = False) -> re.Pattern[str]:
     parts = _term_parts(term)
     if not parts:
         return re.compile(r"(?!)")  # hiçbir şeyle eşleşmeyen desen
-    if cogul_esnek and parts[-1][-1:].lower() == "s":
-        kok = parts[-1][:-1]
-        if len(kok) >= MIN_COGUL_KOK:
-            parts = parts[:-1] + [kok]  # kuyruktaki `s?` çoğulu geri getirir
+    if cogul_esnek:
+        # Kuyruktaki `s?` çoğulu geri getirir.
+        parts = _cogul_tekil_parcalari(parts) or parts
     head = r"\b" if parts[0][:1].isalnum() else ""
     tail = r"(?:['’]s|es|s)?\b" if parts[-1][-1:].isalnum() else ""
     core = _TERM_GLUE.join(re.escape(p) for p in parts)
@@ -1525,8 +1568,19 @@ def _ingilizce_korunan(source: str, target: str) -> bool:
     return fold_term(source) == fold_term(target or "")
 
 
-def _terim_metinde(source: str, target: str, text: str) -> bool:
+def _terim_metinde(
+    source: str,
+    target: str,
+    text: str,
+    tekili_kayitli: frozenset[str] = frozenset(),
+) -> bool:
     """Terim metinde geçiyor mu — İngilizce korunan adda KÜÇÜK HARFLİ eşleşme sayılmaz.
+
+    ``tekili_kayitli``: tekili sözlükte AYRICA kayıtlı çoğul kayıtlar
+    (`_tekili_kayitli_cogullar`). Onlarda çoğul esnekliği kapalıdır — tekil geçişin
+    sahibi tekil kayıttır. Sözlüğü dolaşan her çağıran bu kümeyi geçirmeli; prompt
+    süzgeci ile uyum denetimi ayrışırsa prompt'a giren bir terim denetimden kaçar
+    ya da tersine denetim prompt'ta olmayan bir kuralı arar.
 
     Sebep ölçüldü: `_term_regex` `IGNORECASE` arıyor ve İngilizce korunan tek
     kelimelik adların çoğu sıradan İngilizce kelime (`Dark`, `Blue`, `Sun`,
@@ -1550,7 +1604,7 @@ def _terim_metinde(source: str, target: str, text: str) -> bool:
     # Çoğul esnekliği YALNIZ Türkçe karşılıklı kayıtlarda: risk sınıfı İngilizce
     # korunan kişi adlarıdır (`Nephis` -> `Nephi`) ve orada yanlış eşleşme sıradan
     # bir sözcüğü İngilizce bıraktırır — pahalı yön.
-    desen = _term_regex(source, not korunan)
+    desen = _term_regex(source, not korunan and source not in tekili_kayitli)
     if not (korunan and not source.islower()):
         return bool(desen.search(text))
     return any(not m.group(0).islower() for m in desen.finditer(text))
@@ -1559,6 +1613,7 @@ def _terim_metinde(source: str, target: str, text: str) -> bool:
 def _denetlenebilir_terimler(
     glossary: dict[str, str] | None,
     kosullar: dict[str, str] | None,
+    tekili_kayitli: frozenset[str] = frozenset(),
 ):
     """İhlali ÖLÇÜLEBİLEN sözlük kayıtları (kaynak, karşılık) olarak akar.
 
@@ -1579,7 +1634,7 @@ def _denetlenebilir_terimler(
             continue
         if _ingilizce_korunan(source, target):
             continue
-        if _terim_metinde(source, target, target):
+        if _terim_metinde(source, target, target, tekili_kayitli):
             continue  # karşılık kaynağı içeriyor: ölçülemez, sahte ihlal üretme
         yield source, target
 
@@ -1598,9 +1653,10 @@ def sozluk_ihlali_paragraflari(
     """
     if not glossary or not tr_paras or not en_paras:
         return {}
+    tekili = _tekili_kayitli_cogullar(glossary)  # paragraf başına değil, bir kez
     out: dict[int, dict[str, str]] = {}
     for i, (tr, en) in enumerate(zip(tr_paras, en_paras)):
-        ihlal = sozluk_ihlalleri(glossary, en, tr, kosullar)
+        ihlal = sozluk_ihlalleri(glossary, en, tr, kosullar, tekili_kayitli=tekili)
         if ihlal:
             out[i] = ihlal
     return out
@@ -1611,6 +1667,7 @@ def sozluk_ihlalleri(
     kaynak: str | None,
     ceviri: str | None,
     kosullar: dict[str, str] | None = None,
+    tekili_kayitli: frozenset[str] | None = None,
 ) -> dict[str, str]:
     """Türkçe karşılığı kayıtlı olduğu hâlde çeviride İNGİLİZCE kalmış terimler.
 
@@ -1633,15 +1690,21 @@ def sozluk_ihlalleri(
       * KOŞULLU kayıtlar (`[KOŞUL: ...]`) — karşılık yalnız o bağlamda geçerli,
         koşulun sağlanıp sağlanmadığı deterministik olarak ölçülemez
 
+    Tekili sözlükte ayrıca kayıtlı ÇOĞUL kayıt tekil geçişi saymaz
+    (`_tekili_kayitli_cogullar`): koşula uyularak korunan tekil ad çoğul kaydın
+    sahte ihlali olurdu. ``tekili_kayitli`` verilmezse sözlükten hesaplanır.
+
     Döner: kaçan terimlerin {kaynak: karşılık} eşlemesi (boş = uyumlu).
     """
     if not glossary or not kaynak or not ceviri:
         return {}
+    if tekili_kayitli is None:
+        tekili_kayitli = _tekili_kayitli_cogullar(glossary)
     ihlal: dict[str, str] = {}
-    for source, target in _denetlenebilir_terimler(glossary, kosullar):
-        if not _terim_metinde(source, target, kaynak):
+    for source, target in _denetlenebilir_terimler(glossary, kosullar, tekili_kayitli):
+        if not _terim_metinde(source, target, kaynak, tekili_kayitli):
             continue
-        if _terim_metinde(source, target, ceviri):
+        if _terim_metinde(source, target, ceviri, tekili_kayitli):
             ihlal[source] = target
     return ihlal
 
@@ -1932,13 +1995,18 @@ def metinde_gecen_terimler(glossary: dict[str, str] | None, metin: str) -> list[
     if not glossary or not (metin or "").strip():
         return []
     katlanmis = fold_term(metin)
+    tekili = _tekili_kayitli_cogullar(glossary)
     return sorted(
         s for s, t in glossary.items()
-        if s and fold_term(s) in katlanmis and _terim_metinde(s, t, metin)
+        if s and fold_term(s) in katlanmis and _terim_metinde(s, t, metin, tekili)
     )
 
 
-def _relevant_glossary(glossary: dict[str, str], text: str) -> dict[str, str]:
+def _relevant_glossary(
+    glossary: dict[str, str],
+    text: str,
+    tekili_kayitli: frozenset[str] | None = None,
+) -> dict[str, str]:
     """Bu parçada fiilen geçen sözlük terimlerini süz (ek almış hâlleri dahil).
 
     Sözlüğün TAMAMINI her parçaya göndermek, metinde hiç geçmeyen terimlerin
@@ -1954,13 +2022,15 @@ def _relevant_glossary(glossary: dict[str, str], text: str) -> dict[str, str]:
     """
     if not glossary or len(glossary) < GLOSSARY_FILTER_MIN:
         return dict(glossary or {})
+    if tekili_kayitli is None:
+        tekili_kayitli = _tekili_kayitli_cogullar(glossary)
     folded = fold_term(text)  # metin de aynı indirgemeden geçer
     out: dict[str, str] = {}
     for source, target in glossary.items():
         term = (source or "").strip()
         if not term or fold_term(term) not in folded:  # ucuz ön eleme
             continue
-        if _terim_metinde(term, target, text):
+        if _terim_metinde(term, target, text, tekili_kayitli):
             out[source] = target
     return out
 
@@ -2006,7 +2076,8 @@ def _build_user_prompt(
     iliştirilir; `sozluk_ihlalleri` ve terim eşleştirme karşılığı olduğu gibi görür.
     """
     metin = "\n\n".join(en_paras)
-    relevant = _relevant_glossary(glossary, metin)
+    tekili = _tekili_kayitli_cogullar(glossary)
+    relevant = _relevant_glossary(glossary, metin, tekili)
     kosullar = kosullar or {}
 
     def _satir(s: str, t: str) -> str:
@@ -2055,7 +2126,7 @@ def _build_user_prompt(
         korunacak = [
             s
             for s, t in relevant.items()
-            if _ingilizce_korunan(s, t) and _terim_metinde(s, t, metin)
+            if _ingilizce_korunan(s, t) and _terim_metinde(s, t, metin, tekili)
         ]
         user += (
             "\n\nSON HATIRLATMA — SÖZLÜK KURALI HÂLÂ GEÇERLİDİR: yukarıdaki sözlükte "
