@@ -81,6 +81,7 @@ def test_secilebilir_modeller_kullanicinin_istedikleri():
         "gemini-3.5-flash",
         "gemini-2.5-flash",
         "z-ai/glm-5.3",  # 2026-09-26: ücretsiz, NVIDIA üzerinden
+        "vertex/gemini-3.6-flash",  # 2026-09-26: ÜCRETLİ, Cloud deneme kredisinden
         "claude-haiku-4-5",
         "claude-sonnet-5",
     )
@@ -159,7 +160,7 @@ def test_ucretli_modeller_isaretli():
     """Okuyucu ücretliyi ücretsizden AYIRT edebilmeli: rozetsiz bir liste,
     kullanıcının farkında olmadan para harcayan bir model seçmesine yol açardı."""
     ucretli = {m["ad"] for m in translate.SECILEBILIR_MODELLER if m.get("ucretli")}
-    assert ucretli == set(translate.CLAUDE_MODELLER)
+    assert ucretli == set(translate.CLAUDE_MODELLER) | set(translate.VERTEX_MODELLER)
     for m in translate.SECILEBILIR_MODELLER:
         if m.get("ucretli"):
             assert "ÜCRETLİ" in m["not"], m  # not da açıkça söylemeli

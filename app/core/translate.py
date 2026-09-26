@@ -234,10 +234,60 @@ def _nvidia_modeli(model: str | None) -> bool:
     return bool(model) and model in NVIDIA_MODELLER
 
 
+# ---------------------------------------------------------------------------
+# VERTEX AI — AYNI Gemini modeli, Google Cloud faturasıyla (2026-09-26)
+# ---------------------------------------------------------------------------
+# Kullanıcı kararı. Hesaptaki Google Cloud deneme kredisi (~300 $, 90 gün,
+# 2026-09-11'den) AI Studio anahtarlarına HARCANAMIYOR — 2 Mart 2026'dan sonra
+# açılan hesaplarda kredi yalnız Vertex AI'da geçer. Vertex aynı Gemini
+# modellerini sunuyor; ölçülen 3.6-flash'ın kendisi, ücretsiz katmanın günlük
+# 20 istek sınırı ve 503 dalgaları olmadan.
+#
+# ÜCRETLİDİR (krediden düşer; kredi bitince ya da süre dolunca, hesap ücretliye
+# yükseltilmişse gerçek fatura). Bu yüzden Claude'la aynı kapı: YALNIZ açıkça
+# seçilince kullanılır, ücretsiz zincir ASLA buraya inmez. Claude'dan tek farkı
+# ters yön: Vertex çeviremezse ücretsiz Gemini halkalarına düşülür (`zincir_kur`).
+# Claude'da bu yön de kapalıydı, çünkü künye "Claude" derken bölümü Gemini
+# çevirmiş olurdu; künye artık FİİLEN çevireni yazdığı için o gerekçe burada yok,
+# ve ücretliden ücretsize inmek para harcatmaz.
+#
+# Kimlik anahtar DEĞİL: sunucu VM'inin servis hesabı (metadata sunucusu,
+# `cloud-platform` kapsamı + `roles/aiplatform.user`). `.env`'de yalnız proje
+# kimliği durur; sır yok. Çağrı `api_durum` kaydına GİRMEZ (Gemini anahtar
+# tablosu), harcama göstergesine (`kullanim`) girer.
+VERTEX_PROJE_ENV = "VERTEX_PROJE"
+VERTEX_KONUM_ENV = "VERTEX_KONUM"
+VERTEX_MODELLER = {
+    "vertex/gemini-3.6-flash": {
+        "model": "gemini-3.6-flash",
+        "etiket": "3.6 Flash (Vertex, kredi)",
+        "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
+               "Aynı 3.6; günlük kota ve yoğunluk (503) derdi yok.",
+    },
+}
+
+
+def _vertex_modeli(model: str | None) -> bool:
+    return bool(model) and model in VERTEX_MODELLER
+
+
+def vertex_projesi() -> str:
+    return (os.getenv(VERTEX_PROJE_ENV) or "").strip()
+
+
+def _ucretli_modeli(model: str | None) -> bool:
+    return _claude_modeli(model) or _vertex_modeli(model)
+
+
 def gemini_modeli(model: str | None) -> bool:
-    """Gemini anahtar havuzundan geçen model mi? `api_durum` paneli ve kota aracı
+    """Gemini ANAHTAR HAVUZUNDAN geçen model mi? `api_durum` paneli ve kota aracı
     yalnız bunları gösterir/yoklar."""
-    return bool(model) and not _claude_modeli(model) and not _nvidia_modeli(model)
+    return (
+        bool(model)
+        and not _claude_modeli(model)
+        and not _nvidia_modeli(model)
+        and not _vertex_modeli(model)
+    )
 
 
 def nvidia_anahtari() -> str:
@@ -301,7 +351,7 @@ SECILEBILIR_MODELLER = (
     )
     + tuple(
         {"ad": ad, "etiket": bilgi["etiket"], "not": bilgi["not"], "ucretli": True}
-        for ad, bilgi in CLAUDE_MODELLER.items()
+        for ad, bilgi in {**VERTEX_MODELLER, **CLAUDE_MODELLER}.items()
     )
 )
 SECILEBILIR_ADLAR = tuple(m["ad"] for m in SECILEBILIR_MODELLER)
@@ -332,6 +382,9 @@ def zincir_kur(secili: str | None = None) -> tuple[str, ...]:
         return DEFAULT_MODELS
     if _claude_modeli(secili):
         return (secili,)
+    # Vertex (ücretli) seçilince de başa geçer ve ücretsiz halkalar YEDEK kalır:
+    # ücretliden ücretsize inmek para harcatmaz (bkz. VERTEX bölümü). Tersi —
+    # ücretsiz zincirin Vertex'e inmesi — DEFAULT_MODELS'te olmadığı için imkânsız.
     return tuple(dict.fromkeys((secili, *DEFAULT_MODELS)))
 
 
@@ -409,7 +462,7 @@ def anahtar_degiskenleri() -> list[str]:
     """
     return gemini_anahtar_degiskenleri() + [
         ad
-        for ad in CLAUDE_ANAHTAR_ENVLERI + NVIDIA_ANAHTAR_ENVLERI
+        for ad in CLAUDE_ANAHTAR_ENVLERI + NVIDIA_ANAHTAR_ENVLERI + (VERTEX_PROJE_ENV,)
         if (os.getenv(ad) or "").strip()
     ]
 
@@ -796,6 +849,7 @@ def ceviri_anahtari_var_mi(api_key: str | None = None) -> bool:
         bool(gemini_anahtarlari(api_key))
         or bool(claude_anahtari())
         or bool(nvidia_anahtari())
+        or bool(vertex_projesi())
     )
 
 # Parça çıktısı modelin token sınırını aşıp çeviriyi kesmesin diye ölçülü tutulur.
@@ -2353,6 +2407,86 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
     return _MetinYanit(metin)
 
 
+def _gemini_yapilandirmasi(system: str, max_tokens: int) -> types.GenerateContentConfig:
+    """Gemini çağrı ayarları — AI Studio ve Vertex yolu AYNI ayarı kullanır.
+
+    İki kopya olsaydı biri güncellenip öteki unutulurdu (düşünme bütçesi tam da
+    böyle bir ayar) ve "aynı model" iki yolda farklı çevirirdi."""
+    return types.GenerateContentConfig(
+        system_instruction=system,
+        response_mime_type="application/json",
+        temperature=0.3,
+        max_output_tokens=max_tokens,
+        safety_settings=SAFETY_SETTINGS,
+        thinking_config=(
+            types.ThinkingConfig(thinking_budget=GEMINI_DUSUNME_BUTCESI)
+            if GEMINI_DUSUNME_BUTCESI is not None
+            else None
+        ),
+    )
+
+
+_VERTEX_ISTEMCI: dict[tuple[str, str], genai.Client] = {}
+
+
+def _vertex_uret(model: str, user: str, system: str, max_tokens: int):
+    """Vertex AI ile üret (bkz. VERTEX bölümü); tokenları harcama göstergesine yazar.
+
+    Hatalar Claude/NVIDIA yollarındaki sözleşmeyle çevrilir, böylece
+    `_tek_anahtarla_uret`'teki TEK düşme mantığı aynen çalışır:
+      * 429 / 5xx -> 503 (geçici; geri-çekilmeli tekrar, sonra sıradaki model).
+        429 bilerek çevrilir: o dal Gemini ANAHTAR havuzunu soğutur.
+      * 401 / 403 -> izin yok (beklemek açmaz); sıradaki model.
+      * başka 4xx -> 404 (sıradaki model).
+    Proje ayarlı değilse ya da kimlik bulunamazsa (VM dışı) halka ANAHTARSIZ sayılır.
+    """
+    proje = vertex_projesi()
+    if not proje:
+        atla = _Retryable()
+        atla.anahtarsiz = True
+        raise atla
+    konum = (os.getenv(VERTEX_KONUM_ENV) or "global").strip()
+    try:
+        istemci = _VERTEX_ISTEMCI.get((proje, konum))
+        if istemci is None:
+            istemci = genai.Client(
+                vertexai=True,
+                project=proje,
+                location=konum,
+                http_options=types.HttpOptions(
+                    timeout=GEMINI_ISTEK_ZAMAN_ASIMI_MS,
+                    retry_options=types.HttpRetryOptions(attempts=1),
+                ),
+            )
+            _VERTEX_ISTEMCI[(proje, konum)] = istemci
+        yanit = istemci.models.generate_content(
+            model=VERTEX_MODELLER[model]["model"],
+            contents=user,
+            config=_gemini_yapilandirmasi(system, max_tokens),
+        )
+    except genai_errors.APIError as exc:
+        kod = getattr(exc, "code", None) or 0
+        if kod == 429 or kod >= 500:
+            raise _KodluHata(503, f"vertex {kod}") from exc
+        if kod in (401, 403):
+            atla = _Retryable()
+            atla.anahtar_red = atla.erisimsiz = True
+            atla.detay = f"{model}: Vertex izni yok (HTTP {kod})"
+            raise atla from exc
+        raise _KodluHata(404, f"vertex {kod}") from exc
+    except Exception as exc:
+        # Kimlik bulunamadı (VM dışında, `google.auth` DefaultCredentialsError):
+        # bu kurulumda Vertex yok demektir — zincir ölmesin, halka atlansın.
+        if type(exc).__module__.startswith("google.auth"):
+            atla = _Retryable()
+            atla.anahtarsiz = True
+            raise atla from exc
+        raise
+    giris, cikis = _token_sayilari(yanit)
+    kullanim.ekle(model, giris, cikis)
+    return yanit
+
+
 def _nvidia_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinYanit:
     """NVIDIA'nın OpenAI uyumlu ucuyla, AKIŞLI üret (bkz. NVIDIA bölümü).
 
@@ -2586,6 +2720,11 @@ def _generate_once_with_retry(
         return _tek_anahtarla_uret(
             client_factory, 0, model, user, system, max_tokens
         )
+    if _vertex_modeli(model):
+        # Tek kimlik (VM servis hesabı): Gemini anahtar havuzunda dönmek anlamsız.
+        return _tek_anahtarla_uret(
+            client_factory, 0, model, user, system, max_tokens
+        )
     if _nvidia_modeli(model):
         # Tek anahtar, TEK deneme: başarısız bir NVIDIA denemesi dakikalar
         # sürebiliyor (ölçüm: 600 sn zaman aşımları). Toplu çeviri kendi
@@ -2732,7 +2871,11 @@ def _tek_anahtarla_uret(
         bas = time.monotonic()
         try:
             if not gemini_modeli(model):
-                uret = _claude_uret if _claude_modeli(model) else _nvidia_uret
+                uret = (
+                    _claude_uret if _claude_modeli(model)
+                    else _vertex_uret if _vertex_modeli(model)
+                    else _nvidia_uret
+                )
                 response = uret(model, user, system, max_tokens)
                 if not (response.text or "").strip():
                     atla = _Retryable()
@@ -2752,20 +2895,7 @@ def _tek_anahtarla_uret(
             response = client.models.generate_content(
                 model=model,
                 contents=user,
-                config=types.GenerateContentConfig(
-                    system_instruction=system,
-                    response_mime_type="application/json",
-                    temperature=0.3,
-                    max_output_tokens=max_tokens,
-                    safety_settings=SAFETY_SETTINGS,
-                    thinking_config=(
-                        types.ThinkingConfig(
-                            thinking_budget=GEMINI_DUSUNME_BUTCESI
-                        )
-                        if GEMINI_DUSUNME_BUTCESI is not None
-                        else None
-                    ),
-                ),
+                config=_gemini_yapilandirmasi(system, max_tokens),
             )
         except (genai_errors.APIError, _KodluHata) as exc:
             code = getattr(exc, "code", None)
