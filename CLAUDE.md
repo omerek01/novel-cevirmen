@@ -479,6 +479,24 @@ anahtar x model tablosudur; `translate.gemini_modeli` ayırır, panel ve
 `kota_durum.py` yalnız Gemini modellerini gösterir). Künyede motor `nvidia`.
 Testler `tests/test_nvidia_halkasi.py`.
 
+**VERTEX HALKASI: `vertex/gemini-3.6-flash`, ÜCRETLİ, YALNIZ SEÇİLİNCE** (2026-09-26,
+kullanıcı kararı). Google Cloud deneme kredisi (~300 $ / 14.440 ₺, 90 gün, hesap
+2026-09-11'de açıldı → ~2026-12-10'a kadar) AI Studio anahtarlarına HARCANAMIYOR: 2 Mart
+2026'dan sonra açılan hesaplarda kredi yalnız Vertex AI'da geçer. Vertex aynı 3.6-flash'ı
+günlük 20 istek sınırı olmadan sunuyor. Kurulum sunucu projesinde (`My First Project`,
+`project-b09dd2ba-…`): Vertex AI API açık, VM servis hesabına `cloud-platform` kapsamı
+(VM durdurulup başlatıldı — dış IP değişti) ve `roles/aiplatform.user`. **Anahtar dosyası
+YOK**: kimlik metadata sunucusundan gelir, `.env`'de yalnız `VERTEX_PROJE` durur. Emniyet
+Claude'la aynı yönde: ücretsiz zincir ASLA Vertex'e inmez (`DEFAULT_MODELS`'te yok), yalnız
+açıkça seçilince başa geçer. Claude'dan farkı TERS yön: Vertex çeviremezse ücretsiz Gemini
+halkalarına düşülür (künye fiilen çevireni yazar, para harcanmaz). Çağrı ayarları AI Studio
+yoluyla TEK yardımcıdan gelir (`_gemini_yapilandirmasi`); tokenlar (düşünme dahil) harcama
+göstergesine yazılır (`kullanim.FIYAT`, 0,75/3,75 $ tanıtım fiyatı — 2027'den 1,50/7,50),
+`api_durum`'a yazılmaz. **Kredi bitince ya da süresi dolunca** hesap ücretliye
+yükseltilmişse gerçek fatura başlar — modeli ücretsiz bir Gemini halkasına geri almak
+gerekir. **AI Studio'daki ücretsiz projelerde "Set up billing"e BASILMAZ**: o projenin
+ücretsiz kotası biter ve anahtarı sessizce ücretli olur. Testler `tests/test_vertex_halkasi.py`.
+
 **GEMİNİ DIŞI SAĞLAYICILAR KALDIRILDI** (2026-09-02, kullanıcı kararı; 2026-09-26'da
 yukarıdaki NVIDIA halkası ÖLÇÜLEREK istisna oldu). Bir dönem zincirde
 OpenAI-uyumlu üç sağlayıcı vardı (`openrouter:minimax/minimax-m3:free`,
@@ -1260,6 +1278,7 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 | `GEMINI_API_KEY` | Evet | Zincirin BİRİNCİ anahtarı (yalnız yeni çeviri için; cache isabeti gerektirmez) |
 | `GEMINI2_API_KEY` | Hayır | İKİNCİ anahtar: birincinin kotası dolunca (429) aynı MODELDE devralır. Yoksa sessizce atlanır. Ad esnek — `GEMINI_API_KEY_2` / `GEMINI3_API_KEY`… da tanınır, sıra addaki sayıdan gelir. **Kota PROJE başına olduğu için ayrı bir Google Cloud projesinden alınmadıkça hiçbir şey kazandırmaz** |
 | `NVIDIA_API_KEY` | Hayır | Zincirin SON halkası `z-ai/glm-5.3` (build.nvidia.com, ÜCRETSİZ, kartsız). Google dışı yedek: Gemini halkalarının hepsi düştüğünde çeviri durmaz. Yoksa halka sessizce atlanır |
+| `VERTEX_PROJE` | Hayır | Vertex halkası (`vertex/gemini-3.6-flash`) için Google Cloud proje kimliği. **ÜCRETLİ** (deneme kredisinden düşer), YALNIZ okuyucudan seçilince. Sır değil — kimlik VM servis hesabı. `VERTEX_KONUM` boşsa `global`. Yoksa halka sessizce atlanır |
 | `CLAUDE_API_KEY` | Hayır | Claude halkaları (`claude-haiku-4-5` · `claude-sonnet-5`). **ÜCRETLİ** ve YALNIZ okuyucudan açıkça seçilince kullanılır — ücretsiz zincir asla buraya inmez. `ANTHROPIC_API_KEY` de tanınır (SDK'nın kanonik adı). Yoksa halka sessizce atlanır |
 | `FETCH_HTTP_FIRST` | Hayır | `0` → düz HTTP yolunu KAPAT, doğrudan tarayıcıya düş. **ACİL ÇIKIŞ**; varsayılan açık. Bölüm sayfalarında CF koruması yok, düz HTTP 1 sn'de çekiyor (tarayıcı yolu aynı bölümde 68 sn) |
 | `FETCH_PROXY` | Hayır | Çekimi residential proxy üzerinden çıkarır (`http://kullanıcı:parola@host:port`; parolada `@` varsa `%40` diye yüzde-kodla). Bulut sunucuda **gerekmedi** — engel IP değil TLS'ti, `curl_cffi` çözdü. Sigorta olarak durur |
