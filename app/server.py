@@ -1022,9 +1022,12 @@ def _gemini_zinciri() -> tuple[tuple[str, ...], bool]:
     """Panelin gösterdiği zincir. Claude seçiliyse Gemini havuzu KULLANILMIYOR;
     kartlar yine varsayılan Gemini zincirini gösterir ve bu açıkça söylenir."""
     zincir = translate_mod.secili_zincir()
-    if zincir and translate_mod._claude_modeli(zincir[0]):
-        return tuple(translate_mod.DEFAULT_MODELS), True
-    return tuple(zincir), False
+    claude_secili = bool(zincir) and translate_mod._claude_modeli(zincir[0])
+    if claude_secili:
+        zincir = translate_mod.DEFAULT_MODELS
+    # Kartlar Gemini ANAHTAR x model tablosudur: NVIDIA halkası Gemini anahtarı
+    # kullanmaz, her Gemini anahtarının altında "gözlenmedi" diye dururdu.
+    return tuple(m for m in zincir if translate_mod.gemini_modeli(m)), claude_secili
 
 
 @app.get("/api/settings/api-status")

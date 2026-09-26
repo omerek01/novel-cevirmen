@@ -160,6 +160,9 @@ def test_zincir_kaliteden_ucuza_iner():
         "gemini-3.6-flash",
         "gemini-3.5-flash",
         "gemini-2.5-flash",
+        # 2026-09-26: Google DIŞI son halka (NVIDIA). Aynı ders bir adım ötede:
+        # 3.x ile 2.5 ayrı nesil ama AYNI sağlayıcı.
+        "z-ai/glm-5.3",
     )
 
 
@@ -174,14 +177,17 @@ def test_zincir_tek_model_ailesine_bagli_degil():
     assert len(aileler) >= 2, translate.DEFAULT_MODELS
 
 
-def test_zincirde_gemini_disi_saglayici_yok():
-    """Gemini dışı sağlayıcılar kaldırıldı; `<sağlayıcı>:<model>` yönlendirmesi de.
+def test_zincirdeki_her_halka_bir_saglayiciya_yonlenir():
+    """`<sağlayıcı>:<model>` yönlendirmesi kaldırıldı; Gemini dışı halka YALNIZ
+    kayıtlı bir sağlayıcı tablosundan (bugün `NVIDIA_MODELLER`) gelebilir.
 
-    Önekli bir ad artık HİÇBİR yere yönlenmez — Gemini ucuna olduğu gibi gider ve
-    404 alır, yani halka sessizce elenir. Tel tuzağı bu yüzden: zincire önekli bir
-    ad geri sızarsa arıza "model meşgul" kılığına girerdi."""
+    Tanınmayan bir ad Gemini ucuna olduğu gibi gider ve 404 alır, yani halka
+    sessizce elenir — arıza "model meşgul" kılığına girerdi. Ücretli (Claude)
+    halka ASLA zincirde duramaz."""
     assert all(":" not in m for m in translate.DEFAULT_MODELS)
-    assert all(m.startswith("gemini-") for m in translate.DEFAULT_MODELS)
+    for m in translate.DEFAULT_MODELS:
+        assert m.startswith("gemini-") or m in translate.NVIDIA_MODELLER, m
+        assert not translate._claude_modeli(m), m
 
 
 def test_olculmemis_model_zincirin_basinda_durmaz():

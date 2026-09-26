@@ -137,7 +137,7 @@ def main() -> int:
     modeller = tuple(a.model) if a.model else tuple(
         dict.fromkeys(translate.DEFAULT_MODELS + translate.SECILEBILIR_ADLAR)
     )
-    modeller = tuple(m for m in modeller if m.startswith("gemini"))
+    modeller = tuple(m for m in modeller if translate.gemini_modeli(m))
 
     print(f"Havuz: {len(anahtarlar)} anahtar — {', '.join(degiskenler)}\n")
     erisim: dict[str, dict[str, set[str]]] = {}

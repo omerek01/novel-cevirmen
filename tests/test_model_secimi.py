@@ -80,6 +80,7 @@ def test_secilebilir_modeller_kullanicinin_istedikleri():
         "gemini-3.6-flash",
         "gemini-3.5-flash",
         "gemini-2.5-flash",
+        "z-ai/glm-5.3",  # 2026-09-26: ücretsiz, NVIDIA üzerinden
         "claude-haiku-4-5",
         "claude-sonnet-5",
     )
@@ -113,7 +114,8 @@ def test_2_5_flash_zincire_YEDEK_halka_olarak_girdi():
     0,932). Başa alınsaydı 3.x geri geldiğinde herkesin çevirisi sessizce daha
     kötü bir modele kayardı ve bunu fark etmek zor olurdu.
     """
-    assert translate.DEFAULT_MODELS[-1] == "gemini-2.5-flash"
+    gemini = [m for m in translate.DEFAULT_MODELS if translate.gemini_modeli(m)]
+    assert gemini[-1] == "gemini-2.5-flash"  # SON Gemini halkası
     assert translate.VARSAYILAN_MODEL == "gemini-3.6-flash"  # ilk halka DEĞİŞMEDİ
 
 

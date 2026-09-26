@@ -101,10 +101,18 @@ from .glossary import fold_term
 # Bu, zincire ÖLÇÜLMEMİŞ model koymama kuralının istisnası DEĞİL: 2.5 ölçüldü
 # (2026-09-06, 3 gerçek bölüm — oran 0,932, hizalama 3/3, 3 bölümde 1 sözlük
 # ihlali, ölçülenlerin en hızlısı). Ölçülmemiş olsaydı yine listede kalırdı.
+#
+# DÖRDÜNCÜ ve SON halka `z-ai/glm-5.3` — GOOGLE DIŞI, NVIDIA üzerinden (2026-09-26,
+# kullanıcı kararı; ayrıntı aşağıdaki NVIDIA bölümünde). Aynı dersin bir adım
+# ötesi: 3.x ile 2.5 AYRI nesil ama AYNI sağlayıcı — Google tarafındaki bir
+# erişim/kota arızası ikisini birlikte düşürebilir. SONA konur: ölçümde 3.6-flash
+# daha iyi (3 bölüm medyan oran 0,996 / 0,966) ve bölüm başına 2-3 dk sürüyor,
+# yani yalnız Gemini halkalarının hepsi elendiğinde inilir.
 DEFAULT_MODELS = (
     "gemini-3.6-flash",
     "gemini-3.5-flash",
     "gemini-2.5-flash",
+    "z-ai/glm-5.3",
 )
 
 # ---------------------------------------------------------------------------
@@ -174,6 +182,72 @@ def claude_anahtari() -> str:
     return ""
 
 
+# ---------------------------------------------------------------------------
+# NVIDIA (build.nvidia.com) — ÜCRETSİZ, GOOGLE DIŞI SON HALKA (2026-09-26)
+# ---------------------------------------------------------------------------
+# Kullanıcı kararı. 2026-09-02'de Gemini dışı sağlayıcılar KOTA gerekçesiyle
+# girip KALİTE ölçümüyle çıkmıştı; bu halka tersine önce ölçüldü
+# (`scratch/nvidia_kiyas.py`, 3 gerçek bölüm, tek geçiş, onarımsız):
+#
+#   model                  oran (medyan)  hizalama  ihlal  süre (medyan)
+#   3.6-flash (önbellek)   0,996          3/3       0      ~40-60 sn
+#   z-ai/glm-5.3           0,966          3/3       0      138 sn
+#   moonshotai/kimi-k3     0,957          3/3       1      179 sn
+#   nemotron-3-ultra       0,933          3/3       1      201 sn (düşünmeyi kısmıyor)
+#
+# deepseek-v4.1-flash 150 sn'de içerik üretmedi, gpt-oss-20b zaman aşımı,
+# glm-5.3-flash 3 bölümün yalnız birini 300 sn'de çevirdi.
+#
+# Kazanç DAYANIKLILIK: zincirin öteki halkaları tek sağlayıcının (Google)
+# kaderini paylaşıyor. Bedel HIZ — bölüm başına 2-3 dk; okumanın gövdesi
+# prefetch'ten geldiği için çoğunlukla görünmez.
+#
+# Sürpriz fatura riski YAPISAL olarak yok: NVIDIA'nın ücretsiz katmanı kredi
+# kartı bağlanmamış hesaptır ve sınır aşılınca 429 döner, ücrete dönmez
+# (OpenRouter `:free` dersinin tersine). Kullanım şartı "geliştirme/test/
+# değerlendirme"dir; kişisel kullanım, ama 7/24 trafik bu tanımın sınırında.
+#
+# Üç özel kural:
+#   * Anahtar döngüsü YOK (tek anahtar) ve tekrar YOK: başarısız bir deneme
+#     dakikalar sürebiliyor; toplu çeviri kendi tekrarını zaten yapıyor.
+#   * `api_durum` kaydına GİRMEZ: kayıt Gemini ANAHTAR x model tablosudur,
+#     NVIDIA çağrısı orada Gemini anahtarı #1'in satırına yazılırdı.
+#   * Akışlı (stream) istek: akışsızda sunucu üretim boyunca tek bayt yollamıyor,
+#     okuma zaman aşımı "yavaş üretim"i "kuyrukta bekleme"den ayıramıyordu.
+NVIDIA_ANAHTAR_ENVLERI = ("NVIDIA_API_KEY",)
+NVIDIA_URL = "https://integrate.api.nvidia.com/v1/chat/completions"
+# İki parça arasındaki en uzun sessizlik (düşünme / kuyruk) ve toplam tavan.
+# Ölçümde en uzun başarılı bölüm 300 sn sürdü (glm-5.3-flash).
+NVIDIA_OKUMA_ZAMAN_ASIMI_SN = 180.0
+NVIDIA_TOPLAM_SURE_SN = 480.0
+NVIDIA_MODELLER = {
+    "z-ai/glm-5.3": {
+        "etiket": "GLM-5.3 (NVIDIA)",
+        "not": "Ücretsiz, Google dışı. 3 bölümde oran 0,966, sıfır ihlal; bölüm başı 2-3 dk.",
+        # Kullanıcı isteği: düşünme LOW. glm-5.3 ölçümde hiç düşünme tokeni üretmedi.
+        "dusunme": "low",
+    },
+}
+
+
+def _nvidia_modeli(model: str | None) -> bool:
+    return bool(model) and model in NVIDIA_MODELLER
+
+
+def gemini_modeli(model: str | None) -> bool:
+    """Gemini anahtar havuzundan geçen model mi? `api_durum` paneli ve kota aracı
+    yalnız bunları gösterir/yoklar."""
+    return bool(model) and not _claude_modeli(model) and not _nvidia_modeli(model)
+
+
+def nvidia_anahtari() -> str:
+    for ad in NVIDIA_ANAHTAR_ENVLERI:
+        deger = (os.getenv(ad) or "").strip()
+        if deger:
+            return deger
+    return ""
+
+
 GEMINI_SECENEKLERI = (
     {
         "ad": "gemini-3.8-flash",
@@ -219,9 +293,16 @@ GEMINI_SECENEKLERI = (
         "not": "Eski nesil, sağlam: oran 0,932, hizalama 3/3, en hızlısı (45 sn).",
     },
 )
-SECILEBILIR_MODELLER = GEMINI_SECENEKLERI + tuple(
-    {"ad": ad, "etiket": bilgi["etiket"], "not": bilgi["not"], "ucretli": True}
-    for ad, bilgi in CLAUDE_MODELLER.items()
+SECILEBILIR_MODELLER = (
+    GEMINI_SECENEKLERI
+    + tuple(
+        {"ad": ad, "etiket": bilgi["etiket"], "not": bilgi["not"]}
+        for ad, bilgi in NVIDIA_MODELLER.items()
+    )
+    + tuple(
+        {"ad": ad, "etiket": bilgi["etiket"], "not": bilgi["not"], "ucretli": True}
+        for ad, bilgi in CLAUDE_MODELLER.items()
+    )
 )
 SECILEBILIR_ADLAR = tuple(m["ad"] for m in SECILEBILIR_MODELLER)
 # Ayarın DB anahtarı. Varsayılan, zinciri bugünkü hâlinde bırakan seçimdir —
@@ -318,7 +399,7 @@ def gemini_anahtar_degiskenleri() -> list[str]:
 
 
 def anahtar_degiskenleri() -> list[str]:
-    """Çeviriyi mümkün kılan TÜM anahtar değişkenlerinin adları (Gemini + Claude).
+    """Çeviriyi mümkün kılan TÜM anahtar değişkenlerinin adları (Gemini + Claude + NVIDIA).
 
     Testler için TEK doğru kaynak: "anahtarsız reddedilir" iddiaları bunların
     hepsini silmeli. Adları tek tek yazmak, yeni bir sağlayıcı ya da üçüncü bir
@@ -327,7 +408,9 @@ def anahtar_degiskenleri() -> list[str]:
     düştü ve testler geliştiricinin makinesinde geçip başka yerde kalıyordu.
     """
     return gemini_anahtar_degiskenleri() + [
-        ad for ad in CLAUDE_ANAHTAR_ENVLERI if (os.getenv(ad) or "").strip()
+        ad
+        for ad in CLAUDE_ANAHTAR_ENVLERI + NVIDIA_ANAHTAR_ENVLERI
+        if (os.getenv(ad) or "").strip()
     ]
 
 
@@ -690,12 +773,15 @@ def motor_adi(model: str | None) -> str | None:
     # Parcalar farkli halkalara dusmus olabilir (" + " ile birlesik gelir); sira
     # korunur, tekrar elenir. Claude TEK HALKALI oldugu icin pratikte karisik bir
     # kunye uretmez, ama kural tek yerde dursun diye ayrim burada yapilir.
+    def _saglayici(m: str) -> str:
+        if _claude_modeli(m):
+            return "claude"
+        if _nvidia_modeli(m):
+            return "nvidia"
+        return "gemini"
+
     return " + ".join(
-        dict.fromkeys(
-            "claude" if _claude_modeli(m) else "gemini"
-            for m in model.split(" + ")
-            if m
-        )
+        dict.fromkeys(_saglayici(m) for m in model.split(" + ") if m)
     ) or None
 
 
@@ -706,7 +792,11 @@ def ceviri_anahtari_var_mi(api_key: str | None = None) -> bool:
     yalnız `.env`'de duruyor olabilir ve onu görmeyen bir kapı, pekâlâ çalışabilecek
     bir kurulumu sebepsiz reddederdi.
     """
-    return bool(gemini_anahtarlari(api_key)) or bool(claude_anahtari())
+    return (
+        bool(gemini_anahtarlari(api_key))
+        or bool(claude_anahtari())
+        or bool(nvidia_anahtari())
+    )
 
 # Parça çıktısı modelin token sınırını aşıp çeviriyi kesmesin diye ölçülü tutulur.
 # Büyük parça = daha az kopma noktası = bölüm içinde daha tutarlı üslup; sınırı
@@ -2189,7 +2279,7 @@ class _KodluHata(Exception):
         self.code = code
 
 
-class _ClaudeYanit:
+class _MetinYanit:
     """`response.text` sözleşmesini karşılayan asgari sarmalayıcı.
 
     Yanıt nesnesi zincirin geri kalanına Gemini'ninkiyle aynı yüzeyle ulaşır —
@@ -2202,7 +2292,7 @@ class _ClaudeYanit:
         self.text = text
 
 
-def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _ClaudeYanit:
+def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinYanit:
     """Claude ile üret; kullanılan tokenları GÖSTERGE deposuna yazar.
 
     Akış (`messages.stream`) kullanılır: `max_tokens` bu projede 32.768 ve SDK bu
@@ -2260,7 +2350,80 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _Claude
         getattr(yanit.usage, "output_tokens", 0) or 0,
     )
     metin = "".join(b.text for b in yanit.content if getattr(b, "type", "") == "text")
-    return _ClaudeYanit(metin)
+    return _MetinYanit(metin)
+
+
+def _nvidia_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinYanit:
+    """NVIDIA'nın OpenAI uyumlu ucuyla, AKIŞLI üret (bkz. NVIDIA bölümü).
+
+    Hatalar Claude yolundaki sözleşmeyle `_KodluHata`'ya çevrilir, böylece
+    `_tek_anahtarla_uret`'teki TEK düşme mantığı aynen çalışır:
+      * 429 / 5xx / taşıma / süre aşımı -> 503 (geçici). 429 bilerek 503'e
+        çevrilir: 429 dalı Google'ın kota gövdesini ayrıştırıp anahtarı
+        soğutur, NVIDIA'da ikisi de anlamsız.
+      * 401 / 403 -> anahtar reddi (beklemek açmaz).
+      * başka 4xx -> 404 (erişim yok; sıradaki modele).
+    """
+    anahtar = nvidia_anahtari()
+    if not anahtar:
+        atla = _Retryable()
+        atla.anahtarsiz = True
+        raise atla
+
+    govde = {
+        "model": model,
+        "messages": [
+            {"role": "system", "content": system},
+            {"role": "user", "content": user},
+        ],
+        "temperature": 0.3,
+        "max_tokens": max_tokens,
+        "response_format": {"type": "json_object"},
+        "stream": True,
+    }
+    dusunme = NVIDIA_MODELLER[model].get("dusunme")
+    if dusunme:
+        govde["reasoning_effort"] = dusunme
+
+    parcalar: list[str] = []
+    son_tarih = time.monotonic() + NVIDIA_TOPLAM_SURE_SN
+    try:
+        with httpx.stream(
+            "POST",
+            NVIDIA_URL,
+            headers={"Authorization": f"Bearer {anahtar}"},
+            json=govde,
+            timeout=httpx.Timeout(NVIDIA_OKUMA_ZAMAN_ASIMI_SN, connect=15.0),
+        ) as yanit:
+            kod = yanit.status_code
+            if kod != 200:
+                yanit.read()
+                if kod in (401, 403):
+                    atla = _Retryable()
+                    atla.anahtar_red = atla.erisimsiz = True
+                    atla.detay = f"{model}: NVIDIA anahtarı reddedildi (HTTP {kod})"
+                    raise atla
+                if kod == 429 or kod >= 500:
+                    raise _KodluHata(503, f"nvidia {kod}")
+                raise _KodluHata(404, f"nvidia {kod}: {yanit.text[:200]}")
+            for satir in yanit.iter_lines():
+                if time.monotonic() > son_tarih:
+                    raise _KodluHata(503, "nvidia toplam süre aşıldı")
+                if not satir.startswith("data:"):
+                    continue
+                veri = satir[5:].strip()
+                if veri == "[DONE]":
+                    break
+                try:
+                    parca = json.loads(veri)
+                except ValueError:
+                    continue
+                delta = ((parca.get("choices") or [{}])[0].get("delta")) or {}
+                if delta.get("content"):
+                    parcalar.append(delta["content"])
+    except httpx.HTTPError as exc:
+        raise _KodluHata(503, f"nvidia ağ: {type(exc).__name__}") from exc
+    return _MetinYanit("".join(parcalar))
 
 
 def _generate_with_fallback(
@@ -2423,6 +2586,13 @@ def _generate_once_with_retry(
         return _tek_anahtarla_uret(
             client_factory, 0, model, user, system, max_tokens
         )
+    if _nvidia_modeli(model):
+        # Tek anahtar, TEK deneme: başarısız bir NVIDIA denemesi dakikalar
+        # sürebiliyor (ölçüm: 600 sn zaman aşımları). Toplu çeviri kendi
+        # geri-çekilmeli tekrarını zaten yapıyor.
+        return _tek_anahtarla_uret(
+            client_factory, 0, model, user, system, max_tokens, 1
+        )
     sayi = max(1, getattr(client_factory, "anahtar_sayisi", 1))
     # İKİ KATMAN, ve ayrım ölçülerek bulundu (iki ayrı yanlıştan sonra):
     #   İÇ  — havuzu UYKUSUZ dolaş. Sıradaki anahtar zaten yeni bir denemedir ve
@@ -2545,7 +2715,9 @@ def _tek_anahtarla_uret(
     sonuç sınıfı, HTTP kodu, süre, token, kota ayrıntısı. Anahtarsızlık bir çağrı
     değildir ve kaydedilmez. Claude'un kendi harcama göstergesi var (`kullanim`).
     """
-    kaydet = not _claude_modeli(model)
+    # Kayıt Gemini ANAHTAR x model tablosudur: Claude ve NVIDIA çağrısı oraya
+    # yazılsaydı Gemini anahtarı #1'in satırına düşerdi.
+    kaydet = gemini_modeli(model)
     kimlik = _anahtar_kimligi(client_factory, indeks)
 
     def _kayit(sonuc: str, bas: float, kod: int | None = None, **kw) -> None:
@@ -2559,8 +2731,9 @@ def _tek_anahtarla_uret(
     for attempt in range(max(1, tekrar_sayisi)):
         bas = time.monotonic()
         try:
-            if _claude_modeli(model):
-                response = _claude_uret(model, user, system, max_tokens)
+            if not gemini_modeli(model):
+                uret = _claude_uret if _claude_modeli(model) else _nvidia_uret
+                response = uret(model, user, system, max_tokens)
                 if not (response.text or "").strip():
                     atla = _Retryable()
                     atla.blocked = True

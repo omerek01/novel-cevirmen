@@ -119,7 +119,9 @@ def test_claude_seciliyken_gemini_havuzu_kullanilmadigi_soylenir():
     settings.set(translate.MODEL_AYAR_ANAHTARI, "claude-haiku-4-5")
     veri = _istemci().get("/api/settings/api-status").json()
     assert veri["claude_secili"] is True
-    assert tuple(veri["zincir"]) == tuple(translate.DEFAULT_MODELS)
+    assert tuple(veri["zincir"]) == tuple(
+        m for m in translate.DEFAULT_MODELS if translate.gemini_modeli(m)
+    )
 
 
 @pytest.mark.parametrize("son, bitis, beklenen", [

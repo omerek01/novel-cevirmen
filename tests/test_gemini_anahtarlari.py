@@ -173,18 +173,20 @@ def test_istemci_zaman_asimi_ve_tek_deneme(monkeypatch):
 
 # ---------- zincir: GEMINI-TEK ----------
 
-def test_zincir_yalniz_gemini_modelleri():
-    """Gemini dışı sağlayıcı zincire GERİ SIZAMAZ.
+def test_zincir_yalniz_bilinen_saglayicilardan():
+    """Önekli (`<sağlayıcı>:<model>`) ad zincire GERİ SIZAMAZ.
 
-    Yönlendirme (`<sağlayıcı>:<model>`) kaldırıldığı için önekli bir ad artık
-    hiçbir yere yönlenmez: Gemini ucuna olduğu gibi gider, 404 alır ve halka
-    SESSİZCE elenir. Yani geri sızan bir önek "model meşgul" kılığında bir arıza
-    üretirdi — tel tuzağının sebebi bu.
+    Yönlendirme kaldırıldığı için önekli bir ad hiçbir yere yönlenmez: Gemini
+    ucuna olduğu gibi gider, 404 alır ve halka SESSİZCE elenir. Gemini dışı tek
+    istisna kayıtlı ücretsiz NVIDIA halkasıdır (2026-09-26, kullanıcı kararı) —
+    o da ZİNCİRİN SONUNDA: Gemini halkaları önce denenir.
     """
     assert translate.DEFAULT_MODELS
     for model in translate.DEFAULT_MODELS:
-        assert model.startswith("gemini-"), model
+        assert model.startswith("gemini-") or model in translate.NVIDIA_MODELLER, model
         assert ":" not in model, model
+    gemini = [translate.gemini_modeli(m) for m in translate.DEFAULT_MODELS]
+    assert gemini == sorted(gemini, reverse=True), "Gemini dışı halka Gemini'den önce"
 
 
 def test_kaldirilan_saglayici_yuzeyi_geri_gelmesin():
