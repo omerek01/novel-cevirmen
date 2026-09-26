@@ -126,9 +126,10 @@ geçer; geri-çekilme uykuları kapı DIŞINDA tutulur. Tipli hatalar:
 `MAX_WORDS_PER_CHUNK` (2800 kelime) sınırında parçalar, parçalar arası son cümleleri
 bağlam olarak taşır, glossary'i prompt'a enjekte eder. **`[[n]]` işaretçileri**
 Türkçe↔İngilizce paragrafları hizalar (iki-dilli okuma; hizalama tutmazsa o parça tek
-blok, `source` None). **TEK MOTOR: Gemini** (2026-09-02, kullanıcı kararı) ve **TEK model
+blok, `source` None). **ANA MOTOR: Gemini** (2026-09-02, kullanıcı kararı; 2026-09-26'dan
+beri Google DIŞI tek bir son halka var, aşağıya bak) ve **TEK model
 yedek zinciri, KALİTE öncelikli**: `DEFAULT_MODELS` = **`gemini-3.6-flash`** →
-`gemini-3.5-flash` → `gemini-2.5-flash`. Bu sıra HER YERDE geçerlidir — okuma,
+`gemini-3.5-flash` → `gemini-2.5-flash` → `z-ai/glm-5.3` (NVIDIA). Bu sıra HER YERDE geçerlidir — okuma,
 prefetch, toplu çeviri, "yeniden çevir", içe aktarılan sayfa çevirisi (`import_translate`)
 ve sözlük terim önerisi (`suggest_term`) aynı sabiti kullanır; `refresh` YALNIZ önbelleği
 yok sayar, model sırasına karışmaz. Yola göre AYRI zincir (ucuz okuma / kaliteli refresh)
@@ -455,7 +456,31 @@ Soğuma **MODEL BAŞINADIR**: günlük kota model başına ayrı tutulduğu içi
 3.6-flash'ta tükenen anahtar 3.5-flash'ta hâlâ çalışır; tek bir "anahtar bitti" bayrağı
 çalışan halkaları da kapatırdı. Testler `tests/test_gemini_anahtarlari.py`.
 
-**GEMİNİ DIŞI SAĞLAYICILAR KALDIRILDI** (2026-09-02, kullanıcı kararı). Bir dönem zincirde
+**NVIDIA HALKASI: `z-ai/glm-5.3`, ÜCRETSİZ, ZİNCİRİN SONU** (2026-09-26, kullanıcı
+kararı). build.nvidia.com'un OpenAI uyumlu ucu, `NVIDIA_API_KEY`. Gerekçe dayanıklılık:
+3.x ile 2.5 ayrı nesil ama AYNI sağlayıcı, Google tarafındaki bir erişim/kota arızası
+hepsini birlikte düşürebilir. Aşağıdaki "Gemini dışı sağlayıcılar kaldırıldı" kararının
+TERSİNE bu halka önce ÖLÇÜLDÜ (`scratch/nvidia_kiyas.py`, 3 gerçek bölüm, tek geçiş,
+onarımsız): oran medyanı 3.6-flash 0,996 · **glm-5.3 0,966** · kimi-k3 0,957 ·
+nemotron-3-ultra 0,933 (düşünmeyi kısmıyor, çıkışın 3 katı); glm-5.3 hizalama 3/3,
+SIFIR ihlal ve kalıntı, bölüm başına **138 sn** (106-166). Aynı katalogda elenenler:
+deepseek-v4.1-flash 150 sn'de içerik üretmedi, gpt-oss-20b zaman aşımı, glm-5.3-flash 3
+bölümün yalnız birini 300 sn'de çevirdi, kimi-k2.6 ve mistral-large-2 404.
+**Kısa yoklama hızı uzun isteği temsil ETMEZ** (kimi-k3 kısa istekte ilk token 1,7 sn,
+tam bölümde 180 sn). SONA konur: 3.6 daha iyi ve glm yavaş. Sürpriz fatura riski
+YAPISAL olarak yok: NVIDIA ücretsiz katmanı kartsız hesaptır, sınırda 429 döner.
+Kullanım şartı "geliştirme/test/değerlendirme" — 7/24 okuma trafiği bu tanımın sınırında.
+Üç kural (`translate._nvidia_uret`): **akışlı** istek (akışsızda sunucu üretim boyunca
+bayt yollamıyor, zaman aşımı yavaşlığı kuyruktan ayıramıyordu; parça arası 180 sn,
+toplam 480 sn tavan) · **tek anahtar, TEK deneme** (başarısız deneme dakikalar
+sürebiliyor; 429/5xx/taşıma geçici sayılır, 429 Google'ın kota gövdesi
+ayrıştırılmasın diye 503'e çevrilir) · **`api_durum` kaydına GİRMEZ** (kayıt Gemini
+anahtar x model tablosudur; `translate.gemini_modeli` ayırır, panel ve
+`kota_durum.py` yalnız Gemini modellerini gösterir). Künyede motor `nvidia`.
+Testler `tests/test_nvidia_halkasi.py`.
+
+**GEMİNİ DIŞI SAĞLAYICILAR KALDIRILDI** (2026-09-02, kullanıcı kararı; 2026-09-26'da
+yukarıdaki NVIDIA halkası ÖLÇÜLEREK istisna oldu). Bir dönem zincirde
 OpenAI-uyumlu üç sağlayıcı vardı (`openrouter:minimax/minimax-m3:free`,
 `mistral:mistral-medium-latest`, ayrıca Groq/Cerebras kod desteği). Hepsi zincire KOTA
 gerekçesiyle girmişti, kaliteyle değil, ve ölçüm tersini söyledi — bkz. aşağıdaki uzunluk
@@ -1234,6 +1259,7 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
 |---|---|---|
 | `GEMINI_API_KEY` | Evet | Zincirin BİRİNCİ anahtarı (yalnız yeni çeviri için; cache isabeti gerektirmez) |
 | `GEMINI2_API_KEY` | Hayır | İKİNCİ anahtar: birincinin kotası dolunca (429) aynı MODELDE devralır. Yoksa sessizce atlanır. Ad esnek — `GEMINI_API_KEY_2` / `GEMINI3_API_KEY`… da tanınır, sıra addaki sayıdan gelir. **Kota PROJE başına olduğu için ayrı bir Google Cloud projesinden alınmadıkça hiçbir şey kazandırmaz** |
+| `NVIDIA_API_KEY` | Hayır | Zincirin SON halkası `z-ai/glm-5.3` (build.nvidia.com, ÜCRETSİZ, kartsız). Google dışı yedek: Gemini halkalarının hepsi düştüğünde çeviri durmaz. Yoksa halka sessizce atlanır |
 | `CLAUDE_API_KEY` | Hayır | Claude halkaları (`claude-haiku-4-5` · `claude-sonnet-5`). **ÜCRETLİ** ve YALNIZ okuyucudan açıkça seçilince kullanılır — ücretsiz zincir asla buraya inmez. `ANTHROPIC_API_KEY` de tanınır (SDK'nın kanonik adı). Yoksa halka sessizce atlanır |
 | `FETCH_HTTP_FIRST` | Hayır | `0` → düz HTTP yolunu KAPAT, doğrudan tarayıcıya düş. **ACİL ÇIKIŞ**; varsayılan açık. Bölüm sayfalarında CF koruması yok, düz HTTP 1 sn'de çekiyor (tarayıcı yolu aynı bölümde 68 sn) |
 | `FETCH_PROXY` | Hayır | Çekimi residential proxy üzerinden çıkarır (`http://kullanıcı:parola@host:port`; parolada `@` varsa `%40` diye yüzde-kodla). Bulut sunucuda **gerekmedi** — engel IP değil TLS'ti, `curl_cffi` çözdü. Sigorta olarak durur |
