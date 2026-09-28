@@ -72,6 +72,14 @@ def _connect() -> sqlite3.Connection:
     # — `_split_by_markers` yalnız YAPIYI, `glossary_leaks` yalnız KAYITLI terimleri
     # denetliyor. NULL = hiç denetlenmedi (eski satır), "{}" = denetlendi ve temiz.
     db.ensure_column(conn, "chapters", "ingilizce_kalinti", "ingilizce_kalinti TEXT")
+    # KISALMA ÖLÇÜMÜ (2026-09-28): Türkçe çıktı / İngilizce kaynak KARAKTER oranı.
+    # Model çevirmek yerine ÖZETLEDİĞİNDE (gerçek vaka: shadow-slave #787) bunu
+    # gören başka hiçbir denetim yok — hizalama yalnız YAPIYI, glossary_leaks
+    # yalnız KAYITLI terimleri, ingilizce_kalinti yalnız İNGİLİZCE kalıntıyı
+    # denetliyor. ORAN saklanır, "kısa mı" KARARI değil: eşik ileride kalibre
+    # edilirse kaydedilmiş bir karar sessizce yanlışa dönerdi (aynı ayrım
+    # `kullanim.py`de token/maliyet olarak zaten var). NULL = hiç ölçülmedi.
+    db.ensure_column(conn, "chapters", "uzunluk_orani", "uzunluk_orani REAL")
     # SÖZLÜK SÜRÜMÜ (2026-09-16): bölüm çevrilirken kitabın sözlüğü hangi
     # sürümdeydi (`glossary.kitap_surumu`). `first_chapter` bunu söyleyemiyordu —
     # eski bir bölüm sonradan yeniden çevrilmiş olabilir. NULL = bilinmiyor.
@@ -91,6 +99,7 @@ def _connect() -> sqlite3.Connection:
             model TEXT,
             glossary_leaks TEXT,
             ingilizce_kalinti TEXT,
+            uzunluk_orani REAL,
             sozluk_surumu INTEGER,
             ceviri_zamani REAL,
             arsiv_zamani REAL NOT NULL
@@ -104,7 +113,7 @@ def _connect() -> sqlite3.Connection:
 ARSIV_MAX = 3
 _ARSIV_SUTUNLARI = (
     "translation", "source_text", "engine", "model", "glossary_leaks", "ingilizce_kalinti",
-    "sozluk_surumu",
+    "uzunluk_orani", "sozluk_surumu",
 )
 
 
@@ -138,7 +147,8 @@ def arsiv_listesi(url: str) -> list[dict]:
     try:
         rows = conn.execute(
             "SELECT id, model, engine, sozluk_surumu, ceviri_zamani, arsiv_zamani, "
-            "length(translation), glossary_leaks, ingilizce_kalinti, source_text IS NOT NULL "
+            "length(translation), glossary_leaks, ingilizce_kalinti, uzunluk_orani, "
+            "source_text IS NOT NULL "
             "FROM ceviri_arsivi WHERE url = ? ORDER BY id DESC",
             (url,),
         ).fetchall()
@@ -149,7 +159,8 @@ def arsiv_listesi(url: str) -> list[dict]:
             "id": r[0], "model": r[1], "engine": r[2], "sozluk_surumu": r[3],
             "ceviri_zamani": r[4], "arsiv_zamani": r[5], "uzunluk": r[6],
             "ihlal": len(json.loads(r[7] or "{}")), "kalinti": len(json.loads(r[8] or "{}")),
-            "hizali": bool(r[9]),
+            "uzunluk_orani": r[9],
+            "hizali": bool(r[10]),
         }
         for r in rows
     ]
@@ -210,7 +221,7 @@ def get_chapter(url: str) -> dict | None:
             "SELECT book_slug, book_title, title, chapter_no, translation, "
             "next_url, detected_names, chunk_count, prev_url, source_text, content_type, "
             "engine, added_terms, model, glossary_leaks, ingilizce_kalinti, sozluk_surumu, "
-            "created_at "
+            "created_at, uzunluk_orani "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -242,6 +253,9 @@ def get_chapter(url: str) -> dict | None:
         "ingilizce_kalinti": json.loads(row[15] or "{}"),
         "sozluk_surumu": row[16],
         "ceviri_zamani": row[17],
+        # NULL = hiç ölçülmedi (eski satır / kaynaksız bölüm). Okuyucu eşiği
+        # `translate.KISALMA_ORANI` ile karşılaştırır; karar TEK yerde durur.
+        "uzunluk_orani": row[18],
         "cached": True,
     }
 
@@ -422,7 +436,8 @@ def denetim_bolumleri(book_slug: str | None = None) -> list[dict]:
     try:
         rows = conn.execute(
             "SELECT url, book_slug, chapter_no, title, source_text, translation, "
-            f"model, glossary_leaks, ingilizce_kalinti FROM chapters WHERE {kosul} "
+            f"model, glossary_leaks, ingilizce_kalinti, uzunluk_orani "
+            f"FROM chapters WHERE {kosul} "
             "ORDER BY book_slug, chapter_no",
             parametreler,
         ).fetchall()
@@ -435,6 +450,7 @@ def denetim_bolumleri(book_slug: str | None = None) -> list[dict]:
             # None = hiç denetlenmedi (araç bunu "işaretlenecek" sayar).
             "glossary_leaks": json.loads(r[7]) if r[7] else None,
             "ingilizce_kalinti": json.loads(r[8]) if r[8] else None,
+            "uzunluk_orani": r[9],
         }
         for r in rows
     ]
@@ -628,8 +644,8 @@ def save_chapter(url: str, data: dict) -> None:
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text, content_type, engine, added_terms, model,
-                 glossary_leaks, ingilizce_kalinti, sozluk_surumu)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -644,6 +660,7 @@ def save_chapter(url: str, data: dict) -> None:
                 glossary_leaks = COALESCE(excluded.glossary_leaks, glossary_leaks),
                 ingilizce_kalinti = COALESCE(
                     excluded.ingilizce_kalinti, ingilizce_kalinti),
+                uzunluk_orani = COALESCE(excluded.uzunluk_orani, uzunluk_orani),
                 sozluk_surumu = COALESCE(excluded.sozluk_surumu, sozluk_surumu)
             """,
             (
@@ -677,6 +694,10 @@ def save_chapter(url: str, data: dict) -> None:
                 json.dumps(data["ingilizce_kalinti"], ensure_ascii=False)
                 if data.get("ingilizce_kalinti") is not None
                 else None,
+                # Aynı None-vs-değer kuralı: ölçülemeyen bölüm (kaynak yok) NULL
+                # bırakılır ki COALESCE künyesiz bir güncellemede eski ölçümü
+                # koruyabilsin ve "ölçülmedi" ile "ölçüldü" ayrışsın.
+                data.get("uzunluk_orani"),
                 data.get("sozluk_surumu"),
             ),
         )

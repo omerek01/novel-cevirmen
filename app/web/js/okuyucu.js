@@ -545,6 +545,12 @@ export function buildChapterEntry(url, data) {
     // "bu paragrafı hiç çevirmedin" der; ikisini tek sayaçta toplamak, okuyucunun
     // hangisine baktığını belirsizleştirirdi.
     ingilizceKalinti: data.ingilizce_kalinti || null,
+    // KISALMA: model çevirmek yerine ÖZETLEDİ mi. Kararı SUNUCU veriyor (eşik
+    // orada); okuyucuda ikinci bir eşik tutmak, model listesinde kaçınılan
+    // ayrışmanın aynısını doğururdu. Oran da gelir — rozette sayı gösterilir,
+    // çünkü "kısa" demek tek başına ne kadar kısa olduğunu söylemiyor.
+    kisalmis: data.kisalmis === true,
+    uzunlukOrani: data.uzunluk_orani ?? null,
     // Bu çeviride kullanılan sözlüğün sürümü (eski bölümlerde yok).
     sozlukSurumu: data.sozluk_surumu ?? null,
     // Bu bölümde geçen KOŞULLU / ek anlamlı kayıtlar: deterministik denetim dışı.
@@ -693,17 +699,23 @@ export function kunyeKarti(entry) {
   const kalinti = entry.ingilizceKalinti || {};
   const kalintiIndeksleri = Object.keys(kalinti);
   const denetlenmeyen = entry.kosulluDenetlenmeyen || [];
+  // Kısalma bir UYARIDIR ve tek başına da rozeti açtırır: özetlenmiş bir bölümde
+  // sözlük/kalıntı bayrakları çoğu zaman TEMİZ döner (atılan metinde ihlal de
+  // olmaz), yani öteki koşullara bağlansaydı en bozuk bölüm sessiz kalırdı.
+  const kisalmis = entry.kisalmis === true;
   // Eski önbellekteki bölümde künye yok: "bilinmiyor" yazmak yanıltıcı olur, sessizce atla.
   if (
     !motor &&
     adlar.length === 0 &&
     ihlalAdlari.length === 0 &&
     kalintiIndeksleri.length === 0 &&
-    denetlenmeyen.length === 0
+    denetlenmeyen.length === 0 &&
+    !kisalmis
   )
     return null;
 
-  const uyariVar = ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0;
+  const uyariVar =
+    ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0 || kisalmis;
   const kutu = document.createElement("details");
   kutu.className = "kunye" + (uyariVar ? " kunye-uyarili" : "");
   const ozet = document.createElement("summary");
@@ -712,6 +724,13 @@ export function kunyeKarti(entry) {
   // işi zaten sessiz kalan bir bozukluğu görünür kılmak. İki arıza sınıfı AYRI
   // sayılır: biri "terim yanlış", öteki "paragraf hiç çevrilmemiş".
   const uyarilar = [];
+  // Kısalma ÖNCE yazılır: ötekiler "bir terim/paragraf bozuk" der, bu "metnin bir
+  // kısmı hiç YOK" der — okurun önce görmesi gereken bu.
+  if (kisalmis) {
+    const yuzde =
+      entry.uzunlukOrani != null ? ` (%${Math.round(entry.uzunlukOrani * 100)})` : "";
+    uyarilar.push(`çeviri kaynaktan belirgin KISA${yuzde} — özetlenmiş olabilir`);
+  }
   if (kalintiIndeksleri.length)
     uyarilar.push(`${kalintiIndeksleri.length} paragraf İngilizce kaldı`);
   if (ihlalAdlari.length)

@@ -1072,6 +1072,20 @@ SYSTEM_INSTRUCTION = (
     "- METİN paragrafları [[n]] ile numaralıdır. Çeviride HER paragrafın başına AYNI "
     "[[n]] işaretini koy; hiçbir işareti ATLAMA, BİRLEŞTİRME veya sırasını DEĞİŞTİRME. "
     "Bir İngilizce paragraf bir Türkçe paragrafa karşılık gelir.\n"
+    # Ölçülen arıza (2026-09-28, shadow-slave #787): model çevirmek yerine
+    # ÖZETLEDİ. Yukarıdaki madde işaretçi DÜZENİNİ şart koşuyordu ama hiçbir
+    # madde içeriğin KORUNMASINI istemiyordu: model her [[n]] işaretini doğru
+    # yerine koyup her paragrafı tek cümleye indirdiğinde hiçbir kural
+    # çiğnenmiş olmuyordu. Bu, 2026-09-05'teki İngilizce-kalıntı boşluğunun
+    # birebir aynısı — orada da düzen isteniyor, içerik istenmiyordu.
+    "- BU BİR ÇEVİRİDİR, ÖZET DEĞİL. Her paragrafı TAMAMEN çevir: hiçbir cümleyi, "
+    "betimlemeyi, diyaloğu ya da ayrıntıyı ATLAMA, kısaltma, sadeleştirme veya "
+    "birkaç paragrafı tek paragrafta TOPLAMA. Kaynakta 5 cümlelik bir paragraf "
+    "varsa çevirisi de yaklaşık 5 cümle olmalıdır; 'özetle', 'kısaca', 'ana "
+    "hatlarıyla' diye bir istek YOKTUR. ÖLÇÜT: her [[n]] paragrafının Türkçe "
+    "karşılığı, kaynak paragrafla yaklaşık AYNI UZUNLUKTA olmalı. Türkçe metnin "
+    "toplam uzunluğu İngilizce kaynağın belirgin biçimde altına düşüyorsa içerik "
+    "atlamışsın demektir — atladığın yerlere dönüp tam çevir.\n"
     '- Yanıtı SADECE şu JSON ile ver: {"translation": "[[1]] ...\\n\\n[[2]] ...", '
     '"detected_names": ["..."], '
     '"detected_terms": {"İngilizce özel ad": "Türkçe karşılığı"}}\n'
@@ -1179,6 +1193,35 @@ def translate_chapter(
         result = _translate_chunk(
             client_factory, models, chunk_en, glossary, prev_tail, kosullar,
         )
+        # KISALMA (özetleme) onarımı, PARÇA düzeyinde ve TEK TUR.
+        #
+        # Parça düzeyi bilerek seçildi: kaynak tam burada elimizde, onarım yalnız
+        # bozuk parçayı hedefler ve hizalama henüz denenmediği için ölçüt her
+        # hâlükârda uygulanabilir. Bölüm düzeyinde ölçmek, tek bozuk parça için
+        # bölümün TAMAMINI yeniden çevirtirdi.
+        #
+        # Zincir bunu KURTARAMAZ: düşme yalnız HATADA olur (429/503/404), başarılı
+        # ama kötü bir yanıtta olmaz. Model 200 dönüp metni yarıya indirdiğinde
+        # hiçbir kural çiğnenmiş olmuyor — onarımı buradan tetiklemek şart.
+        oran = uzunluk_orani(_strip_markers(result.get("translation") or ""), chunk)
+        if kisalmis_mi(oran):
+            with api_durum.baglam(asama="kisalma_onarimi"):
+                yeniden = _translate_chunk(
+                    client_factory, models, chunk_en, glossary, prev_tail, kosullar,
+                )
+            yeni_oran = uzunluk_orani(
+                _strip_markers(yeniden.get("translation") or ""), chunk
+            )
+            # DAHA UZUN olanı tut. İkinci tur da kısa gelebilir (aynı model, aynı
+            # dikkat kayması) ve onu körlemesine kabul etmek daha çok içerik
+            # kaybettirirdi. Tur SAYISI bir: döngü kurmak maliyeti — ücretli model
+            # seçiliyken PARAYI — katlar, ve `_kalintiyi_onar` de aynı gerekçeyle
+            # tek turdur.
+            if (yeni_oran or 0) > (oran or 0):
+                result = yeniden
+                oran = yeni_oran
+                if yeniden.get("model"):
+                    used_models[yeniden["model"]] = None
         if result.get("model"):
             used_models[result["model"]] = None
         for name in result["detected_names"]:
@@ -1263,6 +1306,13 @@ def translate_chapter(
             translation,
             kosullar,
         ),
+        # KISALMA ölçümü, onarım turundan SONRA. ORANIN KENDİSİ saklanır, "kısa mı"
+        # KARARI değil: eşik ileride kalibre edilirse kaydedilmiş bir karar sessizce
+        # yanlışa dönerdi (aynı ders `kullanim.py`de token/maliyet ayrımıyla ödendi).
+        # Ölçüt bölümün TAMAMI üzerinden ve hizalamadan BAĞIMSIZ — özetleme
+        # hizalamayı öldürdüğü için hizalama isteyen bir bayrak tam da gerektiği
+        # anda susardı. NULL = hiç ölçülmedi (eski satırlar, kaynaksız bölüm).
+        "uzunluk_orani": uzunluk_orani(translation, text),
         "chunk_count": len(chunks),
         # MOTOR fiilen çeviren model(ler)den türetilir. Sabit "gemini" yazmak,
         # Mistral zincirin ilk halkası olduğundan doğrudan yanlış bilgiydi:
@@ -1926,6 +1976,44 @@ KALINTI_MIN_TOKEN = 5
 # Ölçülen dağılımda 0,7 ile 1,0 arasında HİÇ paragraf yok — eşik o boşluğa konur.
 KALINTI_ORAN = 0.9
 
+# ---------------------------------------------------------------------------
+# KISALMA (ÖZETLEME) DENETİMİ — üçüncü kalite ölçütü (2026-09-28)
+# ---------------------------------------------------------------------------
+# Arıza: model çevirmek yerine ÖZETLİYOR — paragrafları birleştirip ayrıntıyı
+# atıyor. Gerçek vaka: shadow-slave #787 (kullanıcı bildirimi, "çevirmek yerine
+# özet atıyor").
+#
+# Bu arızayı MEVCUT denetimlerin HİÇBİRİ göremiyordu ve sebebi yapısal:
+#   * `_split_by_markers`  yalnız YAPIYI doğrular (işaretler tam ve sıralı mı)
+#   * `sozluk_ihlalleri`   yalnız KAYITLI terimlere bakar
+#   * `ingilizce_kalinti`  yalnız İngilizce KALINTI arar
+# Üçü de "metnin yarısı gitti mi" diye SORMUYOR. CLAUDE.md uzunluk oranını
+# "birincil kalite ölçütü" ilan etmişti ama ölçüm yalnız çevrimdışı kıyas
+# betiklerinde vardı — ÜRETİM yolunda hiç hesaplanmıyordu.
+#
+# Daha kötüsü: arıza KENDİ denetimini de kapatıyor. Model özetleyince işaretçiler
+# tutmaz -> `aligned = False` -> `translate_chapter` içindeki İKİ onarım dalı da
+# (`if aligned:`) tümden atlanır. Yani en bozuk bölüm, hiç denetlenmeyen bölümdür.
+# Üstüne `source` NULL yazılır ve İngilizce kaynak saklanmadığı için hasar
+# SONRADAN ölçülemez hâle gelir.
+#
+# Bu yüzden ölçüt HİZALAMADAN BAĞIMSIZ seçildi: düz karakter sayısı. Tam da
+# hizalamanın öldüğü yerde çalışması gereken tek denetim bu.
+#
+# EŞİK NEREDEN GELİYOR: ölçülmüş model medyanları arasında GENİŞ bir boşluk var.
+# Özetleyen `gemini-3-flash-preview` 0,436'da kaldı; ölçülen en kötü MEŞRU model
+# (mistral-medium) 0,914, üretim medyanları 0,932-0,985 arası. 0,70 o boşluğun
+# ortasına oturur.
+#
+# DÜRÜSTLÜK NOTU: bu sayı model MEDYANLARINDAN türetildi, bölüm bazlı bir
+# dağılımdan DEĞİL — tek tek bölümler medyandan daha oynaktır (Türkçe bazı
+# pasajlarda İngilizceden derli toplu çıkar). Eşik bilerek DÜŞÜK tutuldu: yanlış
+# pozitif bir onarım turu PARA harcar (ücretli model seçiliyken), yanlış negatif
+# ise yalnız bir fırsat kaçırır. `KALINTI_ORAN` eşiği gerçek bir dağılım
+# boşluğuna oturtulmuştu; bunu da önbellek gerçek veriyle doldukça aynı yöntemle
+# kalibre et.
+KISALMA_ORANI = 0.70
+
 _KALINTI_TOK = re.compile(r"[A-Za-z\u00c0-\u024f'\u2019]+")
 # Cümle sonu sayılan işaretler: bunlardan sonra gelen BÜYÜK harf özel ad DEĞİLDİR.
 _CUMLE_SONU = ".!?:;\u2026\"\u201c\u201d'\u2018\u2019(-[\u2014\u2013"
@@ -2035,6 +2123,38 @@ def _sozcuk_kalintisi(
                 continue
         return True
     return False
+
+
+def uzunluk_orani(ceviri: str, kaynak: str) -> float | None:
+    """Türkçe çıktı / İngilizce kaynak KARAKTER oranı. Kaynak boşsa None.
+
+    Projenin birincil kalite ölçütü. Hizalamaya İHTİYAÇ DUYMAZ — ölçüt düz
+    karakter sayısıdır — ve bu bilerek böyle: özetleme hizalamayı öldürür, yani
+    hizalama isteyen bir denetim tam da gerekli olduğu anda susardı.
+
+    Neden karakter, kelime değil: Türkçe sondan eklemeli, aynı içeriği daha AZ
+    kelimeyle ama benzer karakterle yazar. Kelime oranı bu yüzden meşru
+    çevirilerde de düşük çıkar ve sahte alarm üretirdi.
+
+    Oranın KENDİSİ döner, "kısa mı" kararı DEĞİL. Aynı ders `kullanim.py`de
+    ödendi (token saklanır, maliyet değil): eşik ileride kalibre edilirse
+    kaydedilmiş bir KARAR sessizce yanlışa dönerdi, kaydedilmiş bir ÖLÇÜM
+    dönmez.
+    """
+    kaynak = (kaynak or "").strip()
+    if not kaynak:
+        return None
+    return len((ceviri or "").strip()) / len(kaynak)
+
+
+def kisalmis_mi(oran: float | None) -> bool:
+    """Oran özetleme eşiğinin altında mı? None (ölçülemedi) kısalma SAYILMAZ.
+
+    Karar TEK yerde durur: bayrağı üreten yol, onarımı tetikleyen yol ve okuyucu
+    aynı ölçütü kullanmalı. Bu projede aynı kuralın iki yerde yaşaması defalarca
+    sessiz ayrışmayla bitti (künye alanları, motor adı, sözlük ölçütü).
+    """
+    return oran is not None and oran < KISALMA_ORANI
 
 
 def ingilizce_kalinti(

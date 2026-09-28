@@ -793,6 +793,61 @@ paragrafı fiilen onaran halkayı gizlerdi.
 İKİSİNİ de güncelle — `model` alanında tam bu hata yaşandı. NULL (hiç
 denetlenmedi) ile `{}` (denetlendi, temiz) AYRIDIR.
 
+**KISALMA (ÖZETLEME): denetim + TEK TURLUK onarım** (2026-09-28, kullanıcı
+bildirimi + kullanıcı kararı). Şikâyet: "bölüm 787 çevirmek yerine özet atıyor".
+Model paragrafları birleştirip ayrıntıyı atıyordu ve **mevcut denetimlerin
+HİÇBİRİ bunu göremiyordu** — `_split_by_markers` yalnız YAPIYI, `sozluk_ihlalleri`
+yalnız KAYITLI terimleri, `ingilizce_kalinti` yalnız İngilizce kalıntıyı
+denetliyor. Üçü de "metnin yarısı gitti mi" diye SORMUYOR. Uzunluk oranı bu
+belgede 2026-09-02'den beri "birincil kalite ölçütü" ilan edilmişti ama ölçüm
+yalnız çevrimdışı kıyas betiklerindeydi; ÜRETİM yolunda hiç hesaplanmıyordu.
+
+**Arıza KENDİ denetimini kapatıyordu.** Model özetleyince işaretçiler tutmaz →
+`aligned = False` → `translate_chapter` içindeki İKİ onarım dalı da (`if aligned:`)
+tümden atlanır. Yani en bozuk bölüm, hiç denetlenmeyen bölümdü. Üstüne `source`
+NULL yazılıyor ve İngilizce kaynak saklanmadığı için hasar SONRADAN ölçülemez
+hâle geliyordu. Bu yüzden ölçüt **hizalamadan BAĞIMSIZ** seçildi: düz karakter
+sayısı (`translate.uzunluk_orani`). Tam da hizalamanın öldüğü yerde çalışması
+gereken tek denetim bu — `tests/test_kisalma_denetimi.py` bunu tel tuzağıyla tutar.
+
+**Karakter, kelime DEĞİL**: Türkçe sondan eklemeli, aynı içeriği daha AZ kelimeyle
+ama benzer karakterle yazar; kelime oranı meşru çevirilerde de düşük çıkar.
+
+**ORAN saklanır, KARAR saklanmaz** (`chapters.uzunluk_orani REAL`, NULL = hiç
+ölçülmedi). Eşik (`KISALMA_ORANI` = 0,70) okuma anında uygulanır
+(`translate.kisalmis_mi`, pipeline'ın üç payload noktasında türetilir). Eşik
+kalibre edilirse ESKİ satırlar da kendiliğinden doğru değerlendirilir; kaydedilmiş
+bir karar o gün sessizce yanlışa dönerdi. Aynı ayrım `kullanim.py`de token/maliyet
+olarak zaten var. Okuyucuya eşik KOPYALANMAZ (sunucu `kisalmis` bayrağını verir) —
+model listesinde kaçınılan ayrışmanın aynısı.
+
+**Eşik ölçülmüş bir boşluğa oturur ama KALİBRE EDİLMEDİ.** Özetleyen
+`gemini-3-flash-preview` 0,436; ölçülen en kötü MEŞRU model (mistral-medium) 0,914;
+üretim medyanları 0,932-0,985. 0,70 bu boşluğun ortasıdır. DÜRÜSTLÜK NOTU: sayı
+model MEDYANLARINDAN türetildi, bölüm bazlı bir DAĞILIMDAN değil — tek tek bölümler
+medyandan oynaktır. Eşik bilerek DÜŞÜK: yanlış pozitif bir onarım turu PARA harcar
+(ücretli model), yanlış negatif yalnız fırsat kaçırır. `KALINTI_ORAN` gerçek bir
+dağılım boşluğuna oturtulmuştu; bunu da önbellek dolunca aynı yöntemle kalibre et.
+
+**Onarım PARÇA düzeyinde ve TEK TUR.** Kaynak tam orada elimizde, onarım yalnız
+bozuk parçayı hedefler ve hizalama henüz denenmediği için ölçüt her hâlükârda
+uygulanabilir; bölüm düzeyinde ölçmek tek bozuk parça için bölümün TAMAMINI
+yeniden çevirtirdi. **İki turun DAHA UZUN olanı tutulur** — ikinci tur da kısa
+gelebilir (aynı model, aynı dikkat kayması) ve onu körlemesine kabul etmek daha
+çok içerik kaybettirirdi. Tur sayısı bir: `_kalintiyi_onar` ile aynı gerekçe.
+
+**Zincir bunu KURTARAMAZ** ve bu kural genel: düşme yalnız HATADA olur
+(429/503/404), başarılı ama kötü bir yanıtta olmaz. Model 200 dönüp metni yarıya
+indirdiğinde hiçbir kural çiğnenmiş olmaz — **kaliteyi zincire havale etme, ölç.**
+
+**Prompt'ta AYRI ve ÖLÇÜTLÜ madde** (`SYSTEM_INSTRUCTION`): "BU BİR ÇEVİRİDİR,
+ÖZET DEĞİL". İşaretçi maddesi paragraf DÜZENİNİ şart koşuyordu ama içeriğin
+KORUNMASINI istemiyordu — model her `[[n]]`'i doğru yerine koyup her paragrafı tek
+cümleye indirdiğinde hiçbir kural çiğnenmiyordu. Bu, 2026-09-05 İngilizce-kalıntı
+boşluğunun BİREBİR aynısı: iki kez de prompt düzeni istiyor, içeriği istemiyordu.
+**Yeni bir prompt maddesi yazarken sor: bu kural düzeni mi yoksa İÇERİĞİ mi
+koruyor?**
+
 `SAFETY_SETTINGS` = `BLOCK_NONE`, `max_output_tokens` açıkça verilir
 (sessiz kesilme → bozuk JSON → hizalama kaybı). Çıktı JSON
 `{translation, detected_names}`; bozuk/yarım JSON için kurtarma ayrıştırıcısı.
