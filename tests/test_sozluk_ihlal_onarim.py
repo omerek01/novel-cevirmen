@@ -328,9 +328,17 @@ def test_pipeline_bayragi_ceviri_sonucundan_alir():
 
 
 def test_hizalama_tutmazsa_onarim_denenmez(monkeypatch):
-    """Hizalama yoksa hangi paragrafın bozuk olduğu bilinemez; denetim yine koşar."""
+    """Hizalama yoksa hangi paragrafın bozuk olduğu bilinemez; denetim yine koşar.
+
+    Sahte çeviri kaynakla YAKIN UZUNLUKTA tutulur: KISALMA denetimi (2026-09-28)
+    hizalamadan BAĞIMSIZ koşar ve kısa bir taslak onu haklı olarak tetiklerdi.
+    Bu test yalnız SÖZLÜK onarımını ölçüyor; `Saint` bilerek çevrilmeden kalıyor.
+    """
     cagrilar: list[str] = []
-    _kur(monkeypatch, ["Saint elini kaldırdı. Sunny gökyüzünü izledi."], cagrilar)
+    _kur(monkeypatch, [
+        "Saint elini kaldırdı. Sunny boş gökyüzünü izledi. "
+        "Aşağıda pek çok Saint toplanmıştı ve hepsi sessizce bekliyordu."
+    ], cagrilar)
 
     out = translate.translate_chapter(KAYNAK, api_key="k", glossary=SOZLUK)
 

@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v101"; // GLM-5.3 (NVIDIA) son halka + seçilebilir
+const SHELL_CACHE = "novellink-shell-v102"; // kısalma (özetleme) uyarısı künye rozetinde
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",

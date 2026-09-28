@@ -114,9 +114,17 @@ def test_temiz_ceviride_onarim_turu_yok(monkeypatch):
 
 
 def test_hizalama_tutmazsa_onarim_denenmez(monkeypatch):
-    """Hizalama yoksa hangi paragrafın sızdığı bilinemez; ölçüt uygulanamaz."""
+    """Hizalama yoksa hangi paragrafın sızdığı bilinemez; ölçüt uygulanamaz.
+
+    Sahte çeviri kaynakla YAKIN UZUNLUKTA tutulur: KISALMA denetimi (2026-09-28)
+    hizalamadan BAĞIMSIZ koşar ve kısa bir taslak onu haklı olarak tetiklerdi.
+    İki denetim ayrı arıza sınıfıdır; bu test yalnız KALINTI onarımını ölçüyor.
+    """
     cagrilar: list[str] = []
-    _kur(monkeypatch, ["işaretçisiz düz çeviri"], cagrilar)
+    _kur(monkeypatch, [
+        "Sunny yavaşça başını salladı. Ama bana göre orası bir cennet sayılırdı. "
+        "Sonra karanlığın içine doğru uzaklaşıp gitti."
+    ], cagrilar)
 
     out = translate.translate_chapter(KAYNAK, api_key="k")
 

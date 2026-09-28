@@ -65,6 +65,11 @@ def _finalize_cached(cached: dict, url: str, advance_position: bool = True) -> d
         cached["title"], cached["chapter_no"],
         update_position=advance_position,
     )
+    # KISALMA kararı okuma ANINDA türetilir, DB'de saklanmaz. DB'de duran ölçüm
+    # (`uzunluk_orani`), burada duran eşik (`translate.KISALMA_ORANI`). Eşik
+    # kalibre edilirse ESKİ satırlar da kendiliğinden doğru değerlendirilir —
+    # kaydedilmiş bir karar ise o gün sessizce yanlışa dönerdi.
+    cached["kisalmis"] = _translate_mod.kisalmis_mi(cached.get("uzunluk_orani"))
     return cached
 
 
@@ -433,6 +438,17 @@ def _do_fetch_translate_save(
         # İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş
         # paragraflar. Boş = temiz.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        # KISALMA ölçümü: Türkçe/İngilizce karakter oranı. Modelin çevirmek yerine
+        # ÖZETLEDİĞİNİ gören TEK ölçüt (gerçek vaka: shadow-slave #787) ve
+        # ötekilerden farklı olarak hizalamaya İHTİYAÇ DUYMAZ — özetleme
+        # hizalamayı öldürdüğü için hizalama isteyen bir bayrak tam da gerektiği
+        # anda susardı. None = ölçülemedi; `or {}` gibi bir varsayılan VERİLMEZ,
+        # çünkü 0.0 ile "ölçülmedi" ayrı şeyler.
+        "uzunluk_orani": result.get("uzunluk_orani"),
+        # Karar eşikten TÜRETİLİR (bkz. `_finalize_cached`): okuyucuya eşiği
+        # kopyalamak, model listesi/sözlük ölçütü gibi ikinci bir kural kümesi
+        # doğururdu ve eşik değiştiği gün ikisi sessizce ayrışırdı.
+        "kisalmis": _translate_mod.kisalmis_mi(result.get("uzunluk_orani")),
         # Bu çeviride kullanılan sözlüğün sürümü (künye).
         "sozluk_surumu": sozluk_surumu,
         "cached": False,
@@ -595,6 +611,11 @@ def fetch_into_book(
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        # Kısalma ölçümü de `_fetch_translate_save` ile AYNI: bayrağı üreten
+        # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
+        # ölçümsüz olur — `model` alanında tam bu hata yaşandı.
+        "uzunluk_orani": result.get("uzunluk_orani"),
+        "kisalmis": _translate_mod.kisalmis_mi(result.get("uzunluk_orani")),
         "sozluk_surumu": sozluk_surumu,
         "cached": False,
     }
