@@ -2355,8 +2355,44 @@ def _translate_chunk(
     # bile GEMINI_API_KEY'i zorunlu kılıyordu.
     response, model = _generate_with_fallback(client_factory, models, user)
     out = _parse_response(response.text)
+    if out.get("gecersiz"):
+        out, model = _reti_asarak_uret(client_factory, models, model, user)
     out["model"] = model
     return out
+
+
+def _reti_asarak_uret(
+    client_factory, models: tuple[str, ...], reddeden: str, user: str,
+) -> tuple[dict, str]:
+    """Ret alan parçayı önce AYNI modelde, sonra zincirin kalanında yeniden çevirir.
+
+    Sıra kullanıcı kararıdır (2026-09-29): ret alan model ATLANMAZ. Ölçülen iki
+    vakada (vertex, shadow-slave #782/#787) ret rastgeleydi — aynı istek yeniden
+    gönderilince ikisi de düzgün çevrildi. İkinci ret de gelirse YALNIZ bu parça
+    zincirin sıradaki halkasına iner; zincirin kendisi değişmez, yani Claude gibi
+    tek halkalı bir zincirde başka modele sessizce geçilmez.
+
+    Zincir bunu KENDİSİ yapamaz: düşme yalnız HATADA olur, ret ise HTTP 200 + dolu
+    metindir. Hiçbir halka çeviremezse ret metni KAYDEDİLMEZ, hata verilir —
+    önbelleğe giren ret bir daha çeviri tetiklemezdi, hata ise tekrar denenebilir.
+    """
+    kalan = models[models.index(reddeden) + 1:] if reddeden in models else ()
+    son_hata = None
+    for model in (reddeden, *kalan):
+        try:
+            with api_durum.baglam(asama="ret_onarimi"):
+                response, uretilen = _generate_with_fallback(client_factory, (model,), user)
+        except TranslateError as exc:
+            son_hata = exc
+            continue
+        out = _parse_response(response.text)
+        if not out.get("gecersiz"):
+            return out, uretilen
+    raise TranslateError(
+        "Model çeviri yerine serbest metin döndürdü (ret) ve zincirde çeviren "
+        "kalmadı. Bölümü biraz sonra yeniden deneyin."
+        + (f" Son hata: {son_hata}" if son_hata else "")
+    )
 
 
 # `glossary.ceviri_kosullari` ek anlamları koşul metnine bu işaretle işler.
@@ -3171,10 +3207,22 @@ def _parse_response(raw: str | None) -> dict:
             "detected_terms": terimler,
         }
     except (json.JSONDecodeError, TypeError, AttributeError):
-        # JSON bozuk/yarım: ham basmak yerine 'translation' alanını ayıklamayı dene.
         out = _BOS_AYRISTIRMA()
+        # RET (2026-09-28, ölçüldü): istek JSON modunda gidiyor, yani ne JSON ne
+        # "translation" alanı ne [[n]] işaretçisi taşıyan yanıt bir ÇEVİRİ DEĞİLDİR —
+        # modelin serbest metinle verdiği cevaptır ("birebir çevirmek yerine özetini
+        # sunabilirim"). `_extract_translation` bu durumda ham metni döndürüyordu ve
+        # ret önbelleğe çeviri diye yazılıyordu (vertex, shadow-slave #782/#787).
+        # İşaretçili düz metin meşru kalır: hizalanabilir, yani gerçekten çeviridir.
+        if '"translation"' not in text and not _ISARETCI_VAR.search(text):
+            out["gecersiz"] = True
+            return out
+        # JSON bozuk/yarım: ham basmak yerine 'translation' alanını ayıklamayı dene.
         out["translation"] = _extract_translation(text)
         return out
+
+
+_ISARETCI_VAR = re.compile(r"\[\[\d+\]\]")
 
 
 def _liste(deger) -> list[str]:
