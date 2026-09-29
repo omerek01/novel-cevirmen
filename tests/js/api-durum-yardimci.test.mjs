@@ -32,6 +32,7 @@ test("kalan süre okunur biçimde, geçmişte boş", () => {
 
 test("model kısaltılır, her tonun metin dışı bir işareti var", () => {
   assert.equal(kisaModel("gemini-3.6-flash"), "3.6-flash");
+  assert.equal(kisaModel("vertex/gemini-3.6-flash"), "vertex/3.6-flash");
   for (const ton of ["iyi", "bekle", "uyari", "hata", "notr"]) {
     assert.ok(isaret(ton));
   }

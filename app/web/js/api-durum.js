@@ -160,8 +160,10 @@ function ozetCiz() {
     const dd = yap("dd", null, deger);
     kutu.append(dt, dd);
   };
-  satir("Tercih edilen model", kisaModel(v.tercih));
-  satir("Yedek sırası", v.zincir.map(kisaModel).join(" → "));
+  // `secili`/`tam_zincir` FİİLEN seçili zinciri taşır (Vertex ve NVIDIA dahil);
+  // `tercih`/`zincir` Gemini havuzuna süzülmüştür ve yalnız soğuma sayımında kalır.
+  satir("Tercih edilen model", kisaModel(v.secili || v.tercih));
+  satir("Yedek sırası", (v.tam_zincir || v.zincir).map(kisaModel).join(" → "));
   satir("Rotasyon", v.rotasyon);
   satir(
     `${kisaModel(v.tercih)} soğumada`,
@@ -198,7 +200,10 @@ function modelSatiri(m, simdi, ayrintili) {
   if (m.son_basari) bilgi.push(`son başarı ${tarihSaat(m.son_basari)}`);
   const g = m.bugun || {};
   if (ayrintili || g.deneme) {
-    bilgi.push(`bugün ${g.deneme} istek · ${g.basari} başarı · ${g.hata} hata`);
+    bilgi.push(
+      `bugün ${g.deneme} istek · ${g.basari} başarı · ${g.hata} hata` +
+        (g.ret ? ` (${g.ret} ret)` : "")
+    );
   }
   if (bilgi.length) kutu.appendChild(yap("p", "api-model-bilgi", bilgi.join(" · ")));
   if (m.hata_etiketi && m.durum !== "basarili" && m.durum !== "gozlenmedi") {
@@ -222,11 +227,19 @@ function kartlariCiz() {
   kutu.replaceChildren();
   const v = p.veri;
   if (!v) return;
+  const simdi = Date.now() / 1000;
+  // Vertex kartı Gemini anahtarlarından ÖNCE: seçiliyken çeviriyi o yapıyor.
+  // Anahtar havuzu yok, yedek model yok — tek satır, ayrıntılı.
+  if (v.vertex) {
+    const kart = yap("article", "api-kart");
+    kart.appendChild(yap("h3", "api-kart-baslik", v.vertex.etiket));
+    for (const m of v.vertex.modeller) kart.appendChild(modelSatiri(m, simdi, true));
+    kutu.appendChild(kart);
+  }
   if (!v.anahtarlar.length) {
     kutu.appendChild(yap("p", "gloss-hint", "Sunucuda Gemini anahtarı tanımlı değil."));
     return;
   }
-  const simdi = Date.now() / 1000;
   for (const a of v.anahtarlar) {
     const kart = yap("article", "api-kart");
     kart.appendChild(yap("h3", "api-kart-baslik", a.etiket));

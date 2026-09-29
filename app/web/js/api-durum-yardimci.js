@@ -45,9 +45,10 @@ export function kalanSure(bitis, simdi) {
   return dk % 60 ? `${sa} sa ${dk % 60} dk` : `${sa} sa`;
 }
 
-/** "gemini-3.6-flash" → "3.6-flash". */
+/** "gemini-3.6-flash" → "3.6-flash"; "vertex/gemini-3.6-flash" → "vertex/3.6-flash".
+ *  Sunucudaki `api_durum._kisa` ile AYNI kural. */
 export function kisaModel(m) {
-  return String(m || "?").replace(/^gemini-/, "");
+  return String(m || "?").replace(/^vertex\/gemini-/, "vertex/").replace(/^gemini-/, "");
 }
 
 /** Durum işareti: renk TEK başına anlam taşımasın diye metnin yanında durur. */
