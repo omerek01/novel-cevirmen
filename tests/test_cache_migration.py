@@ -91,3 +91,65 @@ def test_save_get_roundtrips_source():
     row = cache.get_chapter("u1")
     assert row["source"] == "english\n\ntwo"
     assert row["translation"] == "çeviri\n\niki"
+
+
+# ---------------------------------------------------------------- arşiv göçü
+
+def _eski_semali_arsiv():
+    """`uzunluk_orani` sütunu OLMAYAN `ceviri_arsivi` — sunucudaki hâli taklit eder."""
+    path = db.db_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(path)
+    conn.execute(
+        """
+        CREATE TABLE ceviri_arsivi (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL,
+            translation TEXT NOT NULL, source_text TEXT, engine TEXT, model TEXT,
+            glossary_leaks TEXT, ingilizce_kalinti TEXT, sozluk_surumu INTEGER,
+            ceviri_zamani REAL, arsiv_zamani REAL NOT NULL
+        )
+        """
+    )
+    conn.commit()
+    conn.close()
+
+
+def _bolum(**ek):
+    temel = {
+        "book_slug": "k", "book_title": "K", "title": "B1", "chapter_no": 1,
+        "source": "kaynak", "uzunluk_orani": 0.9,
+    }
+    temel.update(ek)
+    return temel
+
+
+def test_arsiv_tablosu_da_goc_alir():
+    """`CREATE TABLE IF NOT EXISTS` VAR OLAN tabloya sütun EKLEMEZ.
+
+    Ölçülen vaka (2026-09-29): `uzunluk_orani` arşiv tablosuna yalnız BİLDİRİMLE
+    eklenmişti. Sıfırdan kurulan test DB'sinde çalışıyordu, canlı sunucuda ise
+    tablo zaten durduğu için sütun HİÇ oluşmuyordu.
+
+    Arşive künye alanı eklerken İKİSİ de gerekir: bildirim (yeni kurulum) +
+    `ensure_column` (mevcut kurulum).
+    """
+    _eski_semali_arsiv()
+    conn = cache._connect()
+    try:
+        sutunlar = {r[1] for r in conn.execute("PRAGMA table_info(ceviri_arsivi)")}
+    finally:
+        conn.close()
+    assert "uzunluk_orani" in sutunlar
+
+
+def test_eski_semali_arsivde_YENIDEN_CEVIR_calisir():
+    """Asıl tehlike buydu: `_arsivle`, var olan bir bölüm YENİDEN ÇEVRİLİRKEN
+    koşar. Göç olmadan "yeniden çevir" düğmesi sunucuda çökerdi — ve kullanıcının
+    o gün yapacağı tam olarak buydu (özetlenmiş bölümü yeniden çevirmek)."""
+    _eski_semali_arsiv()
+    cache.save_chapter("uA", _bolum(translation="ilk çeviri"))
+    cache.save_chapter("uA", _bolum(translation="YENİDEN çevrildi"))
+
+    assert cache.get_chapter("uA")["translation"] == "YENİDEN çevrildi"
+    arsiv = cache.arsiv_listesi("uA")
+    assert len(arsiv) == 1 and arsiv[0]["uzunluk_orani"] == 0.9
