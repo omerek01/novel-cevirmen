@@ -848,6 +848,24 @@ boşluğunun BİREBİR aynısı: iki kez de prompt düzeni istiyor, içeriği is
 **Yeni bir prompt maddesi yazarken sor: bu kural düzeni mi yoksa İÇERİĞİ mi
 koruyor?**
 
+**#787 aslında ÖZETLEME DEĞİL, RETTİ** (2026-09-29, sunucu verisi + kullanıcı
+kararı). Arşivdeki ilk hâller (#782 654 karakter, #787 560; kaynak ~6.000) çeviri
+değil, modelin serbest metinle verdiği cevaptı: "birebir çevirmek yerine kısa bir
+özetini sunabilirim … bir sonraki bölümün özetini ister misiniz?". Ne JSON ne
+`[[n]]` vardı. İkisi de `vertex/gemini-3.6-flash`; aynı dönemde AI Studio yolundan
+çevrilen ~700 bölümde SIFIR ret, Vertex'te 77'de 2 (aynı akşam, bir saat arayla).
+Sebep Google tarafında, koddan ayırt edilemez. Açık AYRIŞTIRICIDAYDI:
+`_extract_translation` "translation" alanını bulamayınca HAM metni döndürüyordu.
+Artık ne JSON ne `"translation"` ne işaretçi taşıyan yanıt `gecersiz` işaretlenir
+(`_parse_response`) ve `_reti_asarak_uret` onu **önce AYNI modelde** yeniden dener
+(kullanıcı kararı: Vertex ATLANMAZ; ret rastgeleydi, iki vakada da ikinci deneme
+tuttu), yine reddederse YALNIZ o parça zincirin sıradaki halkasına iner. Hiçbiri
+çeviremezse ret KAYDEDİLMEZ, `TranslateError` verilir. Tek halkalı zincir (Claude)
+başka modele geçmez. Kısalma denetimi ikinci hattır: JSON içine gömülü bir ret onu
+yine tetikler. İşaretçili düz metin meşru sayılır (hizalanabilir). Prompt'u
+modeli retten vazgeçirecek şekilde değiştirmek bilerek YAPILMADI. Testler
+`tests/test_ret_yaniti.py`.
+
 `SAFETY_SETTINGS` = `BLOCK_NONE`, `max_output_tokens` açıkça verilir
 (sessiz kesilme → bozuk JSON → hizalama kaybı). Çıktı JSON
 `{translation, detected_names}`; bozuk/yarım JSON için kurtarma ayrıştırıcısı.
