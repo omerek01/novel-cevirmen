@@ -107,6 +107,21 @@ def _connect() -> sqlite3.Connection:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS ceviri_arsivi_url ON ceviri_arsivi (url, id)")
+    # ARŞİV TABLOSUNUN DA GÖÇE İHTİYACI VAR. `CREATE TABLE IF NOT EXISTS` var olan
+    # tabloya sütun EKLEMEZ, yani yukarıdaki bildirime sütun yazmak YALNIZ sıfırdan
+    # kurulan veritabanında (testler, yeni kurulum) işe yarar — canlı sunucuda tablo
+    # zaten durduğu için sessizce atlanır.
+    #
+    # Ölçülen vaka (2026-09-29): `uzunluk_orani` yalnız bildirime eklenmişti ve eski
+    # şemalı bir DB'de İKİ yol birden patlıyordu — `arsiv_listesi` ("no such column")
+    # ve daha kötüsü `save_chapter`, çünkü `_arsivle` var olan bir bölüm YENİDEN
+    # ÇEVRİLİRKEN koşuyor. Yani tam da "yeniden çevir" düğmesi sunucuda çökerdi.
+    # Testler kaçırdı: test DB'si her koşuda sıfırdan kuruluyor ve bildirim işliyor.
+    #
+    # Arşive yeni künye alanı eklerken HER İKİSİNİ de yaz: bildirim (yeni kurulum)
+    # + `ensure_column` (mevcut kurulum). `tests/test_cache_migration.py` eski
+    # şemalı bir DB kurup bunu tel tuzağıyla tutar.
+    db.ensure_column(conn, "ceviri_arsivi", "uzunluk_orani", "uzunluk_orani REAL")
     return conn
 
 
