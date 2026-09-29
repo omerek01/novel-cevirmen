@@ -2356,13 +2356,20 @@ def _translate_chunk(
     response, model = _generate_with_fallback(client_factory, models, user)
     out = _parse_response(response.text)
     if out.get("gecersiz"):
-        out, model = _reti_asarak_uret(client_factory, models, model, user)
+        ret = api_durum.ret_kaydet(model) or _ret_denemesi(model)
+        out, model = _reti_asarak_uret(client_factory, models, model, user, [ret])
     out["model"] = model
     return out
 
 
+def _ret_denemesi(model: str) -> dict:
+    """Kaydı olmayan (Claude/NVIDIA) modelin reti geçiş özetine yine girsin."""
+    return {"model": model, "sira": None, "sonuc": api_durum.RET, "kod": 200}
+
+
 def _reti_asarak_uret(
     client_factory, models: tuple[str, ...], reddeden: str, user: str,
+    retler: list[dict] | None = None,
 ) -> tuple[dict, str]:
     """Ret alan parçayı önce AYNI modelde, sonra zincirin kalanında yeniden çevirir.
 
@@ -2375,7 +2382,13 @@ def _reti_asarak_uret(
     Zincir bunu KENDİSİ yapamaz: düşme yalnız HATADA olur, ret ise HTTP 200 + dolu
     metindir. Hiçbir halka çeviremezse ret metni KAYDEDİLMEZ, hata verilir —
     önbelleğe giren ret bir daha çeviri tetiklemezdi, hata ise tekrar denenebilir.
+
+    Her ret API durum kaydına işlenir (`api_durum.ret_kaydet`) ve ret yüzünden
+    tercih edilen modelden inildiyse bir GEÇİŞ olayı yazılır: künye rozetindeki
+    "neden bu model?" bunu ancak böyle söyleyebilir.
     """
+    retler = list(retler or [])
+    tercih = models[0] if models else reddeden
     kalan = models[models.index(reddeden) + 1:] if reddeden in models else ()
     son_hata = None
     for model in (reddeden, *kalan):
@@ -2387,7 +2400,11 @@ def _reti_asarak_uret(
             continue
         out = _parse_response(response.text)
         if not out.get("gecersiz"):
+            if uretilen != tercih:
+                api_durum.gecis_kaydet(tercih, uretilen, retler)
             return out, uretilen
+        retler.append(api_durum.ret_kaydet(uretilen) or _ret_denemesi(uretilen))
+    api_durum.gecis_kaydet(tercih, None, retler)
     raise TranslateError(
         "Model çeviri yerine serbest metin döndürdü (ret) ve zincirde çeviren "
         "kalmadı. Bölümü biraz sonra yeniden deneyin."
@@ -2622,14 +2639,21 @@ def _vertex_uret(model: str, user: str, system: str, max_tokens: int):
         )
     except genai_errors.APIError as exc:
         kod = getattr(exc, "code", None) or 0
+        # `asil_kod`: API durum kaydı Google'ın FİİLEN döndürdüğü kodu yazsın —
+        # içerideki 503/404 çevirisi yalnız düşme kuralı içindir.
         if kod == 429 or kod >= 500:
-            raise _KodluHata(503, f"vertex {kod}") from exc
+            hata = _KodluHata(503, f"vertex {kod}")
+            hata.asil_kod = kod
+            raise hata from exc
         if kod in (401, 403):
             atla = _Retryable()
             atla.anahtar_red = atla.erisimsiz = True
+            atla.kod = kod
             atla.detay = f"{model}: Vertex izni yok (HTTP {kod})"
             raise atla from exc
-        raise _KodluHata(404, f"vertex {kod}") from exc
+        hata = _KodluHata(404, f"vertex {kod}")
+        hata.asil_kod = kod
+        raise hata from exc
     except Exception as exc:
         # Kimlik bulunamadı (VM dışında, `google.auth` DefaultCredentialsError):
         # bu kurulumda Vertex yok demektir — zincir ölmesin, halka atlansın.
@@ -3011,14 +3035,18 @@ def _tek_anahtarla_uret(
     değildir ve kaydedilmez. Claude'un kendi harcama göstergesi var (`kullanim`).
     """
     # Kayıt Gemini ANAHTAR x model tablosudur: Claude ve NVIDIA çağrısı oraya
-    # yazılsaydı Gemini anahtarı #1'in satırına düşerdi.
-    kaydet = gemini_modeli(model)
-    kimlik = _anahtar_kimligi(client_factory, indeks)
+    # yazılsaydı Gemini anahtarı #1'in satırına düşerdi. Vertex (2026-09-29)
+    # kendi sabit kimliğiyle ve SIRA 0 ile yazılır: anahtarı yok, "Anahtar 1"
+    # satırına karışmamalı ve panelde ayrı kart olarak durur.
+    vertex = _vertex_modeli(model)
+    kaydet = gemini_modeli(model) or vertex
+    kimlik = api_durum.VERTEX_KIMLIGI if vertex else _anahtar_kimligi(client_factory, indeks)
+    sira = 0 if vertex else indeks + 1
 
     def _kayit(sonuc: str, bas: float, kod: int | None = None, **kw) -> None:
         if kaydet:
             api_durum.istek_kaydet(
-                kimlik, indeks + 1, model, sonuc, kod,
+                kimlik, sira, model, sonuc, kod,
                 int((time.monotonic() - bas) * 1000), **kw,
             )
 
@@ -3034,9 +3062,13 @@ def _tek_anahtarla_uret(
                 )
                 response = uret(model, user, system, max_tokens)
                 if not (response.text or "").strip():
+                    _kayit(api_durum.BOS, bas, 200)
                     atla = _Retryable()
                     atla.blocked = True
                     raise atla
+                if kaydet:
+                    giris, cikis = _token_sayilari(response)
+                    _kayit(api_durum.BASARI, bas, 200, giris=giris, cikis=cikis)
                 return response
             try:
                 client = client_factory(indeks)
@@ -3055,6 +3087,8 @@ def _tek_anahtarla_uret(
             )
         except (genai_errors.APIError, _KodluHata) as exc:
             code = getattr(exc, "code", None)
+            # Kayda giden kod: Vertex içerideki çeviriden ÖNCEKİ kodu taşır.
+            kayit_kodu = getattr(exc, "asil_kod", None) or code
             if code in FALLBACK_CODES:
                 atla = _Retryable()
                 # Bayraklar çağıranın "sıradaki anahtar mı, sıradaki model mi"
@@ -3083,13 +3117,13 @@ def _tek_anahtarla_uret(
                     }.get(kota["tur"], api_durum.KOTA_BELIRSIZ)
                     _kayit(sinif, bas, code, kota=kota, soguma_sn=atla.kota_sn)
                 else:
-                    _kayit(api_durum.ERISIM, bas, code)
+                    _kayit(api_durum.ERISIM, bas, kayit_kodu)
                 # Sebep TAŞINIR: "tüm modeller meşgul" tek başına teşhis edilemez bir
                 # mesajdı ve yapılandırma hatasını geçici arıza gibi gösteriyordu.
                 atla.detay = f"{model} (anahtar #{indeks + 1}): {exc}"
                 raise atla from exc
             if code in RETRY_CODES:
-                _kayit(api_durum.GECICI, bas, code)
+                _kayit(api_durum.GECICI, bas, kayit_kodu)
                 if attempt < tekrar_sayisi - 1:
                     time.sleep(delay)
                     delay *= 2
@@ -3116,10 +3150,15 @@ def _tek_anahtarla_uret(
                     f"{model} (anahtar #{indeks + 1}): anahtar reddedildi (HTTP {code})"
                 )
                 raise atla from exc
-            _kayit(api_durum.DIGER, bas, code)
+            _kayit(api_durum.DIGER, bas, kayit_kodu)
             raise TranslateError(f"Çeviri hatası: {exc}") from exc
-        except (_Retryable, TranslateError):
-            raise  # kendi sinyalimiz (anahtar yok) — aşağıdaki dala düşmesin
+        except (_Retryable, TranslateError) as exc:
+            # Kendi sinyalimiz — aşağıdaki dala düşmesin. Vertex'in izin reddi
+            # `_vertex_uret`te `_Retryable` olarak doğar ve buraya gelir; Gemini
+            # yolunda bu dala yalnız anahtarsızlık (çağrı DEĞİL) düşer.
+            if getattr(exc, "anahtar_red", False):
+                _kayit(api_durum.ANAHTAR, bas, getattr(exc, "kod", None))
+            raise
         except httpx.HTTPError as exc:
             # TAŞIMA katmanı: bağlantı koptu, TLS, okuma zaman aşımı. Bunlar
             # `APIError` DEĞİLDİR ve bir dönem hiçbir dala girmeyip zinciri tümden

@@ -1036,10 +1036,23 @@ def get_api_durumu(response: Response) -> dict:
     response.headers["Cache-Control"] = "no-store"
     kimlikler = _anahtar_kimlikleri()
     zincir, claude_secili = _gemini_zinciri()
+    tam_zincir = translate_mod.secili_zincir()
+    # Vertex kartı: proje ayarlıysa ya da Vertex seçiliyse. Kayıt Vertex'i kendi
+    # kimliğiyle tutar (`api_durum.VERTEX_KIMLIGI`); Gemini kartlarına karışmaz.
+    vertex_modelleri = [
+        m for m in translate_mod.VERTEX_MODELLER
+        if translate_mod.vertex_projesi() or m in tam_zincir
+    ]
     veri = api_durum.panel_verisi(
-        kimlikler, zincir, translate_mod.aktif_soguma_bitisleri(kimlikler)
+        kimlikler, zincir, translate_mod.aktif_soguma_bitisleri(kimlikler),
+        vertex_modelleri=vertex_modelleri,
     )
     veri["claude_secili"] = claude_secili
+    # Özet satırı FİİLEN seçili zinciri göstermeli: `tercih` Gemini havuzuna
+    # süzülmüş zincirin başıdır (soğuma sayımı onu kullanır) ve Vertex seçiliyken
+    # "tercih edilen: 3.6-flash" demek yanlış olurdu.
+    veri["secili"] = tam_zincir[0] if tam_zincir else None
+    veri["tam_zincir"] = list(tam_zincir)
     return veri
 
 

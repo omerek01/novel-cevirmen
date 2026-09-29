@@ -102,9 +102,10 @@ def test_ayni_gemini_modeli_ve_ayni_ayarlar(monkeypatch):
     )
 
 
-def test_harcama_gostergesine_yazilir_gemini_kaydina_yazilmaz(monkeypatch):
-    """Ücretli: token harcama göstergesine gider (düşünme dahil). Gemini anahtar
-    tablosuna yazılsaydı anahtar #1'in satırına düşerdi."""
+def test_harcama_gostergesine_yazilir_kayda_KENDI_kimligiyle_girer(monkeypatch):
+    """Ücretli: token harcama göstergesine gider (düşünme dahil). API durum kaydına
+    da girer (2026-09-29) ama Gemini anahtar #1'in satırına DEĞİL: sabit Vertex
+    kimliği ve sıra 0 ile (bkz. `tests/test_api_durum_vertex.py`)."""
     monkeypatch.setenv("VERTEX_PROJE", "proje-x")
     _sahte_istemci(monkeypatch, _Yanit())
     harcama, kayit = [], []
@@ -112,7 +113,9 @@ def test_harcama_gostergesine_yazilir_gemini_kaydina_yazilmaz(monkeypatch):
     monkeypatch.setattr(api_durum, "istek_kaydet", lambda *a, **k: kayit.append(a))
     translate._generate_with_fallback(_fabrika_kullanilmamali, (VERTEX,), "p")
     assert harcama == [(VERTEX, 5000, 7000)]
-    assert kayit == []
+    assert [(a[0], a[1], a[2], a[3]) for a in kayit] == [
+        (api_durum.VERTEX_KIMLIGI, 0, VERTEX, api_durum.BASARI)
+    ]
     assert VERTEX in kullanim.FIYAT
 
 

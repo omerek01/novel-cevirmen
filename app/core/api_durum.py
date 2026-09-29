@@ -66,6 +66,17 @@ ANAHTAR = "anahtar"  # 401/403 ya da 400 API_KEY_INVALID
 BOS = "bos"  # 200 ama boş/engellenmiş yanıt
 DIGER = "diger"  # beklenmeyen HTTP kodu
 SOGUMA = "soguma"  # istek ATILMADI: anahtar bu modelde soğumada
+# RET: HTTP 200 + dolu metin, ama çeviri değil ("özetini sunabilirim…"). Kayıt önce
+# başarı olarak düşer, ret `translate._translate_chunk`ta anlaşılınca `ret_kaydet`
+# AYNI kaydı düzeltir (bkz. orası).
+RET = "ret"
+
+# Vertex çağrılarının kayıt kimliği (2026-09-29). Vertex'in ANAHTARI yok (kimlik VM
+# servis hesabından gelir); sabit bir ad, Gemini anahtar özetleriyle (16 hex)
+# çakışamaz. Sıra 0: "Anahtar N" sıraları 1'den başlar, geçiş özetindeki "denenen
+# anahtarlar" listesi 0'ı bilerek dışarıda bırakır.
+VERTEX_KIMLIGI = "vertex"
+VERTEX_ETIKETI = "Vertex"
 
 ETIKET = {
     BASARI: "başarılı",
@@ -79,6 +90,7 @@ ETIKET = {
     BOS: "boş/engellenmiş yanıt",
     DIGER: "beklenmeyen hata",
     SOGUMA: "soğumada, atlandı",
+    RET: "ret (çeviri yerine serbest metin)",
 }
 KOTA_SINIFLARI = frozenset({KOTA_GUNLUK, KOTA_DAKIKALIK, KOTA_BELIRSIZ})
 
@@ -141,6 +153,11 @@ _BAGLAM: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
 # buradan kurulur. Ortak bir "son hata" değişkeni paralel işlemleri karıştırırdı.
 _CAGRI: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
     "api_durum_cagri", default=None
+)
+# Bu bağlamdaki SON başarılı istek: ret sonradan anlaşıldığında `ret_kaydet` onu
+# düzeltir. Bağlam başınadır, yani paralel çeviriler birbirinin kaydına dokunmaz.
+_SON_BASARI: contextvars.ContextVar[dict | None] = contextvars.ContextVar(
+    "api_durum_son_basari", default=None
 )
 
 
@@ -277,6 +294,9 @@ def _connect() -> sqlite3.Connection:
             );
             """
         )
+        # Ret sayacı sonradan eklendi (2026-09-29): var olan tabloya bildirim
+        # sütun EKLEMEZ, `ensure_column` şart.
+        db.ensure_column(conn, "api_gunluk", "ret", "ret INTEGER NOT NULL DEFAULT 0")
         with _yazim(conn):
             conn.execute(
                 "INSERT OR IGNORE INTO api_meta (ad, deger) VALUES ('baslangic', ?)",
@@ -322,9 +342,9 @@ def _sessiz(fn):
     return sarici
 
 
-def _olay_yaz(conn, tur: str, **alanlar) -> None:
+def _olay_yaz(conn, tur: str, **alanlar) -> int:
     ctx = _BAGLAM.get() or {}
-    conn.execute(
+    imlec = conn.execute(
         "INSERT INTO api_olay (zaman, islem, cagri, amac, asama, url, tur, anahtar, sira,"
         " model, hedef, sonuc, http_kodu, sure_ms, ayrinti)"
         " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -346,6 +366,7 @@ def _olay_yaz(conn, tur: str, **alanlar) -> None:
             alanlar.get("ayrinti"),
         ),
     )
+    return imlec.lastrowid
 
 
 def _gerekirse_temizle(conn, simdi: float) -> None:
@@ -406,7 +427,13 @@ def istek_kaydet(
                     int(giris or 0), int(cikis or 0),
                 ),
             )
+            onceki_basari = None
             if basari:
+                r = conn.execute(
+                    "SELECT son_basari FROM api_son WHERE anahtar = ? AND model = ?",
+                    (anahtar, model),
+                ).fetchone()
+                onceki_basari = r[0] if r else None
                 # Başarı soğumayı KALDIRIR ama son hatanın ayrıntısını silmez:
                 # "en son ne zaman ve neden hata aldı" bilgisi başarıdan sonra da
                 # anlamlıdır.
@@ -441,9 +468,14 @@ def istek_kaydet(
                         kota.get("yeniden_sn"), bitis,
                     ),
                 )
-            _olay_yaz(
+            olay_id = _olay_yaz(
                 conn, "istek", zaman=simdi, cagri=cagri_kimligi, anahtar=anahtar,
                 sira=sira, model=model, sonuc=sonuc, kod=kod, sure_ms=sure_ms,
+            )
+            _SON_BASARI.set(
+                {"anahtar": anahtar, "sira": sira, "model": model, "gun": pasifik_gunu(simdi),
+                 "olay": olay_id, "onceki_basari": onceki_basari}
+                if basari else None
             )
             _gerekirse_temizle(conn, simdi)
     finally:
@@ -465,8 +497,44 @@ def atlama_kaydet(anahtar: str, sira: int, model: str) -> None:
         conn.close()
 
 
+@_sessiz
+def ret_kaydet(model: str) -> dict | None:
+    """Az önce BAŞARI diye kaydedilmiş istek aslında RETTİ: aynı kaydı düzelt.
+
+    Ret HTTP düzeyinde görünmez (200 + dolu metin); ancak yanıt ayrıştırılınca
+    anlaşılır, o sırada istek çoktan başarı olarak yazılmıştır. Yeni bir kayıt
+    eklemek istek sayısını ikiye katlardı; düzeltme yapılır: başarı -> hata (+ret),
+    son durum -> RET, "son başarı" önceki değerine döner, olay satırı RET olur.
+
+    Döner: geçiş özetine girecek deneme (``{"model", "sira", "sonuc", "kod"}``);
+    bu bağlamda o modelin kaydı yoksa (Claude/NVIDIA kayda girmez) None.
+    """
+    son = _SON_BASARI.get()
+    if not son or son["model"] != model:
+        return None
+    _SON_BASARI.set(None)
+    conn = _connect()
+    try:
+        with _yazim(conn):
+            conn.execute(
+                "UPDATE api_gunluk SET basari = MAX(basari - 1, 0), hata = hata + 1,"
+                " ret = ret + 1 WHERE anahtar = ? AND model = ? AND gun = ?",
+                (son["anahtar"], model, son["gun"]),
+            )
+            conn.execute(
+                "UPDATE api_son SET sonuc = ?, hata_sinifi = ?, http_kodu = 200,"
+                " son_hata = son_deneme, son_basari = ? WHERE anahtar = ? AND model = ?",
+                (RET, RET, son["onceki_basari"], son["anahtar"], model),
+            )
+            if son.get("olay"):
+                conn.execute("UPDATE api_olay SET sonuc = ? WHERE id = ?", (RET, son["olay"]))
+    finally:
+        conn.close()
+    return {"model": model, "sira": son["sira"], "sonuc": RET, "kod": 200}
+
+
 def _kisa(model: str | None) -> str:
-    return (model or "?").removeprefix("gemini-")
+    return (model or "?").replace("vertex/gemini-", "vertex/").removeprefix("gemini-")
 
 
 def gecis_ozeti(tercih: str, kullanilan: str | None, denemeler: list[dict]) -> str:
@@ -485,10 +553,14 @@ def gecis_ozeti(tercih: str, kullanilan: str | None, denemeler: list[dict]) -> s
         sayim: dict[str, int] = {}
         for sonuc in anahtarlar.values():
             sayim[sonuc] = sayim.get(sonuc, 0) + 1
-        dokum = ", ".join(
-            f"{n} anahtarda {ETIKET.get(s, s)}"
-            for s, n in sorted(sayim.items(), key=lambda x: -x[1])
-        )
+        if set(anahtarlar) == {0}:
+            # Vertex (sıra 0): anahtar havuzu yok, "1 anahtarda" demek yanıltırdı.
+            dokum = ", ".join(ETIKET.get(s, s) for s in sayim)
+        else:
+            dokum = ", ".join(
+                f"{n} anahtarda {ETIKET.get(s, s)}"
+                for s, n in sorted(sayim.items(), key=lambda x: -x[1])
+            )
         parcalar.append(f"{_kisa(model)}: {dokum}")
     bas = f"{_kisa(tercih)} → {_kisa(kullanilan) if kullanilan else 'çeviri yapılamadı'}"
     return bas + (": " + "; ".join(parcalar) if parcalar else "")
@@ -560,14 +632,14 @@ def gunluk_sayaclar(gun: str | None = None) -> list[dict]:
     conn = _connect()
     try:
         satirlar = conn.execute(
-            "SELECT anahtar, model, deneme, basari, hata, kota, giris_token, cikis_token"
-            " FROM api_gunluk WHERE gun = ? ORDER BY anahtar, model",
+            "SELECT anahtar, model, deneme, basari, hata, kota, giris_token, cikis_token,"
+            " ret FROM api_gunluk WHERE gun = ? ORDER BY anahtar, model",
             (gun,),
         ).fetchall()
     finally:
         conn.close()
     adlar = ("anahtar", "model", "deneme", "basari", "hata", "kota", "giris_token",
-             "cikis_token")
+             "cikis_token", "ret")
     return [dict(zip(adlar, r)) for r in satirlar]
 
 
@@ -647,6 +719,7 @@ DURUM = {
     ANAHTAR: ("Anahtar/izin hatası", "hata"),
     BOS: ("Son yanıt boş/engellenmiş", "notr"),
     DIGER: ("Beklenmeyen hata", "hata"),
+    RET: ("Son yanıt ret", "uyari"),
 }
 
 AMAC = {
@@ -694,6 +767,7 @@ def panel_verisi(
     zincir: tuple[str, ...] | list[str],
     sogumalar: dict[tuple[str, str], float],
     simdi: float | None = None,
+    vertex_modelleri: tuple[str, ...] | list[str] = (),
 ) -> dict:
     """`GET /api/settings/api-status` gövdesi. Google'a istek ATMAZ.
 
@@ -701,38 +775,57 @@ def panel_verisi(
     "Anahtar N" etiketi gider. ``sogumalar`` çeviri yolunun KENDİ bellek
     soğumasıdır (`translate.aktif_soguma_bitisleri`): panel ile çeviri yolu
     aynı kaynağa bakar, ikinci bir kural doğmaz.
+
+    ``vertex_modelleri`` boş değilse Vertex AYRI bir kart (``vertex``) olarak
+    döner: `anahtarlar` listesine girseydi "Anahtar N" sayımı, soğuma özeti ve
+    günlük Gemini toplamı (kota günü) Vertex'i de sayardı — Vertex'in kotası
+    Gemini havuzundan bağımsız.
     """
     simdi = time.time() if simdi is None else simdi
     gun = pasifik_gunu(simdi)
     son = {(d["anahtar"], d["model"]): d for d in son_durumlar()}
     sayac = {(s["anahtar"], s["model"]): s for s in gunluk_sayaclar(gun)}
     tercih = zincir[0] if zincir else None
-    kartlar = []
-    for i, kimlik in enumerate(kimlikler):
-        modeller = []
-        for model in zincir:
-            d = son.get((kimlik, model))
-            bitis = sogumalar.get((kimlik, model))
-            durum = kart_durumu(d, bitis, simdi)
-            etiket, ton = DURUM[durum]
-            s = sayac.get((kimlik, model)) or {}
-            d = d or {}
-            modeller.append({
-                "model": model,
-                "durum": durum,
-                "etiket": etiket,
-                "ton": ton,
-                "son_deneme": d.get("son_deneme"),
-                "son_basari": d.get("son_basari"),
-                "son_hata": d.get("son_hata"),
-                "hata_etiketi": ETIKET.get(d["hata_sinifi"]) if d.get("hata_sinifi") else None,
-                "http_kodu": d.get("http_kodu"),
-                "kota_turu": d.get("kota_turu"),
-                "kota_sinir": d.get("kota_sinir"),
-                "soguma_bitis": bitis if bitis and bitis > simdi else None,
-                "bugun": {k: s.get(k, 0) for k in ("deneme", "basari", "hata", "kota")},
-            })
-        kartlar.append({"etiket": f"Anahtar {i + 1}", "sira": i + 1, "modeller": modeller})
+
+    def _model_karti(kimlik: str, model: str) -> dict:
+        d = son.get((kimlik, model))
+        bitis = sogumalar.get((kimlik, model))
+        durum = kart_durumu(d, bitis, simdi)
+        etiket, ton = DURUM[durum]
+        s = sayac.get((kimlik, model)) or {}
+        d = d or {}
+        return {
+            "model": model,
+            "durum": durum,
+            "etiket": etiket,
+            "ton": ton,
+            "son_deneme": d.get("son_deneme"),
+            "son_basari": d.get("son_basari"),
+            "son_hata": d.get("son_hata"),
+            "hata_etiketi": ETIKET.get(d["hata_sinifi"]) if d.get("hata_sinifi") else None,
+            "http_kodu": d.get("http_kodu"),
+            "kota_turu": d.get("kota_turu"),
+            "kota_sinir": d.get("kota_sinir"),
+            "soguma_bitis": bitis if bitis and bitis > simdi else None,
+            "bugun": {k: s.get(k) or 0 for k in ("deneme", "basari", "hata", "kota", "ret")},
+        }
+
+    kartlar = [
+        {
+            "etiket": f"Anahtar {i + 1}",
+            "sira": i + 1,
+            "modeller": [_model_karti(kimlik, model) for model in zincir],
+        }
+        for i, kimlik in enumerate(kimlikler)
+    ]
+    vertex = (
+        {
+            "etiket": f"{VERTEX_ETIKETI} (Cloud kredisi, ücretli)",
+            "sira": 0,
+            "modeller": [_model_karti(VERTEX_KIMLIGI, m) for m in vertex_modelleri],
+        }
+        if vertex_modelleri else None
+    )
     toplam = {
         k: sum(s[k] for s in sayac.values() if s["model"] in zincir)
         for k in ("deneme", "basari", "hata")
@@ -749,6 +842,7 @@ def panel_verisi(
         "sogumada": sum(1 for k in kimlikler if (sogumalar.get((k, tercih)) or 0) > simdi),
         "bugun_toplam": toplam,
         "anahtarlar": kartlar,
+        "vertex": vertex,
     }
 
 
@@ -761,6 +855,7 @@ def olaylari_disa_ver(
     anahtara taşımak, silinen anahtarın hatasını sağlam anahtara yazardı.
     """
     etiket = {k: f"Anahtar {i + 1}" for i, k in enumerate(kimlikler)}
+    etiket[VERTEX_KIMLIGI] = VERTEX_ETIKETI
     bolumler = bolumler or {}
     cikti = []
     for o in olaylar:

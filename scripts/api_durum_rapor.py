@@ -64,6 +64,8 @@ def _sira_haritasi() -> dict[str, str]:
 def _ad(harita: dict[str, str], kimlik: str | None, sira: int | None = None) -> str:
     if kimlik in harita:
         return harita[kimlik]
+    if kimlik == api_durum.VERTEX_KIMLIGI:
+        return api_durum.VERTEX_ETIKETI
     if kimlik and kimlik.startswith("sira"):
         return f"Anahtar {kimlik[4:]}"
     return f"(çıkarılmış anahtar, o gün #{sira})" if sira else "(bilinmeyen anahtar)"
