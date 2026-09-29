@@ -353,6 +353,22 @@ başına SON sonuç). Okuma: `scripts/api_durum_rapor.py` (Google'a istek ATMAZ;
 * **Gün Pasifik günüdür** (kota orada sıfırlanır). Windows'ta `tzdata` paketi ŞART
   (requirements'ta): yoksa `ZoneInfo` patlar, sabit UTC-8'e düşülür ve yaz saatinde
   bir saat şaşar — testler bunu yakaladı.
+* **Vertex de kayda girer, KENDİ kimliğiyle** (2026-09-29, kullanıcı isteği):
+  `api_durum.VERTEX_KIMLIGI` ("vertex"), sıra **0**. Anahtarı olmadığı için Gemini
+  anahtar özetleriyle çakışmaz; sıra 0 "Anahtar N" sıralarına (1'den başlar) ve
+  geçiş özetindeki "denenen anahtarlar" listesine karışmaz. Panelde AYRI kart
+  (`panel_verisi(..., vertex_modelleri=)` → `vertex`); Gemini günlük toplamına ve
+  soğuma sayımına GİRMEZ (kotası havuzdan bağımsız). Kayda Google'ın FİİLEN
+  döndürdüğü kod yazılır (`asil_kod`): 429 içeride 503'e çevriliyor, yalnız düşme
+  kuralı için. NVIDIA ve Claude hâlâ kayda girmez.
+* **RET ayrı sonuç sınıfıdır** (`api_durum.RET`): HTTP 200 + dolu metin ama çeviri
+  değil. İstek önce BAŞARI diye yazılır; ret `_translate_chunk`ta anlaşılınca
+  `ret_kaydet` AYNI kaydı düzeltir (başarı → hata, `api_gunluk.ret` +1, son durum
+  RET, "son başarı" önceki değerine döner, olay satırı RET). Yeni satır eklemek
+  istek sayısını ikiye katlardı. Hangi kaydın düzeltileceği bağlam başına
+  `_SON_BASARI` contextvar'ından okunur — paralel çeviriler birbirine dokunmaz. Ret
+  yüzünden tercih edilen modelden inilirse `_reti_asarak_uret` bir GEÇİŞ yazar
+  ("neden bu model?" bunu ancak böyle söyler).
 Manga görsel yolu (`import_translate._manga_regions`) havuzu kullanmaz ve kayda
 GİRMEZ (kullanıcı kararı: kapsam dışı).
 
@@ -492,7 +508,7 @@ açıkça seçilince başa geçer. Claude'dan farkı TERS yön: Vertex çevireme
 halkalarına düşülür (künye fiilen çevireni yazar, para harcanmaz). Çağrı ayarları AI Studio
 yoluyla TEK yardımcıdan gelir (`_gemini_yapilandirmasi`); tokenlar (düşünme dahil) harcama
 göstergesine yazılır (`kullanim.FIYAT`, 0,75/3,75 $ tanıtım fiyatı — 2027'den 1,50/7,50),
-`api_durum`'a yazılmaz. **Kredi bitince ya da süresi dolunca** hesap ücretliye
+API durum kaydına KENDİ kimliğiyle girer (bkz. API GÖZLEM KAYDI). **Kredi bitince ya da süresi dolunca** hesap ücretliye
 yükseltilmişse gerçek fatura başlar — modeli ücretsiz bir Gemini halkasına geri almak
 gerekir. **AI Studio'daki ücretsiz projelerde "Set up billing"e BASILMAZ**: o projenin
 ücretsiz kotası biter ve anahtarı sessizce ücretli olur. Testler `tests/test_vertex_halkasi.py`.
