@@ -510,7 +510,11 @@ yoluyla TEK yardımcıdan gelir (`_gemini_yapilandirmasi`); tokenlar (düşünme
 göstergesine yazılır (`kullanim.FIYAT`, 0,75/3,75 $ tanıtım fiyatı — 2027'den 1,50/7,50),
 API durum kaydına KENDİ kimliğiyle girer (bkz. API GÖZLEM KAYDI). **Kredi bitince ya da süresi dolunca** hesap ücretliye
 yükseltilmişse gerçek fatura başlar — modeli ücretsiz bir Gemini halkasına geri almak
-gerekir. **AI Studio'daki ücretsiz projelerde "Set up billing"e BASILMAZ**: o projenin
+gerekir. **`vertex/gemini-3.8-flash` ve `vertex/gemini-3.7-flash` da seçilebilir**
+(2026-09-30, kullanıcı isteği): adlar sunucudan yoklandı (kısa istek, ikisi de 200),
+fiyat 3.6 ile aynı; kalite ÖLÇÜLMEDİ, yalnız listede. Yeni Vertex modeli eklerken
+`kullanim.FIYAT`'a da ekle — fiyatsız model göstergeden sessizce düşer
+(`tests/test_vertex_halkasi.py` tutar). **AI Studio'daki ücretsiz projelerde "Set up billing"e BASILMAZ**: o projenin
 ücretsiz kotası biter ve anahtarı sessizce ücretli olur. Testler `tests/test_vertex_halkasi.py`.
 
 **GEMİNİ DIŞI SAĞLAYICILAR KALDIRILDI** (2026-09-02, kullanıcı kararı; 2026-09-26'da
