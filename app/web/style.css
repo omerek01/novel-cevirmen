@@ -647,7 +647,7 @@ body.reading { padding-bottom: 0; }
 }
 .setting-row + .setting-row { border-top: 1px solid color-mix(in oklab, var(--ink) 12%, transparent); }
 
-/* Dört seçenekli model kutusu tek satıra sığmıyor (telefonda taşıyordu): etiket
+/* Model kutusu tek satıra sığmıyor (telefonda taşıyordu): etiket
    üstte, seçenekler ve ölçüm notu altta. */
 .setting-row-dikey {
   display: block;
@@ -657,6 +657,39 @@ body.reading { padding-bottom: 0; }
 /* Ucretli model secilince not gorsel olarak da ayrilir: sadece metinde "ÜCRETLİ"
    yazmak, panelde hizlica goz gezdiren kullanicida kaybolur. */
 .model-ucretli { color: var(--accent); font-weight: 700; }
+/* Model seçici: sağlayıcı başlığı + alt satıra kayan ızgara. Tek sıralı segment
+   kutusu on bir seçenekte telefonda sağa taşıyordu; ayrı çipler sarmalanır. */
+.model-secim { margin-top: 0.5rem; width: 100%; }
+.model-grup-baslik {
+  margin: 0.7rem 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: var(--ink-soft);
+}
+.model-grup-baslik:first-child { margin-top: 0; }
+.model-grup {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(5.2rem, 1fr));
+  gap: 0.4rem;
+}
+.model-secenek {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--sans);
+  font-weight: 800;
+  font-size: 0.78rem;
+  padding: 0.35rem 0.4rem;
+  min-height: 44px; /* D-A11y */
+  cursor: pointer;
+}
+.model-secenek[aria-pressed="true"] {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent, #fff);
+}
 .model-harcama {
   margin: 0.3rem 0 0;
   text-transform: none;
@@ -667,7 +700,7 @@ body.reading { padding-bottom: 0; }
    "bir sey oluyor" demeli, dikkat calmadan. */
 .auto-offline { color: var(--accent); }
 .model-notu {
-  margin: 0.45rem 0 0;
+  margin: 0.7rem 0 0;
   text-transform: none;
   letter-spacing: normal;
   font-weight: 500;

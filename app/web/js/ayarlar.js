@@ -82,14 +82,35 @@ export function cizModelSecim(secili) {
   const kutu = el("modelSecim");
   if (!kutu) return;
   kutu.innerHTML = "";
+  /* Sağlayıcıya göre gruplu, alt satıra kayan ızgara: on bir seçenek tek sıraya
+     sığmıyordu (telefonda sağa taşıyordu). Grubu SUNUCU verir; eski sunucu
+     `grup` göndermezse hepsi tek grupta, tam etiketle çizilir. */
+  const gruplar = new Map();
   for (const m of modelSecenekleri) {
-    const b = document.createElement("button");
-    b.className = "seg";
-    b.dataset.model = m.ad;
-    b.textContent = m.etiket;
-    b.title = m.not || m.ad;
-    b.setAttribute("aria-pressed", m.ad === secili ? "true" : "false");
-    kutu.appendChild(b);
+    const g = m.grup || "";
+    if (!gruplar.has(g)) gruplar.set(g, []);
+    gruplar.get(g).push(m);
+  }
+  for (const [grup, modeller] of gruplar) {
+    if (grup) {
+      const baslik = document.createElement("div");
+      baslik.className = "model-grup-baslik";
+      baslik.textContent = grup;
+      kutu.appendChild(baslik);
+    }
+    const izgara = document.createElement("div");
+    izgara.className = "model-grup";
+    for (const m of modeller) {
+      const b = document.createElement("button");
+      b.className = "model-secenek";
+      b.dataset.model = m.ad;
+      b.textContent = m.kisa || m.etiket;
+      b.title = m.not || m.ad;
+      b.setAttribute("aria-label", m.etiket);
+      b.setAttribute("aria-pressed", m.ad === secili ? "true" : "false");
+      izgara.appendChild(b);
+    }
+    kutu.appendChild(izgara);
   }
   const notu = el("modelNotu");
   if (notu) {
