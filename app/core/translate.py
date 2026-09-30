@@ -223,6 +223,7 @@ NVIDIA_TOPLAM_SURE_SN = 480.0
 NVIDIA_MODELLER = {
     "z-ai/glm-5.3": {
         "etiket": "GLM-5.3 (NVIDIA)",
+        "kisa": "GLM-5.3",
         "not": "Ücretsiz, Google dışı. 3 bölümde oran 0,966, sıfır ihlal; bölüm başı 2-3 dk.",
         # Kullanıcı isteği: düşünme LOW. glm-5.3 ölçümde hiç düşünme tokeni üretmedi.
         "dusunme": "low",
@@ -267,18 +268,21 @@ VERTEX_MODELLER = {
     "vertex/gemini-3.8-flash": {
         "model": "gemini-3.8-flash",
         "etiket": "3.8 Flash (Vertex, kredi)",
+        "kisa": "3.8 Flash",
         "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
                "En yeni; çeviri kalitesi henüz ölçülmedi.",
     },
     "vertex/gemini-3.7-flash": {
         "model": "gemini-3.7-flash",
         "etiket": "3.7 Flash (Vertex, kredi)",
+        "kisa": "3.7 Flash",
         "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
                "Çeviri kalitesi henüz ölçülmedi.",
     },
     "vertex/gemini-3.6-flash": {
         "model": "gemini-3.6-flash",
         "etiket": "3.6 Flash (Vertex, kredi)",
+        "kisa": "3.6 Flash",
         "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
                "Aynı 3.6; günlük kota ve yoğunluk (503) derdi yok.",
     },
@@ -361,16 +365,29 @@ GEMINI_SECENEKLERI = (
         "not": "Eski nesil, sağlam: oran 0,932, hizalama 3/3, en hızlısı (45 sn).",
     },
 )
+# `grup` + `kisa` okuyucunun seçicisi için (2026-09-30): on bir seçenek tek sıraya
+# sığmıyordu, seçici sağlayıcıya göre gruplanıp alt satıra kayıyor. Grup başlığı
+# sağlayıcıyı ve ücreti söylediği için düğmede `kisa` ad yeter; `etiket` tam adı
+# taşımaya devam eder (eski önbellekli kabuk düz listeyi onunla çizer).
+GRUP_GEMINI = "Gemini · ücretsiz"
+GRUP_NVIDIA = "NVIDIA · ücretsiz"
+GRUP_VERTEX = "Vertex · Cloud kredisi (ücretli)"
+GRUP_CLAUDE = "Claude · ücretli"
+
+
+def _secenek(ad: str, bilgi: dict, grup: str, ucretli: bool = False) -> dict:
+    s = {"ad": ad, "etiket": bilgi["etiket"], "kisa": bilgi.get("kisa", bilgi["etiket"]),
+         "not": bilgi["not"], "grup": grup}
+    if ucretli:
+        s["ucretli"] = True
+    return s
+
+
 SECILEBILIR_MODELLER = (
-    GEMINI_SECENEKLERI
-    + tuple(
-        {"ad": ad, "etiket": bilgi["etiket"], "not": bilgi["not"]}
-        for ad, bilgi in NVIDIA_MODELLER.items()
-    )
-    + tuple(
-        {"ad": ad, "etiket": bilgi["etiket"], "not": bilgi["not"], "ucretli": True}
-        for ad, bilgi in {**VERTEX_MODELLER, **CLAUDE_MODELLER}.items()
-    )
+    tuple(_secenek(m["ad"], m, GRUP_GEMINI) for m in GEMINI_SECENEKLERI)
+    + tuple(_secenek(ad, b, GRUP_NVIDIA) for ad, b in NVIDIA_MODELLER.items())
+    + tuple(_secenek(ad, b, GRUP_VERTEX, True) for ad, b in VERTEX_MODELLER.items())
+    + tuple(_secenek(ad, b, GRUP_CLAUDE, True) for ad, b in CLAUDE_MODELLER.items())
 )
 SECILEBILIR_ADLAR = tuple(m["ad"] for m in SECILEBILIR_MODELLER)
 # Ayarın DB anahtarı. Varsayılan, zinciri bugünkü hâlinde bırakan seçimdir —
