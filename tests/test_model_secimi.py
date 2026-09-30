@@ -81,7 +81,9 @@ def test_secilebilir_modeller_kullanicinin_istedikleri():
         "gemini-3.5-flash",
         "gemini-2.5-flash",
         "z-ai/glm-5.3",  # 2026-09-26: ücretsiz, NVIDIA üzerinden
-        "vertex/gemini-3.6-flash",  # 2026-09-26: ÜCRETLİ, Cloud deneme kredisinden
+        "vertex/gemini-3.8-flash",  # 2026-09-30: ÜCRETLİ, Cloud deneme kredisinden
+        "vertex/gemini-3.7-flash",
+        "vertex/gemini-3.6-flash",  # 2026-09-26
         "claude-haiku-4-5",
         "claude-sonnet-5",
     )

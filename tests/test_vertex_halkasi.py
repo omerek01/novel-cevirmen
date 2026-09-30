@@ -119,6 +119,16 @@ def test_harcama_gostergesine_yazilir_kayda_KENDI_kimligiyle_girer(monkeypatch):
     assert VERTEX in kullanim.FIYAT
 
 
+@pytest.mark.parametrize("ad", list(translate.VERTEX_MODELLER))
+def test_her_vertex_modeli_harcama_gostergesinde_ve_zincire_girmez(ad):
+    """Tel tuzağı: fiyatı olmayan ücretli model göstergeden SESSİZCE düşerdi
+    (`kullanim.ozet` fiyatsızı atlar) — harcama olur, gösterge 0 der."""
+    assert ad in kullanim.FIYAT
+    assert ad not in translate.DEFAULT_MODELS
+    assert translate.zincir_kur(ad) == (ad, *translate.DEFAULT_MODELS)
+    assert translate.VERTEX_MODELLER[ad]["model"] == ad.removeprefix("vertex/")
+
+
 def test_proje_yoksa_halka_anahtarsiz_atlanir(monkeypatch):
     _sahte_istemci(monkeypatch, AssertionError("istek atılmamalı"))
     with pytest.raises(translate.TranslateError) as hata:

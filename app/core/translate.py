@@ -257,7 +257,25 @@ def _nvidia_modeli(model: str | None) -> bool:
 # tablosu), harcama göstergesine (`kullanim`) girer.
 VERTEX_PROJE_ENV = "VERTEX_PROJE"
 VERTEX_KONUM_ENV = "VERTEX_KONUM"
+#
+# 3.8 ve 3.7 (2026-09-30, kullanıcı isteği): AI Studio'da uzun bölümleri sık 503
+# ile reddettikleri için ücretsiz listede "ölçülemedi" notuyla duruyorlar; Vertex
+# ücretli kapasiteden geçtiği için orada ayrıca teklif edilir. Ad yoklandı (sunucu,
+# kısa istek: ikisi de 200). Kalite/uzunluk oranı ÖLÇÜLMEDİ — zincire değil yalnız
+# listeye girer. Fiyat 3.6 ile aynı (tanıtım 0,75/3,75 $).
 VERTEX_MODELLER = {
+    "vertex/gemini-3.8-flash": {
+        "model": "gemini-3.8-flash",
+        "etiket": "3.8 Flash (Vertex, kredi)",
+        "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
+               "En yeni; çeviri kalitesi henüz ölçülmedi.",
+    },
+    "vertex/gemini-3.7-flash": {
+        "model": "gemini-3.7-flash",
+        "etiket": "3.7 Flash (Vertex, kredi)",
+        "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
+               "Çeviri kalitesi henüz ölçülmedi.",
+    },
     "vertex/gemini-3.6-flash": {
         "model": "gemini-3.6-flash",
         "etiket": "3.6 Flash (Vertex, kredi)",

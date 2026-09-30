@@ -21,6 +21,8 @@ from . import db
 FIYAT = {
     # Vertex: AI Studio ücretli fiyatı (tanıtım, 2026-12-31'e kadar; 2027'den
     # 1,50 / 7,50). Çıkışa düşünme tokenları dahildir, onlar da faturalanır.
+    "vertex/gemini-3.8-flash": {"giris": 0.75, "cikis": 3.75},
+    "vertex/gemini-3.7-flash": {"giris": 0.75, "cikis": 3.75},
     "vertex/gemini-3.6-flash": {"giris": 0.75, "cikis": 3.75},
     "claude-haiku-4-5": {"giris": 1.00, "cikis": 5.00},
     "claude-sonnet-5": {"giris": 2.00, "cikis": 10.00},
