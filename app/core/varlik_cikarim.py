@@ -51,13 +51,16 @@ CIKARIM_INSTRUCTION = (
     "- Özne ve nesne BELİRLİ bir varlık olmalı (kişi, yer, örgüt, eşya, yetenek). "
     "Genel sınıf/grup adları ÖZNE OLAMAZ ('Echo', 'scavengers', 'Transcendents', "
     "'horde' gibi). Genel ad yalnız türü/rütbesi/sınıfı ilişkisinin NESNESİ olabilir.\n"
-    "- bulundugu_yer KALICI bağdır (yaşadığı, ait olduğu, hapsolduğu yer); bir "
-    "sahnede bir yerde durmak, yürümek, savaşmak bulundugu_yer DEĞİLDİR.\n"
+    "- bulundugu_yer: bir DÖNEM boyunca yaşadığı, ait olduğu ya da hapsolduğu BÖLGE "
+    "(şehir, ada, diyar). Bir sahnede bir odada durmak, yürümek, savaşmak "
+    "bulundugu_yer DEĞİLDİR.\n"
     "- parcasi YALNIZ yer -> daha büyük yer içindir (bir kule bir adanın parçası); "
     "kişi/grup üyeliği için klani ya da yoldasi kullan.\n"
     "- unvani: unvan o kişiye METİNDE AÇIKÇA atfedilmeli ('X, the Y' / 'Y known as X').\n"
     # Ölçülen (16-35. bölümler): `Hero -> gercek_adi -> Auro of the Nine`. Hero bir
     # lakap, Auro of the Nine kişinin ADI; True Name ise Spell'in verdiği ayrı bir ad.
+    "- niteligi YALNIZ Spell'in [Attribute] olarak adlandırdığı şeyler içindir (Fated, "
+    "Mark of Divinity); toplanan kaynaklar, sayılar, yetenekler nitelik DEĞİLDİR.\n"
     "- gercek_adi YALNIZ Spell'in verdiği True Name içindir (rünlerde 'True Name: X' "
     "ya da 'You have been bestowed a True Name'). Bir kişinin asıl adı ile lakabı "
     "arasındaki bağ takma_adi'dır: özne ASIL ad, nesne lakap (Auro of the Nine -> "
@@ -257,7 +260,9 @@ def bolum_cikar(
     for b in varlik_grafigi.baglar(book_slug):
         if b["origin"] == "sistem":
             sistem.setdefault((b["kaynak_kimlik"], b["hedef_kimlik"]), set()).add(b["iliski"])
-        if b["iliski"] == "takma_adi" and b["origin"] in ("sistem", "manual"):
+        # Gerçek Ad da kişiyi adlandırır (ölçülen: `Changing Star -> oldurdu -> ...`
+        # Nephis'in düğümüne değil ayrı düğüme yazılıyordu).
+        if b["iliski"] in ("takma_adi", "gercek_adi") and b["origin"] in ("sistem", "manual"):
             asil[b["hedef_kimlik"]] = b["kaynak_kimlik"]
     response, model = translate._generate_with_fallback(
         translate._gemini_fabrikasi(api_key), models or sozluk_dogrulama.ucretsiz_zincir(), user,

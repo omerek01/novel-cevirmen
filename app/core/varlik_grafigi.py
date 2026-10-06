@@ -50,7 +50,9 @@ ILISKILER: dict[str, dict] = {
     "akrabasi": {"simetrik": True, "etiket": "akrabası", "ters": "akrabası", "grup": "toplum"},
     "dusmani": {"simetrik": True, "etiket": "düşmanı", "ters": "düşmanı", "grup": "toplum"},
     "ogretmeni": {"etiket": "öğretmeni", "ters": "öğrencisi", "grup": "toplum"},
-    "bulundugu_yer": {"etiket": "bulunduğu yer", "ters": "orada bulunan", "grup": "mekan"},
+    # O DÖNEM yaşadığı/bulunduğu bölge (ilk_bolum dönemi gösterir); sahnelik anlık
+    # konum değil. Ölçülen: `Kai -> Forgotten Shore` arc boyunca doğru bilgi.
+    "bulundugu_yer": {"etiket": "bulunduğu yer (o dönem)", "ters": "orada bulunan", "grup": "mekan"},
     "parcasi": {"etiket": "parçası olduğu yer", "ters": "içerdiği", "grup": "mekan"},
     "turu": {"etiket": "türü", "ters": "örneği", "grup": "duzen"},
     "rutbesi": {"etiket": "rütbesi", "ters": "bu rütbede", "grup": "duzen", "tekil": True},
@@ -84,9 +86,12 @@ KITAP_PROFILLERI: dict[str, dict] = {
             "Flaw", "Flaws", "Gate", "Gates", "Gateway", "Gateways", "Seed", "Spell", "Rank",
             "Ranks", "Class", "Classes", "Tier", "Lord", "Lords", "Master", "Masters",
             "Saints", "Sovereign", "Sovereigns", "Legacy", "Legacies", "Citadel", "Citadels",
-            "Nightmare Creature", "Nightmare Creatures", "Nightmares", "Dream Realm",
+            "Nightmare Creature", "Nightmare Creatures", "Nightmares",
             "Sleeper", "Sleepers", "Dreamer", "Dreamers", "Awakened", "Aspirant", "Aspirants",
             "Transcendents", "Supremes", "Soul Core", "Soul Shards", "Shadow Core", "Relic",
+            # Toplanan KAYNAKLAR (ölçülen: `Sunny -> niteligi -> Shadow Fragments`).
+            "Shadow Fragment", "Shadow Fragments", "Soul Fragment", "Soul Fragments",
+            "Soul Shard", "Soul Essence", "Shard Memory", "Shard Memories",
             "Dormant Ability", "Awakened Ability", "Ascended Ability", "Transformation Ability",
         ),
         # Spell'in sıralı düzenleri (kitap metninden, `CLAUDE.md` `Great -> Ulu`
