@@ -1355,6 +1355,110 @@ SQLite'ta `ADD COLUMN IF NOT EXISTS` yok). `NOVEL_DB_PATH` env'i yolu değiştir
   çevirileri ölçer), `--calistir` kota harcar ve önbelleğe YAZMAZ, ücretli modeli reddeder.
   Çıktılar `cache/degerlendirme/` (depoya girmez).
 
+## Sözlük kalite sistemi (2026-10-06, `SOZLUK-SISTEMI-ARASTIRMA.md` uygulaması)
+
+Shadow Slave sözlüğünün 1100 kaydı incelendi; hataların ortak paydası: bütün
+denetimler çeviriden SONRA ve RAPOR olarak çalışıyordu, sözlüğe YAZMA anında kapı
+yoktu ve model ne önerirse KURAL oluyordu (`Weaver -> Weaver’s`, `Seven -> Yediler`,
+`daemon -> Şeytan` = `Devil -> Şeytan`, `God of Death -> Savaş Tanrısı`). Dört katman:
+
+* **Yazma kapısı** (`app/core/sozluk_kapi.py`, deterministik, API'siz). YALNIZ
+  `origin="auto"` adaylara uygulanır (elle/içe aktarma kullanıcının iradesi).
+  `merge_terms` her adayı `kapi_denetle`den geçirir: biçim (İngilizce iyelik, sonda
+  kesmeli ek, Türkçe karşılıkta İngilizce işlev sözcüğü) · tekil/çoğul (baş sözcüğe
+  bakar: `Chains of Longing` çoğul, `Lake of Bones` tekil) · ters benzersizlik (aynı
+  karşılık başka KAVRAMDA) · yasak karşılık · kategori politikası · yazım varyantı.
+  Takılan aday `durum="tutuldu"` ile yazılır: **prompt'a ve uyum denetimine GİRMEZ**
+  (`ceviri_sozlugu`/`ceviri_kosullari` süzer), inceleme bekler, künye "eklendi"
+  demez, bir daha eklenmez. Onay ya da elle düzeltme onu kurala çevirir (prompt
+  değişikliği: sürüm artar, geçmişe yazılır). Zararsız varyant (`the`, `of the`,
+  iç iyelik) ve AYNI karşılıklı sözcük sırası / tekil-çoğul yazım varyantı ayrı satır
+  AÇMAZ, mevcut kayda alternatif yazım olarak bağlanır.
+  **Kalibrasyon ölçüldü** (sunucu kopyası): tek harf yakınlığı yalnız 7+ harfte
+  (`YAKIN_MIN_UZUNLUK`) — kısa adlarda uyarıların TAMAMI meşru ayrı adlardı
+  (Abel/Obel, Dale/Gale, Fool/Tool). Kalıp denetimi yalnız ortak kökü olan
+  ayrışmaları işaretler (`Uykuda`/`Uykudaki`, `Mahluku`/`Mahluğu`); `Great -> Ulu`
+  ile `Great Clan -> Büyük Klan` (iki anlam) ve `Gölge Rütbesi`/`Yüce Rütbe` (ad /
+  sıfat tamlaması) bilerek dışarıda.
+* **Kavram alanları**: `glossary.tanim`, `tur` (vardı), `sozluk_yasak` (TBX
+  "forbidden", kimliğe bağlı), `sozluk_politika` (tür -> ingilizce/turkce). YASAK
+  koşul metnine `YASAK KARŞILIK:` işaretiyle işlenir (ek anlamla aynı yol) ama kaydı
+  KOŞULLU YAPMAZ — `translate._gercek_kosul` işaretli parçayı ayırır, kayıt uyum
+  denetiminde kalır; prompt'a `[YASAK: ...]` çıkar ve açıklama YALNIZ o istekte yasak
+  varsa eklenir (yasaksız prompt bayt bayt aynı). Politika prompt'a girmez.
+* **Model doğrulaması** (`app/core/sozluk_dogrulama.py`). YALNIZ ücretsiz zincir
+  (`ucretsiz_zincir()`): kullanıcının seçtiği Claude/Vertex ASLA kullanılmaz — tel
+  tuzağı `secili_zincir(` çağrısını yasaklar. Sonuç kaydı DEĞİŞTİRMEZ; sorunlu kayıt
+  incelemeye düşer (onaylanmış kayıt düşmez), tanım/tür YALNIZ boşsa yazılır.
+  Çeviri akışı yeni aday gelince `arka_planda_dogrula` çağırır: 300 sn biriktirir,
+  kitap başına tek uçuş, `SOZLUK_DOGRULAMA=0` kapatır (`conftest` testlerde kapatır).
+  **Ölçüm** (20 bilinen hatalı + 20 doğru kayıt, 3.6-flash): model hatalıların 15'ini
+  yakaladı (13 "uygun değil", 2 "sıradan sözcük"), doğruların HİÇBİRİNİ reddetmedi.
+  Geri çeviri örtüşmesi (Jaccard) karar kuralı olarak DENENDİ ve KALDIRILDI: ek hata
+  yakalamadı, eş anlamlılarda 4/20 sahte red verdi (chitin/shell). Geri çeviri notta
+  bilgi olarak durur.
+* **Geri besleme** (`sozluk_kapi.ihlal_supheleri`): iyi modellerin (lite ve önekli
+  eski modeller hariç) en az 2 bölümde UYMADIĞI kayıt şüphelidir. Saklı
+  `glossary_leaks` yalnız aday seçer, **bugünkü ölçütle yeniden ölçülür** — saklı
+  bayrakların bir kısmı eski ölçütle yazılmış sahte (`Saints` 44 bölüm). Sözlük
+  ekranı hızlı kipi (bayraklı bölümler), bakım aracı `tam=True` kullanır (eski
+  bölümlerde bayrak NULL: `Fool` ancak tam taramada görünür).
+
+Bakım: `scripts/sozluk_denetle.py --kitap X` (API'siz tam denetim; `--isaretle`
+bulguları yazar ama kaydı KURAL bırakır — prompt'tan sessizce terim çekmek
+kullanıcının bilmediği bir davranış değişikliği olurdu) ve `scripts/sozluk_dogrula.py
+--kitap X` (kuru; `--calistir --cikti r.json` sorar, `--rapordan r.json --uygula`
+KOTA HARCAMADAN sunucuya işler). Uçlar: `PUT /api/book/{slug}/glossary/yasak|tanim|
+politika`, `POST|GET .../glossary/verify`. İnceleme ekranı yeni nedenleri etiketler
+ve tutulan kaydı `TUTULDU` diye gösterir. Testler `tests/test_sozluk_kapi.py`,
+`tests/test_sozluk_dogrulama.py`.
+
+## Varlık grafiği (2026-10-06, `PLAN-varlik-grafigi.md`; şimdilik YALNIZ Shadow Slave)
+
+Sözlük kayıtları arasındaki bağlar: Sunny'nin anıları/gölgeleri/rütbesi, takma ve
+Gerçek Adlar, klan, yoldaş, yer... **Düğüm = sözlük kaydı** (`glossary.kimlik`);
+ayrı varlık tablosu AÇILMADI — ikinci bir kaynak sözlükle ayrışırdı. Yalnız bağlar
+`varlik_bag` tablosunda (`app/core/varlik_grafigi.py`, şemanın sahibi). İlişki
+türleri denetimli sözlükten (`ILISKILER`, yön özne -> nesne); `tekil` ilişkide
+(rütbe, sınıf — gölgeler evrimleşir) güncel değer konumdan önceki EN SON bağdır.
+
+Üç kaynak, güven sırasıyla: **sistem** (Spell rünleri, deterministik, API'siz;
+kitap profili `KITAP_PROFILLERI` — yeni kitap = yeni kayıt, profilsiz kitapta
+sessiz), **model** (`app/core/varlik_cikarim.py`, `aday`), **manual**. Sistem
+bağları her yeni bölümde `pipeline._sozluge_isle` sonunda eklenir (sözlük
+işlendikten SONRA: yeni kayıt aynı bölümde düğüm olsun); grafik hatası çeviriyi
+düşürmez. Ölçüm (sunucu kopyası): 189 tekil sistem bağı. Rün bloğu ardışık rün
+satırlarıdır; DÜZ PARAGRAF bloğu kapatır (yoksa sonraki rün biçimli satır önceki
+öznenin sayılırdı — testte mutasyonla tutuldu).
+
+**Model çıkarımında kanıt şarttır:** kanıt cümlesi kaynakta birebir (tırnak/boşluk
+normalize) geçmeli VE iki ad da o cümlede olmalı; değilse bağ atılır. Model yalnız
+bölümde geçen sözlük kayıtları arasında bağ kurar; yeni adlar sözlüğe girmez,
+raporlanır. Varsayılan zincir ücretsiz; Vertex YALNIZ `scripts/varlik_cikar.py
+--model vertex/...` ile (kullanıcı kararı: geriye dönük doldurma Vertex kredisiyle).
+
+**SPOILER varsayılan GİZLİ** (kullanıcı kararı): her bağ `ilk_bolum` taşır ve
+yalnız KÜÇÜLÜR (daha eski kanıt bağı erken gösterir; geç kanıt geciktirmez).
+`GET /api/book/{slug}/graph` konum verilmezse kitabın kayıtlı okuma konumunu
+kullanır; tümü ancak `spoiler=true` ile. Model çıkarımı bölümleri SIRAYLA işler.
+
+**Kalite kuralları** (`kalite_nedenleri`, inceleme listesine girer):
+`sozcuk_karismalari` — bir sınıfın/rütbenin Türkçe sözcüğü o sınıfı içermeyen
+kaydın karşılığında (`Winter Beast -> Kış Canavarı`: Canavar = Monster;
+`Transcended Echo -> Yüce Yankı`: Yüce = Supreme; `Dread -> Dehşet` = Terror).
+Sınıf/rütbe listesi GRAFİKTEN gelir (en az 2 bağ ya da profil dizisi — tek rün
+satırı `Unknown`ı rütbe yapıyordu). Türkçe kök uzun sözcükte son harfi düşer, kısa
+sözcükte tamdır (`düşm` kökü `düşman`ı yakalıyordu). `ad_tutarsizliklari` —
+aynı kişinin takma/Gerçek Adları farklı politikada (Sunny/Sunless İngilizce,
+`Lost from Light -> Işıktan Mahrum`). Ölçüm: 19 bulgu, modelin kaçırdığı üç
+hatayı yakalıyor. Sözlük kaydı silinince bağları da gider; kitap birleştirmede
+bağlar taşınır, çakışan uç hedefin kimliğine çevrilir.
+
+Bakım: `scripts/varlik_grafigi.py --kitap X [--uygula] [--json graph.json]`
+(sistem katmanı, API'siz) ve `scripts/varlik_cikar.py --kitap X` (kuru; `--calistir
+--sinir N --rapor r.json` örnek, `--uygula --model ...` tüm kitap). Testler
+`tests/test_varlik_grafigi.py`, `tests/test_varlik_cikarim.py`.
+
 **Test tuzakları (ölçüldü):**
 - **`page.wait_for_function` ASYNC yüklemi BEKLEMEZ** — dönen Promise truthy, anında geçer
   (`"async () => false"` 0,03 sn). Sunucu durumunu fetch ile bekleyen her iddia için
