@@ -77,6 +77,34 @@ def _connect() -> sqlite3.Connection:
     # TÜR: kisi / yer / orgut / rutbe / yetenek / nesne / diger. YALNIZ saklama ve
     # süzme içindir, prompt'a GİRMEZ — etkisi ölçülmeden prompt değiştirilmez.
     db.ensure_column(conn, "glossary", "tur", "tur TEXT")
+    # YAZMA KAPISI (2026-10-06, `sozluk_kapi`, `SOZLUK-SISTEMI-ARASTIRMA.md`).
+    # `durum`: NULL = KURAL (prompt'a girer, bugünkü davranış); "tutuldu" = otomatik
+    # aday kapıya takıldı — prompt'a ve uyum denetimine GİRMEZ, inceleme bekler.
+    # Ölçülen gerekçe: model ne önerirse kural oluyordu (`Weaver -> Weaver’s`,
+    # `Seven -> Yediler`, `daemon -> Şeytan` = `Devil -> Şeytan`).
+    # `kapi`: takılma nedenleri (JSON liste). `tanim`: kavramın tek satırlık tanımı
+    # (TBX'teki definition) — iki ayrı kavramın aynı karşılığı alması ancak
+    # tanımla görülür. `dogrulama` / `dogrulama_notu`: model doğrulamasının
+    # sonucu ("gecti" / "sorunlu") ve gerekçesi (JSON: geri çeviri, sorun, öneri).
+    db.ensure_column(conn, "glossary", "durum", "durum TEXT")
+    db.ensure_column(conn, "glossary", "kapi", "kapi TEXT")
+    db.ensure_column(conn, "glossary", "tanim", "tanim TEXT")
+    db.ensure_column(conn, "glossary", "dogrulama", "dogrulama TEXT")
+    db.ensure_column(conn, "glossary", "dogrulama_notu", "dogrulama_notu TEXT")
+    # YASAK KARŞILIK: bu kavram için KULLANILMAMASI gereken Türkçe karşılıklar (TBX
+    # "forbidden"). Sözlük yalnız "ne yazılacak"ı söylüyordu, "ne yazılmayacak"ı
+    # söyleyemiyordu: `daemon` doğru karşılığa çekilse bile model "Şeytan" demeye
+    # devam edebilir. Kimliğe bağlıdır (kayıt yeniden adlandırılsa da kopmaz).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sozluk_yasak (book_slug TEXT NOT NULL, kimlik TEXT NOT NULL, "
+        "yasak TEXT NOT NULL, anahtar TEXT NOT NULL, PRIMARY KEY (book_slug, kimlik, anahtar))"
+    )
+    # KATEGORİ POLİTİKASI: tür düzeyinde kural ("kisi -> ingilizce"). Gerçek İsimler
+    # tek tek, birbirinden habersiz karar verilmişti (yarısı Türkçe, yarısı İngilizce).
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sozluk_politika (book_slug TEXT NOT NULL, tur TEXT NOT NULL, "
+        "kural TEXT NOT NULL, PRIMARY KEY (book_slug, tur))"
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sozluk_gecmis (
@@ -145,10 +173,13 @@ def _connect() -> sqlite3.Connection:
 _SATIR_ALANLARI = (
     "source", "target", "created_at", "origin", "first_chapter", "kosul", "kaynak_cumle",
     "kimlik", "surum", "updated_at", "inceleme", "tur",
+    "durum", "kapi", "tanim", "dogrulama", "dogrulama_notu",
 )
 _SATIR_SUTUNLARI = ", ".join(_SATIR_ALANLARI)
 # PROMPT'u etkileyen alanlar: yalnız bunlar değişince kayıt/kitap sürümü artar.
-_PROMPT_ALANLARI = ("target", "kosul")
+# `durum` da girer: "tutuldu"dan kurala geçen kayıt prompt'a girmeye BAŞLAR.
+_PROMPT_ALANLARI = ("target", "kosul", "durum")
+TUTULDU = "tutuldu"
 # `terimi_yaz`da "koşul verilmedi" işareti (None "temizle" ile karışmasın diye ayrı).
 KORU = object()
 GECMIS_MAX = 100  # geçmiş ucu kayıt başına en çok bu kadar döndürür
@@ -212,7 +243,7 @@ def _ozet(satir: dict | None) -> str | None:
         return None
     return json.dumps(
         {"target": satir.get("target"), "kosul": satir.get("kosul"), "surum": satir.get("surum"),
-         "origin": satir.get("origin")},
+         "origin": satir.get("origin"), "durum": satir.get("durum")},
         ensure_ascii=False,
     )
 
@@ -319,9 +350,13 @@ def terimi_yaz(
                 degisen["kosul"] = (kosul or "").strip() or None
             if tur is not None:
                 degisen["tur"] = _tur(tur)
-            # Kullanıcı kaydı düzenledi: incelemeden geçmiş sayılır.
+            # Kullanıcı kaydı düzenledi: incelemeden geçmiş sayılır. Kapıda TUTULAN
+            # aday da serbest kalır — karşılığı artık kullanıcının kararıdır.
             if origin == "manual" and mevcut.get("inceleme") == "bekliyor":
                 degisen["inceleme"] = "onaylandi"
+            if origin == "manual":
+                degisen["durum"] = None
+                degisen["kapi"] = None
             satir = _satiri_guncelle(conn, book_slug, mevcut, degisen, origin or "manual", surum_al)
         conn.commit()
         return satir
@@ -736,6 +771,25 @@ def kitaba_tasi(conn: sqlite3.Connection, kaynak_slug: str, hedef_slug: str) -> 
         "FROM sozluk_red WHERE book_slug = ?", (hedef_slug, kaynak_slug),
     )
     conn.execute("DELETE FROM sozluk_red WHERE book_slug = ?", (kaynak_slug,))
+    # VARLIK BAĞLARI: taşınan kaydın kimliği aynı kalır; hedefte ZATEN olan
+    # kayda (kimliği farklı) düşen uçlar o kaydın kimliğine çevrilir. Çakışan
+    # bağ hedefteki sürümüyle kalır (`OR IGNORE`).
+    if _tablo_var(conn, "varlik_bag"):
+        hedef_kimligi = {
+            fold_term(r[0]): r[1]
+            for r in conn.execute("SELECT source, kimlik FROM glossary WHERE book_slug = ?", (hedef_slug,))
+        }
+        kimlik_esle = {s["kimlik"]: hedef_kimligi.get(fold_term(s["source"]), s["kimlik"]) for s in satirlar}
+        for b in conn.execute("SELECT * FROM varlik_bag WHERE book_slug = ?", (kaynak_slug,)).fetchall():
+            yeni_b = list(b)
+            yeni_b[0] = hedef_slug
+            yeni_b[1] = kimlik_esle.get(b[1], b[1])
+            yeni_b[3] = kimlik_esle.get(b[3], b[3])
+            if yeni_b[1] != yeni_b[3]:
+                conn.execute(
+                    f"INSERT OR IGNORE INTO varlik_bag VALUES ({', '.join('?' for _ in yeni_b)})", yeni_b
+                )
+        conn.execute("DELETE FROM varlik_bag WHERE book_slug = ?", (kaynak_slug,))
     conn.execute("DELETE FROM glossary WHERE book_slug = ?", (kaynak_slug,))
     conn.execute("DELETE FROM sozluk_surumu WHERE book_slug = ?", (kaynak_slug,))
 
@@ -771,10 +825,11 @@ def delete_term(
             "DELETE FROM glossary WHERE book_slug = ? AND source = ?",
             (book_slug, bulunan["source"]),
         )
-        # Alternatif yazım ve ek anlamlar kimliğe bağlı: kayıtla birlikte gider.
-        # Geri alma yalnız birincil kaydı getirir (bilinçli sınır — yedek biçimi
-        # bunları taşımıyor).
-        for tablo in ("sozluk_yazim", "sozluk_anlam"):
+        # Alternatif yazım, ek anlam, yasak ve VARLIK BAĞLARI kimliğe bağlı: kayıtla
+        # birlikte gider. Geri alma yalnız birincil kaydı getirir (bilinçli sınır —
+        # yedek biçimi bunları taşımıyor).
+        _varlik_baglarini_sil(conn, book_slug, bulunan["kimlik"])
+        for tablo in ("sozluk_yazim", "sozluk_anlam", "sozluk_yasak"):
             conn.execute(
                 f"DELETE FROM {tablo} WHERE book_slug = ? AND kimlik = ?",
                 (book_slug, bulunan["kimlik"]),
@@ -787,6 +842,22 @@ def delete_term(
     finally:
         conn.close()
     return bulunan
+
+
+def _tablo_var(conn, ad: str) -> bool:
+    return conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?", (ad,)
+    ).fetchone() is not None
+
+
+def _varlik_baglarini_sil(conn, book_slug: str, kimlik: str) -> None:
+    """Düğümü silinen bağlar (`varlik_grafigi`). Tablo henüz yoksa iş yok —
+    sözlük modülü grafik şemasını kurmaz (sahibi `varlik_grafigi`)."""
+    if _tablo_var(conn, "varlik_bag"):
+        conn.execute(
+            "DELETE FROM varlik_bag WHERE book_slug = ? AND (kaynak_kimlik = ? OR hedef_kimlik = ?)",
+            (book_slug, kimlik, kimlik),
+        )
 
 
 # Yazım varyantı ayırıcıları. Aynı özel ad metinde "Ore Empire", "OreEmpire",
@@ -879,25 +950,81 @@ def merge_terms(
             )
         }
         eklenecek = {k: h for k, h in seen.items() if fold_term(k) not in mevcut}
+        etkili: dict[str, str] = {}
         if eklenecek:
             simdi = time.time()
             kitap_surumu = _kitap_surumunu_artir(conn, book_slug)
+            # YAZMA KAPISI yalnız OTOMATİK adaylara uygulanır: elle ve içe aktarma
+            # yolu kullanıcının iradesidir (bkz. `sozluk_kapi`).
+            kapi = _kapi_baglami(conn, book_slug) if origin == "auto" else None
             for k, h in eklenecek.items():
+                nedenler: list[dict] = []
+                if kapi is not None:
+                    sonuc = kapi["modul"].kapi_denetle(
+                        k, h, kapi["satirlar"], kapi["yasaklar"], kapi["politikalar"], tur,
+                    )
+                    if sonuc["yazim_of"]:
+                        # Mevcut kaydın yazım varyantı: ayrı satır AÇILMAZ, kayda
+                        # alternatif yazım olarak bağlanır ve onun karşılığını alır.
+                        _yazim_bagla(conn, book_slug, sonuc["yazim_of"], k, origin)
+                        continue
+                    nedenler = sonuc["nedenler"]
                 # Köken cümlesi ILK görülen hâlinde kalır — "ilk nerede geçti"
                 # sorusunun cevabı sonraki bölümlerde değişmemeli.
                 satir = _satir_ekle(conn, book_slug, {
                     "source": k, "target": h, "created_at": simdi, "origin": origin,
                     "first_chapter": chapter_no, "kaynak_cumle": (cumleler or {}).get(k),
                     "inceleme": "bekliyor" if origin == "auto" else None, "tur": tur,
+                    "durum": TUTULDU if nedenler else None,
+                    "kapi": json.dumps(nedenler, ensure_ascii=False) if nedenler else None,
                 })
                 _gecmise_yaz(conn, book_slug, "ekle", None, satir, origin, kitap_surumu)
+                if kapi is not None:
+                    kapi["satirlar"].append(satir)  # aynı yanıttaki ikinci aday bunu görsün
+                if not nedenler:
+                    etkili[k] = h
         conn.commit()
-        return eklenecek
+        # Döner: FİİLEN etkili olanlar. Tutulan aday prompt'a girmediği için künyede
+        # "eklendi" denmez; inceleme listesinde sebebiyle görünür.
+        return etkili
     except BaseException:
         conn.rollback()
         raise
     finally:
         conn.close()
+
+
+def _kapi_baglami(conn: sqlite3.Connection, book_slug: str) -> dict:
+    """Kapının ihtiyaç duyduğu kitap durumu, AÇIK işlemin bağlantısından okunur
+    (eşzamanlı iki çeviri aynı anda eklerken ikisi de güncel sözlüğü görsün)."""
+    from . import sozluk_kapi  # döngüsel içe aktarma: sozluk_kapi glossary'yi kullanır
+
+    satirlar = [
+        dict(zip(_SATIR_ALANLARI, r))
+        for r in conn.execute(f"SELECT {_SATIR_SUTUNLARI} FROM glossary WHERE book_slug = ?", (book_slug,))
+    ]
+    return {
+        "modul": sozluk_kapi,
+        "satirlar": satirlar,
+        "yasaklar": _yasaklar(conn, book_slug),
+        "politikalar": _politikalar(conn, book_slug),
+    }
+
+
+def _yazim_bagla(conn, book_slug: str, kaynak: str, yazim: str, yol: str) -> bool:
+    """Otomatik adayı mevcut kayda alternatif yazım olarak bağla (yazım boştaysa)."""
+    anahtar = fold_term(yazim)
+    satir = _bul(conn, book_slug, kaynak)
+    if satir is None or conn.execute(
+        "SELECT 1 FROM sozluk_yazim WHERE book_slug = ? AND anahtar = ?", (book_slug, anahtar)
+    ).fetchone():
+        return False
+    conn.execute(
+        "INSERT INTO sozluk_yazim (book_slug, kimlik, yazim, anahtar) VALUES (?, ?, ?, ?)",
+        (book_slug, satir["kimlik"], yazim, anahtar),
+    )
+    _kayit_degisti(conn, book_slug, satir, "yazim", {"yazim_eklendi": yazim}, yol=yol)
+    return True
 
 
 def ornek_doldur(book_slug: str, source: str, cumle: str | None, bolum: int | None) -> bool:
@@ -1125,6 +1252,8 @@ TURLER = ("kisi", "yer", "orgut", "rutbe", "yetenek", "nesne", "diger")
 # translate.EK_ANLAM_ISARETI ile AYNI olmalı (glossary translate'i içe aktarmıyor:
 # döngüsel içe aktarma olurdu). `tests/test_sozluk_ekleri.py` eşitliği tutar.
 EK_ANLAM_ISARETI = "BAŞKA ANLAM:"
+# translate.YASAK_ISARETI ile AYNI olmalı (aynı gerekçe; `tests/test_sozluk_kapi.py`).
+YASAK_ISARETI = "YASAK KARŞILIK:"
 
 
 def _tur(tur: str | None) -> str | None:
@@ -1133,16 +1262,17 @@ def _tur(tur: str | None) -> str | None:
     return tur if tur in TURLER else None
 
 
-def _kayit_degisti(conn, book_slug: str, satir: dict, islem: str, ayrinti: dict) -> None:
-    """Birincil satır dışındaki PROMPT verisi (yazım, anlam) değişti: kayıt ve kitap
-    sürümü artar, geçmişe yazılır — çakışma denetimi bu değişiklikleri de görür."""
+def _kayit_degisti(conn, book_slug: str, satir: dict, islem: str, ayrinti: dict,
+                   yol: str = "manual") -> None:
+    """Birincil satır dışındaki PROMPT verisi (yazım, anlam, yasak) değişti: kayıt ve
+    kitap sürümü artar, geçmişe yazılır — çakışma denetimi bu değişiklikleri de görür."""
     yeni_surum = (satir.get("surum") or 1) + 1
     conn.execute(
         "UPDATE glossary SET surum = ?, updated_at = ? WHERE book_slug = ? AND source = ?",
         (yeni_surum, time.time(), book_slug, satir["source"]),
     )
     sonraki = {**satir, "surum": yeni_surum}
-    _gecmise_yaz(conn, book_slug, islem, satir, sonraki, "manual",
+    _gecmise_yaz(conn, book_slug, islem, satir, sonraki, yol,
                  _kitap_surumunu_artir(conn, book_slug), ek=ayrinti)
 
 
@@ -1308,11 +1438,31 @@ def ceviri_sozlugu(book_slug: str) -> dict[str, str]:
     prompt ve uyum denetimi bunu okur. Alternatif yazım prompt'a ve denetime girmezse
     kaynak sitenin öteki yazımı sözlüksüz çevrilir — `Ore Empire` vakası tam buydu.
     """
-    sozluk = get_glossary(book_slug)
+    tutulan = tutulan_kaynaklar(book_slug)
+    sozluk = {k: v for k, v in get_glossary(book_slug).items() if k not in tutulan}
     for kaynak, ek in ekler(book_slug).items():
+        if kaynak not in sozluk:
+            continue
         for yazim in ek["yazimlar"]:
             sozluk.setdefault(yazim, sozluk[kaynak])
     return sozluk
+
+
+def tutulan_kaynaklar(book_slug: str) -> set[str]:
+    """Kapıda TUTULAN kayıtlar: çeviri yolu (prompt, uyum denetimi) bunları görmez.
+
+    Model serbest karar verir — kayıt sözlükte HİÇ yokmuş gibi. Bu, kapıdan önceki
+    durumdur; yanlış bir karşılığı kural yapmaktan ucuzdur. Kayıt tekrar otomatik
+    eklenmez (satır duruyor), inceleme listesinde sebebiyle bekler."""
+    conn = _connect()
+    try:
+        return {
+            r[0] for r in conn.execute(
+                "SELECT source FROM glossary WHERE book_slug = ? AND durum = ?", (book_slug, TUTULDU)
+            )
+        }
+    finally:
+        conn.close()
 
 
 def ceviri_kosullari(book_slug: str) -> dict[str, str]:
@@ -1324,13 +1474,26 @@ def ceviri_kosullari(book_slug: str) -> dict[str, str]:
     aynı yoldan gidiyor. Yan etki bilinçli: ek anlamı olan kayıt koşullu sayılır ve
     deterministik uyum denetiminden ÇIKAR (hangi anlamın geçerli olduğu ölçülemez).
     """
-    kosullar = get_kosullar(book_slug)
+    tutulan = tutulan_kaynaklar(book_slug)
+    kosullar = {k: v for k, v in get_kosullar(book_slug).items() if k not in tutulan}
     sozluk = get_glossary(book_slug)
     for kaynak, ek in ekler(book_slug).items():
+        if kaynak in tutulan:
+            continue
         if ek["anlamlar"]:
             parcalar = [kosullar.get(kaynak) or "yukarıdaki diğer anlamlar dışında"]
             parcalar += [f'{EK_ANLAM_ISARETI} "{a["target"]}" — {a["kosul"]}' for a in ek["anlamlar"]]
             kosullar[kaynak] = " ; ".join(parcalar)
+    # YASAK karşılıklar koşul metnine İŞARETLİ bir parça olarak eklenir (ek anlamla
+    # aynı yol: prompt'a, onarıma ve denetime zaten koşul üzerinden gidiyor). YALNIZ
+    # yasak taşıyan kayıt KOŞULLU SAYILMAZ — `translate._gercek_kosul` işaretli
+    # parçayı ayırır, kayıt uyum denetiminde kalır.
+    for kaynak, liste in yasaklar(book_slug).items():
+        if kaynak in tutulan or not liste:
+            continue
+        parca = f"{YASAK_ISARETI} " + ", ".join(f'"{y}"' for y in liste)
+        kosullar[kaynak] = " ; ".join(p for p in (kosullar.get(kaynak), parca) if p)
+    for kaynak, ek in ekler(book_slug).items():
         for yazim in ek["yazimlar"]:
             if kaynak in kosullar and yazim not in sozluk:
                 kosullar.setdefault(yazim, kosullar[kaynak])
@@ -1356,18 +1519,216 @@ def reddet(book_slug: str, source: str, taban_surum: int | None = None) -> dict 
 
 
 def onayla(book_slug: str, source: str) -> bool:
-    """İnceleme kararı: kayıt olduğu gibi doğru. Prompt değişmez, sürüm artmaz."""
+    """İnceleme kararı: kayıt olduğu gibi doğru.
+
+    Kural olan kayıtta prompt değişmez, sürüm artmaz. Kapıda TUTULAN kayıt ise
+    onayla KURALA dönüşür: prompt'a girmeye başlar — bu bir prompt değişikliğidir,
+    sürüm artar ve geçmişe yazılır (`_satiri_guncelle`)."""
+    conn = _connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        satir = _bul(conn, book_slug, normalize_source(source) or source)
+        if satir is None:
+            conn.rollback()
+            return False
+        if satir.get("durum") == TUTULDU:
+            _satiri_guncelle(
+                conn, book_slug, satir, {"durum": None, "kapi": None, "inceleme": "onaylandi"},
+                "inceleme", lambda: _kitap_surumunu_artir(conn, book_slug),
+            )
+        else:
+            conn.execute(
+                "UPDATE glossary SET inceleme = 'onaylandi' WHERE book_slug = ? AND source = ?",
+                (book_slug, satir["source"]),
+            )
+        conn.commit()
+        return True
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
+# ---------- yasak karşılık, kategori politikası, tanım, doğrulama ----------
+def _yasaklar(conn, book_slug: str) -> dict[str, list[str]]:
+    kimlikten = {
+        r[1]: r[0] for r in conn.execute("SELECT source, kimlik FROM glossary WHERE book_slug = ?", (book_slug,))
+    }
+    out: dict[str, list[str]] = {}
+    for kimlik, yasak in conn.execute(
+        "SELECT kimlik, yasak FROM sozluk_yasak WHERE book_slug = ? ORDER BY yasak", (book_slug,)
+    ):
+        if kimlik in kimlikten:
+            out.setdefault(kimlikten[kimlik], []).append(yasak)
+    return out
+
+
+def yasaklar(book_slug: str) -> dict[str, list[str]]:
+    """{kaynak: [yasak karşılıklar]} — yalnız yasağı OLAN kayıtlar."""
+    conn = _connect()
+    try:
+        return _yasaklar(conn, book_slug)
+    finally:
+        conn.close()
+
+
+def yasaklari_yaz(
+    book_slug: str, source: str, liste: list[str], taban_surum: int | None = None
+) -> list[str] | None:
+    """Kaydın yasak karşılıklarını tümüyle değiştir; kayıt yoksa None.
+
+    Kaydın KENDİ karşılığı yasak olamaz (çelişki: kural "bunu yaz" ve "bunu yazma"
+    derdi) — sessizce düşer. Prompt'u değiştirdiği için sürüm artar, geçmişe yazılır.
+    """
+    temiz: dict[str, str] = {}
+    for y in liste or []:
+        y = (y or "").strip()[:200]
+        if y:
+            temiz.setdefault(fold_term(y), y)
+
+    def is_(conn, satir):
+        temiz.pop(fold_term(satir["target"] or ""), None)
+        onceki = sorted(
+            r[0] for r in conn.execute(
+                "SELECT yasak FROM sozluk_yasak WHERE book_slug = ? AND kimlik = ?", (book_slug, satir["kimlik"])
+            )
+        )
+        yeni = sorted(temiz.values())
+        if onceki == yeni:
+            return yeni
+        conn.execute("DELETE FROM sozluk_yasak WHERE book_slug = ? AND kimlik = ?", (book_slug, satir["kimlik"]))
+        for anahtar, yasak in temiz.items():
+            conn.execute(
+                "INSERT INTO sozluk_yasak (book_slug, kimlik, yasak, anahtar) VALUES (?, ?, ?, ?)",
+                (book_slug, satir["kimlik"], yasak, anahtar),
+            )
+        _kayit_degisti(conn, book_slug, satir, "yasak", {"yasaklar": yeni})
+        return yeni
+
+    return _islem(book_slug, source, taban_surum, is_)
+
+
+def _politikalar(conn, book_slug: str) -> dict[str, str]:
+    return dict(conn.execute("SELECT tur, kural FROM sozluk_politika WHERE book_slug = ?", (book_slug,)))
+
+
+def politikalar(book_slug: str) -> dict[str, str]:
+    """{tür: "ingilizce" | "turkce"} — kitabın kategori politikası."""
+    conn = _connect()
+    try:
+        return _politikalar(conn, book_slug)
+    finally:
+        conn.close()
+
+
+def politikalari_yaz(book_slug: str, yeni: dict[str, str | None]) -> dict[str, str]:
+    """Politikaları güncelle: değer None/"" ise o türün politikası kalkar.
+
+    Tanınmayan tür ya da kural ValueError — yanlış yazılmış bir kural sessizce
+    hiçbir şey denetlemeyen bir politika olurdu. Politika prompt'a GİRMEZ; yalnız
+    kapı ve inceleme listesi okur, o yüzden sürüm artmaz."""
+    from . import sozluk_kapi
+
+    conn = _connect()
+    try:
+        for tur, kural in (yeni or {}).items():
+            if tur not in TURLER:
+                raise ValueError(f"Bilinmeyen tür: {tur!r}")
+            if kural in (None, ""):
+                conn.execute("DELETE FROM sozluk_politika WHERE book_slug = ? AND tur = ?", (book_slug, tur))
+                continue
+            if kural not in sozluk_kapi.POLITIKA_DEGERLERI:
+                raise ValueError(f"Bilinmeyen kural: {kural!r}")
+            conn.execute(
+                "INSERT INTO sozluk_politika (book_slug, tur, kural) VALUES (?, ?, ?) "
+                "ON CONFLICT(book_slug, tur) DO UPDATE SET kural = excluded.kural",
+                (book_slug, tur, kural),
+            )
+        conn.commit()
+        return _politikalar(conn, book_slug)
+    finally:
+        conn.close()
+
+
+def tanim_yaz(book_slug: str, source: str, tanim: str | None, tur: str | None = None,
+              yalniz_bossa: bool = False) -> bool:
+    """Kaydın tanımını (ve verilirse türünü) yaz. Prompt'a GİRMEZ, sürüm artmaz.
+
+    `yalniz_bossa`: model doğrulamasının yolu — kullanıcının yazdığı tanımı/türü ezmez.
+    """
     conn = _connect()
     try:
         satir = _bul(conn, book_slug, normalize_source(source) or source)
         if satir is None:
             return False
+        tanim = (tanim or "").strip()[:300] or None
+        tur = _tur(tur)
+        degisen = {}
+        if not (yalniz_bossa and satir.get("tanim")):
+            degisen["tanim"] = tanim
+        if tur and not (yalniz_bossa and satir.get("tur")):
+            degisen["tur"] = tur
+        if degisen:
+            conn.execute(
+                f"UPDATE glossary SET {', '.join(a + ' = ?' for a in degisen)} "
+                "WHERE book_slug = ? AND source = ?",
+                (*degisen.values(), book_slug, satir["source"]),
+            )
+            conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict) -> bool:
+    """Model doğrulamasının sonucunu yaz ("gecti" / "sorunlu"). Prompt'a girmez.
+
+    Sorunlu sonuç kaydı DEĞİŞTİRMEZ; yalnız incelemeye düşürür (`inceleme =
+    bekliyor`) — öneri onaya sunulur, sözlük kullanıcınındır. Kullanıcının daha
+    önce ONAYLADIĞI kayıt yeniden incelemeye düşmez."""
+    conn = _connect()
+    try:
+        satir = _bul(conn, book_slug, normalize_source(source) or source)
+        if satir is None:
+            return False
+        inceleme = satir.get("inceleme")
+        if sonuc == "sorunlu" and inceleme != "onaylandi":
+            inceleme = "bekliyor"
         conn.execute(
-            "UPDATE glossary SET inceleme = 'onaylandi' WHERE book_slug = ? AND source = ?",
-            (book_slug, satir["source"]),
+            "UPDATE glossary SET dogrulama = ?, dogrulama_notu = ?, inceleme = ? "
+            "WHERE book_slug = ? AND source = ?",
+            (sonuc, json.dumps(not_, ensure_ascii=False), inceleme, book_slug, satir["source"]),
         )
         conn.commit()
         return True
+    finally:
+        conn.close()
+
+
+def kapi_isaretle(book_slug: str, nedenler: dict[str, list[dict]]) -> int:
+    """Geriye dönük denetimin bulgularını kayıtlara yaz (`scripts/sozluk_denetle.py`).
+
+    Kayıt KURAL olarak kalır (durum değişmez): bugün prompt'ta olan bir terimi
+    sessizce çekip almak, kullanıcının bilmediği bir davranış değişikliği olurdu.
+    Yalnız `kapi` nedenleri yazılır ve onaylanmamış kayıt incelemeye düşer.
+    Döner: işaretlenen kayıt sayısı."""
+    conn = _connect()
+    try:
+        n = 0
+        for kaynak, liste in nedenler.items():
+            satir = _bul(conn, book_slug, kaynak)
+            if satir is None or not liste:
+                continue
+            inceleme = satir.get("inceleme")
+            conn.execute(
+                "UPDATE glossary SET kapi = ?, inceleme = ? WHERE book_slug = ? AND source = ?",
+                (json.dumps(liste, ensure_ascii=False),
+                 inceleme if inceleme == "onaylandi" else "bekliyor", book_slug, satir["source"]),
+            )
+            n += 1
+        conn.commit()
+        return n
     finally:
         conn.close()
 
@@ -1407,18 +1768,57 @@ def inceleme_listesi(book_slug: str) -> list[dict]:
     stili ayrışması (`kardes_tutarsizliklari`). İkinci bir denetim motoru KURULMADI:
     bakım fonksiyonları zaten vardı, burada açıklanabilir uyarıya dönüşüyorlar.
     """
-    satirlar = {r["source"]: r for r in get_glossary_rows(book_slug)}
+    from . import sozluk_kapi
+
+    satir_listesi = get_glossary_rows(book_slug)
+    satirlar = {r["source"]: r for r in satir_listesi}
     nedenler: dict[str, list[dict]] = {}
 
-    def ekle(kaynak, tur, aciklama, ilgili=()):
+    def ekle(kaynak, tur, aciklama, ilgili=(), **ek):
         if kaynak in satirlar and satirlar[kaynak].get("inceleme") != "onaylandi":
-            nedenler.setdefault(kaynak, []).append(
-                {"tur": tur, "aciklama": aciklama, "ilgili": list(ilgili)}
-            )
+            liste = nedenler.setdefault(kaynak, [])
+            if any(n["tur"] == tur and n["aciklama"] == aciklama for n in liste):
+                return  # saklı kapı nedeni ile canlı hesap aynı şeyi söyleyebilir
+            liste.append({"tur": tur, "aciklama": aciklama, "ilgili": list(ilgili), **ek})
 
+    politika = politikalar(book_slug)
     for kaynak, r in satirlar.items():
-        if r.get("inceleme") == "bekliyor":
+        if r.get("inceleme") == "bekliyor" and r.get("origin") == "auto" and not r.get("kapi"):
             ekle(kaynak, "yeni_otomatik", "Çeviri sırasında otomatik eklendi, henüz incelenmedi.")
+        # Kapının (ya da geriye dönük denetimin) yazdığı nedenler.
+        try:
+            for n in json.loads(r.get("kapi") or "[]"):
+                ekle(kaynak, n.get("tur", "kapi"), n.get("aciklama", ""), n.get("ilgili") or ())
+        except (TypeError, json.JSONDecodeError):
+            pass
+        if r.get("dogrulama") == "sorunlu":
+            try:
+                not_ = json.loads(r.get("dogrulama_notu") or "{}")
+            except (TypeError, json.JSONDecodeError):
+                not_ = {}
+            parcalar = [not_.get("sorun") or "Model doğrulaması bu karşılığı sorunlu buldu."]
+            if not_.get("geri_ceviri"):
+                parcalar.append(f"Geri çeviri: '{not_['geri_ceviri']}'.")
+            if not_.get("oneri"):
+                parcalar.append(f"Öneri: {not_['oneri']}.")
+            ekle(kaynak, sozluk_kapi.DOGRULAMA, " ".join(parcalar), oneri=not_.get("oneri"))
+        sorun = sozluk_kapi.politika_ihlali(r.get("tur"), kaynak, r.get("target") or "", politika)
+        if sorun:
+            ekle(kaynak, sozluk_kapi.POLITIKA, sorun)
+    for kaynak, n in sozluk_kapi.kalip_tutarsizliklari(satir_listesi).items():
+        ekle(kaynak, n["tur"], n["aciklama"], n["ilgili"])
+    for kaynak, n in sozluk_kapi.ihlal_supheleri(book_slug, set(satirlar)).items():
+        ekle(kaynak, n["tur"], n["aciklama"], (), bolumler=n.get("bolumler"))
+    # VARLIK GRAFİĞİ kuralları (sınıf sözcüğü karışması, aynı kişinin adları).
+    # Grafik yoksa boş döner; grafik hatası inceleme listesini düşürmemeli.
+    from . import varlik_grafigi
+
+    try:
+        for kaynak, liste in varlik_grafigi.kalite_nedenleri(book_slug).items():
+            for n in liste:
+                ekle(kaynak, n["tur"], n["aciklama"], n.get("ilgili") or ())
+    except sqlite3.Error:
+        pass
     for a, b in yakin_terimler(book_slug):
         ekle(a, "yakin_yazim", f"'{b}' ile tek harf farklı — biri yazım hatası olabilir.", [b])
         ekle(b, "yakin_yazim", f"'{a}' ile tek harf farklı — biri yazım hatası olabilir.", [a])
@@ -1439,7 +1839,14 @@ def inceleme_listesi(book_slug: str) -> list[dict]:
                  "Aynı ad ailesinde büyük harf/tire stili ayrışıyor: "
                  + ", ".join(f"{x} → {satirlar[x]['target']}" for x in uyeler if x in satirlar), [
                      x for x in uyeler if x != k])
-    oncelik = {"karsilik_cakismasi": 0, "yakin_yazim": 1, "kardes_tutarsizligi": 2, "yeni_otomatik": 3}
+    # Önce kesin hatalar (biçim, yasak), sonra iki kavramı birleştiren çakışmalar ve
+    # model doğrulamasının reddi, en son stil/yeni ekleme bilgisi.
+    oncelik = {
+        "bicim": 0, "yasak_karsilik": 0, "karsilik_cakismasi": 1, "dogrulama": 1,
+        "sozcuk_karismasi": 1, "ad_tutarliligi": 2,
+        "ihlal_suphesi": 2, "sayi_uyumsuzlugu": 2, "politika": 2, "yakin_yazim": 3,
+        "kalip_tutarsizligi": 4, "kardes_tutarsizligi": 4, "yeni_otomatik": 5,
+    }
     liste = [{**satirlar[k], "nedenler": n} for k, n in nedenler.items()]
-    liste.sort(key=lambda x: (min(oncelik[n["tur"]] for n in x["nedenler"]), -(x.get("created_at") or 0)))
+    liste.sort(key=lambda x: (min(oncelik.get(n["tur"], 3) for n in x["nedenler"]), -(x.get("created_at") or 0)))
     return liste

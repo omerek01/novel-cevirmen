@@ -173,6 +173,9 @@ _GECMISSIZ_YAZABILIR = {
     "_gecmise_yaz", "_kitap_surumunu_artir",
     # İnceleme onayı yalnız `inceleme` bayrağını yazar: prompt değişmez, sürüm artmaz.
     "onayla",
+    # Yalnız prompt DIŞI alanlar (tanım, tür, doğrulama sonucu, kapı nedenleri,
+    # inceleme bayrağı): prompt değişmez, sürüm artmaz (`sozluk_kapi`).
+    "tanim_yaz", "dogrulama_yaz", "kapi_isaretle",
 }
 
 

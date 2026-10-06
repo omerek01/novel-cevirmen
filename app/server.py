@@ -38,7 +38,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import api_durum, cache, epub_export, glossary, import_book, jobs, kullanim, library, media, pipeline, reading_log, settings, synthetic  # noqa: E402
+from core import api_durum, cache, epub_export, glossary, import_book, jobs, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -262,6 +262,28 @@ class GlossaryKarar(BaseModel):
     source: str
     karar: str  # onayla | reddet
     taban_surum: int | None = None
+
+
+class GlossaryYasak(BaseModel):
+    source: str
+    yasaklar: list[str]
+    taban_surum: int | None = None
+
+
+class GlossaryTanim(BaseModel):
+    source: str
+    tanim: str | None = None
+    tur: str | None = None
+
+
+class GlossaryPolitika(BaseModel):
+    # {tür: "ingilizce" | "turkce" | null}; null/"" o türün politikasını kaldırır.
+    politikalar: dict[str, str | None]
+
+
+class GlossaryDogrula(BaseModel):
+    # "yeni": hiç doğrulanmamış otomatik kayıtlar · "hepsi": sözlüğün tamamı.
+    kapsam: str = "yeni"
 
 
 class GlossaryImportRequest(BaseModel):
@@ -691,6 +713,9 @@ def get_book_glossary(
         "surum": glossary.kitap_surumu(slug),
         # Alternatif yazımlar + ek anlamlar (yalnız eki olan kayıtlar).
         "ekler": glossary.ekler(slug),
+        # Yasak karşılıklar ve kategori politikası (`sozluk_kapi`).
+        "yasaklar": glossary.yasaklar(slug),
+        "politikalar": glossary.politikalar(slug),
     }
     if bolum is not None:
         # "Bu bölümde geçenler" süzgeci. null = bölümün kaynağı yok (bilinmiyor).
@@ -833,6 +858,75 @@ def glossary_review_decision(slug: str, req: GlossaryKarar) -> dict:
             raise _kayit_bulunamadi()
         return {"ok": True, "silinen": silinen}
     raise HTTPException(status_code=400, detail="karar: onayla | reddet")
+
+
+@app.put("/api/book/{slug}/glossary/yasak")
+def set_glossary_forbidden(slug: str, req: GlossaryYasak) -> dict:
+    """Kaydın YASAK karşılıklarını tümüyle değiştir (TBX "forbidden"): prompt'a
+    `[YASAK: ...]` olarak çıkar ve kapı bu karşılığı başka bir adaya da vermez."""
+    try:
+        liste = glossary.yasaklari_yaz(slug, req.source, req.yasaklar, taban_surum=req.taban_surum)
+    except glossary.SurumCakismasi as exc:
+        raise _surum_cakismasi(exc) from exc
+    if liste is None:
+        raise _kayit_bulunamadi()
+    return {"yasaklar": liste, "kayit": _kayit(slug, req.source)}
+
+
+@app.put("/api/book/{slug}/glossary/tanim")
+def set_glossary_definition(slug: str, req: GlossaryTanim) -> dict:
+    """Kaydın tanımını ve türünü yaz (prompt'a girmez, sürüm artmaz)."""
+    if not glossary.tanim_yaz(slug, req.source, req.tanim, req.tur):
+        raise _kayit_bulunamadi()
+    return {"kayit": _kayit(slug, req.source)}
+
+
+@app.get("/api/book/{slug}/glossary/politika")
+def get_glossary_policy(slug: str) -> dict:
+    return {"politikalar": glossary.politikalar(library.resolve_slug(slug)), "turler": glossary.TURLER}
+
+
+@app.put("/api/book/{slug}/glossary/politika")
+def set_glossary_policy(slug: str, req: GlossaryPolitika) -> dict:
+    """Kategori politikası: tür düzeyinde "ingilizce"/"turkce" kuralı. Kapı ve
+    inceleme listesi uymayan kayıtları gösterir; mevcut kayıtlara DOKUNMAZ."""
+    try:
+        return {"politikalar": glossary.politikalari_yaz(library.resolve_slug(slug), req.politikalar)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@app.post("/api/book/{slug}/glossary/verify")
+def start_glossary_verification(slug: str, req: GlossaryDogrula) -> dict:
+    """Sözlüğü arka planda MODEL doğrulamasından geçir (yalnız ücretsiz zincir).
+
+    Sonuç kayıtları değiştirmez; sorunlu bulunanlar inceleme listesine düşer.
+    Bekleme yok: kullanıcı açıkça istedi, biriktirmeye gerek yok."""
+    if req.kapsam not in ("yeni", "hepsi"):
+        raise HTTPException(status_code=400, detail="kapsam: yeni | hepsi")
+    canonical = library.resolve_slug(slug)
+    basladi = sozluk_dogrulama.arka_planda_dogrula(canonical, req.kapsam, bekle=0)
+    return {"basladi": basladi, **sozluk_dogrulama.durum(canonical)}
+
+
+@app.get("/api/book/{slug}/glossary/verify")
+def glossary_verification_status(slug: str) -> dict:
+    return sozluk_dogrulama.durum(library.resolve_slug(slug))
+
+
+@app.get("/api/book/{slug}/graph")
+def book_entity_graph(
+    slug: str,
+    bolum: int | None = Query(None, description="Okuma konumu: bundan SONRA kurulan bağ dönmez"),
+    spoiler: bool = Query(False, description="true: konum süzgeci uygulanmaz"),
+) -> dict:
+    """Varlık grafiği (graphify uyumlu düğüm/kenar). SPOILER varsayılan GİZLİ:
+    `bolum` verilmezse kitabın KAYITLI okuma konumu kullanılır; konum da yoksa
+    yalnız `spoiler=true` ile tüm grafik döner (kullanıcı kararı 2026-10-06)."""
+    canonical = library.resolve_slug(slug)
+    if not spoiler and bolum is None:
+        bolum = (library.get_book(canonical) or {}).get("chapter_no") or 0
+    return varlik_grafigi.graph_json(canonical, None if spoiler else bolum)
 
 
 @app.delete("/api/book/{slug}/glossary/red")

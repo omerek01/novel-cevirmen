@@ -6,9 +6,10 @@ aynı mantığı kullanır (DRY). FetchError/TranslateError yukarı sızar; ça�
 """
 from __future__ import annotations
 
+import sqlite3
 import threading
 
-from . import api_durum, budget, cache, glossary, library, synthetic
+from . import api_durum, budget, cache, glossary, library, sozluk_dogrulama, synthetic, varlik_grafigi
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
 # `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
@@ -158,14 +159,16 @@ def kosullu_denetlenmeyen(book_slug: str | None, kaynak: str | None) -> list[str
     sozluk = glossary.ceviri_sozlugu(book_slug)
     tekili = _translate_mod._tekili_kayitli_cogullar(sozluk)
     return sorted(
-        s for s in kosullar
-        if _translate_mod._terim_metinde(s, sozluk.get(s, s), kaynak, tekili)
+        s for s, k in kosullar.items()
+        # Yalnız YASAK taşıyan kayıt koşullu değildir, denetlenir (`_gercek_kosul`).
+        if _translate_mod._gercek_kosul(k)
+        and _translate_mod._terim_metinde(s, sozluk.get(s, s), kaynak, tekili)
     )
 
 
 
 def _sozluge_isle(
-    slug: str, veri: dict, chapter_no: int | None = None
+    slug: str, veri: dict, chapter_no: int | None = None, kaynak_metin: str | None = None
 ) -> dict[str, str]:
     """Bölümden algılanan özel adları kitabın sözlüğüne işle.
 
@@ -222,6 +225,21 @@ def _sozluge_isle(
             slug, veri.get("detected_names"), "auto", chapter_no, cumleler
         )
     )
+    # Yeni adaylar (kapıdan geçen ya da tutulan) arka planda MODEL doğrulamasına
+    # girer (`sozluk_dogrulama`): kapı biçimi yakalar, anlamı yakalayamaz. İş
+    # biriktirerek koşar (toplu çeviride bölüm başına istek atmaz), ücretsiz
+    # zinciri kullanır ve çeviriyi beklemez.
+    if terimler or adlar:
+        sozluk_dogrulama.arka_planda_dogrula(slug)
+    # VARLIK GRAFİĞİ: bölümün rün mesajlarından deterministik bağlar (API'siz,
+    # milisaniyeler). Yeni eklenen sözlük kaydı aynı bölümde düğüm olabilsin diye
+    # sözlük işlendikten SONRA koşar. Grafik bir yan üründür: hatası çeviriyi
+    # düşürmemeli.
+    if kaynak_metin:
+        try:
+            varlik_grafigi.bolumden_sistem_baglari(slug, chapter_no, kaynak_metin)
+        except sqlite3.Error:
+            pass
     return eklenen
 
 
@@ -412,7 +430,7 @@ def _do_fetch_translate_save(
     # Sözlüğe işleme uçuşun İÇİNDE: eklenen terimler künyenin parçası ve bölümle
     # birlikte cache'e yazılıyor, böylece bölüm ikinci açılışta (önbellek isabeti)
     # künyesini kaybetmiyor.
-    eklenen = _sozluge_isle(book_slug, result, chapter.get("chapter_no"))
+    eklenen = _sozluge_isle(book_slug, result, chapter.get("chapter_no"), chapter.get("text"))
     ihlaller = _uyum_denetimi(result)
 
     payload = {
@@ -585,7 +603,7 @@ def fetch_into_book(
             kosullar=book_kosullar,
         )
     book_title = (book and book.get("title")) or chapter["book_title"]
-    eklenen = _sozluge_isle(target_slug, result, no)  # künyeye girecek, kayıttan ÖNCE
+    eklenen = _sozluge_isle(target_slug, result, no, chapter["text"])  # künyeye girecek, kayıttan ÖNCE
     payload = {
         "title": chapter["title"],
         "translation": result["translation"],

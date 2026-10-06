@@ -1889,7 +1889,9 @@ def _denetlenebilir_terimler(
         # iken terim gölge kölesinin ADI olarak geçip İngilizce kaldığında bu
         # DOĞRU çeviridir — koşulu yok sayan denetim sahte bir ⚠ üretir ve
         # otomatik onarım özel adı zorla Türkçeleştirirdi.
-        if (kosullar or {}).get(source, "").strip():
+        # YALNIZ yasak karşılık taşıyan kayıt koşullu DEĞİLDİR: yasak bir bağlam
+        # kuralı değil, her bağlamda geçerli bir "bunu yazma"dır (`_gercek_kosul`).
+        if _gercek_kosul((kosullar or {}).get(source)):
             continue
         if _ingilizce_korunan(source, target):
             continue
@@ -2449,6 +2451,27 @@ def _reti_asarak_uret(
 
 # `glossary.ceviri_kosullari` ek anlamları koşul metnine bu işaretle işler.
 EK_ANLAM_ISARETI = "BAŞKA ANLAM:"
+# `glossary.ceviri_kosullari` YASAK karşılıkları koşul metnine bu işaretle işler
+# (glossary.YASAK_ISARETI ile AYNI; `tests/test_sozluk_kapi.py` tutar).
+YASAK_ISARETI = "YASAK KARŞILIK:"
+_KOSUL_AYIRICI = " ; "
+
+
+def _kosul_parcalari(kosul: str | None) -> tuple[str, str]:
+    """Koşul metnini (gerçek koşul, yasak parçası) olarak ayır."""
+    gercek, yasak = [], []
+    for parca in (kosul or "").split(_KOSUL_AYIRICI):
+        parca = parca.strip()
+        if not parca:
+            continue
+        (yasak if parca.startswith(YASAK_ISARETI) else gercek).append(parca)
+    return _KOSUL_AYIRICI.join(gercek), " ".join(p[len(YASAK_ISARETI):].strip() for p in yasak)
+
+
+def _gercek_kosul(kosul: str | None) -> str:
+    """Koşulun bağlam kuralı kısmı (yasak parçası hariç). Boşsa kayıt KOŞULSUZDUR:
+    uyum denetimine ve onarıma girer."""
+    return _kosul_parcalari(kosul)[0]
 
 
 def _build_user_prompt(
@@ -2471,8 +2494,12 @@ def _build_user_prompt(
     def _satir(s: str, t: str) -> str:
         # Koşul YALNIZ süzgeçten geçen (metinde fiilen geçen) terimler için yazılır;
         # geçmeyen bir terimin koşulu her istekte boşa token yakardı.
-        kosul = (kosullar.get(s) or "").strip()
-        return f"{s} -> {t}" + (f"  [KOŞUL: {kosul}]" if kosul else "")
+        kosul, yasak = _kosul_parcalari(kosullar.get(s))
+        return (
+            f"{s} -> {t}"
+            + (f"  [KOŞUL: {kosul}]" if kosul else "")
+            + (f"  [YASAK: {yasak}]" if yasak else "")
+        )
 
     glossary_str = (
         "\n" + "\n".join(_satir(s, t) for s, t in relevant.items())
@@ -2488,6 +2515,14 @@ def _build_user_prompt(
             f"\n(Koşulda {EK_ANLAM_ISARETI} \"X\" — <bağlam> geçen kelimenin birden çok "
             "kayıtlı karşılığı vardır: cümlenin bağlamı hangi koşula uyuyorsa O karşılığı "
             "yaz; hiçbirine uymuyorsa bağlama göre normal çevir.)"
+        )
+    # YASAK açıklaması da YALNIZ bu istekte yasak taşıyan bir terim varsa eklenir
+    # (2026-10-06, `sozluk_kapi`): yasak tanımlamamış kitapların prompt'u bayt bayt
+    # aynı kalır — ölçülmemiş bir prompt değişikliği HER isteğe yayılmaz.
+    if any(_kosul_parcalari(kosullar.get(s))[1] for s in relevant):
+        glossary_str += (
+            "\n([YASAK: \"X\"] taşıyan terimin karşılığı olarak X ASLA yazılmaz: X başka "
+            "bir kavramın karşılığıdır ve ikisi okurda karışır. Sözlükteki karşılığı kullan.)"
         )
     numbered = "\n\n".join(f"[[{i + 1}]] {p}" for i, p in enumerate(en_paras))
     user = (

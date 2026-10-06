@@ -729,6 +729,8 @@ AMAC = {
     "yeniden_ceviri": "yeniden çeviri",
     "webden_ekle": "web'den ekleme",
     "sozluk_onerisi": "sözlük önerisi",
+    "sozluk_dogrulama": "sözlük doğrulama",
+    "varlik_cikarim": "varlık grafiği",
     "diger": "diğer",
 }
 

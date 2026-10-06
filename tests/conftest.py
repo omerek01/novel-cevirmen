@@ -23,4 +23,8 @@ if str(SCRIPTS_DIR) not in sys.path:
 @pytest.fixture(autouse=True)
 def temp_db(tmp_path, monkeypatch):
     monkeypatch.setenv("NOVEL_DB_PATH", str(tmp_path / "chapters.db"))
+    # Arka plan sözlük doğrulaması GERÇEK model çağırır (`sozluk_dogrulama`):
+    # `server` importu `.env`i yüklediği için testte anahtar bulunabilir. Testler
+    # çevrimdışıdır; doğrulamayı sınayan test bayrağı kendisi açar.
+    monkeypatch.setenv("SOZLUK_DOGRULAMA", "0")
     yield
