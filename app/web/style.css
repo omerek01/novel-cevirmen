@@ -2027,7 +2027,19 @@ html { scroll-padding-top: 5rem; }
 .inceleme-aciklama { margin: 0.2rem 0 0; font-size: 0.82rem; color: var(--ink-soft); }
 .inceleme-karsilik_cakismasi,
 .inceleme-yakin_yazim,
-.inceleme-kardes_tutarsizligi { color: var(--warn); border-color: var(--warn); }
+.inceleme-kardes_tutarsizligi,
+.inceleme-sayi_uyumsuzlugu,
+.inceleme-politika,
+.inceleme-kalip_tutarsizligi,
+.inceleme-ihlal_suphesi,
+.inceleme-dogrulama,
+.inceleme-sozcuk_karismasi,
+.inceleme-ad_tutarliligi { color: var(--warn); border-color: var(--warn); }
+.inceleme-bicim,
+.inceleme-yasak_karsilik,
+.inceleme-tutuldu { color: var(--danger, var(--warn)); border-color: var(--danger, var(--warn)); font-weight: 600; }
+.inceleme-tanim { font-style: italic; }
+.inceleme-dogrula { align-items: center; padding-bottom: var(--s-xs); border-bottom: 1px solid var(--border); }
 .inceleme-eylem { display: flex; flex-wrap: wrap; gap: var(--s-sm); margin-top: var(--s-xs); }
 .inceleme-eylem .pill,
 .inceleme-red .pill { min-height: var(--tap); }

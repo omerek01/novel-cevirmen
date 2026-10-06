@@ -30,6 +30,16 @@ const NEDEN_ETIKETI = {
   yakin_yazim: "YAKIN YAZIM",
   kardes_tutarsizligi: "STİL",
   yeni_otomatik: "YENİ",
+  // Yazma kapısı ve doğrulama (sunucu `sozluk_kapi` / `sozluk_dogrulama`).
+  bicim: "BİÇİM",
+  sayi_uyumsuzlugu: "TEKİL/ÇOĞUL",
+  yasak_karsilik: "YASAK",
+  politika: "POLİTİKA",
+  kalip_tutarsizligi: "KALIP",
+  ihlal_suphesi: "MODELLER UYMUYOR",
+  dogrulama: "DOĞRULAMA",
+  sozcuk_karismasi: "SINIF SÖZCÜĞÜ",
+  ad_tutarliligi: "AD POLİTİKASI",
 };
 
 function dugme(metin, fn, sinif = "pill") {
@@ -66,6 +76,7 @@ function ciz(slug, { liste, red }) {
   el("glossReviewSayi").textContent = `İNCELENECEKLER (${liste.length})`;
   const govde = el("glossReviewList");
   govde.replaceChildren();
+  govde.appendChild(dogrulamaSatiri(slug));
   if (!liste.length) {
     const p = document.createElement("p");
     p.className = "gloss-hint";
@@ -102,6 +113,15 @@ function satir(slug, x) {
   ad.lang = "en";
   ad.textContent = x.source;
   ust.append(ad, document.createTextNode(" → " + x.target));
+  // TUTULDU: kapıya takılan aday prompt'a GİRMİYOR. Okuyucu bunu bilmeli —
+  // "Doğru" demek terimi çeviride kural yapar.
+  if (x.durum === "tutuldu") {
+    const t = document.createElement("span");
+    t.className = "gloss-cip inceleme-tutuldu";
+    t.textContent = "TUTULDU";
+    t.title = "Kapıya takıldı: çeviride kullanılmıyor. Onaylarsan kural olur.";
+    ust.appendChild(t);
+  }
   for (const n of x.nedenler) {
     const c = document.createElement("span");
     c.className = "gloss-cip inceleme-neden inceleme-" + n.tur;
@@ -115,6 +135,12 @@ function satir(slug, x) {
     p.className = "inceleme-aciklama";
     p.textContent = n.aciklama;
     kart.appendChild(p);
+  }
+  if (x.tanim) {
+    const t = document.createElement("p");
+    t.className = "inceleme-aciklama inceleme-tanim";
+    t.textContent = "Tanım: " + x.tanim;
+    kart.appendChild(t);
   }
   if (x.kaynak_cumle) {
     const c = document.createElement("p");
@@ -132,6 +158,44 @@ function satir(slug, x) {
   );
   kart.appendChild(eylem);
   return kart;
+}
+
+// MODEL DOĞRULAMASI: sözlüğün tamamını ücretsiz zincire sordurur (arka planda,
+// sunucuda). Sonuç kayıtları DEĞİŞTİRMEZ; sorunlu bulunanlar bu listeye düşer.
+function dogrulamaSatiri(slug) {
+  const d = document.createElement("div");
+  d.className = "inceleme-eylem inceleme-dogrula";
+  const durumMetni = document.createElement("span");
+  durumMetni.className = "gloss-hint";
+  d.append(
+    dugme("Sözlüğü doğrula", async () => {
+      try {
+        const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/glossary/verify`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ kapsam: "hepsi" }),
+        });
+        const veri = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error((veri && veri.detail) || "sunucu " + res.status);
+        if (veri.basladi) bildir("Doğrulama başladı (arka planda, birkaç dakika). Sonra listeyi tazele.");
+        else if (veri.calisiyor) bildir("Doğrulama zaten sürüyor.");
+        else bildir("Doğrulama başlatılamadı (sunucuda kapalı ya da anahtar yok).");
+      } catch (err) {
+        bildir("Doğrulama başlatılamadı (" + err.message + ").");
+      }
+    }),
+    durumMetni
+  );
+  fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/glossary/verify`, {}, 8000)
+    .then((r) => (r.ok ? r.json() : null))
+    .then((v) => {
+      if (!v) return;
+      if (v.calisiyor) durumMetni.textContent = "doğrulama sürüyor…";
+      else if (v.son && v.son.hata) durumMetni.textContent = "son doğrulama hata verdi";
+      else if (v.son) durumMetni.textContent = `son doğrulama: ${v.son.islenen} kayıt, ${v.son.sorunlu} sorunlu`;
+    })
+    .catch(() => {});
+  return d;
 }
 
 async function karar(slug, x, tur) {
