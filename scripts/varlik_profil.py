@@ -100,7 +100,7 @@ def main() -> int:
                                                 float(g.get("guven") or 0), conn=conn)
                     for d in sonuc["degerler"]:
                         varlik_grafigi.deger_yaz(slug, d["kimlik"], d["anahtar"], d["deger"], d["bolum"],
-                                                 d.get("kanit"), conn=conn)
+                                                 d.get("kanit"), conn=conn, origin="model")
                     conn.commit()
                 finally:
                     conn.close()

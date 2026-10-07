@@ -54,9 +54,14 @@ ILISKILER: dict[str, dict] = {
     "gorunusu": {"etiket": "Görünüşü", "ters": "kimin Görünüşü", "grup": "sahiplik"},
     "klani": {"etiket": "klanı", "ters": "üyesi", "grup": "toplum"},
     "lideri": {"etiket": "lideri", "ters": "yönettiği", "grup": "toplum"},
-    "yoldasi": {"simetrik": True, "etiket": "yoldaşı", "ters": "yoldaşı", "grup": "toplum"},
+    # `kapatir`: bu ilişki ONAYLI olarak kurulunca aynı çiftin açık bağlarından
+    # hangilerini KAPATIR (Faz 1F). Varsayılan hiçbiri — ilişkiler bir arada var
+    # olabilir; kapanma yalnız burada açıkça bildirilince olur.
+    "yoldasi": {"simetrik": True, "etiket": "yoldaşı", "ters": "yoldaşı", "grup": "toplum",
+                "kapatir": ("dusmani",)},
     "akrabasi": {"simetrik": True, "etiket": "akrabası", "ters": "akrabası", "grup": "toplum"},
-    "dusmani": {"simetrik": True, "etiket": "düşmanı", "ters": "düşmanı", "grup": "toplum"},
+    "dusmani": {"simetrik": True, "etiket": "düşmanı", "ters": "düşmanı", "grup": "toplum",
+                "kapatir": ("yoldasi",)},
     "ogretmeni": {"etiket": "öğretmeni", "ters": "öğrencisi", "grup": "toplum"},
     # O DÖNEM yaşadığı/bulunduğu bölge (ilk_bolum dönemi gösterir); sahnelik anlık
     # konum değil. Ölçülen: `Kai -> Forgotten Shore` arc boyunca doğru bilgi.
@@ -86,7 +91,30 @@ ILISKILER: dict[str, dict] = {
     "ruya_capasi": {"etiket": "Rüya Çapası", "ters": "kimin Rüya Çapası", "grup": "mekan", "tekil": True},
 }
 ORIGIN_ONCELIGI = {"model": 0, "sistem": 1, "manual": 2}
+# `durum` İŞ AKIŞI durumudur (inceleme): aday / onaylandi / reddedildi. Hikâyede
+# DOĞRU olup olmadığı DEĞİL — o `durum_bilgisi` (Faz 1D).
 DURUMLAR = ("aday", "onaylandi", "reddedildi")
+
+# ---------- ZAMAN ve BİLGİ DURUMU (Faz 1B–1E, 2026-10-07) ----------
+# İki ayrı saat vardır ve KARIŞTIRILMAZ:
+#   ilk_bolum          = learned_at: okurun / anlatının bilgiyi ÖĞRENDİĞİ bölüm.
+#                        SPOILER süzgecinin TEK ölçütüdür (`ilk_bolum <= okur bölümü`).
+#   gecerli_baslangic  = hikâye kronolojisinde DOĞRU olmaya başladığı bölüm.
+#   gecerli_bitis      = hikâye kronolojisinde doğru olmaktan çıktığı bölüm.
+#   bitis_ogrenildigi  = bitişin ÖĞRENİLDİĞİ bölüm (o da spoiler süzgecine tabi).
+# Örnek: 800. bölüm "X 300'de Tarikat'a katılmıştı" der -> ilk_bolum 800,
+# gecerli_baslangic 300; 500'deki okur bu bağı GÖRMEZ.
+# NULL = BİLİNMİYOR. `gecerli_baslangic` NULL ise "ilk_bolum'da başladı" VARSAYILMAZ;
+# `gecerli_bitis` NULL "sonsuza dek doğru" demek DEĞİLDİR, "bitiş kurulmadı" demektir.
+DURUM_BILGISI = ("confirmed", "strongly_implied", "believed", "rumor", "uncertain", "disproven", "deception")
+# Sonradan doğrulanan farklı bir bilgiyle ÇÜRÜTÜLEBİLEN durumlar.
+CURUTULEBILIR = frozenset(("believed", "rumor", "uncertain", "strongly_implied", "deception"))
+
+
+def _durum_bilgisi_denetle(deger: str | None) -> str | None:
+    if deger is not None and deger not in DURUM_BILGISI:
+        raise ValueError(f"Bilinmeyen durum_bilgisi: {deger!r}")
+    return deger
 
 # ---------- kitap profilleri ----------
 # Rün mesajlarının biçimi kitaba özgüdür; yeni kitap = yeni kayıt (fetch.SITES gibi).
@@ -212,6 +240,25 @@ def _connect() -> sqlite3.Connection:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS varlik_bag_hedef ON varlik_bag (book_slug, hedef_kimlik)"
     )
+    # Faz 1B–1E: EKLEMELİ göç (mevcut satırlar korunur, kanıt yeniden yazılmaz).
+    db.ensure_column(conn, "varlik_bag", "gecerli_baslangic", "gecerli_baslangic INTEGER")
+    db.ensure_column(conn, "varlik_bag", "gecerli_bitis", "gecerli_bitis INTEGER")
+    db.ensure_column(conn, "varlik_bag", "bitis_ogrenildigi", "bitis_ogrenildigi INTEGER")
+    db.ensure_column(conn, "varlik_bag", "durum_bilgisi", "durum_bilgisi TEXT")
+    db.ensure_column(conn, "varlik_bag", "curutuldugu_bolum", "curutuldugu_bolum INTEGER")
+    # Eski satırların bilgi durumu — YALNIZ güvenle türetilebilen: rün (`sistem`,
+    # Spell'in kendi mesajı) ve elle (`manual`, insan kararı) -> confirmed. Model
+    # bağları incelenip onaylanmış olsa bile NULL kalır (= değerlendirilmemiş):
+    # "anlatıcı mı söylüyor, karakter mi inanıyor" ayrımı yapılmadı, confirmed
+    # demek uydurma olurdu. Önce OKUNUR — boş UPDATE bile yazma kilidi alırdı.
+    if conn.execute(
+        "SELECT 1 FROM varlik_bag WHERE durum_bilgisi IS NULL AND origin IN ('sistem', 'manual') LIMIT 1"
+    ).fetchone():
+        conn.execute(
+            "UPDATE varlik_bag SET durum_bilgisi = 'confirmed' "
+            "WHERE durum_bilgisi IS NULL AND origin IN ('sistem', 'manual')"
+        )
+        conn.commit()
     # DURUM DEĞERLERİ: varlık olmayan, zamanla değişen sayaç/etiketler (Shadow Cores
     # 4/7, Shadow Fragments 777/4000, Memory Tier V). Bağ değildir — nesnesi bir sözlük
     # kaydı değil. Yalnız DEĞİŞİMLER saklanır; güncel değer konumdan önceki en son
@@ -229,6 +276,18 @@ def _connect() -> sqlite3.Connection:
         )
         """
     )
+    db.ensure_column(conn, "varlik_deger", "durum_bilgisi", "durum_bilgisi TEXT")
+    db.ensure_column(conn, "varlik_deger", "curutuldugu_bolum", "curutuldugu_bolum INTEGER")
+    # KÖKEN: sistem çıkarımı YALNIZ kendi yazdığı (rün) değerleri yeniden kurar.
+    # Ölçülen hata: çıkarım kitabın BÜTÜN değerlerini siliyordu ve profil aracının
+    # yazdığı "Görev" değerleri (Kim, Samara) her koşuda kayboluyordu.
+    db.ensure_column(conn, "varlik_deger", "origin", "origin TEXT")
+    if conn.execute("SELECT 1 FROM varlik_deger WHERE origin IS NULL LIMIT 1").fetchone():
+        anahtarlar = sorted({a for kume in _DEGER_SATIRLARI.values() for a in kume})
+        yer = ", ".join("?" for _ in anahtarlar)
+        conn.execute(f"UPDATE varlik_deger SET origin = 'sistem' WHERE origin IS NULL AND anahtar IN ({yer})", anahtarlar)
+        conn.execute("UPDATE varlik_deger SET origin = 'model' WHERE origin IS NULL")
+        conn.commit()
     return conn
 
 
@@ -431,8 +490,15 @@ def bag_ekle(
     guven: float | None = None,
     durum: str | None = None,
     conn: sqlite3.Connection | None = None,
+    durum_bilgisi: str | None = None,
+    gecerli_baslangic: int | None = None,
+    gecerli_bitis: int | None = None,
 ) -> bool:
     """Bağı ekle ya da birleştir. Yeni eklendiyse True.
+
+    `ilk_bolum` learned_at'tir (spoiler ölçütü). `gecerli_*` hikâye zamanıdır ve
+    BİLİNMİYORSA NULL bırakılır (bkz. modül başı ZAMAN notu). `durum_bilgisi`
+    verilmezse: rün/elle -> confirmed, model -> NULL (değerlendirilmemiş).
 
     Birleştirme kuralları: `ilk_bolum` yalnız KÜÇÜLÜR (spoiler); kanıt en eski
     bölümünkidir; köken önceliği manual > sistem > model (güçlü kaynak zayıfı ezer,
@@ -451,6 +517,9 @@ def bag_ekle(
         kaynak_kimlik, hedef_kimlik = hedef_kimlik, kaynak_kimlik
     if durum is None:
         durum = "onaylandi" if origin in ("manual", "sistem") else "aday"
+    durum_bilgisi = _durum_bilgisi_denetle(durum_bilgisi)
+    if durum_bilgisi is None and origin in ("manual", "sistem"):
+        durum_bilgisi = "confirmed"
     kendi = conn is None
     conn = conn or _connect()
     try:
@@ -463,10 +532,12 @@ def bag_ekle(
         if mevcut is None:
             conn.execute(
                 "INSERT INTO varlik_bag (book_slug, kaynak_kimlik, iliski, hedef_kimlik, ilk_bolum, "
-                "kanit, kanit_bolum, origin, durum, guven, created_at, updated_at) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                "kanit, kanit_bolum, origin, durum, guven, created_at, updated_at, durum_bilgisi, "
+                "gecerli_baslangic, gecerli_bitis) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 (book_slug, kaynak_kimlik, iliski, hedef_kimlik, ilk_bolum, (kanit or "")[:600] or None,
-                 ilk_bolum, origin, durum, guven, simdi, simdi),
+                 ilk_bolum, origin, durum, guven, simdi, simdi, durum_bilgisi,
+                 gecerli_baslangic, gecerli_bitis),
             )
             yeni = True
         else:
@@ -487,13 +558,76 @@ def bag_ekle(
                  max(x for x in (guven, m_guven, 0.0) if x is not None),
                  simdi, book_slug, kaynak_kimlik, iliski, hedef_kimlik),
             )
+            # Zaman / bilgi durumu yalnız VERİLDİYSE yazılır; bilinen değer bilinmeyenle ezilmez.
+            for alan, deger in (("durum_bilgisi", durum_bilgisi if guclu or durum_bilgisi else None),
+                                ("gecerli_baslangic", gecerli_baslangic), ("gecerli_bitis", gecerli_bitis)):
+                if deger is not None:
+                    conn.execute(
+                        f"UPDATE varlik_bag SET {alan} = ? WHERE book_slug = ? AND kaynak_kimlik = ? "
+                        "AND iliski = ? AND hedef_kimlik = ?",
+                        (deger, book_slug, kaynak_kimlik, iliski, hedef_kimlik),
+                    )
             yeni = False
+        _kapanislari_uygula(conn, book_slug, kaynak_kimlik, iliski, hedef_kimlik)
         if kendi:
             conn.commit()
         return yeni
     finally:
         if kendi:
             conn.close()
+
+
+def _kapanislari_uygula(conn: sqlite3.Connection, book_slug: str, a: str, iliski: str, b: str) -> int:
+    """ONAYLI bağ, `ILISKILER`'de bildirilen eski bağları KAPATIR (Faz 1F).
+
+    Kapatılan: (1) tekil ilişkide aynı öznenin BAŞKA nesneli bağı; (2) `kapatir`
+    listesindeki ilişkilerle aynı çift. Yalnız yeni bağdan ÖNCE öğrenilmiş ve
+    henüz kapanmamış olanlar (`ilk_bolum` < yeni `ilk_bolum`). Kapanış SİLMEZ:
+    `bitis_ogrenildigi` = yeni bağın `ilk_bolum`u (bitişin öğrenildiği an);
+    `gecerli_bitis` YALNIZ yeni bağın hikâye başlangıcı biliniyorsa yazılır.
+    Aday (incelenmemiş) bağ kapatmaz: gürültülü tek bir model önerisi bir
+    dostluğu bitirmemeli."""
+    yeni = conn.execute(
+        "SELECT ilk_bolum, durum, gecerli_baslangic FROM varlik_bag WHERE book_slug = ? "
+        "AND kaynak_kimlik = ? AND iliski = ? AND hedef_kimlik = ?",
+        (book_slug, a, iliski, b),
+    ).fetchone()
+    if yeni is None or yeni[1] != "onaylandi" or yeni[0] is None:
+        return 0
+    ilk, _d, baslangic = yeni
+    bitis = baslangic - 1 if baslangic is not None else None
+    kural = ILISKILER[iliski]
+    kosullar, arg = [], []
+    if kural.get("tekil"):
+        kosullar.append("(kaynak_kimlik = ? AND iliski = ? AND hedef_kimlik != ?)")
+        arg += [a, iliski, b]
+    for diger in kural.get("kapatir", ()):
+        kosullar.append("(iliski = ? AND ((kaynak_kimlik = ? AND hedef_kimlik = ?) OR (kaynak_kimlik = ? AND hedef_kimlik = ?)))")
+        arg += [diger, a, b, b, a]
+    if not kosullar:
+        return 0
+    return conn.execute(
+        "UPDATE varlik_bag SET bitis_ogrenildigi = ?, gecerli_bitis = COALESCE(gecerli_bitis, ?) "
+        f"WHERE book_slug = ? AND ({' OR '.join(kosullar)}) AND durum = 'onaylandi' "
+        "AND bitis_ogrenildigi IS NULL AND ilk_bolum IS NOT NULL AND ilk_bolum < ?",
+        (ilk, bitis, book_slug, *arg, ilk),
+    ).rowcount
+
+
+def iddiayi_curut(book_slug: str, kaynak_kimlik: str, iliski: str, hedef_kimlik: str, bolum: int) -> bool:
+    """Bir bağın (iddianın) `bolum`da ÇÜRÜTÜLDÜĞÜNÜ kaydet — SİLMEDEN (Faz 1E).
+    Eski `durum_bilgisi` korunur; o bölümden önceki okur iddiayı olduğu gibi görür."""
+    conn = _connect()
+    try:
+        n = conn.execute(
+            "UPDATE varlik_bag SET curutuldugu_bolum = ? WHERE book_slug = ? AND kaynak_kimlik = ? "
+            "AND iliski = ? AND hedef_kimlik = ? AND (curutuldugu_bolum IS NULL OR curutuldugu_bolum > ?)",
+            (bolum, book_slug, kaynak_kimlik, iliski, hedef_kimlik, bolum),
+        ).rowcount
+        conn.commit()
+        return n > 0
+    finally:
+        conn.close()
 
 
 def bag_durumu(book_slug: str, kaynak_kimlik: str, iliski: str, hedef_kimlik: str, durum: str) -> bool:
@@ -506,6 +640,8 @@ def bag_durumu(book_slug: str, kaynak_kimlik: str, iliski: str, hedef_kimlik: st
             "AND iliski = ? AND hedef_kimlik = ?",
             (durum, time.time(), book_slug, kaynak_kimlik, iliski, hedef_kimlik),
         ).rowcount
+        if n and durum == "onaylandi":
+            _kapanislari_uygula(conn, book_slug, kaynak_kimlik, iliski, hedef_kimlik)
         conn.commit()
         return n > 0
     finally:
@@ -515,23 +651,39 @@ def bag_durumu(book_slug: str, kaynak_kimlik: str, iliski: str, hedef_kimlik: st
 def deger_yaz(
     book_slug: str, kimlik: str, anahtar: str, deger: str, bolum: int | None,
     kanit: str | None = None, conn: sqlite3.Connection | None = None,
+    origin: str = "sistem", durum_bilgisi: str | None = None,
 ) -> bool:
-    """Durum değerini yaz; önceki en son değerle AYNIYSA yazmaz. Yazdıysa True."""
+    """Durum değerini yaz; önceki en son değer ve durumu AYNIYSA yazmaz. Yazdıysa True.
+
+    İDDİA GEÇMİŞİ (Faz 1E): `confirmed` bir değer, daha önce öğrenilmiş FARKLI ve
+    çürütülebilir (`believed`, `rumor`…) değerleri SİLMEZ; onlara `curutuldugu_bolum`
+    yazar. Böylece 220'deki okur "ölü sanılıyordu"yu, 300'deki "çürütüldü"yü görür."""
+    durum_bilgisi = _durum_bilgisi_denetle(durum_bilgisi)
+    if durum_bilgisi is None and origin in ("sistem", "manual"):
+        durum_bilgisi = "confirmed"
     kendi = conn is None
     conn = conn or _connect()
     try:
         no = bolum or 0
         onceki = conn.execute(
-            "SELECT deger FROM varlik_deger WHERE book_slug = ? AND kimlik = ? AND anahtar = ? "
+            "SELECT deger, durum_bilgisi FROM varlik_deger WHERE book_slug = ? AND kimlik = ? AND anahtar = ? "
             "AND ilk_bolum <= ? ORDER BY ilk_bolum DESC LIMIT 1",
             (book_slug, kimlik, anahtar, no),
         ).fetchone()
-        if onceki is not None and onceki[0] == deger:
+        if onceki is not None and onceki[0] == deger and onceki[1] == durum_bilgisi:
             return False
         n = conn.execute(
-            "INSERT OR IGNORE INTO varlik_deger VALUES (?, ?, ?, ?, ?, ?)",
-            (book_slug, kimlik, anahtar, deger, no, kanit),
+            "INSERT OR IGNORE INTO varlik_deger (book_slug, kimlik, anahtar, deger, ilk_bolum, kanit, origin, "
+            "durum_bilgisi) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+            (book_slug, kimlik, anahtar, deger, no, kanit, origin, durum_bilgisi),
         ).rowcount
+        if n and durum_bilgisi == "confirmed":
+            yer = ", ".join("?" for _ in CURUTULEBILIR)
+            conn.execute(
+                "UPDATE varlik_deger SET curutuldugu_bolum = ? WHERE book_slug = ? AND kimlik = ? AND anahtar = ? "
+                f"AND ilk_bolum < ? AND deger != ? AND durum_bilgisi IN ({yer}) AND curutuldugu_bolum IS NULL",
+                (no, book_slug, kimlik, anahtar, no, deger, *CURUTULEBILIR),
+            )
         if kendi:
             conn.commit()
         return n > 0
@@ -540,11 +692,19 @@ def deger_yaz(
             conn.close()
 
 
+def _etkin_durum(durum_bilgisi: str | None, curutuldugu: int | None, en_cok_bolum: int | None) -> str | None:
+    """Okur bölümüne göre görünen bilgi durumu: çürütülme o bölümde BİLİNİYORSA disproven."""
+    if curutuldugu is not None and (en_cok_bolum is None or curutuldugu <= en_cok_bolum):
+        return "disproven"
+    return durum_bilgisi
+
+
 def degerler(book_slug: str, en_cok_bolum: int | None = None, kimlik: str | None = None) -> dict:
-    """{kimlik: {anahtar: {"deger", "ilk_bolum"}}} — konumdan önceki EN SON değer."""
+    """{kimlik: {anahtar: {"deger", "ilk_bolum", "durum_bilgisi"}}} — konumdan önceki EN SON
+    değer ("şu an ne biliniyor"). Geçmiş için `deger_gecmisi`."""
     conn = _connect()
     try:
-        sorgu = "SELECT kimlik, anahtar, deger, ilk_bolum FROM varlik_deger WHERE book_slug = ?"
+        sorgu = "SELECT kimlik, anahtar, deger, ilk_bolum, durum_bilgisi, curutuldugu_bolum FROM varlik_deger WHERE book_slug = ?"
         arg: list = [book_slug]
         if en_cok_bolum is not None:
             sorgu += " AND ilk_bolum <= ?"
@@ -553,9 +713,29 @@ def degerler(book_slug: str, en_cok_bolum: int | None = None, kimlik: str | None
             sorgu += " AND kimlik = ?"
             arg.append(kimlik)
         out: dict = {}
-        for k, a, d, b in conn.execute(sorgu + " ORDER BY ilk_bolum", arg):
-            out.setdefault(k, {})[a] = {"deger": d, "ilk_bolum": b or None}
+        for k, a, d, b, db_, c in conn.execute(sorgu + " ORDER BY ilk_bolum", arg):
+            out.setdefault(k, {})[a] = {"deger": d, "ilk_bolum": b or None,
+                                        "durum_bilgisi": _etkin_durum(db_, c, en_cok_bolum)}
         return out
+    finally:
+        conn.close()
+
+
+def deger_gecmisi(book_slug: str, kimlik: str, anahtar: str, en_cok_bolum: int | None = None) -> list[dict]:
+    """Bir değerin İDDİA geçmişi, okur bölümüne kadar ("okur 220'de neye inanıyordu?").
+    Her satırın durumu o bölümdeki bilgiyle hesaplanır (`_etkin_durum`)."""
+    conn = _connect()
+    try:
+        sorgu = ("SELECT deger, ilk_bolum, durum_bilgisi, curutuldugu_bolum FROM varlik_deger "
+                 "WHERE book_slug = ? AND kimlik = ? AND anahtar = ?")
+        arg: list = [book_slug, kimlik, anahtar]
+        if en_cok_bolum is not None:
+            sorgu += " AND ilk_bolum <= ?"
+            arg.append(en_cok_bolum)
+        return [
+            {"deger": d, "ilk_bolum": b, "durum_bilgisi": _etkin_durum(s, c, en_cok_bolum)}
+            for d, b, s, c in conn.execute(sorgu + " ORDER BY ilk_bolum", arg)
+        ]
     finally:
         conn.close()
 
@@ -587,7 +767,8 @@ def baglar(
     try:
         sorgu = (
             "SELECT b.kaynak_kimlik, k.source, k.target, b.iliski, b.hedef_kimlik, h.source, h.target, "
-            "b.ilk_bolum, b.kanit, b.kanit_bolum, b.origin, b.durum, b.guven "
+            "b.ilk_bolum, b.kanit, b.kanit_bolum, b.origin, b.durum, b.guven, "
+            "b.gecerli_baslangic, b.gecerli_bitis, b.bitis_ogrenildigi, b.durum_bilgisi, b.curutuldugu_bolum "
             "FROM varlik_bag b "
             # Anlam düğümü (`abc#golge`) adını TABAN kayıttan alır.
             "JOIN glossary k ON k.book_slug = b.book_slug AND k.kimlik = CASE WHEN instr(b.kaynak_kimlik, '#') > 0 "
@@ -612,9 +793,25 @@ def baglar(
             "hedef_kimlik": r[4], "hedef": r[5], "hedef_karsilik": r[6], "ilk_bolum": r[7],
             "kanit": r[8], "kanit_bolum": r[9], "origin": r[10], "durum": r[11], "guven": r[12],
             "kaynak_anlam": anlam_adi(r[0]), "hedef_anlam": anlam_adi(r[4]),
+            **_zaman_alanlari(r[13], r[14], r[15], r[16], r[17], en_cok_bolum),
         }
         for r in satirlar
     ]
+
+
+def _zaman_alanlari(baslangic, bitis, bitis_ogr, durum_bilgisi, curutuldugu, en_cok_bolum) -> dict:
+    """Bağın zaman ve bilgi durumu alanları, OKUR BÖLÜMÜNE göre (Faz 1B–1F).
+
+    Bitiş ve çürütme de bilgidir: okur onları öğrendiği bölümden önce GÖRMEZ —
+    250'deki okura 301'de biten bir dostluk "bitti" diye gösterilmez."""
+    bitis_biliniyor = bitis_ogr is not None and (en_cok_bolum is None or bitis_ogr <= en_cok_bolum)
+    return {
+        "gecerli_baslangic": baslangic,
+        "gecerli_bitis": bitis if bitis_biliniyor else None,
+        "bitis_ogrenildigi": bitis_ogr if bitis_biliniyor else None,
+        "aktif": not bitis_biliniyor,
+        "durum_bilgisi": _etkin_durum(durum_bilgisi, curutuldugu, en_cok_bolum),
+    }
 
 
 def kategori_kimlikleri(
@@ -1113,7 +1310,7 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
             sonuc["anlama_tasinan"] = anlamlari_ayir(book_slug)
             # Değerler YALNIZ rünlerden türer ve yalnız değişimler saklanır; baştan
             # yazmak, ayrıştırma düzeltildiğinde eski bozuk satırların kalmasını önler.
-            conn.execute("DELETE FROM varlik_deger WHERE book_slug = ?", (book_slug,))
+            conn.execute("DELETE FROM varlik_deger WHERE book_slug = ? AND origin = 'sistem'", (book_slug,))
         evrim_durumu: dict = {}  # bölümler arası: bekleyen evrim + görülen gölge adları
         # (özne, ilişki, nesne, aranan adlar, sabit bölüm | None). Sabit bölüm yoksa ilk
         # bölüm NESNENİN ilk geçişidir; varsa o bölümde önce ÖZNENİN, o yoksa NESNENİN
