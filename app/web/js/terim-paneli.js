@@ -365,7 +365,7 @@ function yazimlariCiz(kaynak, yazimlar) {
   }
 }
 
-function anlamSatiri(a = { target: "", kosul: "" }) {
+function anlamSatiri(a = { target: "", kosul: "", ad_mi: false, etiket: "", ilk_bolum: null }) {
   const satir = document.createElement("div");
   satir.className = "terim-anlam";
   const hedef = document.createElement("input");
@@ -386,7 +386,34 @@ function anlamSatiri(a = { target: "", kosul: "" }) {
   sil.textContent = "×";
   sil.setAttribute("aria-label", "Bu anlamı kaldır");
   sil.addEventListener("click", () => satir.remove());
-  satir.append(hedef, kosul, sil);
+  // "Bu bir ad": ek anlam bir varlığın ADIYSA (Saint: Sunny'nin gölgesi) grafik ikinci
+  // düğüm açar ve metindeki geçişleri ayırır. Çeviri talimatına GİRMEZ.
+  const adEtiket = document.createElement("label");
+  adEtiket.className = "terim-anlam-ad";
+  const ad = document.createElement("input");
+  ad.type = "checkbox";
+  ad.className = "terim-anlam-ad-mi";
+  ad.checked = !!a.ad_mi;
+  adEtiket.append(ad, document.createTextNode(" Bu bir ad"));
+  const etiket = document.createElement("input");
+  etiket.type = "text";
+  etiket.className = "terim-anlam-etiket";
+  etiket.placeholder = "Kısa ad (örn. gölge)";
+  etiket.setAttribute("aria-label", "Grafikteki kısa ad");
+  etiket.value = a.etiket || "";
+  const ilk = document.createElement("input");
+  ilk.type = "number";
+  ilk.min = "0";
+  ilk.className = "terim-anlam-ilk";
+  ilk.placeholder = "İlk bölüm";
+  ilk.setAttribute("aria-label", "Bu anlamın ilk göründüğü bölüm");
+  ilk.value = a.ilk_bolum ?? "";
+  const adAlanlari = document.createElement("div");
+  adAlanlari.className = "terim-anlam-ad-alanlari";
+  adAlanlari.append(etiket, ilk);
+  adAlanlari.hidden = !ad.checked;
+  ad.addEventListener("change", () => { adAlanlari.hidden = !ad.checked; });
+  satir.append(hedef, kosul, sil, adEtiket, adAlanlari);
   return satir;
 }
 
@@ -438,10 +465,17 @@ async function ekIstegi(yontem, tur, kaynak, alanlar) {
 function anlamlariKaydet() {
   if (!panel || !panel.kayitli) return;
   const anlamlar = [...el("terimAnlamlar").querySelectorAll(".terim-anlam")]
-    .map((s) => ({
-      target: s.querySelector(".terim-anlam-hedef").value.trim(),
-      kosul: s.querySelector(".terim-anlam-kosul").value.trim(),
-    }))
+    .map((s) => {
+      const adMi = s.querySelector(".terim-anlam-ad-mi").checked;
+      const ilk = s.querySelector(".terim-anlam-ilk").value.trim();
+      return {
+        target: s.querySelector(".terim-anlam-hedef").value.trim(),
+        kosul: s.querySelector(".terim-anlam-kosul").value.trim(),
+        ad_mi: adMi,
+        etiket: adMi ? s.querySelector(".terim-anlam-etiket").value.trim() || null : null,
+        ilk_bolum: adMi && ilk ? Number(ilk) : null,
+      };
+    })
     .filter((a) => a.target);
   if (anlamlar.some((a) => !a.kosul)) {
     yaz("terimEkDurum", "Her ek anlamın koşulu olmalı: model hangisini ne zaman yazacağını ancak böyle bilir.");

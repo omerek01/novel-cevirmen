@@ -2210,3 +2210,10 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 .api-bos { list-style: none; }
 .kunye-neden { display: block; }
 .kunye-neden-baslik { font-weight: 700; color: var(--ink); }
+
+/* Ek anlam: "Bu bir ad" işareti ve grafik alanları */
+.terim-anlam-ad { display: flex; align-items: center; gap: 6px; font-size: 0.85em; flex-basis: 100%; }
+.terim-anlam-ad-alanlari { display: flex; gap: 8px; flex-basis: 100%; }
+.terim-anlam-ad-alanlari[hidden] { display: none; }
+.terim-anlam-etiket { flex: 1; min-width: 0; }
+.terim-anlam-ilk { width: 7em; }
