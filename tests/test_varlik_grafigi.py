@@ -329,3 +329,26 @@ def test_aninin_niteligi_efsune_cevrilir():
     assert durum[("Puppeteer's Shroud", "efsunu", "Doubtless")] == ("onaylandi", 143)
     assert durum[("Puppeteer's Shroud", "niteligi", "Doubtless")][0] == "reddedildi"
     assert durum[("Nephis", "niteligi", "Fire")][0] == "onaylandi"  # kişi niteliği kalır
+
+
+def test_durum_blogu_anlatimdan_sonra_devam_eder_rank_etmez():
+    # Yapay metin; yapı 848. bölümdeki gibi.
+    metin = "\n\n".join([
+        "Name: Sunless.", "Rank: Ascended.", "Class: Devil.", "Shadow Cores: 4/7.",
+        "He frowned at the numbers.",
+        "Attributes: [Fated], [Flame of Divinity].",
+        "Aspect: [Shadow Slave].", "Aspect Rank: Divine.",
+        "He sighed.",
+        "Aspect Abilities: [Shadow Step].", "Aspect Legacy: [Shadow Dance].",
+        "Flaw: [Clear Conscience].", "Dream Anchor: [Tower of Longing].",
+        "Someone else spoke.", "Rank: Dreamer.",
+    ])
+    b = {x[:3] for x in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
+    assert {
+        ("Sunny", "sinifi", "Devil"), ("Sunny", "niteligi", "Flame of Divinity"),
+        ("Sunny", "gorunusu", "Shadow Slave"), ("Shadow Slave", "rutbesi", "Divine"),
+        ("Sunny", "yetenegi", "Shadow Step"), ("Sunny", "yetenegi", "Shadow Dance"),
+        ("Sunny", "kusuru", "Clear Conscience"), ("Sunny", "ruya_capasi", "Tower of Longing"),
+    } <= b
+    # Anlatımdan sonra tek başına "Rank:" yine bağlanmaz.
+    assert ("Sunny", "rutbesi", "Dreamer") not in b

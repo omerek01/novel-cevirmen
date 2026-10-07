@@ -73,6 +73,10 @@ ILISKILER: dict[str, dict] = {
     "bicimi": {"etiket": "o dönemki biçimi", "ters": "kimin biçimi", "grup": "kimlik", "tekil": True},
     "donustu": {"etiket": "dönüştüğü biçim", "ters": "önceki biçimi", "grup": "kimlik"},
     "oldurdu": {"etiket": "öldürdü", "ters": "öldüreni", "grup": "olay"},
+    # Durum rününün iki satırı ("Flaw: [...]", "Dream Anchor: [...]"); ikisi de
+    # 2026-10-07'ye dek hiç okunmuyordu (Sunny'nin 848. bölüm bloğu).
+    "kusuru": {"etiket": "Kusuru", "ters": "kimin Kusuru", "grup": "sahiplik"},
+    "ruya_capasi": {"etiket": "Rüya Çapası", "ters": "kimin Rüya Çapası", "grup": "mekan", "tekil": True},
 }
 ORIGIN_ONCELIGI = {"model": 0, "sistem": 1, "manual": 2}
 DURUMLAR = ("aday", "onaylandi", "reddedildi")
@@ -530,7 +534,20 @@ _SATIR_ICI_EFSUN = re.compile(r"^\[([^\]]+)\]\s*Enchantment Description:")
 _DURUM_SATIRLARI = {
     "True Name": "gercek_adi", "Rank": "rutbesi", "Memories": "anisi", "Echoes": "yanki",
     "Attributes": "niteligi", "Aspect": "gorunusu", "Shadows": "golgesi",
+    "Class": "sinifi", "Aspect Abilities": "yetenegi", "Aspect Legacy": "yetenegi",
+    "Flaw": "kusuru", "Dream Anchor": "ruya_capasi",
 }
+# Durum bloğunu anlatımdan SONRA yeniden açabilen anahtarlar. `Rank`, `True Name`
+# ve `Name` BİLEREK yok: tek başına "Rank:" başka bir şeyin rünü ya da diyalog
+# olabilir (`test_duz_paragraf_run_blogunu_kapatir`). Bunlar yalnız kişi durumunda
+# geçer; ölçülen: 848. bölümde Attributes ve Aspect satırları anlatımdan sonra
+# geldiği için `Flame of Divinity`, `Master of Shadows`, `Shadow Slave` düşüyordu.
+_DURUM_DEVAM_ANAHTARLARI = frozenset(
+    ("Class", "Soul", "Shadow Cores", "Shadow Fragments", "Memories", "Echoes", "Shadows",
+     "Attributes", "Attribute Description", "Aspect", "Aspect Rank", "Aspect Description",
+     "Aspect Abilities", "Ability Description", "Aspect Legacy", "Flaw", "Flaw Description",
+     "Dream Anchor")
+)
 
 
 def _ogeler(deger: str) -> list[str]:
@@ -556,7 +573,9 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
     efsun_sirasi: list[int] = []  # açıklaması henüz gelmemiş efsunların `out` sırası
     efsunlar: dict[str, int] = {}  # son Anının efsunları: ad -> `out` sırası
     son_ani: str | None = None     # anlatımla kapanmış son Anı bloğunun öznesi
+    son_durum: str | None = None   # anlatımla kapanmış son durum bloğunun öznesi
     anlatim = 0                    # o bloktan beri geçen düz paragraf
+    gorunus: str | None = None     # durum bloğundaki Aspect (Aspect Rank'ın öznesi)
     for paragraf in (p.strip() for p in metin.split("\n")):
         if not paragraf:
             continue
@@ -585,25 +604,30 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
                     efsun_sirasi.remove(i)
             if blok_tur == "Memory":
                 son_ani, anlatim = blok_ozne, 0
-            elif son_ani:
+            elif blok_tur == "durum":
+                son_durum, anlatim = blok_ozne, 0
+            elif son_ani or son_durum:
                 anlatim += 1
             blok_ozne = blok_tur = None
             continue
         anahtar, deger = satir.group(1).strip(), satir.group(2)
-        if blok_tur is None and anahtar in _ANI_ANAHTARLARI and son_ani and anlatim < ANI_ANLATIM_PENCERESI:
-            blok_ozne, blok_tur = son_ani, "Memory"
+        if blok_tur is None and anlatim < ANI_ANLATIM_PENCERESI:
+            if anahtar in _ANI_ANAHTARLARI and son_ani:
+                blok_ozne, blok_tur = son_ani, "Memory"
+            elif anahtar in _DURUM_DEVAM_ANAHTARLARI and son_durum:
+                blok_ozne, blok_tur = son_durum, "durum"
         if anahtar == "Name":
             ad = _ogeler(deger)
             blok_ozne = ana_karakter if ad and ad[0] in ana_adlar else (ad[0] if ad else None)
             blok_tur = "durum"
-            son_ani, efsunlar, efsun_sirasi = None, {}, []
+            son_ani, son_durum, gorunus, efsunlar, efsun_sirasi = None, None, None, {}, []
             continue
         if anahtar in _BLOK_SAHIPLIK:
             ogeler = _ogeler(deger)
             if ogeler:
                 blok_ozne, blok_tur = ogeler[0], anahtar
                 efsun_sirasi, efsunlar = [], {}
-                son_ani = None
+                son_ani = son_durum = None
                 out.append((ana_karakter, _BLOK_SAHIPLIK[anahtar], ogeler[0], paragraf))
                 out.append((ogeler[0], "turu", anahtar, paragraf))
             continue
@@ -613,9 +637,14 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             ozne, iliski, nesne, _k = out[i]
             out[i] = (ozne, iliski, nesne, paragraf)
             continue
-        if blok_tur == "durum" and anahtar in _DURUM_SATIRLARI and blok_ozne:
+        if blok_tur == "durum" and anahtar == "Aspect Rank" and gorunus:
+            for oge in _ogeler(deger):
+                out.append((gorunus, "rutbesi", oge, paragraf))
+        elif blok_tur == "durum" and anahtar in _DURUM_SATIRLARI and blok_ozne:
             for oge in _ogeler(deger):
                 out.append((blok_ozne, _DURUM_SATIRLARI[anahtar], oge, paragraf))
+                if anahtar == "Aspect":
+                    gorunus = oge
         elif blok_tur in _BLOK_ALT and anahtar in _BLOK_ALT[blok_tur] and blok_ozne:
             for oge in _ogeler(deger):
                 if _BLOK_ALT[blok_tur][anahtar] == "efsunu":
