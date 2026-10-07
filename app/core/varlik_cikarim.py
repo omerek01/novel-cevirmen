@@ -356,3 +356,74 @@ def kitabi_cikar(
         if ilerleme:
             ilerleme(f"  bölüm {b['chapter_no']}: {len(s['gecerli'])} bağ, {len(s['red'])} red ({s['model']})")
     return ozet
+
+
+# ---------- hedefli soru (boşluk doldurma, `varlik_bosluk`) ----------
+CIFT_INSTRUCTION = (
+    "Sen bir roman için bilgi grafiğini tamamlayan bir analistsin. Sana varlık "
+    "ÇİFTLERİ ve her çiftin birlikte geçtiği cümleler verilecek. Her çift için bu "
+    "cümlelerin AÇIKÇA söylediği kalıcı ilişkiyi bul; söylemiyorsa o çift için "
+    "hiçbir şey yazma.\n"
+    "Kurallar ÇIKARIM kurallarıyla aynıdır: yalnız açıkça söyleneni yaz; varsayım "
+    "cümlesi kanıt değildir; kategori yalnız tür/rütbe/sınıf nesnesi olabilir; "
+    "bulundugu_yer bir dönem boyunca bulunulan BÖLGE'dir; gercek_adi yalnız Spell'in "
+    "True Name'idir; lakap için takma_adi (özne asıl ad).\n"
+    "- 'kanit': VERİLEN cümlelerden birini KELİMESİ KELİMESİNE kopyala.\n"
+    "- 'iliski' şu listeden biri (özne -> nesne):\n"
+    + "".join(f"    {k}: {v['etiket']}\n" for k, v in varlik_grafigi.ILISKILER.items())
+    + '- Yanıtı SADECE şu JSON ile ver: {"baglar": [{"ozne": "...", "iliski": "...", '
+    '"nesne": "...", "kanit": "...", "guven": 0.9}]}'
+)
+CIFT_PARTI = 6
+
+
+def ciftleri_sor(
+    book_slug: str, ciftler: list[dict], api_key: str = "", models: tuple[str, ...] | None = None,
+    cozucu: varlik_grafigi.DugumCozucu | None = None, kategoriler: set[str] | None = None,
+) -> dict:
+    """Bir parti çifti modele sor; kanıtı VERİLEN cümlelerle doğrula.
+
+    `ciftler`: `varlik_bosluk.ortak_gecisler` satırları (`a`, `b`, `ornekler`).
+    Kanıt verilen bir cümleyle (normalize) eşleşmezse bağ atılır: model kitabın
+    dışından bilgi getiremez. `ilk_bolum` eşleşen cümlenin bölümüdür."""
+    cozucu = cozucu or varlik_grafigi.DugumCozucu(book_slug)
+    if kategoriler is None:
+        kategoriler = varlik_grafigi.kategori_kimlikleri(book_slug, cozucu)
+    bloklar = []
+    for i, c in enumerate(ciftler, 1):
+        cumleler = "\n".join(f"  - {s}" for _no, s in c["ornekler"])
+        bloklar.append(f"ÇİFT {i}: {c['a']} | {c['b']}\n{cumleler}")
+    response, model = translate._generate_with_fallback(
+        translate._gemini_fabrikasi(api_key), models or sozluk_dogrulama.ucretsiz_zincir(),
+        "\n\n".join(bloklar), system=CIFT_INSTRUCTION, max_tokens=translate.MAX_OUTPUT_TOKENS,
+    )
+    veri = _ayristir(getattr(response, "text", None))
+    havuz = [(no, s, _normal(s)) for c in ciftler for no, s in c["ornekler"]]
+    yazimlar = {k: v["yazimlar"] for k, v in glossary.ekler(book_slug).items()}
+    diziler = (varlik_grafigi.profil(book_slug) or {}).get("diziler", {})
+    sistem: dict[tuple[str, str], set[str]] = {}
+    asil: dict[str, str] = {}
+    for b in varlik_grafigi.baglar(book_slug):
+        if b["origin"] == "sistem":
+            sistem.setdefault((b["kaynak_kimlik"], b["hedef_kimlik"]), set()).add(b["iliski"])
+        if b["iliski"] in ("takma_adi", "gercek_adi") and b["durum"] == "onaylandi":
+            asil[b["hedef_kimlik"]] = b["kaynak_kimlik"]
+    gecerli, red = [], []
+    for b in veri["baglar"]:
+        b = {**b, "ozne": ad_temizle(b.get("ozne") or ""), "nesne": ad_temizle(b.get("nesne") or "")}
+        b = duzen_iliskisini_duzelt(b, diziler)
+        kanit = _normal(b.get("kanit") or "")
+        eslesme = next(((no, s) for no, s, n in havuz if kanit and len(kanit) >= 8 and kanit in n), None)
+        if eslesme is None:
+            sebep, eslesen = "kanıt verilen cümlelerden değil", None
+        else:
+            eslesen, cumle = eslesme
+            # Aynı deterministik kurallar, eşleşen cümlenin kendisine karşı.
+            sebep = kaniti_dogrula({**b, "kanit": kanit}, cumle, yazimlar)
+        a, n = cozucu.coz(b.get("ozne") or ""), cozucu.coz(b.get("nesne") or "")
+        a, n = asil.get(a, a), asil.get(n, n)
+        if sebep is None:
+            sebep = yapisal_red(b, a, n, kategoriler, sistem)
+        (red if sebep else gecerli).append({**b, "sebep": sebep, "ozne_kimlik": a, "nesne_kimlik": n,
+                                           "bolum": eslesen})
+    return {"gecerli": gecerli, "red": red, "model": model}
