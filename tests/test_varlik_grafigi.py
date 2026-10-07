@@ -409,3 +409,34 @@ def test_elle_bag_model_bagini_reddeder():
     assert vg.sistemle_celisenleri_reddet(KITAP) == 1
     durum = {(b["iliski"]): b["durum"] for b in vg.baglar(KITAP, durumlar=("aday", "onaylandi", "reddedildi"))}
     assert durum == {"golgesi": "reddedildi", "kendi_golgesi": "onaylandi"}
+
+
+def test_obek_siniflari_bagdan_turer_sozluk_turunu_duzeltir():
+    kayitlar = {
+        "Sunny": "kisi", "Devil": "rutbe", "Saint": "diger", "Bitter Cusp": "nesne", "Black Venom": "yetenek",
+        "gloomy shadow": "nesne", "Rolling Stone": "diger", "Monster": "rutbe", "Chained Isles": "yer",
+        "First Irregular Company": "orgut", "Belle": "kisi", "Fated": "yetenek", "Shadow Slave": "diger",
+        "Black Knight": "kisi", "Tower of Longing": "diger",
+    }
+    for k, tur in kayitlar.items():
+        glossary.set_term(KITAP, k, k)
+        glossary.tanim_yaz(KITAP, k, None, tur=tur)
+    k = vg.DugumCozucu(KITAP).coz
+    for a, i, b in [
+        ("Sunny", "sinifi", "Devil"), ("Sunny", "anisi", "Bitter Cusp"), ("Bitter Cusp", "efsunu", "Black Venom"),
+        ("Sunny", "golgesi", "Saint"), ("Sunny", "kendi_golgesi", "gloomy shadow"),
+        ("Sunny", "oldurdu", "Rolling Stone"), ("Rolling Stone", "sinifi", "Monster"),
+        ("Sunny", "niteligi", "Fated"), ("Sunny", "gorunusu", "Shadow Slave"),
+        ("Belle", "grubu", "First Irregular Company"), ("First Irregular Company", "lideri", "Sunny"),
+        ("Black Knight", "sinifi", "Devil"), ("Sunny", "ruya_capasi", "Tower of Longing"),
+        ("Sunny", "bulundugu_yer", "Chained Isles"),
+    ]:
+        vg.bag_ekle(KITAP, k(a), i, k(b), 10, "x", "sistem", 1.0)
+    o = {vg.DugumCozucu(KITAP).kaynak(x): s for x, s in vg.obek_siniflari(KITAP).items()}
+    assert o["Sunny"] == "kisi"  # sınıfı Devil olduğu hâlde
+    assert o["Bitter Cusp"] == "ani" and o["Black Venom"] == "efsun"
+    assert o["Saint"] == "yaratik" and o["gloomy shadow"] == "golge"
+    assert o["Rolling Stone"] == "yaratik" and o["Black Knight"] == "yaratik"
+    assert o["Fated"] == "nitelik" and o["Shadow Slave"] == "gorunus"
+    assert o["First Irregular Company"] == "grup" and o["Belle"] == "kisi"
+    assert o["Chained Isles"] == "yer" and o["Tower of Longing"] == "yer"

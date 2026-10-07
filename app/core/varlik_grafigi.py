@@ -77,6 +77,9 @@ ILISKILER: dict[str, dict] = {
     "bicimi": {"etiket": "o dönemki biçimi", "ters": "kimin biçimi", "grup": "kimlik", "tekil": True},
     "donustu": {"etiket": "dönüştüğü biçim", "ters": "önceki biçimi", "grup": "kimlik"},
     "oldurdu": {"etiket": "öldürdü", "ters": "öldüreni", "grup": "olay"},
+    # Bir GRUBA üyelik (ekip, bölük, lonca) — klan değil. Grubun lideri `lideri` ile
+    # (grup -> kişi). Kullanıcı örneği: Sunny'nin Antarktika ekibi.
+    "grubu": {"etiket": "bağlı olduğu grup", "ters": "üyesi", "grup": "toplum"},
     # Durum rününün iki satırı ("Flaw: [...]", "Dream Anchor: [...]"); ikisi de
     # 2026-10-07'ye dek hiç okunmuyordu (Sunny'nin 848. bölüm bloğu).
     "kusuru": {"etiket": "Kusuru", "ters": "kimin Kusuru", "grup": "sahiplik"},
@@ -1097,6 +1100,75 @@ def kalite_nedenleri(book_slug: str) -> dict[str, list[dict]]:
 
 
 # ---------- dışa aktarma ----------
+# ---------- öbekler (düğüm sınıfları) ----------
+# Harita ve kartlar düğümleri bu öbeklere göre gruplar. Sınıf SAKLANMAZ, grafikten
+# türetilir (bağ değişince kendiliğinden güncellenir). Sözlükteki `tur` taban olarak
+# kullanılır ama ÖNCELİK bağlardadır: ölçülen (2026-10-07), sözlük türü yaratıklarda
+# tutarsızdı (`Rolling Stone` diger, `Black Knight` kisi, `Soul Serpent` nesne).
+OBEKLER = {
+    "kisi": "Kişiler", "golge": "Kendi gölgeleri", "yaratik": "Yaratıklar", "yer": "Yerler",
+    "grup": "Gruplar", "ani": "Anılar", "efsun": "Efsunlar", "gorunus": "Görünüşler",
+    "yetenek": "Yetenekler", "nitelik": "Nitelikler", "kategori": "Kategoriler ve rütbeler",
+    "nesne": "Nesneler", "diger": "Diğer",
+}
+_TURDEN_OBEK = {"kisi": "kisi", "yer": "yer", "orgut": "grup", "rutbe": "kategori",
+                "yetenek": "yetenek", "nesne": "nesne", "diger": "diger"}
+# Bu ilişkilerin ÖZNESİ kişidir (yaratık kuralından ÖNCE: Sunny'nin sınıfı `Devil`).
+_KISI_OZNE = frozenset(("anisi", "gorunusu", "gercek_adi", "kendi_golgesi", "niteligi",
+                        "kusuru", "ruya_capasi", "grubu", "klani", "ogretmeni", "yoldasi"))
+
+
+def obek_siniflari(book_slug: str, bag_listesi: list[dict] | None = None) -> dict[str, str]:
+    """{kimlik: öbek} — kurallar sırayla, ilk tutan kazanır (bkz. `OBEKLER`)."""
+    if bag_listesi is None:
+        bag_listesi = baglar(book_slug)
+    satirlar = {r["kimlik"]: r for r in glossary.get_glossary_rows(book_slug)}
+    p = profil(book_slug) or {}
+    yaratik_siniflari = {x.casefold() for x in p.get("diziler", {}).get("yaratik_sinifi", ())}
+    ozne: dict[str, set[str]] = {}
+    nesne: dict[str, set[str]] = {}
+    sinif_nesnesi: dict[str, set[str]] = {}
+    for b in bag_listesi:
+        ozne.setdefault(b["kaynak_kimlik"], set()).add(b["iliski"])
+        nesne.setdefault(b["hedef_kimlik"], set()).add(b["iliski"])
+        if b["iliski"] == "sinifi":
+            sinif_nesnesi.setdefault(b["kaynak_kimlik"], set()).add(b["hedef"].casefold())
+        if b["iliski"] == "turu" and b["hedef"] in ("Memory", "Memories"):
+            nesne.setdefault(b["kaynak_kimlik"], set()).add("_ani_turu")
+    kategoriler = kategori_kimlikleri(book_slug)
+    out: dict[str, str] = {}
+    for kimlik in set(ozne) | set(nesne):
+        oz, ne = ozne.get(kimlik, set()), nesne.get(kimlik, set())
+        tur = (satirlar.get(kimlik) or {}).get("tur")
+        if kimlik in kategoriler or tur == "rutbe" and not oz & _KISI_OZNE:
+            sinif = "kategori"
+        elif "anisi" in ne or "_ani_turu" in ne:
+            sinif = "ani"
+        elif "efsunu" in ne:
+            sinif = "efsun"
+        elif "gorunusu" in ne:
+            sinif = "gorunus"
+        elif "kendi_golgesi" in ne:
+            sinif = "golge"
+        elif oz & _KISI_OZNE:
+            sinif = "kisi"
+        elif "yetenegi" in ne:
+            sinif = "yetenek"
+        elif ne & {"niteligi", "kusuru"}:
+            sinif = "nitelik"
+        elif ne & {"golgesi", "yanki"} or sinif_nesnesi.get(kimlik, set()) & yaratik_siniflari \
+                or ("oldurdu" in ne and tur != "kisi"):
+            sinif = "yaratik"
+        elif ne & {"bulundugu_yer", "parcasi", "ruya_capasi"} or "parcasi" in oz:
+            sinif = "yer"
+        elif ne & {"klani", "grubu"} or "lideri" in oz:
+            sinif = "grup"
+        else:
+            sinif = _TURDEN_OBEK.get(tur or "", "diger")
+        out[kimlik] = sinif
+    return out
+
+
 def graph_json(book_slug: str, en_cok_bolum: int | None = None) -> dict:
     """graphify'ın `graph.json` biçimine yakın düğüm/kenar listesi.
 
@@ -1106,6 +1178,7 @@ def graph_json(book_slug: str, en_cok_bolum: int | None = None) -> dict:
     """
     bag_listesi = baglar(book_slug, en_cok_bolum=en_cok_bolum)
     deger_tablosu = degerler(book_slug, en_cok_bolum)
+    obekler = obek_siniflari(book_slug, bag_listesi)
     satirlar = {r["kimlik"]: r for r in glossary.get_glossary_rows(book_slug)}
     kullanilan = {b["kaynak_kimlik"] for b in bag_listesi} | {b["hedef_kimlik"] for b in bag_listesi}
     dugumler = []
@@ -1119,6 +1192,7 @@ def graph_json(book_slug: str, en_cok_bolum: int | None = None) -> dict:
             "id": kimlik, "label": r["source"], "karsilik": r["target"], "tur": r.get("tur"),
             "tanim": r.get("tanim"), "ilk_bolum": r.get("first_chapter"),
             "degerler": deger_tablosu.get(kimlik, {}),
+            "obek": obekler.get(kimlik, "diger"),
         })
     gorunur = {d["id"] for d in dugumler}
     kenarlar = [
@@ -1127,4 +1201,5 @@ def graph_json(book_slug: str, en_cok_bolum: int | None = None) -> dict:
          "origin": b["origin"], "durum": b["durum"], "guven": b["guven"]}
         for b in bag_listesi if b["kaynak_kimlik"] in gorunur and b["hedef_kimlik"] in gorunur
     ]
-    return {"book_slug": book_slug, "en_cok_bolum": en_cok_bolum, "nodes": dugumler, "edges": kenarlar}
+    return {"book_slug": book_slug, "en_cok_bolum": en_cok_bolum, "nodes": dugumler, "edges": kenarlar,
+            "obekler": OBEKLER}
