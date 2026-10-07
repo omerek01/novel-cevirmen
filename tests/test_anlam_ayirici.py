@@ -18,6 +18,8 @@ def test_rutbe_kaliplari():
     assert _sinif("Saint Tyris raised her hand.") == ["taban"]
     assert _sinif("Masters and Saints alike bowed.") == ["taban"]
     assert _sinif("He reached the rank of Saint.") == ["taban"]
+    assert _sinif("Every Awakened, Master, and Saint felt it.") == ["taban"]
+    assert _sinif("They would become Masters, maybe even Saint.") == ["taban"]
 
 
 def test_golge_ve_belirsiz():
@@ -25,6 +27,8 @@ def test_golge_ve_belirsiz():
     assert _sinif("Saint and Nightmare guarded the camp.") == ["anlam"]
     assert _sinif("He glanced at Saint. The night was cold.") == ["anlam"]
     assert _sinif("Saint's sword flashed.") == ["anlam"]
+    # Virgül tek başına sayım değildir: önceki cümlenin sonu.
+    assert _sinif("Ascended, Saint was now Ascended!") == ["anlam"]
     assert _sinif("The Saint sighed.") == ["belirsiz"]
     assert _sinif("The wounded Saint dissipated.") == ["belirsiz"]
 

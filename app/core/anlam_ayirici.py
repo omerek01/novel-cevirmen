@@ -13,7 +13,9 @@ koyar:
 Kurallar kitap profilindedir (`varlik_grafigi.KITAP_PROFILLERI[...]["anlam_dugumleri"]
 [kayıt]["ayirici"]`) ve ölçülerek kondu: Saint kitapta 1.099 kez geçiyor; artikelsiz
 yalın kullanım (505) 106. bölümden sonra rastgele 40 örnekte ~%88 gölge, belirsiz
-artikelli kullanım rütbe; "the Saint" iki anlama da gidiyor.
+artikelli kullanım rütbe; "the Saint" iki anlama da gidiyor. Sınıflayıcı ölçümü
+(2026-10-07, sınıf başına 25 rastgele örnek): rütbe 281 geçiş 25/25, gölge 450 geçiş
+23/25 (iki hata rütbe sayımıydı, `_RUTBE_SAYIMI` ile kapandı), belirsiz 80.
 """
 from __future__ import annotations
 
@@ -24,6 +26,13 @@ _AD_DEGIL = frozenset(("The", "He", "She", "It", "They", "But", "And", "Then", "
 _BELIRSIZ_ARTIKEL = re.compile(r"\b(?:a|an|another|every|no|any|one)\s+(?:[A-Za-z]+\s+)?$", re.IGNORECASE)
 _BELIRLI_ARTIKEL = re.compile(r"\bthe\s+(?:[a-z]+\s+)?$", re.IGNORECASE)
 _SONRAKI_SOZCUK = re.compile(r"\s+([A-Z][a-z]+)")
+# Rütbe SAYIMI: "every Awakened, Master, and Saint", "Masters, maybe even Saint".
+# Bağlaç ŞART: yalnız virgül yetmez — ölçülen: "Ascended, Saint was now Ascended!"
+# gölgeyi anlatıyor (rütbe sözcüğü önceki cümlenin sonu).
+_RUTBE_SAYIMI = re.compile(
+    r"\b(?:Sleeper|Awakened|Master|Ascended|Transcendent|Sovereign|Supreme)s?,?\s+"
+    r"(?:and|or|nor|(?:maybe\s+)?even)\s+$"
+)
 
 
 def gecisleri_siniflandir(paragraf: str, kayit: str, bolum_no: int | None, kural: dict) -> list[tuple[int, str]]:
@@ -53,7 +62,8 @@ def gecisleri_siniflandir(paragraf: str, kayit: str, bolum_no: int | None, kural
         if sonraki and sonraki.group(1) not in _AD_DEGIL:
             out.append((m.start(), "taban"))  # unvan + ad: Saint Tyris
             continue
-        if _BELIRSIZ_ARTIKEL.search(once) or (taban_oncesi and taban_oncesi.search(once)):
+        if _BELIRSIZ_ARTIKEL.search(once) or _RUTBE_SAYIMI.search(once) \
+                or (taban_oncesi and taban_oncesi.search(once)):
             out.append((m.start(), "taban"))
             continue
         if _BELIRLI_ARTIKEL.search(once):
