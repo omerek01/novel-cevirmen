@@ -440,3 +440,25 @@ def test_obek_siniflari_bagdan_turer_sozluk_turunu_duzeltir():
     assert o["Fated"] == "nitelik" and o["Shadow Slave"] == "gorunus"
     assert o["First Irregular Company"] == "grup" and o["Belle"] == "kisi"
     assert o["Chained Isles"] == "yer" and o["Tower of Longing"] == "yer"
+
+
+def test_obek_kural_sirasi_olculen_hatalar():
+    kayitlar = {"Sunny": "kisi", "Shadow Slave": "rutbe", "Beth": "kisi", "Obel": "kisi",
+                "Abomination": "diger", "Black Knight": "kisi", "Flesh Reaver": "diger",
+                "awakened beast": "diger", "Crimson Terror": "diger", "Lost from Light": "diger"}
+    for k, tur in kayitlar.items():
+        glossary.set_term(KITAP, k, k)
+        glossary.tanim_yaz(KITAP, k, None, tur=tur)
+    k = vg.DugumCozucu(KITAP).coz
+    for a, i, b in [("Sunny", "gorunusu", "Shadow Slave"), ("Beth", "lideri", "Obel"),
+                    ("Black Knight", "turu", "Abomination"), ("Flesh Reaver", "turu", "awakened beast"),
+                    ("Sunny", "gercek_adi", "Lost from Light")]:
+        vg.bag_ekle(KITAP, k(a), i, k(b), 10, "x", "model", 0.9, durum="onaylandi")
+    vg.bag_ekle(KITAP, k("Crimson Terror"), "dusmani", k("Obel"), 10, "x", "model", 0.9, durum="onaylandi")
+    o = {vg.DugumCozucu(KITAP).kaynak(x): s for x, s in vg.obek_siniflari(KITAP).items()}
+    assert o["Shadow Slave"] == "gorunus"     # sözlükte "rutbe" türünde olsa da
+    assert o["Beth"] == "kisi"                # kişiden kişiye "lideri" grup yapmaz
+    assert o["Abomination"] == "kategori"     # bir şeyin türü
+    assert o["Flesh Reaver"] == "yaratik"     # türü bir yaratık sınıfı içeriyor
+    assert o["Crimson Terror"] == "yaratik"   # adı yaratık sınıfıyla bitiyor
+    assert o["Lost from Light"] == "kisi"     # sahibinin öbeği

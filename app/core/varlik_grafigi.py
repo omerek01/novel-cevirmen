@@ -1119,7 +1119,12 @@ _KISI_OZNE = frozenset(("anisi", "gorunusu", "gercek_adi", "kendi_golgesi", "nit
 
 
 def obek_siniflari(book_slug: str, bag_listesi: list[dict] | None = None) -> dict[str, str]:
-    """{kimlik: öbek} — kurallar sırayla, ilk tutan kazanır (bkz. `OBEKLER`)."""
+    """{kimlik: öbek} — kurallar sırayla, ilk tutan kazanır (bkz. `OBEKLER`).
+
+    Bağdan gelen kesin sınıflar (Anı, efsun, Görünüş, gölge) sözlük türünden ÖNCE
+    gelir: ölçülen, `Shadow Slave` sözlükte `rutbe` türündeydi ve kategoriye düşüyordu.
+    Kimlik bağlarının nesnesi (Gerçek Ad, takma ad, biçim) kendi kuralı tutmadıysa
+    SAHİBİNİN öbeğini alır (`Lost from Light` -> Sunny'nin öbeği)."""
     if bag_listesi is None:
         bag_listesi = baglar(book_slug)
     satirlar = {r["kimlik"]: r for r in glossary.get_glossary_rows(book_slug)}
@@ -1127,20 +1132,30 @@ def obek_siniflari(book_slug: str, bag_listesi: list[dict] | None = None) -> dic
     yaratik_siniflari = {x.casefold() for x in p.get("diziler", {}).get("yaratik_sinifi", ())}
     ozne: dict[str, set[str]] = {}
     nesne: dict[str, set[str]] = {}
-    sinif_nesnesi: dict[str, set[str]] = {}
+    tur_nesnesi: dict[str, set[str]] = {}   # sinifi/turu nesnelerinin adları
+    sahip: dict[str, str] = {}              # kimlik bağı nesnesi -> sahibi
     for b in bag_listesi:
         ozne.setdefault(b["kaynak_kimlik"], set()).add(b["iliski"])
         nesne.setdefault(b["hedef_kimlik"], set()).add(b["iliski"])
-        if b["iliski"] == "sinifi":
-            sinif_nesnesi.setdefault(b["kaynak_kimlik"], set()).add(b["hedef"].casefold())
+        if b["iliski"] in ("sinifi", "turu"):
+            tur_nesnesi.setdefault(b["kaynak_kimlik"], set()).add(b["hedef"].casefold())
         if b["iliski"] == "turu" and b["hedef"] in ("Memory", "Memories"):
             nesne.setdefault(b["kaynak_kimlik"], set()).add("_ani_turu")
+        if b["iliski"] in ("gercek_adi", "takma_adi", "unvani", "bicimi"):
+            sahip.setdefault(b["hedef_kimlik"], b["kaynak_kimlik"])
+
+    def yaratik_turu(adlar: set[str]) -> bool:
+        return any(set(a.split()) & yaratik_siniflari for a in adlar)
+
     kategoriler = kategori_kimlikleri(book_slug)
     out: dict[str, str] = {}
+    tabandan: set[str] = set()  # sözlük türüne düşenler (kimlik sahibinden devralabilir)
     for kimlik in set(ozne) | set(nesne):
         oz, ne = ozne.get(kimlik, set()), nesne.get(kimlik, set())
-        tur = (satirlar.get(kimlik) or {}).get("tur")
-        if kimlik in kategoriler or tur == "rutbe" and not oz & _KISI_OZNE:
+        satir = satirlar.get(kimlik) or {}
+        tur = satir.get("tur")
+        son_sozcuk = (satir.get("source") or "").split()[-1:] or [""]
+        if kimlik in kategoriler:
             sinif = "kategori"
         elif "anisi" in ne or "_ani_turu" in ne:
             sinif = "ani"
@@ -1152,20 +1167,27 @@ def obek_siniflari(book_slug: str, bag_listesi: list[dict] | None = None) -> dic
             sinif = "golge"
         elif oz & _KISI_OZNE:
             sinif = "kisi"
+        elif ne & {"turu", "esya_turu"} or tur == "rutbe":
+            sinif = "kategori"  # bir şeyin TÜRÜ olan düğüm (`Abomination`, `Armor`)
         elif "yetenegi" in ne:
             sinif = "yetenek"
         elif ne & {"niteligi", "kusuru"}:
             sinif = "nitelik"
-        elif ne & {"golgesi", "yanki"} or sinif_nesnesi.get(kimlik, set()) & yaratik_siniflari \
-                or ("oldurdu" in ne and tur != "kisi"):
+        elif ne & {"golgesi", "yanki"} or yaratik_turu(tur_nesnesi.get(kimlik, set())) \
+                or ("oldurdu" in ne and tur != "kisi") \
+                or (tur != "kisi" and son_sozcuk[0].casefold() in yaratik_siniflari):
             sinif = "yaratik"
         elif ne & {"bulundugu_yer", "parcasi", "ruya_capasi"} or "parcasi" in oz:
             sinif = "yer"
-        elif ne & {"klani", "grubu"} or "lideri" in oz:
+        elif ne & {"klani", "grubu"} or ("lideri" in oz and tur != "kisi"):
             sinif = "grup"
         else:
             sinif = _TURDEN_OBEK.get(tur or "", "diger")
+            tabandan.add(kimlik)
         out[kimlik] = sinif
+    for kimlik in tabandan:
+        if kimlik in sahip and sahip[kimlik] in out:
+            out[kimlik] = out[sahip[kimlik]]
     return out
 
 
