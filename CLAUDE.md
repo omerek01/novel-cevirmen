@@ -1521,6 +1521,23 @@ olmayan cins tür ("technician") kanıtlıysa "Görev" (kişi) / "Tür" değeri 
 model aynı soruya her seferinde aynı cevabı vermiyor — sonuçlar `aday` yazılır,
 incelenmeden onaylanmaz.
 
+**ÇİFT ANLAMLI AD İPUCU: kod var, okuma akışına BAĞLI DEĞİL** (2026-10-07, Vertex A/B).
+Genel mekanizma: sözlükte ek anlam "bu bir ad" diye işaretlenir (`sozluk_anlam.ad_mi`,
+`etiket`, `ilk_bolum` — prompt'a girmez) ya da kitap profilinde tanımlanır; grafik ikinci
+düğüm açar, `anlam_ayirici` geçişleri `taban`/`anlam`/`belirsiz` diye sınıflar, rütbe
+sözcükleri o kitabın grafiğinden gelir (`varlik_grafigi.ceviri_anlamlari`).
+`translate_chapter(anlamlar=, bolum_no=)` verilirse talimata paragraf numaralı ipucu girer;
+verilmezse talimat bayt bayt aynıdır. Ölçüm (10 bölüm, iki anlamın da en çok geçtiği,
+`vertex/gemini-3.6-flash`, düşünme açık): ipuçsuz gölge 38/40 rütbe 20/21, ipuçlu
+39/40 · 21/21, oran farkı yok. AMA "hata"ların ikisi SINIFLAYICI hatasıydı ("one to
+Saint", "that handsome Saint") ve ipuçlu kolda model YANLIŞ İPUCUNA UYDU. Yani düşünme
+açık model ayrımı zaten yapıyor; ipucu kazanç getirmiyor, sınıflayıcının hatasını
+çeviriye taşıyor. **Ders: yanlış olabilecek bir deterministik karar talimata KURAL
+olarak girmemeli; doğru yeri çeviriden SONRAKİ denetimdir** (işaretler, düzeltmez).
+Sınıflayıcı Saint için kitap üzerinde rütbe 25/25, gölge 25/25 ölçüldü (iki hata
+sonradan kapandı). Saint kuralı şimdilik profilde; sözlük ek anlamına taşımak Saint'in
+talimat satırını değiştirir (koşula BAŞKA ANLAM eki) — ölçmeden yapılmadı.
+
 **Test tuzakları (ölçüldü):**
 - **`page.wait_for_function` ASYNC yüklemi BEKLEMEZ** — dönen Promise truthy, anında geçer
   (`"async () => false"` 0,03 sn). Sunucu durumunu fetch ile bekleyen her iddia için

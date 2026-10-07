@@ -23,8 +23,15 @@ import re
 
 # Büyük harfle başlayıp AD sayılmayacak sözcükler ("Saint. The..." değil, "Saint Tyris").
 _AD_DEGIL = frozenset(("The", "He", "She", "It", "They", "But", "And", "Then", "His", "Her", "I", "A", "An"))
-_BELIRSIZ_ARTIKEL = re.compile(r"\b(?:a|an|another|every|no|any|one)\s+(?:[A-Za-z]+\s+)?$", re.IGNORECASE)
-_BELIRLI_ARTIKEL = re.compile(r"\bthe\s+(?:[a-z]+\s+)?$", re.IGNORECASE)
+# Aradaki isteğe bağlı sözcük SIFATTIR, edat değil. Ölçülen (Vertex A/B, 585. bölüm):
+# "sent one to Saint" — `one` + `to` belirsiz artikel sanılıp gölge rütbe işaretlendi ve
+# model yanlış ipucuna UYUP "Aziz" yazdı. `one` bu yüzden listede yok.
+_EDAT = r"(?!(?:to|of|for|with|at|from|by|on|in|into|onto|than|as)\s)"
+_BELIRSIZ_ARTIKEL = re.compile(
+    r"\b(?:a|an|another|every|no|any)\s+(?:" + _EDAT + r"[A-Za-z]+\s+)?$", re.IGNORECASE)
+# "the / that / this + (sıfat) + Saint" belirsizdir: ölçülen (856. bölüm) "that handsome
+# Saint" rütbeli bir KİŞİYDİ, gölge değil.
+_BELIRLI_ARTIKEL = re.compile(r"\b(?:the|that|this|those|these)\s+(?:[a-z]+\s+)?$", re.IGNORECASE)
 _SONRAKI_SOZCUK = re.compile(r"\s+([A-Z][a-z]+)")
 # Rütbe SAYIMI: "every Awakened, Master, and Saint", "Masters, maybe even Saint".
 # Bağlaç ŞART: yalnız virgül yetmez — ölçülen: "Ascended, Saint was now Ascended!"

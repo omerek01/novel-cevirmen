@@ -31,6 +31,9 @@ def test_golge_ve_belirsiz():
     assert _sinif("Ascended, Saint was now Ascended!") == ["anlam"]
     assert _sinif("The Saint sighed.") == ["belirsiz"]
     assert _sinif("The wounded Saint dissipated.") == ["belirsiz"]
+    # Vertex A/B'de ölçülen iki sınıflayıcı hatası:
+    assert _sinif("He reluctantly sent one to Saint.") == ["anlam"]             # 585: edat, artikel değil
+    assert _sinif("Remember that handsome Saint who flirted?") == ["belirsiz"]  # 856: rütbeli kişi
 
 
 def test_bicim_adi_ve_erken_bolum():
