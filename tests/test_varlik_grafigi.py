@@ -497,6 +497,8 @@ def test_saint_golge_ve_rutbe_ayri_dugumlerdir():
     vg.bag_ekle(KITAP, k("Tyris"), "rutbesi", k("Saint"), 400, "b", "model", 0.9, durum="onaylandi")
     vg.bag_ekle(KITAP, k("Saint"), "oldurdu", k("Black Knight"), 270, "c", "model", 0.9, durum="onaylandi")
     vg.bag_ekle(KITAP, k("Master"), "ust_basamak", k("Saint"), 1, None, "manual", 1.0)
+    # Gölge bir Anı kullansa da (ölçülen: Broken Oath) yaratıktır, kişi değil.
+    vg.bag_ekle(KITAP, k("Saint"), "anisi", k("Stone Saint"), 853, "d", "model", 0.9, durum="onaylandi")
     b = {(x["kaynak"], x["iliski"], x["hedef"]): x for x in vg.baglar(KITAP)}
     golge, taban = k("Saint") + "#golge", k("Saint")
     assert b[("Sunny", "golgesi", "Saint")]["hedef_kimlik"] == golge

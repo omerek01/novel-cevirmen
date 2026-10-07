@@ -1298,6 +1298,10 @@ def obek_siniflari(book_slug: str, bag_listesi: list[dict] | None = None) -> dic
             sinif = "gorunus"
         elif "kendi_golgesi" in ne:
             sinif = "golge"
+        elif ne & {"golgesi", "yanki"}:
+            # Birinin gölge kölesi / Yankısı olmak kişi kuralından KESİNDİR: Saint bir
+            # Anı kullanıyor (`Saint -> anisi -> Broken Oath`) ama yine yaratıktır.
+            sinif = "yaratik"
         elif oz & _KISI_OZNE:
             sinif = "kisi"
         elif ne & {"turu", "esya_turu", "rutbesi"} or "ust_basamak" in oz | ne or tur == "rutbe":
