@@ -2217,3 +2217,7 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 .terim-anlam-ad-alanlari[hidden] { display: none; }
 .terim-anlam-etiket { flex: 1; min-width: 0; }
 .terim-anlam-ilk { width: 7em; }
+
+/* Sözlük spoiler süzgeci (Faz 1A) */
+.gloss-spoiler-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.gloss-cip-gizli { opacity: 0.75; border-style: dashed; }

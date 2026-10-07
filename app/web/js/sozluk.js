@@ -53,8 +53,9 @@ async function islemiGonder(op) {
   let res;
   if (op.tur === "sil") {
     const taban = op.taban_surum !== undefined ? `&taban_surum=${op.taban_surum}` : "";
+    const sp = spoilerParam() ? `&${spoilerParam()}` : "";
     res = await fetchWithTimeout(
-      `/api/book/${slug}/glossary?source=${encodeURIComponent(op.source)}${taban}`,
+      `/api/book/${slug}/glossary?source=${encodeURIComponent(op.source)}${taban}${sp}`,
       { method: "DELETE" }
     );
   } else if (op.tur === "geri") {
@@ -70,7 +71,9 @@ async function islemiGonder(op) {
     if (op.ornek) govde.ornek = op.ornek; // okurken eklenen terimin kökeni (boşsa yazılır)
     if (op.taban_surum !== undefined) govde.taban_surum = op.taban_surum; // çakışma denetimi
     if (op.terim_turu !== undefined) govde.tur = op.terim_turu; // kisi/yer/… (prompt'a girmez)
-    res = await fetchWithTimeout(`/api/book/${slug}/glossary`, {
+    // Yanıttaki terim listesi GET ile aynı süzgeçten geçer (sunucu); bu ekran
+    // spoiler'ları açtıysa yanıt da açık gelmeli, yoksa liste sessizce daralırdı.
+    res = await fetchWithTimeout(`/api/book/${slug}/glossary${spoilerParam() ? "?" + spoilerParam() : ""}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(govde),
@@ -221,6 +224,11 @@ export function terimDurumu(slug, source, harita = null) {
    pratik değil. Süzme TAMAMEN istemci tarafında: sunucuya ek istek yok, çevrimdışı
    da çalışır (bekleyen kayıtlar `overlayGloss` ile listeye zaten karışıyor). */
 export let glossFilter = "all";
+// SPOILER süzgeci (Faz 1A): sunucu okuma konumundan SONRA öğrenilen kayıt ve
+// açıklamaları göndermez. `glossSpoiler` = kullanıcı bilinçli olarak açtı.
+export let glossSpoiler = false;
+let glossGizlenen = 0;
+const spoilerParam = () => (glossSpoiler ? "spoiler=1" : "");
 export let glossQuery = "";
 export let glossRows = {};       // kaynak -> {origin, created_at, first_chapter}
 export let glossTermsSonHal = {}; // sunucudan gelen HAM eşleme (süzgeç yerelde yeniden çizer)
@@ -323,8 +331,10 @@ export async function fetchGlossary(slug) {
   glossWarnPairs = [];
   const istekSirasi = gonderimSirasi;
   try {
-    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary`);
+    const sp = spoilerParam() ? `?${spoilerParam()}` : "";
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary${sp}`);
     const data = await res.json();
+    glossGizlenen = (data.spoiler_suzgeci && data.spoiler_suzgeci.gizlenen_kayit) || 0;
     terms = data.terms || {};
     kosullar = data.kosullar || {};
     for (const satir of data.rows || []) glossRows[satir.source] = satir;
@@ -613,6 +623,20 @@ export function updateGlossCount(gosterilen, toplam) {
   note.textContent =
     (glossFilter === "bolumde" && glossBolumdeNot ? glossBolumdeNot + " " : "") +
     (suzuluyor ? `${toplam} terimden ${gosterilen} tanesi gösteriliyor` : `${toplam} terim`);
+  updateSpoilerNote();
+}
+
+// Okuma konumundan sonra öğrenilen kayıtlar gizli: kaç tane olduğunu söyle, bilinçli
+// açmaya izin ver. Gizli olduğunu SÖYLEMEMEK, kaybolan bir terimi "silinmiş" sandırırdı.
+function updateSpoilerNote() {
+  const note = el("glossSpoilerNote");
+  const btn = el("glossSpoilerBtn");
+  if (!note || !btn) return;
+  note.hidden = !glossSpoiler && glossGizlenen === 0;
+  note.firstChild.textContent = glossSpoiler
+    ? "Spoiler'lar AÇIK: okuma konumundan sonraki kayıtlar ve açıklamalar da görünüyor. "
+    : `Okuma konumundan sonra öğrenilen ${glossGizlenen} kayıt gizli. `;
+  btn.textContent = glossSpoiler ? "Gizle" : "Göster";
 }
 
 function cip(metin, sinif, baslik) {
@@ -685,6 +709,10 @@ export function renderGlossary(terms) {
     // çevrildiğinde sebebi hiçbir yerde okunamaz. Tam metni panelde.
     if (gorunenKosullar[source]) cipler.appendChild(cip("KOŞULLU", "gloss-cip-kosul", gorunenKosullar[source]));
     const kok = glossRows[source] || {};
+    if ((kok.gizli_alanlar || []).includes("kosul")) {
+      cipler.appendChild(cip("KOŞUL GİZLİ", "gloss-cip-gizli",
+        "Bu koşul hangi bölümün bilgisiyle yazıldığı bilinmiyor ya da ilerideki bir bölüme ait — spoiler olabilir"));
+    }
     if (kok.origin === "auto") cipler.appendChild(cip("OTO", "gloss-cip-oto", "Çeviri sırasında otomatik eklendi"));
     if (kok.first_chapter) cipler.appendChild(cip("B" + kok.first_chapter, "gloss-cip-bolum", "İlk eklendiği bölüm"));
     const ek = glossEkler[source];
@@ -824,6 +852,10 @@ export function kur() {
   el("glossSearch")?.addEventListener("input", (e) => {
     glossQuery = e.target.value.trim();
     yenidenSuz();
+  });
+  el("glossSpoilerBtn")?.addEventListener("click", async () => {
+    glossSpoiler = !glossSpoiler;
+    renderGlossary(await fetchGlossary(durum.currentBookSlug));
   });
   for (const btn of document.querySelectorAll("[data-gloss-filter]")) {
     btn.addEventListener("click", async () => {
