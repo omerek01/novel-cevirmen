@@ -521,8 +521,12 @@ def varlik_profili_sor(
     # ("technician", "combat medic"). Bağ olamaz (nesne düğüm değil) ama kanıtı
     # doğrulanmış bir özelliktir; durum değeri olarak döner. Ölçülen: altı kişilik
     # denemede doğru üç görev "varlık sözlükte yok" diye kayboluyordu.
+    # Kişide "Görev" (technician), kişi olmayanda "Tür" (island, landmass). Ölçülen:
+    # yer profilinde adaların türü "Görev" diye yazılıyordu.
+    kisi_mi = (cozucu.satirlar.get(varlik_grafigi.taban_kimlik(kimlik or "")) or {}).get("tur") == "kisi"
     degerler = [
-        {"kimlik": kimlik, "anahtar": GOREV_ANAHTARI, "deger": r["nesne"], "bolum": r["bolum"],
+        {"kimlik": kimlik, "anahtar": GOREV_ANAHTARI if kisi_mi else TUR_ANAHTARI, "deger": r["nesne"],
+         "bolum": r["bolum"],
          "kanit": r.get("kanit")}
         for r in red
         if r.get("sebep") == "varlık sözlükte yok" and r.get("iliski") in ("turu", "sinifi")
@@ -534,3 +538,4 @@ def varlik_profili_sor(
 
 
 GOREV_ANAHTARI = "Görev"
+TUR_ANAHTARI = "Tür"

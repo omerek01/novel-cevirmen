@@ -166,6 +166,7 @@ def test_profil_sorusu_kanit_ve_sorulan_varlik_denetimi(monkeypatch):
 
 def test_profil_gorevi_deger_olarak_dondurur(monkeypatch):
     glossary.set_term(KITAP, "Kim", "Kim")
+    glossary.tanim_yaz(KITAP, "Kim", None, tur="kisi")
     cumleler = [(820, "Kim was a technician of the company.")]
 
     def sahte(_f, models, user, system=None, max_tokens=None):
@@ -194,3 +195,18 @@ def test_saint_oldurdu_kategori_diye_reddedilmez(monkeypatch):
     sonuc = varlik_cikarim.varlik_profili_sor(KITAP, "Black Knight", cumleler, api_key="x",
                                              cozucu=cozucu, kategoriler={cozucu.coz("Saint")})
     assert [(g["ozne_kimlik"], g["iliski"]) for g in sonuc["gecerli"]] == [(cozucu.coz("Saint") + "#golge", "oldurdu")]
+
+
+
+def test_kisi_olmayanin_turu_tur_anahtariyla_doner(monkeypatch):
+    glossary.set_term(KITAP, "Reckoning Island", "Hesap Adası")
+    glossary.tanim_yaz(KITAP, "Reckoning Island", None, tur="yer")
+    cumleler = [(409, "Reckoning Island was a small island in the east.")]
+
+    def sahte(_f, models, user, system=None, max_tokens=None):
+        return _Yanit({"baglar": [{"ozne": "Reckoning Island", "iliski": "turu", "nesne": "small island",
+                                   "kanit": cumleler[0][1], "guven": 0.9}]}), models[0]
+
+    monkeypatch.setattr(translate, "_generate_with_fallback", sahte)
+    sonuc = varlik_cikarim.varlik_profili_sor(KITAP, "Reckoning Island", cumleler, api_key="x")
+    assert [(d["anahtar"], d["deger"]) for d in sonuc["degerler"]] == [("Tür", "small island")]
