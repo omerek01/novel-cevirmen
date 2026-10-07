@@ -59,6 +59,12 @@ ILISKILER: dict[str, dict] = {
     # Gölgeler evrimleşir (Soul Serpent: Monster -> Demon -> Devil): sınıf da değişir.
     "sinifi": {"etiket": "sınıfı", "ters": "bu sınıfta", "grup": "duzen", "tekil": True},
     "ust_basamak": {"etiket": "bir üst basamak", "ters": "bir alt basamak", "grup": "duzen"},
+    # ZAMANLA DEĞİŞEN KİMLİK (kullanıcı örneği, 2026-10-07): Sunny'nin gölgesi Saint
+    # önce bir Yankıydı (Stone Saint), gölgeye çevrildi, sonra Marble Saint'e evrildi.
+    # Biçimler ayrı karakter değildir; `bicimi` o dönemki adı/formu verir (tekil: konumdan
+    # önceki en son biçim geçerli), `donustu` eski biçimden yenisine evrimi kaydeder.
+    "bicimi": {"etiket": "o dönemki biçimi", "ters": "kimin biçimi", "grup": "kimlik", "tekil": True},
+    "donustu": {"etiket": "dönüştüğü biçim", "ters": "önceki biçimi", "grup": "kimlik"},
     "oldurdu": {"etiket": "öldürdü", "ters": "öldüreni", "grup": "olay"},
 }
 ORIGIN_ONCELIGI = {"model": 0, "sistem": 1, "manual": 2}
@@ -486,6 +492,10 @@ _OLDURME = re.compile(
     r"\[You have slain (?:an?|the) ([A-Za-z]+) ([A-Za-z]+), ([^\]]+?)\.?\]", re.IGNORECASE
 )
 _GERCEK_AD_ODUL = re.compile(r"\[You have been bestowed a True Name: ([^\].]+)\.?\]")
+_YANKI_ALINDI = re.compile(r"\[You have received an Echo: ([^\]]+?)\.?\]")
+_GOLGE_ALINDI = re.compile(r"\[You have (?:created|received) a Shadow(?: [A-Z][a-z]+)?: ([^\]]+?)\.?\]")
+# "[...The Stone Saint is evolving.]" / "[...Marble Saint is evolving.]"
+_EVRIM = re.compile(r"\[(?:\.\.\.)?(?:The )?([A-Z][^\]]*?) is evolving\.{0,3}\]")
 
 # Blok başlığı -> (öznenin kim olduğu, alt satır anahtarları -> ilişki)
 _BLOK_ALT = {
@@ -531,6 +541,14 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             out.append((ad, "sinifi", sinif, paragraf))
         for m in _GERCEK_AD_ODUL.finditer(paragraf):
             out.append((ana_karakter, "gercek_adi", m.group(1).strip(), paragraf))
+        for m in _YANKI_ALINDI.finditer(paragraf):
+            out.append((ana_karakter, "yanki", m.group(1).strip(), paragraf))
+        for m in _GOLGE_ALINDI.finditer(paragraf):
+            out.append((ana_karakter, "golgesi", m.group(1).strip(), paragraf))
+        for m in _EVRIM.finditer(paragraf):
+            # Evrim İŞARETİ: hangi ada dönüştüğü sonraki rün bloğunda görünür
+            # (`evrim_baglari` bölümler arasında eşleştirir).
+            out.append((m.group(1).strip(), "_evrim", "", paragraf))
         satir = _RUN_SATIRI.match(paragraf)
         if not satir:
             blok_ozne = blok_tur = None
@@ -565,6 +583,7 @@ def bolumden_sistem_baglari(book_slug: str, chapter_no: int | None, metin: str) 
     if not p or not p.get("runler") or not metin:
         return 0
     bulunan = sistem_baglarini_bul(metin, p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())))
+    bulunan = evrimleri_esle(bulunan, {}, chapter_no)
     if not bulunan:
         return 0
     cozucu = DugumCozucu(book_slug)
@@ -579,6 +598,47 @@ def bolumden_sistem_baglari(book_slug: str, chapter_no: int | None, metin: str) 
     finally:
         conn.close()
     return eklenen
+
+
+EVRIM_PENCERESI = 60  # evrim işaretinden sonra yeni adın görülebileceği en çok bölüm
+_EVRIM_HEDEFI = ("golgesi", "yanki")
+
+
+def evrimleri_esle(bulunan: list[tuple], durum: dict, bolum_no: int | None) -> list[tuple]:
+    """`_evrim` işaretlerini gerçek `donustu` bağlarına çevir. `durum` bölümler
+    arasında taşınır (çağıran saklar): {"bekleyen": ..., "gorulen": set()}.
+
+    "[X is evolving.]" mesajı yeni adı SÖYLEMEZ; yeni ad sonraki bir gölge/Echo rün
+    bloğunda görünür — ölçülen: 273'te "Stone Saint is evolving", ancak 310'da
+    "Shadow: [Marble Saint]" (37 bölüm sonra). Eşleşme kuralları, ikisi de ölçülmüş
+    bir yanlıştan:
+      * yalnız GÖLGE/ECHO bloğu (`_EVRIM_HEDEFI`): ilk sürüm sonraki Anı bloğuyla
+        eşleşip `Stone Saint -> donustu -> Weaver's Mask` üretti;
+      * yeni ad DAHA ÖNCE bu sahibin gölgesi/Echo'su olarak görülmemiş olmalı: eski
+        bir gölgenin yeniden listelenmesi evrim sonucu değildir.
+    "Your Shadow has evolved" gibi ADSIZ mesajlar kullanılmaz: birden çok gölge varken
+    hangisi olduğu belirsizdir.
+    """
+    gorulen: set = durum.setdefault("gorulen", set())
+    out = []
+    for ozne, iliski, nesne, kanit in bulunan:
+        if iliski == "_evrim":
+            durum["bekleyen"] = {"ad": ozne, "bolum": bolum_no, "kanit": kanit}
+            continue
+        out.append((ozne, iliski, nesne, kanit))
+        if iliski not in _EVRIM_HEDEFI or not nesne:
+            continue
+        anahtar = nesne.casefold()
+        bekleyen = durum.get("bekleyen")
+        if bekleyen and anahtar != bekleyen["ad"].casefold() and anahtar not in gorulen:
+            out.append((bekleyen["ad"], "donustu", nesne, bekleyen["kanit"]))
+            durum["bekleyen"] = None
+        gorulen.add(anahtar)
+    bekleyen = durum.get("bekleyen")
+    if bekleyen and bolum_no is not None and bekleyen["bolum"] is not None \
+            and bolum_no - bekleyen["bolum"] > EVRIM_PENCERESI:
+        durum["bekleyen"] = None
+    return out
 
 
 def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
@@ -606,10 +666,13 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
                 for alt, ust in zip(kimlikler, kimlikler[1:]):
                     if alt and ust:
                         bag_ekle(book_slug, alt, "ust_basamak", ust, 1, None, "manual", 1.0, conn=conn)
+        evrim_durumu: dict = {}  # bölümler arası: bekleyen evrim + görülen gölge adları
         for bolum in sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0):
-            for ozne, iliski, nesne, kanit in sistem_baglarini_bul(
+            bulunan = sistem_baglarini_bul(
                 bolum["source"] or "", p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())),
-            ):
+            )
+            bulunan = evrimleri_esle(bulunan, evrim_durumu, bolum["chapter_no"])
+            for ozne, iliski, nesne, kanit in bulunan:
                 a, b = cozucu.coz(ozne), cozucu.coz(nesne)
                 if not a or not b:
                     for ad, kim in ((ozne, a), (nesne, b)):

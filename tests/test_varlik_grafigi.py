@@ -219,6 +219,28 @@ def test_unvanli_ad_asil_kisiye_baglanir_kategori_baglanmaz():
     assert ("Roan", "bulundugu_yer", "Chained Isles") in {(b["kaynak"], b["iliski"], b["hedef"]) for b in vg.baglar(KITAP)}
 
 
+def test_evrim_ve_golge_alma_runleri():
+    b1 = vg.sistem_baglarini_bul("[You have received an Echo: Stone Saint.]\n\n[You have created a Shadow Monster: Stone Saint.]",
+                                 "Sunny", ("Sunless",))
+    assert ("Sunny", "yanki", "Stone Saint") in [x[:3] for x in b1]
+    assert ("Sunny", "golgesi", "Stone Saint") in [x[:3] for x in b1]
+    # 106 gölge, 273 evrim işareti, 278 bir ANI bloğu (eşleşmemeli), 310 yeni gölge adı.
+    durum: dict = {}
+    vg.evrimleri_esle([("Sunny", "golgesi", "Stone Saint", "")], durum, 106)
+    vg.evrimleri_esle(vg.sistem_baglarini_bul("[...The Stone Saint is evolving.]", "Sunny", ()), durum, 273)
+    s278 = vg.evrimleri_esle([("Sunny", "anisi", "Weaver's Mask", "")], durum, 278)
+    assert all(x[1] != "donustu" for x in s278)
+    b310 = vg.sistem_baglarini_bul("Shadow: [Marble Saint].\n\nShadow Rank: Awakened.", "Sunny", ("Sunless",))
+    s310 = vg.evrimleri_esle(b310, durum, 310)
+    assert ("Stone Saint", "donustu", "Marble Saint") in [x[:3] for x in s310]
+    # Eski gölgenin yeniden listelenmesi evrim sonucu sayılmaz.
+    durum2: dict = {}
+    vg.evrimleri_esle([("Sunny", "golgesi", "Soul Serpent", "")], durum2, 358)
+    vg.evrimleri_esle(vg.sistem_baglarini_bul("[...Marble Saint is evolving.]", "Sunny", ()), durum2, 400)
+    s = vg.evrimleri_esle([("Sunny", "golgesi", "Soul Serpent", "")], durum2, 401)
+    assert all(x[1] != "donustu" for x in s)
+
+
 def test_bilinmeyen_iliski_reddedilir():
     import pytest
 
