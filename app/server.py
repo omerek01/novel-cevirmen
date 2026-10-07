@@ -1116,6 +1116,13 @@ def get_ceviri_modeli() -> dict:
         "secili": settings.get(translate_mod.MODEL_AYAR_ANAHTARI,
                                translate_mod.VARSAYILAN_MODEL),
         "secenekler": list(translate_mod.SECILEBILIR_MODELLER),
+        # Yapılandırma GÖRÜNÜR (Faz 1I): birincil model, yedekler ve seçimle birlikte
+        # ŞU AN etkin zincir. Hangi modelin çevirdiği ayrıca künyede (`chapters.model`).
+        "yapilandirma": {
+            "birincil": translate_mod.PRIMARY_TRANSLATION_MODEL,
+            "yedekler": list(translate_mod.FALLBACK_TRANSLATION_MODELS),
+            "etkin_zincir": list(translate_mod.secili_zincir()),
+        },
         # Harcama GOSTERGESI (fren degil, kullanici karari): ucretli model elle
         # seciliyor ve ucretli halkaya sessizce dusulmuyor, yani surpriz harcamanin
         # kaynagi zaten kapali. Ayni istekte donuyor cunku okuyucu ikisini de ayni

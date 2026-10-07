@@ -108,12 +108,19 @@ from .glossary import fold_term
 # erişim/kota arızası ikisini birlikte düşürebilir. SONA konur: ölçümde 3.6-flash
 # daha iyi (3 bölüm medyan oran 0,996 / 0,966) ve bölüm başına 2-3 dk sürüyor,
 # yani yalnız Gemini halkalarının hepsi elendiğinde inilir.
-DEFAULT_MODELS = (
-    "gemini-3.6-flash",
+#
+# AÇIK YAPILANDIRMA (Faz 1I, 2026-10-07): birincil model ve yedekler ADIYLA durur;
+# model adları çeviri mantığına dağılmaz. `DEFAULT_MODELS` adı geriye uyumluluk için
+# korunur ve bu ikisinden TÜRER. Varsayılanı değiştirmek = yalnız
+# `PRIMARY_TRANSLATION_MODEL` satırını değiştirmek (ölçüm ve kullanıcı kararıyla).
+# Kullanıcının ayardaki seçimi (`zincir_kur`) birincilin ÖNÜNE geçer, yerini almaz.
+PRIMARY_TRANSLATION_MODEL = "gemini-3.6-flash"
+FALLBACK_TRANSLATION_MODELS = (
     "gemini-3.5-flash",
     "gemini-2.5-flash",
     "z-ai/glm-5.3",
 )
+DEFAULT_MODELS = (PRIMARY_TRANSLATION_MODEL, *FALLBACK_TRANSLATION_MODELS)
 
 # ---------------------------------------------------------------------------
 # SEÇİLEBİLİR MODEL — okuyucudaki ayardan gelir (2026-09-02, kullanıcı isteği)
@@ -393,7 +400,7 @@ SECILEBILIR_ADLAR = tuple(m["ad"] for m in SECILEBILIR_MODELLER)
 # Ayarın DB anahtarı. Varsayılan, zinciri bugünkü hâlinde bırakan seçimdir —
 # yani ayar hiç dokunulmamışsa davranış birebir eskisi gibi kalır.
 MODEL_AYAR_ANAHTARI = "ceviri_modeli"
-VARSAYILAN_MODEL = DEFAULT_MODELS[0]
+VARSAYILAN_MODEL = PRIMARY_TRANSLATION_MODEL
 
 
 def zincir_kur(secili: str | None = None) -> tuple[str, ...]:
