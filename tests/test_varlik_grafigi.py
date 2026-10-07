@@ -6,7 +6,7 @@ sistem bağı, kalite kurallarında 19 bulgu.
 """
 from __future__ import annotations
 
-from core import glossary, library, varlik_grafigi as vg
+from core import cache, glossary, library, varlik_grafigi as vg
 
 KITAP = "shadow-slave"  # profil bu slug'a bağlı
 
@@ -376,3 +376,25 @@ def test_durum_degerleri_bag_degil_degisimle_saklanir():
     # Kayıt silinince değerleri de gider.
     glossary.delete_term(KITAP, "Bitter Cusp")
     assert k("Bitter Cusp") not in vg.degerler(KITAP)
+
+
+def test_sabit_baglar_ilk_gecisten_kurulur(monkeypatch):
+    for k in ("Sunny", "Sunless", "happy shadow", "gloomy shadow"):
+        glossary.set_term(KITAP, k, k)
+    profil = dict(vg.KITAP_PROFILLERI[KITAP])
+    profil["sabit_baglar"] = (("Sunny", "kendi_golgesi", "happy shadow"),
+                              ("Sunny", "kendi_golgesi", "gloomy shadow"),
+                              ("Sunny", "kendi_golgesi", "missing shadow"))
+    monkeypatch.setitem(vg.KITAP_PROFILLERI, KITAP, profil)
+    for no, metin in ((390, "Nothing here."), (394, "Sunny smiled. The happy shadow danced."),
+                      (434, "The gloomy shadow sighed. The happy shadow too.")):
+        cache.save_chapter(f"https://x/ch-{no}", {
+            "book_slug": KITAP, "book_title": "Shadow Slave", "title": f"B{no}", "chapter_no": no,
+            "translation": "Çeviri.", "source": metin,
+        })
+    sonuc = vg.sistem_baglarini_cikar(KITAP)
+    bag = {(b["kaynak"], b["iliski"], b["hedef"]): b for b in vg.baglar(KITAP)}
+    assert bag[("Sunny", "kendi_golgesi", "happy shadow")]["ilk_bolum"] == 394
+    assert bag[("Sunny", "kendi_golgesi", "happy shadow")]["kanit"] == "The happy shadow danced."
+    assert bag[("Sunny", "kendi_golgesi", "gloomy shadow")]["ilk_bolum"] == 434
+    assert "missing shadow" in sonuc["cozulemeyen"]

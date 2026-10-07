@@ -40,6 +40,10 @@ ILISKILER: dict[str, dict] = {
     "unvani": {"etiket": "unvanı", "ters": "kimin unvanı", "grup": "kimlik"},
     "anisi": {"etiket": "Anısı", "ters": "sahibi", "grup": "sahiplik"},
     "golgesi": {"etiket": "Gölgesi", "ters": "efendisi", "grup": "sahiplik"},
+    # Sunny'nin KENDİ gölgeleri (Görünüşünün parçası; her Gölge Çekirdeği bir tane):
+    # adları rünlerde geçmez, Sunny takar ("the gloomy shadow"). Gölge KÖLELERİNDEN
+    # (Saint, Nightmare — `golgesi`) ayrıdır; aynı ilişkiye konsalar kartta karışırlardı.
+    "kendi_golgesi": {"etiket": "kendi gölgesi", "ters": "kimin kendi gölgesi", "grup": "sahiplik"},
     "yanki": {"etiket": "Yankısı", "ters": "efendisi", "grup": "sahiplik"},
     "yetenegi": {"etiket": "yeteneği", "ters": "kimin yeteneği", "grup": "sahiplik"},
     # Anının EFSUNU ("Memory Enchantments: [Unbroken]"); efsunun ne yaptığı bağın
@@ -90,6 +94,16 @@ KITAP_PROFILLERI: dict[str, dict] = {
         # Rünlerdeki `Name: Sunless` ana karakterdir; `Sunny` onun takma adı.
         "ana_karakter_adlari": ("Sunless",),
         "runler": True,
+        # SABİT bağlar: rünlerde geçmeyen ama kesin bilinen ilişkiler (kullanıcı
+        # bildirimi, 2026-10-07). İlk bölüm ve kanıt, nesnenin kitapta İLK geçtiği
+        # cümleden çıkarımda bulunur (`sistem_baglarini_cikar`). Ölçülen ilk geçişler
+        # Gölge Çekirdeği sayacıyla örtüşüyor: creepy 527 (3/7 @526), haughty 702 (4/7 @702).
+        "sabit_baglar": (
+            ("Sunny", "kendi_golgesi", "happy shadow"),
+            ("Sunny", "kendi_golgesi", "gloomy shadow"),
+            ("Sunny", "kendi_golgesi", "creepy shadow"),
+            ("Sunny", "kendi_golgesi", "Haughty Shadow"),
+        ),
         # Spell'in GENEL sistem terimleri: belirli bir varlık değil, kategori.
         # Ölçülen hata (Vertex, 15 bölüm): `Sunny -> yetenegi -> Abilities`,
         # `Nephis -> yetenegi -> Aspect Ability`, `Gateway -> parcasi -> ...`,
@@ -807,6 +821,23 @@ def evrimleri_esle(bulunan: list[tuple], durum: dict, bolum_no: int | None) -> l
     return out
 
 
+_CUMLE_SINIRI = re.compile(r"(?<=[.!?…])\s+|\n+")
+
+
+def ilk_gecis_cumlesi(metin: str, ad: str) -> str | None:
+    """Adın metinde geçtiği İLK cümle (sözlük eşleştirmesiyle aynı desen), yoksa None."""
+    desen = translate_term_regex(ad)
+    for cumle in _CUMLE_SINIRI.split(metin):
+        if desen.search(cumle):
+            return cumle.strip()[:400]
+    return None
+
+
+def translate_term_regex(ad: str):
+    from . import translate  # döngüsel içe aktarmayı önle: translate büyük modül
+    return translate._term_regex(ad)
+
+
 def sistemle_celisenleri_reddet(book_slug: str) -> int:
     """Aynı çift için SİSTEM bağı başka bir ilişki söylüyorsa model bağını reddet.
 
@@ -880,11 +911,26 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
             # yazmak, ayrıştırma düzeltildiğinde eski bozuk satırların kalmasını önler.
             conn.execute("DELETE FROM varlik_deger WHERE book_slug = ?", (book_slug,))
         evrim_durumu: dict = {}  # bölümler arası: bekleyen evrim + görülen gölge adları
+        sabit = [
+            (cozucu.coz(o), i, cozucu.coz(n), n) for o, i, n in p.get("sabit_baglar", ())
+        ]
+        sabit_bekleyen = [s for s in sabit if s[0] and s[2]]
+        for o, i, n in p.get("sabit_baglar", ()):
+            if not (cozucu.coz(o) and cozucu.coz(n)):
+                sonuc["cozulemeyen"][n] = sonuc["cozulemeyen"].get(n, 0) + 1
         for bolum in sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0):
             bulunan = sistem_baglarini_bul(
                 bolum["source"] or "", p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())),
             )
             bulunan = evrimleri_esle(bulunan, evrim_durumu, bolum["chapter_no"])
+            for s in list(sabit_bekleyen):
+                cumle = ilk_gecis_cumlesi(bolum["source"] or "", s[3])
+                if cumle is None:
+                    continue
+                sabit_bekleyen.remove(s)
+                sonuc["baglar"].append((cozucu.kaynak(s[0]), s[1], cozucu.kaynak(s[2]), bolum["chapter_no"]))
+                if yaz:
+                    bag_ekle(book_slug, s[0], s[1], s[2], bolum["chapter_no"], cumle, "manual", 1.0, conn=conn)
             for ozne, iliski, nesne, kanit in bulunan:
                 if iliski == DEGER:
                     a = cozucu.coz(ozne)
