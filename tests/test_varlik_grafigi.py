@@ -367,8 +367,8 @@ def test_durum_degerleri_bag_degil_degisimle_saklanir():
     vg.bolumden_sistem_baglari(KITAP, 900, metin)  # değişmedi: yeni satır yok
     vg.bolumden_sistem_baglari(KITAP, 950, metin.replace("4/7", "5/7"))
     k = vg.DugumCozucu(KITAP).coz
-    assert vg.degerler(KITAP, 949)[k("Sunny")]["Shadow Cores"] == {"deger": "4/7", "ilk_bolum": 848}
-    assert vg.degerler(KITAP)[k("Sunny")]["Shadow Cores"] == {"deger": "5/7", "ilk_bolum": 950}
+    assert vg.degerler(KITAP, 949)[k("Sunny")]["Shadow Cores"] == {"deger": "4/7", "ilk_bolum": 848, "durum_bilgisi": "confirmed"}
+    assert vg.degerler(KITAP)[k("Sunny")]["Shadow Cores"] == {"deger": "5/7", "ilk_bolum": 950, "durum_bilgisi": "confirmed"}
     assert vg.degerler(KITAP)[k("Bitter Cusp")]["Memory Tier"]["deger"] == "I"
     assert vg.degerler(KITAP, 800) == {}  # spoiler: konumdan önce değer yok
     # Değer bir bağ değildir.
@@ -515,7 +515,8 @@ def test_saint_golge_ve_rutbe_ayri_dugumlerdir():
 def test_eski_bag_anlam_dugumune_tasinir_ve_takma_ad_baglanir():
     k = _saint_kur()
     conn = vg._connect()
-    conn.execute("INSERT INTO varlik_bag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    conn.execute("INSERT INTO varlik_bag (book_slug, kaynak_kimlik, iliski, hedef_kimlik, ilk_bolum, kanit, "
+                 "kanit_bolum, origin, durum, guven, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                  (KITAP, k("Sunny"), "golgesi", k("Saint"), 106, "a", 106, "sistem", "onaylandi", 1.0, 0, 0))
     conn.commit()
     conn.close()
