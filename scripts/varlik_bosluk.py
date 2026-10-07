@@ -38,7 +38,12 @@ def main() -> int:
     load_dotenv(KOK / ".env")
     slug = library.resolve_slug(args.kitap)
     _t, _k, korpus = cache.kaynak_kapsamasi(slug)
-    ciftler = varlik_bosluk.ortak_gecisler(slug, args.en_az, korpus)
+    tumu = varlik_bosluk.ortak_gecisler(slug, args.en_az, korpus)
+    bilesikler = [c for c in tumu if c["bilesik"] or not c["ornekler"]]
+    ciftler = [c for c in tumu if not (c["bilesik"] or not c["ornekler"])]
+    print(f"{len(bilesikler)} çift BİLEŞİK AD parçası (eksik sözlük kaydı olabilir, soruya gitmez):")
+    for c in bilesikler[:15]:
+        print(f"  {c['sayi']:4}  {c['a']} + {c['b']}")
     if args.sinir:
         ciftler = ciftler[:args.sinir]
     print(f"{slug}: bağı olmayan {len(ciftler)} sık çift (en az {args.en_az} ortak cümle)")

@@ -31,6 +31,49 @@ from . import cache, glossary, translate, varlik_grafigi
 _CUMLE = re.compile(r"(?<=[.!?…])\s+|\n+")
 ORNEK_CUMLE_SINIRI = 6
 EN_AZ_ORTAK = 3
+ADAY_CUMLE_SINIRI = 60  # örnek seçimi için çift başına saklanan en erken cümleler
+
+# İki anma arasında yalnız bu bağlayıcı varsa ikisi TEK bir adın parçasıdır
+# ("Mantle of the Underworld", "Maiden of War", "Sunny's Shadow" değil — iyelik
+# bir kişiye bağlanınca ilişkidir, ama iki sözlük parçası arasındaki iyelik çoğunlukla
+# bileşik addır). Ölçülen (2026-10-07): ilk 438 çiftin başı bu gürültüydü
+# (`Underworld <-> Mantle` 108, `War <-> Maiden` 84) ve model haklı olarak boş döndü.
+_BITISIK = re.compile(r"^\s*(?:of(?:\s+the)?|['’]s|the)?\s*$", re.IGNORECASE)
+BILESIK_ORANI = 0.5  # ortak geçişlerin en az bu kadarı bitişikse çift bileşik addır
+
+# İLİŞKİ söyleyen cümlelerin ipuçları. Örnekler eskiden yalnız EN ERKEN cümlelerdi
+# ve bunlar çoğunlukla aynı sahnede geçmeyi gösterip ilişkiyi söylemiyordu (ölçülen:
+# `Sunny | Jet` gibi bariz çiftlerde bile model "açıkça söylenmiyor" deyip boş döndü).
+_IPUCU = re.compile(
+    r"\b(?:teacher|mentor|student|disciple|apprentice|friend|companion|cohort|ally|allies|"
+    r"enemy|enemies|rival|brother|sister|father|mother|son|daughter|uncle|aunt|cousin|"
+    r"wife|husband|lover|clan|member|leader|led|lead|master|servant|slave|shadow|echo|"
+    r"memory|attribute|aspect|ability|named|called|known as|true name|rank|killed|"
+    r"slain|slew|belong(?:s|ed)?|lord|heir|legacy|team|guard|retainer|vassal|sovereign|"
+    r"domain|citadel|home|ruler|ruled|owner|owned|summoned|created|form|evolved)\b",
+    re.IGNORECASE,
+)
+
+
+def _bitisik_mi(cumle: str, x_spanlari: list, y_spanlari: list) -> bool:
+    for a1, a2 in x_spanlari:
+        for b1, b2 in y_spanlari:
+            ara = cumle[a2:b1] if a2 <= b1 else cumle[b2:a1] if b2 <= a1 else None
+            if ara is not None and _BITISIK.match(ara):
+                return True
+    return False
+
+
+def _ornek_sec(adaylar: list[tuple[int, str]], sinir: int = ORNEK_CUMLE_SINIRI) -> list[tuple[int, str]]:
+    """İpucu taşıyan cümleler önce (kronolojik), kalan yer en erkenlerle dolar."""
+    ipuclu = [c for c in adaylar if _IPUCU.search(c[1])]
+    secilen = ipuclu[:sinir]
+    for c in adaylar:
+        if len(secilen) >= sinir:
+            break
+        if c not in secilen:
+            secilen.append(c)
+    return sorted(secilen, key=lambda c: c[0] or 0)
 
 
 @lru_cache(maxsize=4096)
@@ -51,8 +94,11 @@ def ortak_gecisler(book_slug: str, en_az: int = EN_AZ_ORTAK, korpus: str | None 
     """Bağı OLMAYAN ve en az `en_az` cümlede birlikte geçen varlık çiftleri.
 
     Döner (sıklığa göre azalan): [{"a", "b", "a_kimlik", "b_kimlik", "sayi",
-    "ilk_bolum", "ornekler": [(bölüm, cümle), ...]}]. Örnekler EN ERKEN bölümlerden
-    seçilir: soru sonucu yazılan bağın `ilk_bolum`u gerçek ilk kuruluşa yakın olsun.
+    "ilk_bolum", "bilesik", "ornekler": [(bölüm, cümle), ...]}]. Örnekler önce İLİŞKİ
+    İPUCU taşıyan cümlelerden, sonra en erkenlerden seçilir (`_ornek_sec`); bitişik
+    anma cümleleri örnek olmaz. `bilesik` = ortak geçişlerin çoğunda iki ad tek bir
+    adın parçası ("Mantle of the Underworld"): ilişki değil, EKSİK sözlük kaydıdır —
+    soruya gitmez, ayrıca raporlanır.
     """
     cozucu = varlik_grafigi.DugumCozucu(book_slug)
     if korpus is None:
@@ -67,6 +113,7 @@ def ortak_gecisler(book_slug: str, en_az: int = EN_AZ_ORTAK, korpus: str | None 
     sayac: dict[frozenset, int] = defaultdict(int)
     ornek: dict[frozenset, list] = defaultdict(list)
     ilk: dict[frozenset, int] = {}
+    bitisik: dict[frozenset, int] = defaultdict(int)
     for bolum in sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0):
         metin = bolum["source"] or ""
         no = bolum["chapter_no"]
@@ -102,7 +149,9 @@ def ortak_gecisler(book_slug: str, en_az: int = EN_AZ_ORTAK, korpus: str | None 
                         continue
                     sayac[cift] += 1
                     ilk.setdefault(cift, no)
-                    if len(ornek[cift]) < ORNEK_CUMLE_SINIRI:
+                    if _bitisik_mi(cumle, anmalar[x], anmalar[y]):
+                        bitisik[cift] += 1
+                    elif len(ornek[cift]) < ADAY_CUMLE_SINIRI:
                         ornek[cift].append((no, cumle.strip()[:400]))
     out = []
     for cift, n in sayac.items():
@@ -111,7 +160,8 @@ def ortak_gecisler(book_slug: str, en_az: int = EN_AZ_ORTAK, korpus: str | None 
         x, y = sorted(cift)
         out.append({
             "a": cozucu.kaynak(x), "b": cozucu.kaynak(y), "a_kimlik": x, "b_kimlik": y,
-            "sayi": n, "ilk_bolum": ilk[cift], "ornekler": ornek[cift],
+            "sayi": n, "ilk_bolum": ilk[cift], "bilesik": bitisik[cift] >= BILESIK_ORANI * n,
+            "ornekler": _ornek_sec(ornek[cift]),
         })
     out.sort(key=lambda c: -c["sayi"])
     return out
