@@ -780,11 +780,16 @@ def kitaba_tasi(conn: sqlite3.Connection, kaynak_slug: str, hedef_slug: str) -> 
             for r in conn.execute("SELECT source, kimlik FROM glossary WHERE book_slug = ?", (hedef_slug,))
         }
         kimlik_esle = {s["kimlik"]: hedef_kimligi.get(fold_term(s["source"]), s["kimlik"]) for s in satirlar}
+        def esle(k):
+            # Anlam düğümü (`abc#golge`) tabanı eşlenip eki korunarak taşınır.
+            taban, ayrac, ek = k.partition("#")
+            return kimlik_esle.get(taban, taban) + ayrac + ek
+
         for b in conn.execute("SELECT * FROM varlik_bag WHERE book_slug = ?", (kaynak_slug,)).fetchall():
             yeni_b = list(b)
             yeni_b[0] = hedef_slug
-            yeni_b[1] = kimlik_esle.get(b[1], b[1])
-            yeni_b[3] = kimlik_esle.get(b[3], b[3])
+            yeni_b[1] = esle(b[1])
+            yeni_b[3] = esle(b[3])
             if yeni_b[1] != yeni_b[3]:
                 conn.execute(
                     f"INSERT OR IGNORE INTO varlik_bag VALUES ({', '.join('?' for _ in yeni_b)})", yeni_b
@@ -867,8 +872,9 @@ def _varlik_baglarini_sil(conn, book_slug: str, kimlik: str) -> None:
     sözlük modülü grafik şemasını kurmaz (sahibi `varlik_grafigi`)."""
     if _tablo_var(conn, "varlik_bag"):
         conn.execute(
-            "DELETE FROM varlik_bag WHERE book_slug = ? AND (kaynak_kimlik = ? OR hedef_kimlik = ?)",
-            (book_slug, kimlik, kimlik),
+            "DELETE FROM varlik_bag WHERE book_slug = ? AND (kaynak_kimlik = ? OR hedef_kimlik = ? "
+            "OR kaynak_kimlik LIKE ? OR hedef_kimlik LIKE ?)",
+            (book_slug, kimlik, kimlik, kimlik + "#%", kimlik + "#%"),
         )
     if _tablo_var(conn, "varlik_deger"):
         conn.execute("DELETE FROM varlik_deger WHERE book_slug = ? AND kimlik = ?", (book_slug, kimlik))

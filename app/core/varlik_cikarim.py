@@ -289,6 +289,8 @@ def bolum_cikar(
         b = duzen_iliskisini_duzelt(b, diziler, ek_rutbeler)
         sebep = kaniti_dogrula(b, kaynak_metin, yazimlar)
         a, n = cozucu.coz(b.get("ozne") or ""), cozucu.coz(b.get("nesne") or "")
+        # Anlam düğümü (Saint gölge / rütbe) KATEGORİ denetiminden ÖNCE seçilir.
+        a, n = varlik_grafigi.anlam_sec(book_slug, a, b.get("iliski") or "", n)
         a, n = asil.get(a, a), asil.get(n, n)
         if sebep is None:
             sebep = yapisal_red(b, a, n, kategoriler, sistem)
@@ -446,6 +448,8 @@ def _kanitli_coz(
             # Aynı deterministik kurallar, eşleşen cümlenin kendisine karşı.
             sebep = kaniti_dogrula({**b, "kanit": kanit}, cumle, yazimlar)
         a, n = cozucu.coz(b.get("ozne") or ""), cozucu.coz(b.get("nesne") or "")
+        # Anlam düğümü (Saint gölge / rütbe) KATEGORİ denetiminden ÖNCE seçilir.
+        a, n = varlik_grafigi.anlam_sec(book_slug, a, b.get("iliski") or "", n)
         a, n = asil.get(a, a), asil.get(n, n)
         if sebep is None:
             sebep = yapisal_red(b, a, n, kategoriler, sistem)

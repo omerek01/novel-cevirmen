@@ -482,3 +482,52 @@ def test_sabit_bag_sabit_bolumle_ozne_cumlesinden_kurulur(monkeypatch):
     assert bag[("Kim", "grubu", "Sunny's cohort")]["ilk_bolum"] == 822
     assert bag[("Kim", "grubu", "Sunny's cohort")]["kanit"] == "Kim, Belle and the rest."
     assert bag[("Sunny's cohort", "lideri", "Sunny")]["ilk_bolum"] == 822
+
+
+def _saint_kur():
+    for k, v in {"Sunny": "Sunny", "Saint": "Aziz", "Tyris": "Tyris", "Shadow Saint": "Gölge Aziz",
+                 "Black Knight": "Kara Şövalye", "Stone Saint": "Taş Aziz", "Master": "Usta"}.items():
+        glossary.set_term(KITAP, k, v)
+    return vg.DugumCozucu(KITAP).coz
+
+
+def test_saint_golge_ve_rutbe_ayri_dugumlerdir():
+    k = _saint_kur()
+    vg.bag_ekle(KITAP, k("Sunny"), "golgesi", k("Saint"), 106, "a", "sistem", 1.0)
+    vg.bag_ekle(KITAP, k("Tyris"), "rutbesi", k("Saint"), 400, "b", "model", 0.9, durum="onaylandi")
+    vg.bag_ekle(KITAP, k("Saint"), "oldurdu", k("Black Knight"), 270, "c", "model", 0.9, durum="onaylandi")
+    vg.bag_ekle(KITAP, k("Master"), "ust_basamak", k("Saint"), 1, None, "manual", 1.0)
+    b = {(x["kaynak"], x["iliski"], x["hedef"]): x for x in vg.baglar(KITAP)}
+    golge, taban = k("Saint") + "#golge", k("Saint")
+    assert b[("Sunny", "golgesi", "Saint")]["hedef_kimlik"] == golge
+    assert b[("Sunny", "golgesi", "Saint")]["hedef_anlam"] == "golge"
+    assert b[("Saint", "oldurdu", "Black Knight")]["kaynak_kimlik"] == golge
+    assert b[("Tyris", "rutbesi", "Saint")]["hedef_kimlik"] == taban
+    assert b[("Master", "ust_basamak", "Saint")]["hedef_kimlik"] == taban
+    o = vg.obek_siniflari(KITAP)
+    assert o[golge] == "yaratik" and o[taban] == "kategori"
+    etiket = {d["id"]: d["label"] for d in vg.graph_json(KITAP)["nodes"]}
+    assert etiket[golge] == "Saint (gölge)" and etiket[taban] == "Saint"
+
+
+def test_eski_bag_anlam_dugumune_tasinir_ve_takma_ad_baglanir():
+    k = _saint_kur()
+    conn = vg._connect()
+    conn.execute("INSERT INTO varlik_bag VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                 (KITAP, k("Sunny"), "golgesi", k("Saint"), 106, "a", 106, "sistem", "onaylandi", 1.0, 0, 0))
+    conn.commit()
+    conn.close()
+    assert vg.anlamlari_ayir(KITAP) == 1
+    assert vg.anlamlari_ayir(KITAP) == 0  # idempotent
+    b = {(x["kaynak"], x["iliski"], x["hedef"]): x for x in vg.baglar(KITAP)}
+    assert b[("Sunny", "golgesi", "Saint")]["hedef_kimlik"] == k("Saint") + "#golge"
+    assert b[("Saint", "takma_adi", "Shadow Saint")]["kaynak_kimlik"] == k("Saint") + "#golge"
+
+
+def test_saint_silinince_anlam_dugumu_baglari_da_gider():
+    k = _saint_kur()
+    vg.bag_ekle(KITAP, k("Sunny"), "golgesi", k("Saint"), 106, "a", "sistem", 1.0)
+    glossary.delete_term(KITAP, "Saint")
+    conn = vg._connect()
+    assert conn.execute("SELECT COUNT(*) FROM varlik_bag WHERE hedef_kimlik LIKE '%#golge'").fetchone()[0] == 0
+    conn.close()

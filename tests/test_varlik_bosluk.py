@@ -176,3 +176,21 @@ def test_profil_gorevi_deger_olarak_dondurur(monkeypatch):
     monkeypatch.setattr(translate, "_generate_with_fallback", sahte)
     sonuc = varlik_cikarim.varlik_profili_sor(KITAP, "Kim", cumleler, api_key="x")
     assert [(d["anahtar"], d["deger"], d["bolum"]) for d in sonuc["degerler"]] == [("Görev", "technician", 820)]
+
+
+
+def test_saint_oldurdu_kategori_diye_reddedilmez(monkeypatch):
+    for k in ("Saint", "Black Knight"):
+        glossary.set_term(KITAP, k, k)
+    cozucu = vg.DugumCozucu(KITAP)
+    cumleler = [(270, "The Saint struck down the Black Knight.")]
+
+    def sahte(_f, models, user, system=None, max_tokens=None):
+        return _Yanit({"baglar": [{"ozne": "Saint", "iliski": "oldurdu", "nesne": "Black Knight",
+                                   "kanit": cumleler[0][1], "guven": 0.9}]}), models[0]
+
+    monkeypatch.setattr(translate, "_generate_with_fallback", sahte)
+    # Saint'in TABAN düğümü kategori olsa da (rütbe), öldüren gölgedir.
+    sonuc = varlik_cikarim.varlik_profili_sor(KITAP, "Black Knight", cumleler, api_key="x",
+                                             cozucu=cozucu, kategoriler={cozucu.coz("Saint")})
+    assert [(g["ozne_kimlik"], g["iliski"]) for g in sonuc["gecerli"]] == [(cozucu.coz("Saint") + "#golge", "oldurdu")]

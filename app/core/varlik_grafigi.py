@@ -97,6 +97,21 @@ KITAP_PROFILLERI: dict[str, dict] = {
         # Rünlerdeki `Name: Sunless` ana karakterdir; `Sunny` onun takma adı.
         "ana_karakter_adlari": ("Sunless",),
         "runler": True,
+        # ANLAM DÜĞÜMLERİ: TEK sözlük kaydının iki ayrı varlığı adlandırdığı yerler
+        # (kullanıcı bildirimi, 2026-10-07: "Sunny'nin gölgesi Saint ile Aziz rütbesi
+        # olan Saint karışıyordu"). Grafikte ikinci düğüm `<kimlik>#<anlam>` olur;
+        # sözlük ve çeviri talimatı DEĞİŞMEZ. `taban_iliskileri` (yön, ilişki) tabanda
+        # kalır, geri kalan her bağ anlam düğümüne gider. Ölçülen: tek düğümken Saint
+        # kategori sayılıyor ve gölgenin öldürdükleri ("Saint -> öldürdü -> Black
+        # Knight") "kategori özne olamaz" diye reddediliyordu.
+        "anlam_dugumleri": {
+            "Saint": {
+                "anlam": "golge", "etiket": "gölge", "karsilik": "Saint",
+                "taban_iliskileri": (("nesne", "rutbesi"), ("nesne", "unvani"),
+                                     ("ozne", "ust_basamak"), ("nesne", "ust_basamak")),
+                "takma_adlari": ("Shadow Saint",),
+            },
+        },
         # SABİT bağlar: rünlerde geçmeyen ama kesin bilinen ilişkiler (kullanıcı
         # bildirimi, 2026-10-07). İlk bölüm ve kanıt, nesnenin kitapta İLK geçtiği
         # cümleden çıkarımda bulunur (`sistem_baglarini_cikar`). Ölçülen ilk geçişler
@@ -238,7 +253,94 @@ class DugumCozucu:
         return self._fold.get(glossary.fold_term(ad)) or self._var.get(self._varyant(ad))
 
     def kaynak(self, kimlik: str) -> str:
-        return self.satirlar[kimlik]["source"]
+        return self.satirlar[taban_kimlik(kimlik)]["source"]
+
+
+# ---------- anlam düğümleri ----------
+ANLAM_AYRACI = "#"
+
+
+def taban_kimlik(kimlik: str) -> str:
+    """Anlam düğümünün sözlük kaydı (`abc#golge` -> `abc`); düz kimlik aynen döner."""
+    return kimlik.split(ANLAM_AYRACI, 1)[0]
+
+
+def anlam_adi(kimlik: str) -> str | None:
+    return kimlik.split(ANLAM_AYRACI, 1)[1] if ANLAM_AYRACI in kimlik else None
+
+
+def anlam_kurallari(book_slug: str) -> dict[str, dict]:
+    """{taban kimlik: kural} — profildeki anlam düğümlerinin sözlükteki kimlikleri."""
+    p = profil(book_slug) or {}
+    tanim = p.get("anlam_dugumleri") or {}
+    if not tanim:
+        return {}
+    conn = db.connect()
+    try:
+        out = {}
+        for kaynak, kural in tanim.items():
+            r = conn.execute(
+                "SELECT kimlik FROM glossary WHERE book_slug = ? AND source = ?", (book_slug, kaynak)
+            ).fetchone()
+            if r and r[0]:
+                out[r[0]] = kural
+        return out
+    finally:
+        conn.close()
+
+
+def anlam_sec(book_slug: str, kaynak_kimlik: str | None, iliski: str, hedef_kimlik: str | None,
+              kurallar: dict | None = None) -> tuple[str | None, str | None]:
+    """Bağın uçlarını doğru ANLAM düğümüne yönelt (bkz. `anlam_dugumleri`)."""
+    if kurallar is None:
+        kurallar = anlam_kurallari(book_slug)
+
+    def sec(kimlik, yon):
+        kural = kurallar.get(kimlik) if kimlik else None
+        if kural is None or (yon, iliski) in kural["taban_iliskileri"]:
+            return kimlik
+        return f"{kimlik}{ANLAM_AYRACI}{kural['anlam']}"
+
+    return sec(kaynak_kimlik, "ozne"), sec(hedef_kimlik, "nesne")
+
+
+def anlamlari_ayir(book_slug: str) -> int:
+    """Kural gelmeden ÖNCE tabana yazılmış bağları anlam düğümüne taşı (idempotent).
+    Takma adları (`Shadow Saint`) anlam düğümüne bağlar. Döner: taşınan bağ sayısı."""
+    kurallar = anlam_kurallari(book_slug)
+    if not kurallar:
+        return 0
+    conn = _connect()
+    try:
+        tasinan = 0
+        yer = ", ".join("?" for _ in kurallar)
+        satirlar = conn.execute(
+            f"SELECT * FROM varlik_bag WHERE book_slug = ? AND (kaynak_kimlik IN ({yer}) "
+            f"OR hedef_kimlik IN ({yer}))", (book_slug, *kurallar, *kurallar),
+        ).fetchall()
+        for s in satirlar:
+            a, n = anlam_sec(book_slug, s[1], s[2], s[3], kurallar)
+            if (a, n) == (s[1], s[3]):
+                continue
+            yeni = list(s)
+            yeni[1], yeni[3] = a, n
+            conn.execute(f"INSERT OR IGNORE INTO varlik_bag VALUES ({', '.join('?' for _ in yeni)})", yeni)
+            conn.execute(
+                "DELETE FROM varlik_bag WHERE book_slug = ? AND kaynak_kimlik = ? AND iliski = ? AND hedef_kimlik = ?",
+                (book_slug, s[1], s[2], s[3]),
+            )
+            tasinan += 1
+        cozucu = DugumCozucu(book_slug)
+        for taban, kural in kurallar.items():
+            for ad in kural.get("takma_adlari", ()):
+                k = cozucu.coz(ad)
+                if k:
+                    bag_ekle(book_slug, taban, "takma_adi", k, cozucu.satirlar[k].get("first_chapter"),
+                             None, "manual", 1.0, conn=conn)
+        conn.commit()
+        return tasinan
+    finally:
+        conn.close()
 
 
 # ---------- yazma ----------
@@ -262,6 +364,9 @@ def bag_ekle(
     """
     if iliski not in ILISKILER:
         raise ValueError(f"Bilinmeyen ilişki: {iliski!r}")
+    # TEK yazma noktası: rün, model, elle ve sabit bağ hep buradan geçer; anlam
+    # seçimi burada olunca hiçbir yol onu atlayamaz.
+    kaynak_kimlik, hedef_kimlik = anlam_sec(book_slug, kaynak_kimlik, iliski, hedef_kimlik)
     if kaynak_kimlik == hedef_kimlik:
         return False
     # SİMETRİK ilişki (yoldaş, akraba, düşman) tek bağdır: uçlar kimliğe göre
@@ -408,8 +513,11 @@ def baglar(
             "SELECT b.kaynak_kimlik, k.source, k.target, b.iliski, b.hedef_kimlik, h.source, h.target, "
             "b.ilk_bolum, b.kanit, b.kanit_bolum, b.origin, b.durum, b.guven "
             "FROM varlik_bag b "
-            "JOIN glossary k ON k.book_slug = b.book_slug AND k.kimlik = b.kaynak_kimlik "
-            "JOIN glossary h ON h.book_slug = b.book_slug AND h.kimlik = b.hedef_kimlik "
+            # Anlam düğümü (`abc#golge`) adını TABAN kayıttan alır.
+            "JOIN glossary k ON k.book_slug = b.book_slug AND k.kimlik = CASE WHEN instr(b.kaynak_kimlik, '#') > 0 "
+            "THEN substr(b.kaynak_kimlik, 1, instr(b.kaynak_kimlik, '#') - 1) ELSE b.kaynak_kimlik END "
+            "JOIN glossary h ON h.book_slug = b.book_slug AND h.kimlik = CASE WHEN instr(b.hedef_kimlik, '#') > 0 "
+            "THEN substr(b.hedef_kimlik, 1, instr(b.hedef_kimlik, '#') - 1) ELSE b.hedef_kimlik END "
             f"WHERE b.book_slug = ? AND b.durum IN ({', '.join('?' for _ in durumlar)})"
         )
         parametre: list = [book_slug, *durumlar]
@@ -427,6 +535,7 @@ def baglar(
             "kaynak_kimlik": r[0], "kaynak": r[1], "kaynak_karsilik": r[2], "iliski": r[3],
             "hedef_kimlik": r[4], "hedef": r[5], "hedef_karsilik": r[6], "ilk_bolum": r[7],
             "kanit": r[8], "kanit_bolum": r[9], "origin": r[10], "durum": r[11], "guven": r[12],
+            "kaynak_anlam": anlam_adi(r[0]), "hedef_anlam": anlam_adi(r[4]),
         }
         for r in satirlar
     ]
@@ -924,6 +1033,8 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
                     if alt and ust:
                         bag_ekle(book_slug, alt, "ust_basamak", ust, 1, None, "manual", 1.0, conn=conn)
         if yaz:
+            conn.commit()
+            sonuc["anlama_tasinan"] = anlamlari_ayir(book_slug)
             # Değerler YALNIZ rünlerden türer ve yalnız değişimler saklanır; baştan
             # yazmak, ayrıştırma düzeltildiğinde eski bozuk satırların kalmasını önler.
             conn.execute("DELETE FROM varlik_deger WHERE book_slug = ?", (book_slug,))
@@ -1173,8 +1284,9 @@ def obek_siniflari(book_slug: str, bag_listesi: list[dict] | None = None) -> dic
     tabandan: set[str] = set()  # sözlük türüne düşenler (kimlik sahibinden devralabilir)
     for kimlik in set(ozne) | set(nesne):
         oz, ne = ozne.get(kimlik, set()), nesne.get(kimlik, set())
-        satir = satirlar.get(kimlik) or {}
-        tur = satir.get("tur")
+        satir = satirlar.get(taban_kimlik(kimlik)) or {}
+        # Anlam düğümü tabanın sözlük TÜRÜNÜ devralmaz (Saint kaydı rütbe olarak tiplenmiş).
+        tur = None if anlam_adi(kimlik) else satir.get("tur")
         son_sozcuk = (satir.get("source") or "").split()[-1:] or [""]
         if kimlik in kategoriler:
             sinif = "kategori"
@@ -1188,8 +1300,10 @@ def obek_siniflari(book_slug: str, bag_listesi: list[dict] | None = None) -> dic
             sinif = "golge"
         elif oz & _KISI_OZNE:
             sinif = "kisi"
-        elif ne & {"turu", "esya_turu"} or tur == "rutbe":
-            sinif = "kategori"  # bir şeyin TÜRÜ olan düğüm (`Abomination`, `Armor`)
+        elif ne & {"turu", "esya_turu", "rutbesi"} or "ust_basamak" in oz | ne or tur == "rutbe":
+            # Bir şeyin TÜRÜ ya da RÜTBESİ olan, rütbe merdiveninde duran düğüm
+            # (`Abomination`, `Armor`, Saint'in rütbe anlamı).
+            sinif = "kategori"
         elif "yetenegi" in ne:
             sinif = "yetenek"
         elif ne & {"niteligi", "kusuru"}:
@@ -1225,10 +1339,15 @@ def graph_json(book_slug: str, en_cok_bolum: int | None = None) -> dict:
     satirlar = {r["kimlik"]: r for r in glossary.get_glossary_rows(book_slug)}
     kullanilan = {b["kaynak_kimlik"] for b in bag_listesi} | {b["hedef_kimlik"] for b in bag_listesi}
     dugumler = []
+    kurallar = anlam_kurallari(book_slug)
     for kimlik in sorted(kullanilan):
-        r = satirlar.get(kimlik)
+        r = satirlar.get(taban_kimlik(kimlik))
         if r is None:
             continue
+        if anlam_adi(kimlik):
+            kural = kurallar.get(taban_kimlik(kimlik)) or {}
+            r = {**r, "source": f"{r['source']} ({kural.get('etiket', anlam_adi(kimlik))})",
+                 "target": kural.get("karsilik", r["target"]), "tur": None}
         if en_cok_bolum is not None and r.get("first_chapter") and r["first_chapter"] > en_cok_bolum:
             continue
         dugumler.append({
