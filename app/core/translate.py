@@ -9,6 +9,8 @@ sıradaki modele düşülür.
 """
 from __future__ import annotations
 
+import contextlib
+import contextvars
 import json
 import os
 import re
@@ -2826,14 +2828,32 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
     return _MetinYanit(metin)
 
 
+# YANIT ŞEMASI (bilgi çıkarımı, Faz 2A v2): çağıran `yanit_semasi(sema)` ile ayarlar,
+# API çıktının yapısını ZORUNLU kılar (nesne/dizi, zorunlu alan, enum). Bağlam
+# değişkeniyle taşınır ki yedek zincirinin her katmanının imzası değişmesin; AYARLANMADIĞINDA
+# çeviri çağrıları bayt bayt aynı kalır.
+_YANIT_SEMASI: contextvars.ContextVar[dict | None] = contextvars.ContextVar("_YANIT_SEMASI", default=None)
+
+
+@contextlib.contextmanager
+def yanit_semasi(sema: dict):
+    belirtec = _YANIT_SEMASI.set(sema)
+    try:
+        yield
+    finally:
+        _YANIT_SEMASI.reset(belirtec)
+
+
 def _gemini_yapilandirmasi(system: str, max_tokens: int) -> types.GenerateContentConfig:
     """Gemini çağrı ayarları — AI Studio ve Vertex yolu AYNI ayarı kullanır.
 
     İki kopya olsaydı biri güncellenip öteki unutulurdu (düşünme bütçesi tam da
     böyle bir ayar) ve "aynı model" iki yolda farklı çevirirdi."""
+    sema = _YANIT_SEMASI.get()
     return types.GenerateContentConfig(
         system_instruction=system,
         response_mime_type="application/json",
+        **({"response_json_schema": sema} if sema is not None else {}),
         temperature=0.3,
         max_output_tokens=max_tokens,
         safety_settings=SAFETY_SETTINGS,

@@ -91,6 +91,26 @@ ILISKILER: dict[str, dict] = {
     "ruya_capasi": {"etiket": "Rüya Çapası", "ters": "kimin Rüya Çapası", "grup": "mekan", "tekil": True},
 }
 ORIGIN_ONCELIGI = {"model": 0, "sistem": 1, "manual": 2}
+# Semantik yön kontratı. Ters adlar SORGU görünümüdür; yeni kanonik ilişki türü değil.
+ILISKI_ROLLERI = {
+    "takma_adi": ("bearer", "alias"), "gercek_adi": ("bearer", "true_name"), "unvani": ("bearer", "title"),
+    "anisi": ("owner", "memory"), "golgesi": ("master", "shadow"), "kendi_golgesi": ("owner", "shadow"),
+    "yanki": ("owner", "echo"), "yetenegi": ("bearer", "ability"), "efsunu": ("memory", "enchantment"),
+    "niteligi": ("bearer", "attribute"), "gorunusu": ("bearer", "aspect"), "klani": ("member", "clan"),
+    "lideri": ("group", "leader"), "ogretmeni": ("student", "teacher"), "bulundugu_yer": ("occupant", "place"),
+    "parcasi": ("part", "whole"), "turu": ("instance", "type"), "rutbesi": ("bearer", "rank"),
+    "sinifi": ("bearer", "class"), "ust_basamak": ("lower_rank", "higher_rank"), "esya_turu": ("item", "item_type"),
+    "bicimi": ("entity", "form"), "donustu": ("previous_form", "new_form"), "oldurdu": ("killer", "victim"),
+    "grubu": ("member", "group"), "kusuru": ("bearer", "flaw"), "ruya_capasi": ("dreamer", "anchor"),
+    "yoldasi": ("companion", "companion"), "akrabasi": ("relative", "relative"), "dusmani": ("enemy", "enemy"),
+}
+assert set(ILISKI_ROLLERI) == set(ILISKILER)
+for _ad, _roller in ILISKI_ROLLERI.items():
+    _k = ILISKILER[_ad]
+    _k.update(subject_role=_roller[0], object_role=_roller[1], symmetric=bool(_k.get("simetrik")),
+              inverse_relation="ogrencisi" if _ad == "ogretmeni" else _k["ters"],
+              direction_sensitive=not bool(_k.get("simetrik")),
+              requires_strong_evidence=_ad in ("oldurdu", "donustu"))
 # `durum` İŞ AKIŞI durumudur (inceleme): aday / onaylandi / reddedildi. Hikâyede
 # DOĞRU olup olmadığı DEĞİL — o `durum_bilgisi` (Faz 1D).
 DURUMLAR = ("aday", "onaylandi", "reddedildi")
@@ -979,6 +999,8 @@ _OLDURME = re.compile(
     r"\[You have slain (?:an?|the) ([A-Za-z]+) ([A-Za-z]+), ([^\]]+?)\.?\]", re.IGNORECASE
 )
 _GERCEK_AD_ODUL = re.compile(r"\[You have been bestowed a True Name: ([^\].]+)\.?\]")
+_INSAN_OLDURME = re.compile(r"\[You have slain (Dreamer|Awakened|Master|Saint|Ascended|Transcendent) ([^\]]+?)\.?\]", re.I)
+_ANI_ALINDI = re.compile(r"\[You have received a Memory: ([^\]]+?)\.?\]")
 _YANKI_ALINDI = re.compile(r"\[You have received an Echo: ([^\]]+?)\.?\]")
 _GOLGE_ALINDI = re.compile(r"\[You have (?:created|received) a Shadow(?: [A-Z][a-z]+)?: ([^\]]+?)\.?\]")
 # "[...The Stone Saint is evolving.]" / "[...Marble Saint is evolving.]"
@@ -990,7 +1012,7 @@ _BLOK_ALT = {
     # tekil "Enchantment:" ve düz "Enchantments:" (923. bölüm, Bitter Cusp / Stifled Scream).
     "Memory": {"Memory Rank": "rutbesi", "Memory Type": "esya_turu", "Memory Enchantments": "efsunu",
                "Enchantments": "efsunu", "Enchantment": "efsunu"},
-    "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi"},
+    "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi", "Shadow Attributes": "niteligi"},
     "Echo": {"Echo Type": "sinifi", "Echo Core": "rutbesi", "Echo Rank": "rutbesi"},
 }
 _BLOK_SAHIPLIK = {"Memory": "anisi", "Shadow": "golgesi", "Echo": "yanki"}
@@ -1006,17 +1028,25 @@ _ANI_ANAHTARLARI = frozenset(
 ANI_ANLATIM_PENCERESI = 12
 # "[Echoing Silence] Enchantment Description: ..." — açıklama efsun adıyla aynı paragrafta.
 _SATIR_ICI_EFSUN = re.compile(r"^\[([^\]]+)\]\s*Enchantment Description:")
+# v6: "[X] Attribute Description: ..." / "[X] Ability Description: ..." — durum bloğunun
+# alt satırı; özne bloğun başlığından MİRAS alınır. Etkin durum bloğu yoksa yazılmaz.
+_SATIR_ICI_DURUM = re.compile(r"^\[([^\]]+)\]\s*(Attribute|Ability) Description:")
+# Spell'in rünleri okuyana yaptığı yetenek duyurusu: ardından gelen yetenek satırı ONUNDUR.
+_YETENEK_DUYURUSU = re.compile(r"^\[(?:\.\.\.)?(?:Awakening Aspect Ability|(?:New )?(?:Aspect )?Ability acquired)\.?\]$")
 # Durum bloğu (`Name: X`) satırları -> ilişki (özne: X).
 _DURUM_SATIRLARI = {
     "True Name": "gercek_adi", "Rank": "rutbesi", "Memories": "anisi", "Echoes": "yanki",
     "Attributes": "niteligi", "Aspect": "gorunusu", "Shadows": "golgesi",
     "Class": "sinifi", "Aspect Abilities": "yetenegi", "Aspect Legacy": "yetenegi",
     "Flaw": "kusuru", "Dream Anchor": "ruya_capasi",
+    "Aspect Name": "gorunusu", "Innate Ability": "yetenegi",
+    "Aspect Ability": "yetenegi", "Aspect Ability Name": "yetenegi",
 }
 # Durum DEĞERİ satırları (bağ değil, `varlik_deger`): blok türü -> anahtarlar.
 _DEGER_SATIRLARI = {
     "durum": frozenset(("Soul", "Shadow Cores", "Shadow Fragments", "Soul Cores", "Soul Fragments")),
     "Memory": frozenset(("Memory Tier",)),
+    "Shadow": frozenset(("Shadow Fragments", "Shadow Cores", "Soul")),
 }
 DEGER = "_deger"  # (özne, DEGER, "anahtar\tdeğer", kanıt)
 
@@ -1031,6 +1061,7 @@ _DURUM_DEVAM_ANAHTARLARI = frozenset(
      "Aspect Abilities", "Ability Description", "Aspect Legacy", "Flaw", "Flaw Description",
      "Dream Anchor")
 )
+_DURUM_DEVAM_ANAHTARLARI |= frozenset(("Aspect Name", "Innate Ability", "Aspect Ability", "Aspect Ability Name"))
 
 
 def _ogeler(deger: str) -> list[str]:
@@ -1059,6 +1090,8 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
     son_durum: str | None = None   # anlatımla kapanmış son durum bloğunun öznesi
     anlatim = 0                    # o bloktan beri geçen düz paragraf
     gorunus: str | None = None     # durum bloğundaki Aspect (Aspect Rank'ın öznesi)
+    bekleyen_gorunus_rutbesi: tuple | None = None
+    son_golge: str | None = None
     for paragraf in (p.strip() for p in metin.split("\n")):
         if not paragraf:
             continue
@@ -1067,8 +1100,21 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             out.append((ana_karakter, "oldurdu", ad, paragraf))
             out.append((ad, "rutbesi", rutbe, paragraf))
             out.append((ad, "sinifi", sinif, paragraf))
+            out.append((ad, DEGER, "Yaşam\tdead", paragraf))
+        for m in _INSAN_OLDURME.finditer(paragraf):
+            ad = m.group(2).strip()
+            out.extend(((ana_karakter, "oldurdu", ad, paragraf),
+                        (ad, "rutbesi", m.group(1), paragraf), (ad, DEGER, "Yaşam\tdead", paragraf)))
         for m in _GERCEK_AD_ODUL.finditer(paragraf):
             out.append((ana_karakter, "gercek_adi", m.group(1).strip(), paragraf))
+            son_durum, anlatim = ana_karakter, 0
+        for m in _ANI_ALINDI.finditer(paragraf):
+            ad = m.group(1).strip()
+            out.extend(((ana_karakter, "anisi", ad, paragraf), (ad, "turu", "Memory", paragraf)))
+        if paragraf == "[New Aspect acquired.]" or _YETENEK_DUYURUSU.match(paragraf):
+            son_durum, anlatim = ana_karakter, 0
+        if re.fullmatch(r"\[Dreamer (?:" + "|".join(re.escape(a) for a in (ana_karakter, *ana_adlar) if a) + r"), receive your boon!\]", paragraf):
+            out.append((ana_karakter, "rutbesi", "Dreamer", paragraf))
         for m in _YANKI_ALINDI.finditer(paragraf):
             out.append((ana_karakter, "yanki", m.group(1).strip(), paragraf))
         for m in _GOLGE_ALINDI.finditer(paragraf):
@@ -1077,8 +1123,20 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             # Evrim İŞARETİ: hangi ada dönüştüğü sonraki rün bloğunda görünür
             # (`evrim_baglari` bölümler arasında eşleştirir).
             out.append((m.group(1).strip(), "_evrim", "", paragraf))
-        satir = _RUN_SATIRI.match(paragraf)
+        # Aynı parser hem düz hem Spell'in köşeli sistem satırını okur.
+        run_metin = paragraf[1:-1] if paragraf.startswith("[") and paragraf.endswith("]") else paragraf
+        # Spell satırı bazen üç noktayla başlar: "[...Aspect Ability Name: X.]"
+        run_metin = re.sub(r"^(?:\.\.\.|…)\s*", "", run_metin)
+        satir = _RUN_SATIRI.match(run_metin)
         if not satir:
+            ic_durum = _SATIR_ICI_DURUM.match(paragraf)
+            durum_oznesi = blok_ozne if blok_tur == "durum" else (
+                son_durum if blok_tur is None and anlatim < ANI_ANLATIM_PENCERESI else None)
+            if ic_durum and durum_oznesi:
+                iliski = "niteligi" if ic_durum.group(2) == "Attribute" else "yetenegi"
+                out.append((durum_oznesi, iliski, ic_durum.group(1).strip(), paragraf))
+                son_durum, anlatim, blok_ozne, blok_tur = durum_oznesi, 0, None, None
+                continue
             ic = _SATIR_ICI_EFSUN.match(paragraf)
             if ic and ic.group(1).strip() in efsunlar:
                 i = efsunlar[ic.group(1).strip()]
@@ -1089,7 +1147,9 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
                 son_ani, anlatim = blok_ozne, 0
             elif blok_tur == "durum":
                 son_durum, anlatim = blok_ozne, 0
-            elif son_ani or son_durum:
+            elif blok_tur == "Shadow":
+                son_golge, anlatim = blok_ozne, 0
+            elif son_ani or son_durum or son_golge:
                 anlatim += 1
             blok_ozne = blok_tur = None
             continue
@@ -1099,18 +1159,22 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
                 blok_ozne, blok_tur = son_ani, "Memory"
             elif anahtar in _DURUM_DEVAM_ANAHTARLARI and son_durum:
                 blok_ozne, blok_tur = son_durum, "durum"
+            elif son_golge and anahtar in {*_BLOK_ALT["Shadow"], *_DEGER_SATIRLARI["Shadow"], "Shadow Description"}:
+                blok_ozne, blok_tur = son_golge, "Shadow"
         if anahtar == "Name":
             ad = _ogeler(deger)
             blok_ozne = ana_karakter if ad and ad[0] in ana_adlar else (ad[0] if ad else None)
             blok_tur = "durum"
-            son_ani, son_durum, gorunus, efsunlar, efsun_sirasi = None, None, None, {}, []
+            son_ani, son_durum, son_golge, gorunus, efsunlar, efsun_sirasi = None, None, None, None, {}, []
+            bekleyen_gorunus_rutbesi = None
             continue
         if anahtar in _BLOK_SAHIPLIK:
             ogeler = _ogeler(deger)
             if ogeler:
                 blok_ozne, blok_tur = ogeler[0], anahtar
                 efsun_sirasi, efsunlar = [], {}
-                son_ani = son_durum = None
+                son_ani = son_durum = son_golge = None
+                gorunus = bekleyen_gorunus_rutbesi = None
                 out.append((ana_karakter, _BLOK_SAHIPLIK[anahtar], ogeler[0], paragraf))
                 out.append((ogeler[0], "turu", anahtar, paragraf))
             continue
@@ -1128,14 +1192,21 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             if deger_metni:
                 out.append((blok_ozne, DEGER, f"{anahtar}\t{deger_metni}", paragraf))
             continue
-        if blok_tur == "durum" and anahtar == "Aspect Rank" and gorunus:
-            for oge in _ogeler(deger):
-                out.append((gorunus, "rutbesi", oge, paragraf))
+        if blok_tur == "durum" and anahtar == "Aspect Rank":
+            if gorunus:
+                for oge in _ogeler(deger):
+                    out.append((gorunus, "rutbesi", oge, paragraf))
+            else:
+                bekleyen_gorunus_rutbesi = (deger, paragraf)
         elif blok_tur == "durum" and anahtar in _DURUM_SATIRLARI and blok_ozne:
             for oge in _ogeler(deger):
                 out.append((blok_ozne, _DURUM_SATIRLARI[anahtar], oge, paragraf))
-                if anahtar == "Aspect":
+                if anahtar in ("Aspect", "Aspect Name"):
                     gorunus = oge
+                    if bekleyen_gorunus_rutbesi:
+                        d, k = bekleyen_gorunus_rutbesi
+                        out.extend((oge, "rutbesi", r, k) for r in _ogeler(d))
+                        bekleyen_gorunus_rutbesi = None
         elif blok_tur in _BLOK_ALT and anahtar in _BLOK_ALT[blok_tur] and blok_ozne:
             for oge in _ogeler(deger):
                 if _BLOK_ALT[blok_tur][anahtar] == "efsunu":

@@ -419,6 +419,7 @@ def ciftleri_sor(
 def _kanitli_coz(
     book_slug: str, ham_baglar: list[dict], havuz: list[tuple], cozucu: varlik_grafigi.DugumCozucu,
     kategoriler: set[str],
+    en_cok_bolum: int | None = None,
 ) -> tuple[list[dict], list[dict]]:
     """Modelin önerdiği bağları VERİLEN cümle havuzuna karşı doğrula ve düğümlere çöz.
 
@@ -430,7 +431,7 @@ def _kanitli_coz(
     ek_rutbeler = (varlik_grafigi.profil(book_slug) or {}).get("ek_rutbeler", ())
     sistem: dict[tuple[str, str], set[str]] = {}
     asil: dict[str, str] = {}
-    for b in varlik_grafigi.baglar(book_slug):
+    for b in varlik_grafigi.baglar(book_slug, en_cok_bolum=en_cok_bolum):
         if b["origin"] == "sistem":
             sistem.setdefault((b["kaynak_kimlik"], b["hedef_kimlik"]), set()).add(b["iliski"])
         if b["iliski"] in ("takma_adi", "gercek_adi") and b["durum"] == "onaylandi":
