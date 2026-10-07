@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 
-from . import api_durum, budget, cache, glossary, library, sozluk_dogrulama, synthetic, varlik_grafigi
+from . import api_durum, bilgi_delta, budget, cache, glossary, library, sozluk_dogrulama, synthetic, varlik_grafigi
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
 # `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
@@ -484,6 +484,9 @@ def _do_fetch_translate_save(
         "cached": False,
     }
     cache.save_chapter(url, payload)
+    # BİLGİ GRAFİĞİ (Faz 2A, canlı mod): çeviri KAYDEDİLDİKTEN SONRA bölüm delta
+    # kuyruğuna girer. Çıkarım okumayı ASLA beklemez ve hatası çeviriyi geri almaz.
+    bilgi_delta.canli_kuyruga_ekle(book_slug, chapter.get("chapter_no"))
     return payload
 
 
@@ -652,6 +655,7 @@ def fetch_into_book(
         "cached": False,
     }
     cache.save_chapter(url, payload)
+    bilgi_delta.canli_kuyruga_ekle(target_slug, no)  # Faz 2A canlı mod (bkz. yukarı)
     if prev_url and kuyruga_ekleniyor:
         # YALNIZ kuyruğa eklerken: aradan bir bölüm eklenirken kuyruğun next'ini
         # yeni bölüme çevirmek zinciri koparıyordu (140 -> 137 -> 141 gibi).
