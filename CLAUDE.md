@@ -1459,6 +1459,68 @@ Bakım: `scripts/varlik_grafigi.py --kitap X [--uygula] [--json graph.json]`
 --sinir N --rapor r.json` örnek, `--uygula --model ...` tüm kitap). Testler
 `tests/test_varlik_grafigi.py`, `tests/test_varlik_cikarim.py`.
 
+**Rün okuması genişledi (2026-10-07, kullanıcının örnekleriyle ölçülerek).**
+* **Anlatımla bölünen bloklar.** Sonraki bölümlerde rün satırları ARASINA anlatım
+  giriyor; düz paragraf bloğu kapattığı için Anı efsunları ve Sunny'nin nitelik/
+  Görünüş satırları düşüyordu. Yalnız bloğa ÖZGÜ anahtarlar (`_ANI_ANAHTARLARI`,
+  `_DURUM_DEVAM_ANAHTARLARI`) kapanan bloğu `ANI_ANLATIM_PENCERESI` (12) paragraf
+  içinde yeniden açar. Tek başına `Rank:` AÇMAZ — başka şeyin rünü olabilir.
+* **Efsun** (`efsunu`): üç biçim ("Memory Enchantments:", tekil "Enchantment:",
+  düz "Enchantments:") + satır içi "[X] Enchantment Description:"; açıklama bağın
+  KANITIDIR. 0 -> 49 bağ. `esya_turu` (Memory Type) `sinifi` DEĞİL: sınıf nesneleri
+  kalite denetiminde sınıf sözcüğü sayılır.
+* **Durum satırları:** Class, Aspect Rank (Görünüş düğümünün rütbesi), Aspect
+  Abilities/Legacy, `kusuru` (Flaw), `ruya_capasi` (Dream Anchor).
+* **Durum DEĞERLERİ** (`varlik_deger`, bağ değil): Shadow Cores/Fragments, Soul,
+  Memory Tier, profilden "Görev"/"Tür". Yalnız DEĞİŞİMLER saklanır; güncel değer
+  konumdan önceki en sonudur. Değer köşeli parantezin İÇİNDEN alınır (site filigranı
+  satıra yapışıyordu); çıkarım değerleri baştan yazar.
+* **Rün/elle bağ model bağını ezer** (`sistemle_celisenleri_reddet`): aynı çift için
+  sistem ya da manual başka ilişki söylüyorsa model bağı reddedilir. Anının model
+  kaynaklı "niteliği" efsuna çevrilir (`ani_niteliklerini_efsune_cevir`).
+
+**Kitap profili sabit bağları** (`sabit_baglar`): rünlerde geçmeyen kesin bilgi —
+Sunny'nin dört KENDİ gölgesi (`kendi_golgesi`; gölge kölelerinden AYRI) ve
+Antarktika ekibi (`grubu` -> elle eklenmiş `Sunny's cohort`, `lideri` -> Sunny).
+İlk bölüm nesnenin ilk geçişinden ya da 4. öğe olarak SABİT verilir (ekibin adı
+metinde yok; altı ad 822'de birlikte sayılıyor).
+
+**ANLAM DÜĞÜMLERİ** (`anlam_dugumleri`, kullanıcı bildirimi: "Saint gölgesi ile Aziz
+rütbesi karışıyordu"). Tek sözlük kaydı iki varlığı adlandırıyorsa grafikte ikinci
+düğüm `<kimlik>#<anlam>` olur; sözlük ve çeviri talimatı DEĞİŞMEZ. `taban_iliskileri`
+(rütbe/unvan/rütbe merdiveni) tabanda kalır, geri kalan her bağ anlam düğümüne
+gider. Seçim TEK yazma noktasında (`bag_ekle` -> `anlam_sec`) ve model çıkarımında
+kategori denetiminden ÖNCE yapılır — ölçülen: tek düğümken Saint kategori sayılıyor,
+gölgenin öldürdükleri "kategori özne olamaz" diye reddediliyordu. `baglar()` adı
+TABAN kayıttan okur, `kaynak_anlam`/`hedef_anlam` döndürür; sözlük silme ve kitap
+birleştirme anlam düğümlerini kapsar. Saint'in biçim adları (Stone/Marble/Shadow
+Saint) kullanıcı kararıyla İngilizce.
+
+**ÖBEKLER** (`obek_siniflari`, saklanmaz, grafikten türer): kişi · kendi gölgesi ·
+yaratık · yer · grup · Anı · efsun · Görünüş · yetenek · nitelik · kategori. Sözlük
+`tur`u yalnız TABAN — yaratıklarda tutarsızdı (diger/kisi/nesne karışık). Kural
+SIRASI load-bearing ve her biri ölçülmüş bir yanlıştan: bağdan gelen kesin sınıf
+sözlük türünden önce (Shadow Slave sözlükte "rutbe") · gölge kölesi/Yankı kişi
+kuralından önce (Saint bir Anı kullanıyor) · kişi kuralı yaratıktan önce (Sunny'nin
+sınıfı Devil) · kişiden kişiye `lideri` grup yapmaz · Gerçek Ad/takma ad sahibinin
+öbeğini alır.
+
+**Boşluk bulucu ZAYIF çıktı, profil aracı yerini aldı.** Çift sorusu
+(`scripts/varlik_bosluk.py`, ortak geçiş) 30 çiftte 1 bağ verdi: ilişki nadiren tek
+çiftin birkaç cümlesinde açıkça söyleniyor ve çiftlerin çoğu ilişki listesine
+sığmıyor. Toplu çalıştırma YAPILMADI. Ölçülen gürültü ve düzeltmeleri kalıcı: bileşik
+adın parçaları (`Mantle of the Underworld`) ayrı çift sayılmaz, bileşik ad içindeki
+anma üçüncü varlıkla çift kurmaz, örnek cümleler ilişki ipucu taşıyanlardan seçilir.
+**Varlık profili** (`scripts/varlik_profil.py --ad X | --obek yaratik`,
+`varlik_cikarim.varlik_profili_sor`): tek varlığın kitap boyunca ipuçlu cümleleri
+(EŞİT ARALIKLI — en erken 40'ı almak uzun süre geçen varlığı ilk bölümlere
+hapsederdi). Kanıt doğrulaması çift sorusuyla ORTAK (`_kanitli_coz`). Sözlükte
+olmayan cins tür ("technician") kanıtlıysa "Görev" (kişi) / "Tür" değeri olur.
+Ölçüm (Vertex, 2026-10-07): ekip 6 kişi -> 2 görev; yaratık 42 -> 11 bağ; yer 58 ->
+20 bağ. Elle incelemede anlık sahne ve söylenti `bulundugu_yer` olarak geliyor,
+model aynı soruya her seferinde aynı cevabı vermiyor — sonuçlar `aday` yazılır,
+incelenmeden onaylanmaz.
+
 **Test tuzakları (ölçüldü):**
 - **`page.wait_for_function` ASYNC yüklemi BEKLEMEZ** — dönen Promise truthy, anında geçer
   (`"async () => false"` 0,03 sn). Sunucu durumunu fetch ile bekleyen her iddia için
