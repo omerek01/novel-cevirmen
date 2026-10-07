@@ -357,8 +357,10 @@ def test_durum_blogu_anlatimdan_sonra_devam_eder_rank_etmez():
 def test_durum_degerleri_bag_degil_degisimle_saklanir():
     for k in ("Sunny", "Sunless", "Bitter Cusp", "Memory"):
         glossary.set_term(KITAP, k, k)
-    metin = "\n\n".join(["Name: Sunless.", "Shadow Cores: 4/7.", "He frowned.",
-                          "Shadow Fragments: 777/4000.", "Memory: [Bitter Cusp].", "Memory Tier: I."])
+    # Köşeli değer ve satıra yapışan filigran (ölçülen biçim) temizlenir.
+    metin = "\n\n".join(["Name: Sunless.", "Shadow Cores: [4/7].", "He frowned.",
+                          "Shadow Fragments: [777/4000]. filigran.example", "Memory: [Bitter Cusp].",
+                          "Memory Tier: I."])
     bulunan = vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
     assert ("Sunny", vg.DEGER, "Shadow Fragments\t777/4000") in {x[:3] for x in bulunan}
     vg.bolumden_sistem_baglari(KITAP, 848, metin)

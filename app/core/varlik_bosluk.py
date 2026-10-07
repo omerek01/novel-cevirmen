@@ -137,6 +137,18 @@ def ortak_gecisler(book_slug: str, en_az: int = EN_AZ_ORTAK, korpus: str | None 
             if len(anmalar) < 2:
                 continue
             icinde_l = sorted(anmalar)
+            # BİLEŞİK AD İÇİNDEKİ anmalar ("Sanctuary of Noctis", "War Maiden") o
+            # varlığı değil, bileşik adı anar; üçüncü bir varlıkla çift KURMAZ.
+            # Ölçülen (2026-10-07): bileşik çift süzgecinden sonra bile listenin başı
+            # `Sunny | Noctis` (75), `Sunny | Underworld`, `Sunny | War` idi — hepsi
+            # Sunny'nin bileşik adın tamamıyla birlikte geçtiği cümleler.
+            bilesik_anma: set[tuple[str, tuple[int, int]]] = set()
+            for i, x in enumerate(icinde_l):
+                for y in icinde_l[i + 1:]:
+                    for sx in anmalar[x]:
+                        for sy in anmalar[y]:
+                            if _bitisik_mi(cumle, [sx], [sy]):
+                                bilesik_anma.update(((x, sx), (y, sy)))
             for i, x in enumerate(icinde_l):
                 for y in icinde_l[i + 1:]:
                     if not any(
@@ -147,11 +159,18 @@ def ortak_gecisler(book_slug: str, en_az: int = EN_AZ_ORTAK, korpus: str | None 
                     cift = frozenset((x, y))
                     if cift in var_olan:
                         continue
+                    if _bitisik_mi(cumle, anmalar[x], anmalar[y]):
+                        sayac[cift] += 1
+                        ilk.setdefault(cift, no)
+                        bitisik[cift] += 1
+                        continue
+                    serbest_x = [s for s in anmalar[x] if (x, s) not in bilesik_anma]
+                    serbest_y = [s for s in anmalar[y] if (y, s) not in bilesik_anma]
+                    if not serbest_x or not serbest_y:
+                        continue  # biri yalnız bileşik adın parçası olarak geçiyor
                     sayac[cift] += 1
                     ilk.setdefault(cift, no)
-                    if _bitisik_mi(cumle, anmalar[x], anmalar[y]):
-                        bitisik[cift] += 1
-                    elif len(ornek[cift]) < ADAY_CUMLE_SINIRI:
+                    if len(ornek[cift]) < ADAY_CUMLE_SINIRI:
                         ornek[cift].append((no, cumle.strip()[:400]))
     out = []
     for cift, n in sayac.items():

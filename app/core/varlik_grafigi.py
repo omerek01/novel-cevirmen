@@ -710,7 +710,10 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             out[i] = (ozne, iliski, nesne, paragraf)
             continue
         if blok_tur in _DEGER_SATIRLARI and anahtar in _DEGER_SATIRLARI[blok_tur] and blok_ozne:
-            deger_metni = deger.strip().rstrip(".").strip()
+            # Köşeli değerin İÇİ alınır: hem parantezden hem satıra yapışan site
+            # filigranından arınır (ölçülen: "[777/4000]. <filigran>").
+            ogeler = _ogeler(deger)
+            deger_metni = ogeler[0] if ogeler else ""
             if deger_metni:
                 out.append((blok_ozne, DEGER, f"{anahtar}\t{deger_metni}", paragraf))
             continue
@@ -872,6 +875,10 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
                 for alt, ust in zip(kimlikler, kimlikler[1:]):
                     if alt and ust:
                         bag_ekle(book_slug, alt, "ust_basamak", ust, 1, None, "manual", 1.0, conn=conn)
+        if yaz:
+            # Değerler YALNIZ rünlerden türer ve yalnız değişimler saklanır; baştan
+            # yazmak, ayrıştırma düzeltildiğinde eski bozuk satırların kalmasını önler.
+            conn.execute("DELETE FROM varlik_deger WHERE book_slug = ?", (book_slug,))
         evrim_durumu: dict = {}  # bölümler arası: bekleyen evrim + görülen gölge adları
         for bolum in sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0):
             bulunan = sistem_baglarini_bul(

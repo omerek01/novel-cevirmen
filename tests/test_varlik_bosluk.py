@@ -99,3 +99,22 @@ def test_ornek_secimi_ipucu_cumlelerini_one_alir():
     secilen = vb._ornek_sec(adaylar, sinir=3)
     assert (50, "Jet was the teacher of Sunny.") in secilen
     assert [n for n, _s in secilen] == [1, 2, 50]  # kalan yer en erkenlerle, kronolojik
+
+
+def test_bilesik_ad_icindeki_anma_ucuncu_varlikla_cift_kurmaz():
+    for k, v in {"Sanctuary": "Tapınak", "Noctis": "Noctis", "Sunny": "Sunny"}.items():
+        glossary.set_term(KITAP, k, v)
+    metin = (
+        "Sunny walked to the Sanctuary of Noctis. Sunny left the Sanctuary of Noctis at dawn. "
+        "Sunny returned to the Sanctuary of Noctis.\n\n"
+        "Noctis smiled at Sunny. Sunny thanked Noctis. Noctis was Sunny's teacher."
+    )
+    cache.save_chapter("https://x/ch-132", {
+        "book_slug": KITAP, "book_title": "Shadow Slave", "title": "B132", "chapter_no": 132,
+        "translation": "Çeviri.", "source": metin,
+    })
+    ciftler = _ciftler(en_az=1)
+    # Yalnız gerçek (ayrık) anmalar sayılır: bileşik ad içindeki üç geçiş değil.
+    assert ciftler[frozenset(("Sunny", "Noctis"))]["sayi"] == 3
+    assert frozenset(("Sunny", "Sanctuary")) not in ciftler
+    assert ciftler[frozenset(("Sanctuary", "Noctis"))]["bilesik"] is True
