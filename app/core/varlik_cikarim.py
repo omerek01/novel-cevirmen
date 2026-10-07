@@ -410,6 +410,19 @@ def ciftleri_sor(
     )
     veri = _ayristir(getattr(response, "text", None))
     havuz = [(no, s, _normal(s)) for c in ciftler for no, s in c["ornekler"]]
+    gecerli, red = _kanitli_coz(book_slug, veri["baglar"], havuz, cozucu, kategoriler)
+    return {"gecerli": gecerli, "red": red, "model": model}
+
+
+def _kanitli_coz(
+    book_slug: str, ham_baglar: list[dict], havuz: list[tuple], cozucu: varlik_grafigi.DugumCozucu,
+    kategoriler: set[str],
+) -> tuple[list[dict], list[dict]]:
+    """Modelin önerdiği bağları VERİLEN cümle havuzuna karşı doğrula ve düğümlere çöz.
+
+    Hedefli soruların (çift, profil) ORTAK gövdesi: iki yol ayrı kural yazsaydı
+    zamanla ayrışırdı (bu projede künye alanları tam böyle ayrışmıştı).
+    `havuz`: [(bölüm, cümle, normalize cümle)]. Döner: (geçerli, red)."""
     yazimlar = {k: v["yazimlar"] for k, v in glossary.ekler(book_slug).items()}
     diziler = (varlik_grafigi.profil(book_slug) or {}).get("diziler", {})
     ek_rutbeler = (varlik_grafigi.profil(book_slug) or {}).get("ek_rutbeler", ())
@@ -421,7 +434,7 @@ def ciftleri_sor(
         if b["iliski"] in ("takma_adi", "gercek_adi") and b["durum"] == "onaylandi":
             asil[b["hedef_kimlik"]] = b["kaynak_kimlik"]
     gecerli, red = [], []
-    for b in veri["baglar"]:
+    for b in ham_baglar:
         b = {**b, "ozne": ad_temizle(b.get("ozne") or ""), "nesne": ad_temizle(b.get("nesne") or "")}
         b = duzen_iliskisini_duzelt(b, diziler, ek_rutbeler)
         kanit = _normal(b.get("kanit") or "")
@@ -438,4 +451,66 @@ def ciftleri_sor(
             sebep = yapisal_red(b, a, n, kategoriler, sistem)
         (red if sebep else gecerli).append({**b, "sebep": sebep, "ozne_kimlik": a, "nesne_kimlik": n,
                                            "bolum": eslesen})
-    return {"gecerli": gecerli, "red": red, "model": model}
+    return gecerli, red
+
+
+# ---------- varlık profili (tek varlık, kitabın tamamı) ----------
+# Çift sorusu (boşluk bulucu) ölçülen denemede 30 çiftten 1 bağ verdi: ilişki
+# nadiren TEK bir çiftin 6 cümlesinde açıkça söyleniyor. Profil, tek varlığın
+# kitap boyunca geçtiği İPUCU taşıyan cümlelerin hepsine bakar (kullanıcı isteği:
+# Sunny'nin ekibi "her şeyiyle", yaratıklar "kim öldürdü").
+PROFIL_INSTRUCTION = (
+    "Sen bir roman için bilgi grafiğini dolduran bir analistsin. Sana TEK bir VARLIK "
+    "ve onun kitapta geçtiği cümleler (bölüm numarasıyla, kronolojik) verilecek. Bu "
+    "varlığın ÖZNE ya da NESNE olduğu, cümlelerin AÇIKÇA söylediği kalıcı ilişkileri yaz: "
+    "rütbesi, sınıfı, Görünüşü, yetenekleri, Anıları, kimin nesi olduğu, hangi gruba bağlı "
+    "olduğu, kimin lideri olduğu, nerede bulunduğu, kimi öldürdüğü / kim tarafından "
+    "öldürüldüğü.\n"
+    "Kurallar ÇIKARIM kurallarıyla aynıdır: yalnız açıkça söyleneni yaz; varsayım/koşul "
+    "cümlesi kanıt değildir; diğer uç BİR ADLA anılan varlık olmalı (zamir, 'the man' "
+    "gibi genel söz olmaz); kategori yalnız tür/rütbe/sınıf nesnesi olabilir; "
+    "bulundugu_yer bir dönem boyunca bulunulan BÖLGE'dir; grubu bir ekibe/bölüğe/loncaya "
+    "üyeliktir (klan için klani); lideri GRUP -> lideri olan kişi yönündedir.\n"
+    "- 'kanit': VERİLEN cümlelerden birini KELİMESİ KELİMESİNE kopyala; iki ad da o "
+    "cümlede geçmeli.\n"
+    "- 'iliski' şu listeden biri (özne -> nesne):\n"
+    + "".join(f"    {k}: {v['etiket']}\n" for k, v in varlik_grafigi.ILISKILER.items())
+    + '- Yanıtı SADECE şu JSON ile ver: {"baglar": [{"ozne": "...", "iliski": "...", '
+    '"nesne": "...", "kanit": "...", "guven": 0.9}]}'
+)
+
+
+def varlik_profili_sor(
+    book_slug: str, ad: str, cumleler: list[tuple[int, str]], api_key: str = "",
+    models: tuple[str, ...] | None = None, cozucu: varlik_grafigi.DugumCozucu | None = None,
+    kategoriler: set[str] | None = None,
+) -> dict:
+    """Tek varlığın profilini sor; kanıt VERİLEN cümlelerden olmalı (`_kanitli_coz`).
+
+    Bilinen bağlar da verilir (tekrar üretmesin, düzeltsin diye değil). Döner:
+    {"gecerli", "red", "model"}."""
+    cozucu = cozucu or varlik_grafigi.DugumCozucu(book_slug)
+    if kategoriler is None:
+        kategoriler = varlik_grafigi.kategori_kimlikleri(book_slug, cozucu)
+    kimlik = cozucu.coz(ad)
+    bilinen = [
+        f"  - {b['kaynak']} {b['iliski']} {b['hedef']}"
+        for b in (varlik_grafigi.baglar(book_slug, kimlik=kimlik) if kimlik else [])
+    ][:BAGLAM_BAG_SINIRI]
+    metin = (
+        f"VARLIK: {ad}\n"
+        + ("BİLİNEN BAĞLAR (tekrar yazma):\n" + "\n".join(bilinen) + "\n" if bilinen else "")
+        + "CÜMLELER:\n" + "\n".join(f"  [{no}] {s}" for no, s in cumleler)
+    )
+    response, model = translate._generate_with_fallback(
+        translate._gemini_fabrikasi(api_key), models or sozluk_dogrulama.ucretsiz_zincir(),
+        metin, system=PROFIL_INSTRUCTION, max_tokens=translate.MAX_OUTPUT_TOKENS,
+    )
+    veri = _ayristir(getattr(response, "text", None))
+    havuz = [(no, s, _normal(s)) for no, s in cumleler]
+    gecerli, red = _kanitli_coz(book_slug, veri["baglar"], havuz, cozucu, kategoriler)
+    # Profil TEK varlık içindir: o varlığa değmeyen öneri sorunun dışındadır.
+    disarida = [g for g in gecerli if kimlik not in (g["ozne_kimlik"], g["nesne_kimlik"])]
+    for g in disarida:
+        g["sebep"] = "sorulan varlığa değmiyor"
+    return {"gecerli": [g for g in gecerli if g not in disarida], "red": red + disarida, "model": model}

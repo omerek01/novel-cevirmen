@@ -118,3 +118,46 @@ def test_bilesik_ad_icindeki_anma_ucuncu_varlikla_cift_kurmaz():
     assert ciftler[frozenset(("Sunny", "Noctis"))]["sayi"] == 3
     assert frozenset(("Sunny", "Sanctuary")) not in ciftler
     assert ciftler[frozenset(("Sanctuary", "Noctis"))]["bilesik"] is True
+
+
+def test_profil_cumleleri_bilesik_anmayi_saymaz_ve_kitaba_yayar():
+    for k, v in {"Sanctuary": "Tapınak", "Noctis": "Noctis", "Sunny": "Sunny"}.items():
+        glossary.set_term(KITAP, k, k if k != "Sanctuary" else v)
+    for no in range(1, 61):
+        metin = (f"Noctis was the teacher of Sunny in part {no}. "
+                 f"His teacher lived in the Sanctuary of Noctis.")  # ipuçlu ama bileşik anma
+        cache.save_chapter(f"https://x/p-{no}", {
+            "book_slug": KITAP, "book_title": "Shadow Slave", "title": f"P{no}", "chapter_no": no,
+            "translation": "Çeviri.", "source": metin,
+        })
+    cumleler = vb.profil_cumleleri(KITAP, "Noctis", sinir=10)
+    assert len(cumleler) == 10
+    # Bileşik ad içindeki anma ADAY bile olmaz (sınır yüksekken bütün adaylar döner).
+    hepsi = vb.profil_cumleleri(KITAP, "Noctis", sinir=500)
+    assert len(hepsi) == 60 and all("Sanctuary" not in s for _n, s in hepsi)
+    bolumler = [n for n, _s in cumleler]
+    assert bolumler[0] == 1 and bolumler[-1] >= 50  # ilk 10 bölüme hapsolmaz
+
+
+def test_profil_sorusu_kanit_ve_sorulan_varlik_denetimi(monkeypatch):
+    for k in ("Sunny", "Belle", "Dorn", "First Irregular Company"):
+        glossary.set_term(KITAP, k, k)
+    cumleler = [(821, "Belle was a member of the First Irregular Company."),
+                (821, "Dorn and Belle were members of the First Irregular Company.")]
+
+    def sahte(_f, models, user, system=None, max_tokens=None):
+        assert "VARLIK: Belle" in user and "[821]" in user
+        return _Yanit({"baglar": [
+            {"ozne": "Belle", "iliski": "grubu", "nesne": "First Irregular Company",
+             "kanit": cumleler[0][1], "guven": 0.9},
+            {"ozne": "Dorn", "iliski": "grubu", "nesne": "First Irregular Company",
+             "kanit": cumleler[1][1], "guven": 0.9},  # doğru ama sorulan varlık değil
+            {"ozne": "Belle", "iliski": "lideri", "nesne": "Sunny",
+             "kanit": "Belle obeyed Sunny.", "guven": 0.9},  # uydurma kanıt
+        ]}), models[0]
+
+    monkeypatch.setattr(translate, "_generate_with_fallback", sahte)
+    sonuc = varlik_cikarim.varlik_profili_sor(KITAP, "Belle", cumleler, api_key="x")
+    assert [(g["ozne"], g["iliski"], g["bolum"]) for g in sonuc["gecerli"]] == [("Belle", "grubu", 821)]
+    sebepler = sorted(r["sebep"] for r in sonuc["red"])
+    assert sebepler == ["kanıt verilen cümlelerden değil", "sorulan varlığa değmiyor"]

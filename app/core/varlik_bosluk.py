@@ -224,3 +224,42 @@ def varlik_cumleleri(book_slug: str, kaynak: str, sinir: int = ORNEK_CUMLE_SINIR
                 if len(out) >= sinir:
                     return out
     return out
+
+
+PROFIL_CUMLE_SINIRI = 40
+
+
+def profil_cumleleri(book_slug: str, kaynak: str, sinir: int = PROFIL_CUMLE_SINIRI) -> list[tuple[int, str]]:
+    """Bir varlığın PROFİL sorusu için cümleleri: ilişki İPUCU taşıyanlar önce, kitap
+    boyunca kronolojik; yer kalırsa en erkenlerle dolar (`_ornek_sec`).
+
+    Bileşik adın parçası olarak geçen anma sayılmaz ("Sanctuary of Noctis" içindeki
+    `Noctis`): o cümle varlığın kendisini değil, başka bir adı anar."""
+    desen = _desen(kaynak)
+    sozluk = glossary.ceviri_sozlugu(book_slug)
+    adaylar: list[tuple[int, str]] = []
+    for bolum in sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0):
+        metin = bolum["source"] or ""
+        if not desen.search(metin):
+            continue
+        digerleri = [_desen(ad) for ad in translate.metinde_gecen_terimler(sozluk, metin)
+                     if glossary.fold_term(ad) != glossary.fold_term(kaynak)]
+        for cumle in _CUMLE.split(metin):
+            if len(cumle) < 12:
+                continue
+            anmalar = [m.span() for m in desen.finditer(cumle)]
+            if not anmalar:
+                continue
+            oteki = [m.span() for d in digerleri for m in d.finditer(cumle)]
+            serbest = [s for s in anmalar
+                       if not any(_bitisik_mi(cumle, [s], [o]) or (o[0] <= s[0] and s[1] <= o[1] and o != s)
+                                  for o in oteki)]
+            if serbest:
+                adaylar.append((bolum["chapter_no"], cumle.strip()[:400]))
+    # İpuçlu cümleler kitap boyunca EŞİT ARALIKLA seçilir: en erken 40'ı almak, uzun
+    # süre geçen bir varlığın (Sunny) profilini ilk bölümlere hapsederdi.
+    ipuclu = [c for c in adaylar if _IPUCU.search(c[1])]
+    if len(ipuclu) > sinir:
+        adim = len(ipuclu) / sinir
+        return [ipuclu[int(i * adim)] for i in range(sinir)]
+    return _ornek_sec(adaylar, sinir)
