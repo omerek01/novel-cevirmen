@@ -44,7 +44,7 @@ KIMLIK_ILISKILERI = ("takma_adi", "gercek_adi", "unvani")
 
 # Bağlam bütçesi (yaklaşık token = karakter / 4). Kaynak metin bütçeye dahil DEĞİL;
 # büyüyen şey grafiktir ve bölüm sayısıyla SINIRSIZ büyümemeli.
-BAGLAM_BUTCESI = 2500
+BAGLAM_BUTCESI = 4000  # kullanıcı kararı (2026-10-07): 2500'de geç bölümlerde 120-320 satır kesiliyordu
 SON_BOLUM_PENCERESI = 30  # "son ilgili geçmiş" önceliği için
 
 # ---------------------------------------------------------------------------
@@ -319,16 +319,21 @@ def baglam_kur(book_slug: str, bolum: int, kaynak: str, butce: int = BAGLAM_BUTC
             satirlar.append((6, f"AÇIK KİMLİK SORUSU (b{i['bolum']}): {i['aciklama']}"))
     satirlar.sort(key=lambda x: x[0])
     secilen, kullanilan, kesilen = [], 0, 0
+    sinif_adi = {1: "varlik", 2: "kimlik", 3: "durum", 4: "dogrudan_yeni", 5: "dogrudan_eski", 6: "kimlik_sorusu"}
+    sinif = {ad: {"aday": 0, "giren": 0, "kesilen": 0} for ad in sinif_adi.values()}
     for oncelik, s in satirlar:
         t = _tok(s) + 1
+        sinif[sinif_adi[oncelik]]["aday"] += 1
         if kullanilan + t > butce:
             kesilen += 1
+            sinif[sinif_adi[oncelik]]["kesilen"] += 1
             continue
         secilen.append(s)
+        sinif[sinif_adi[oncelik]]["giren"] += 1
         kullanilan += t
     return {"bolum": bolum, "bilgi_siniri": onceki, "satirlar": secilen, "gecen": gecen,
-            "baglam_tokeni": kullanilan, "kesilen_satir": kesilen,
-            "kaynak_tokeni": _tok(kaynak)}
+            "baglam_tokeni": kullanilan, "kesilen_satir": kesilen, "aday_satir": len(satirlar),
+            "sinif": sinif, "kaynak_tokeni": _tok(kaynak)}
 
 
 def _bag_satiri(b: dict) -> str:
@@ -591,7 +596,9 @@ def bolum_degerlendir(book_slug: str, bolum: int, model: str, cagri=None) -> dic
     degerlendirme = delta_degerlendir(book_slug, bolum, veri, kaynak) if not hatalar else None
     return {"bolum": bolum, "durum": "dogrulama", "girdi_bilgisi": baglam["satirlar"],
             "olcum": {"kaynak_tokeni": baglam["kaynak_tokeni"], "baglam_tokeni": baglam["baglam_tokeni"],
-                      "kesilen_satir": baglam["kesilen_satir"], **(kullanim or {})},
+                      "kesilen_satir": baglam["kesilen_satir"], "aday_satir": baglam["aday_satir"],
+                      "giren_satir": len(baglam["satirlar"]), "sinif": baglam["sinif"], **(kullanim or {})},
+            "ham_yanit": metin,
             "model_deltasi": veri, "sema_hatalari": hatalar, "degerlendirme": degerlendirme}
 
 
