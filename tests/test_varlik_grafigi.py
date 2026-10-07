@@ -398,3 +398,14 @@ def test_sabit_baglar_ilk_gecisten_kurulur(monkeypatch):
     assert bag[("Sunny", "kendi_golgesi", "happy shadow")]["kanit"] == "The happy shadow danced."
     assert bag[("Sunny", "kendi_golgesi", "gloomy shadow")]["ilk_bolum"] == 434
     assert "missing shadow" in sonuc["cozulemeyen"]
+
+
+def test_elle_bag_model_bagini_reddeder():
+    for k in ("Sunny", "gloomy shadow"):
+        glossary.set_term(KITAP, k, k)
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Sunny"), "golgesi", k("gloomy shadow"), 781, "x", "model", 0.9, durum="onaylandi")
+    vg.bag_ekle(KITAP, k("Sunny"), "kendi_golgesi", k("gloomy shadow"), 409, "y", "manual", 1.0)
+    assert vg.sistemle_celisenleri_reddet(KITAP) == 1
+    durum = {(b["iliski"]): b["durum"] for b in vg.baglar(KITAP, durumlar=("aday", "onaylandi", "reddedildi"))}
+    assert durum == {"golgesi": "reddedildi", "kendi_golgesi": "onaylandi"}

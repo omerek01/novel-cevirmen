@@ -839,16 +839,18 @@ def translate_term_regex(ad: str):
 
 
 def sistemle_celisenleri_reddet(book_slug: str) -> int:
-    """Aynı çift için SİSTEM bağı başka bir ilişki söylüyorsa model bağını reddet.
+    """Aynı çift için SİSTEM ya da ELLE kurulmuş bağ başka bir ilişki söylüyorsa
+    model bağını reddet.
 
-    Rün kesin bilgidir; model çıkarımı aynı kuralı yeni bağlarda zaten uygular
-    (`varlik_cikarim.yapisal_red`), bu, kural gelmeden ÖNCE yazılmış bağları temizler
-    (ölçülen: `Puppeteer's Shroud -> niteligi -> Doubtless`, rün `efsunu` diyor).
+    Rün ve insan kararı kesin bilgidir; model çıkarımı aynı kuralı yeni bağlarda
+    zaten uygular (`varlik_cikarim.yapisal_red`), bu, kural gelmeden ÖNCE yazılmış
+    bağları temizler (ölçülen: `Puppeteer's Shroud -> niteligi -> Doubtless`, rün
+    `efsunu` diyor; `Sunny -> golgesi -> gloomy shadow`, sabit bağ `kendi_golgesi`).
     Elle kurulmuş bağa dokunulmaz. Döner: reddedilen sayısı."""
     hepsi = baglar(book_slug, durumlar=("aday", "onaylandi"))
     sistem: dict[frozenset, set[str]] = {}
     for b in hepsi:
-        if b["origin"] == "sistem":
+        if b["origin"] in ("sistem", "manual"):
             sistem.setdefault(frozenset((b["kaynak_kimlik"], b["hedef_kimlik"])), set()).add(b["iliski"])
     n = 0
     for b in hepsi:
