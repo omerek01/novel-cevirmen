@@ -161,6 +161,23 @@ def _connect() -> sqlite3.Connection:
     conn.execute(
         "CREATE INDEX IF NOT EXISTS varlik_bag_hedef ON varlik_bag (book_slug, hedef_kimlik)"
     )
+    # DURUM DEĞERLERİ: varlık olmayan, zamanla değişen sayaç/etiketler (Shadow Cores
+    # 4/7, Shadow Fragments 777/4000, Memory Tier V). Bağ değildir — nesnesi bir sözlük
+    # kaydı değil. Yalnız DEĞİŞİMLER saklanır; güncel değer konumdan önceki en son
+    # satırdır (tekil ilişkiyle aynı mantık). `ilk_bolum` bilinmiyorsa 0.
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS varlik_deger (
+            book_slug TEXT NOT NULL,
+            kimlik TEXT NOT NULL,
+            anahtar TEXT NOT NULL,
+            deger TEXT NOT NULL,
+            ilk_bolum INTEGER NOT NULL,
+            kanit TEXT,
+            PRIMARY KEY (book_slug, kimlik, anahtar, ilk_bolum)
+        )
+        """
+    )
     return conn
 
 
@@ -281,6 +298,54 @@ def bag_durumu(book_slug: str, kaynak_kimlik: str, iliski: str, hedef_kimlik: st
         ).rowcount
         conn.commit()
         return n > 0
+    finally:
+        conn.close()
+
+
+def deger_yaz(
+    book_slug: str, kimlik: str, anahtar: str, deger: str, bolum: int | None,
+    kanit: str | None = None, conn: sqlite3.Connection | None = None,
+) -> bool:
+    """Durum değerini yaz; önceki en son değerle AYNIYSA yazmaz. Yazdıysa True."""
+    kendi = conn is None
+    conn = conn or _connect()
+    try:
+        no = bolum or 0
+        onceki = conn.execute(
+            "SELECT deger FROM varlik_deger WHERE book_slug = ? AND kimlik = ? AND anahtar = ? "
+            "AND ilk_bolum <= ? ORDER BY ilk_bolum DESC LIMIT 1",
+            (book_slug, kimlik, anahtar, no),
+        ).fetchone()
+        if onceki is not None and onceki[0] == deger:
+            return False
+        n = conn.execute(
+            "INSERT OR IGNORE INTO varlik_deger VALUES (?, ?, ?, ?, ?, ?)",
+            (book_slug, kimlik, anahtar, deger, no, kanit),
+        ).rowcount
+        if kendi:
+            conn.commit()
+        return n > 0
+    finally:
+        if kendi:
+            conn.close()
+
+
+def degerler(book_slug: str, en_cok_bolum: int | None = None, kimlik: str | None = None) -> dict:
+    """{kimlik: {anahtar: {"deger", "ilk_bolum"}}} — konumdan önceki EN SON değer."""
+    conn = _connect()
+    try:
+        sorgu = "SELECT kimlik, anahtar, deger, ilk_bolum FROM varlik_deger WHERE book_slug = ?"
+        arg: list = [book_slug]
+        if en_cok_bolum is not None:
+            sorgu += " AND ilk_bolum <= ?"
+            arg.append(en_cok_bolum)
+        if kimlik is not None:
+            sorgu += " AND kimlik = ?"
+            arg.append(kimlik)
+        out: dict = {}
+        for k, a, d, b in conn.execute(sorgu + " ORDER BY ilk_bolum", arg):
+            out.setdefault(k, {})[a] = {"deger": d, "ilk_bolum": b or None}
+        return out
     finally:
         conn.close()
 
@@ -537,6 +602,13 @@ _DURUM_SATIRLARI = {
     "Class": "sinifi", "Aspect Abilities": "yetenegi", "Aspect Legacy": "yetenegi",
     "Flaw": "kusuru", "Dream Anchor": "ruya_capasi",
 }
+# Durum DEĞERİ satırları (bağ değil, `varlik_deger`): blok türü -> anahtarlar.
+_DEGER_SATIRLARI = {
+    "durum": frozenset(("Soul", "Shadow Cores", "Shadow Fragments", "Soul Cores", "Soul Fragments")),
+    "Memory": frozenset(("Memory Tier",)),
+}
+DEGER = "_deger"  # (özne, DEGER, "anahtar\tdeğer", kanıt)
+
 # Durum bloğunu anlatımdan SONRA yeniden açabilen anahtarlar. `Rank`, `True Name`
 # ve `Name` BİLEREK yok: tek başına "Rank:" başka bir şeyin rünü ya da diyalog
 # olabilir (`test_duz_paragraf_run_blogunu_kapatir`). Bunlar yalnız kişi durumunda
@@ -637,6 +709,11 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             ozne, iliski, nesne, _k = out[i]
             out[i] = (ozne, iliski, nesne, paragraf)
             continue
+        if blok_tur in _DEGER_SATIRLARI and anahtar in _DEGER_SATIRLARI[blok_tur] and blok_ozne:
+            deger_metni = deger.strip().rstrip(".").strip()
+            if deger_metni:
+                out.append((blok_ozne, DEGER, f"{anahtar}\t{deger_metni}", paragraf))
+            continue
         if blok_tur == "durum" and anahtar == "Aspect Rank" and gorunus:
             for oge in _ogeler(deger):
                 out.append((gorunus, "rutbesi", oge, paragraf))
@@ -671,6 +748,12 @@ def bolumden_sistem_baglari(book_slug: str, chapter_no: int | None, metin: str) 
     conn = _connect()
     try:
         for ozne, iliski, nesne, kanit in bulunan:
+            if iliski == DEGER:
+                a = cozucu.coz(ozne)
+                if a:
+                    anahtar, deger = nesne.split("\t", 1)
+                    deger_yaz(book_slug, a, anahtar, deger, chapter_no, kanit, conn=conn)
+                continue
             a, b = cozucu.coz(ozne), cozucu.coz(nesne)
             if a and b and bag_ekle(book_slug, a, iliski, b, chapter_no, kanit, "sistem", 1.0, conn=conn):
                 eklenen += 1
@@ -796,6 +879,15 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
             )
             bulunan = evrimleri_esle(bulunan, evrim_durumu, bolum["chapter_no"])
             for ozne, iliski, nesne, kanit in bulunan:
+                if iliski == DEGER:
+                    a = cozucu.coz(ozne)
+                    if a:
+                        anahtar, deger = nesne.split("\t", 1)
+                        sonuc.setdefault("degerler", []).append(
+                            (cozucu.kaynak(a), anahtar, deger, bolum["chapter_no"]))
+                        if yaz:
+                            deger_yaz(book_slug, a, anahtar, deger, bolum["chapter_no"], kanit, conn=conn)
+                    continue
                 a, b = cozucu.coz(ozne), cozucu.coz(nesne)
                 if not a or not b:
                     for ad, kim in ((ozne, a), (nesne, b)):
@@ -958,6 +1050,7 @@ def graph_json(book_slug: str, en_cok_bolum: int | None = None) -> dict:
     konumdan sonra ilk görülen düğüm de çıkar.
     """
     bag_listesi = baglar(book_slug, en_cok_bolum=en_cok_bolum)
+    deger_tablosu = degerler(book_slug, en_cok_bolum)
     satirlar = {r["kimlik"]: r for r in glossary.get_glossary_rows(book_slug)}
     kullanilan = {b["kaynak_kimlik"] for b in bag_listesi} | {b["hedef_kimlik"] for b in bag_listesi}
     dugumler = []
@@ -970,6 +1063,7 @@ def graph_json(book_slug: str, en_cok_bolum: int | None = None) -> dict:
         dugumler.append({
             "id": kimlik, "label": r["source"], "karsilik": r["target"], "tur": r.get("tur"),
             "tanim": r.get("tanim"), "ilk_bolum": r.get("first_chapter"),
+            "degerler": deger_tablosu.get(kimlik, {}),
         })
     gorunur = {d["id"] for d in dugumler}
     kenarlar = [

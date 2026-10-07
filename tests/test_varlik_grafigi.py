@@ -352,3 +352,25 @@ def test_durum_blogu_anlatimdan_sonra_devam_eder_rank_etmez():
     } <= b
     # Anlatımdan sonra tek başına "Rank:" yine bağlanmaz.
     assert ("Sunny", "rutbesi", "Dreamer") not in b
+
+
+def test_durum_degerleri_bag_degil_degisimle_saklanir():
+    for k in ("Sunny", "Sunless", "Bitter Cusp", "Memory"):
+        glossary.set_term(KITAP, k, k)
+    metin = "\n\n".join(["Name: Sunless.", "Shadow Cores: 4/7.", "He frowned.",
+                          "Shadow Fragments: 777/4000.", "Memory: [Bitter Cusp].", "Memory Tier: I."])
+    bulunan = vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
+    assert ("Sunny", vg.DEGER, "Shadow Fragments\t777/4000") in {x[:3] for x in bulunan}
+    vg.bolumden_sistem_baglari(KITAP, 848, metin)
+    vg.bolumden_sistem_baglari(KITAP, 900, metin)  # değişmedi: yeni satır yok
+    vg.bolumden_sistem_baglari(KITAP, 950, metin.replace("4/7", "5/7"))
+    k = vg.DugumCozucu(KITAP).coz
+    assert vg.degerler(KITAP, 949)[k("Sunny")]["Shadow Cores"] == {"deger": "4/7", "ilk_bolum": 848}
+    assert vg.degerler(KITAP)[k("Sunny")]["Shadow Cores"] == {"deger": "5/7", "ilk_bolum": 950}
+    assert vg.degerler(KITAP)[k("Bitter Cusp")]["Memory Tier"]["deger"] == "I"
+    assert vg.degerler(KITAP, 800) == {}  # spoiler: konumdan önce değer yok
+    # Değer bir bağ değildir.
+    assert all(b["iliski"] != vg.DEGER for b in vg.baglar(KITAP))
+    # Kayıt silinince değerleri de gider.
+    glossary.delete_term(KITAP, "Bitter Cusp")
+    assert k("Bitter Cusp") not in vg.degerler(KITAP)

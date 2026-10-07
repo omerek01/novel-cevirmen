@@ -790,6 +790,18 @@ def kitaba_tasi(conn: sqlite3.Connection, kaynak_slug: str, hedef_slug: str) -> 
                     f"INSERT OR IGNORE INTO varlik_bag VALUES ({', '.join('?' for _ in yeni_b)})", yeni_b
                 )
         conn.execute("DELETE FROM varlik_bag WHERE book_slug = ?", (kaynak_slug,))
+    if _tablo_var(conn, "varlik_deger"):
+        hedef_kimligi = {
+            fold_term(r[0]): r[1]
+            for r in conn.execute("SELECT source, kimlik FROM glossary WHERE book_slug = ?", (hedef_slug,))
+        }
+        kimlik_esle = {s["kimlik"]: hedef_kimligi.get(fold_term(s["source"]), s["kimlik"]) for s in satirlar}
+        for d in conn.execute("SELECT * FROM varlik_deger WHERE book_slug = ?", (kaynak_slug,)).fetchall():
+            yeni_d = list(d)
+            yeni_d[0] = hedef_slug
+            yeni_d[1] = kimlik_esle.get(d[1], d[1])
+            conn.execute(f"INSERT OR IGNORE INTO varlik_deger VALUES ({', '.join('?' for _ in yeni_d)})", yeni_d)
+        conn.execute("DELETE FROM varlik_deger WHERE book_slug = ?", (kaynak_slug,))
     conn.execute("DELETE FROM glossary WHERE book_slug = ?", (kaynak_slug,))
     conn.execute("DELETE FROM sozluk_surumu WHERE book_slug = ?", (kaynak_slug,))
 
@@ -858,6 +870,8 @@ def _varlik_baglarini_sil(conn, book_slug: str, kimlik: str) -> None:
             "DELETE FROM varlik_bag WHERE book_slug = ? AND (kaynak_kimlik = ? OR hedef_kimlik = ?)",
             (book_slug, kimlik, kimlik),
         )
+    if _tablo_var(conn, "varlik_deger"):
+        conn.execute("DELETE FROM varlik_deger WHERE book_slug = ? AND kimlik = ?", (book_slug, kimlik))
 
 
 # Yazım varyantı ayırıcıları. Aynı özel ad metinde "Ore Empire", "OreEmpire",
