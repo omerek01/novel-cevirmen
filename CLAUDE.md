@@ -1538,7 +1538,61 @@ Sınıflayıcı Saint için kitap üzerinde rütbe 25/25, gölge 25/25 ölçüld
 sonradan kapandı). Saint kuralı şimdilik profilde; sözlük ek anlamına taşımak Saint'in
 talimat satırını değiştirir (koşula BAŞKA ANLAM eki) — ölçmeden yapılmadı.
 
+## Bilgi grafiği FAZ 1 (2026-10-07; denetim + kullanıcı onaylı plan)
+
+Mimari YENİDEN TASARLANMADI; SQLite, `glossary.kimlik`, tek yazma noktası `bag_ekle`,
+kanıt doğrulaması ve sözlük kapısı aynen duruyor. Faz 2 (olay/gizem tablosu, embedding,
+grafik bağlamının çeviriye girmesi) Faz 1 ÖLÇÜLMEDEN başlamaz.
+
+* **İKİ SAAT, karıştırma.** `varlik_bag.ilk_bolum` = **learned_at** (okurun öğrendiği
+  bölüm) ve SPOILER süzgecinin TEK ölçütüdür. `gecerli_baslangic`/`gecerli_bitis` =
+  hikâye kronolojisi; NULL = BİLİNMİYOR ("ilk_bolum'da başladı" ya da "hâlâ doğru"
+  VARSAYILMAZ). `bitis_ogrenildigi` bitişin öğrenildiği bölümdür ve o da süzülür:
+  250'deki okura 301'de biten dostluk "bitti" görünmez (`_zaman_alanlari`).
+* **BİLGİ DURUMU** (`durum_bilgisi`, İngilizce makine değerleri: confirmed /
+  strongly_implied / believed / rumor / uncertain / disproven / deception) iş akışı
+  `durum`undan (aday/onaylandi/reddedildi) AYRIDIR. Göç eşlemesi: rün (`sistem`) ve
+  elle (`manual`) -> confirmed; model bağları NULL (değerlendirilmemiş — incelenip
+  onaylanmış olsalar bile "anlatıcı mı karakter mi söylüyor" ayrımı yapılmadı).
+* **ÇÜRÜTME SİLMEZ.** `curutuldugu_bolum` (bağ ve değer): eski iddianın durumu
+  değişmez, okur bölümü >= çürütme bölümüyse `disproven` GÖRÜNÜR (`_etkin_durum`).
+  `deger_yaz(..., durum_bilgisi="confirmed")` farklı değerli çürütülebilir eski
+  satırları kendiliğinden işaretler. Sorgular: `degerler` ("şu an"), `deger_gecmisi`
+  ("okur X'te neye inanıyordu").
+* **KAPANMA yalnız bildirilince:** `ILISKILER[..]["tekil"]` (aynı öznenin eski değeri)
+  ve `["kapatir"]` (bugün yoldasi <-> dusmani). Yalnız ONAYLI bağ kapatır (gürültülü
+  aday bir dostluğu bitiremez); `bag_durumu(..., "onaylandi")` da tetikler.
+* **Değer kökeni:** `varlik_deger.origin`; sistem çıkarımı YALNIZ `origin='sistem'`
+  değerleri yeniden kurar. Ölçülen hata: eskiden kitabın bütün değerlerini siliyordu
+  ve profil aracının "Görev" değerleri (Kim, Samara) kayboluyordu.
+* **SÖZLÜK SPOILER SÜZGECİ** (`glossary.gorunur_sozluk`, GET ve terim döndüren yazma
+  uçları): `first_chapter <= okur bölümü` (açık `konum`, yoksa okuma konumu; `spoiler=1`
+  kaldırır). Koşul/tanımın bölüm kökeni `kosul_koken`/`tanim_koken` = {bolum, metin
+  özeti}; metin değişince köken kendiliğinden geçersiz olur. **Kökeni bilinmeyen
+  koşul/tanım süzülmüş görünümde GİZLİDİR** — `sozluk_gecmis` yalnız ZAMAN tuttuğu için
+  eski metinlerin bölümü kurulamaz ve UYDURULMAZ. Elle yazılan koşul/tanım yazanın
+  okuma konumunu köken alır. Sınırlamalar: karşılığın (`target`) kendisinin sonradan
+  değişmesi süzülmez; `first_chapter` NULL kayıt görünür kalır
+  (`scripts/sozluk_ilk_bolum.py` kaynaktan türetir — önbellek boşluğunda bölüm GEÇ
+  çıkar, erken çıkamaz: güvenli yön).
+* **SAINT (çift anlamlı ad) denetimi çeviri yolunda** (`translate._anlam_denetle_ve_onar`,
+  terminoloji onarımından SONRA, hizalama şart). Sınıflayıcı yalnız ADAY seçer; onarım
+  isteği yalnız o paragrafı + iki komşuyu + iki anlamı taşır ve kararı MODEL verir
+  ("değişiklik yok" = çeviri korunur). Kabul: aynı denetimden geçer VE paragrafın geri
+  kalanı korunur (`ANLAM_ONARIM_MIN_BENZERLIK`). Dize değiştirme YOK, bölüm yeniden
+  gönderilmez. Sayaçlar `chapters.anlam_denetimi` (okura gösterilmez;
+  `scripts/anlam_denetle.py --metrik`). Talimata ipucu olarak GİRMEZ (Vertex A/B).
+* **Kimlik:** bulanık otomatik birleştirme YOK (yanlış birleştirme yinelenmeden
+  tehlikeli). `scripts/kimlik_denetle.py` kanıt kalıplarını sayar (aynı cümlede geçmek
+  kanıt değil) ve yinelenen ADAY raporu verir; birleştirmez.
+* **Model yapılandırması:** `translate.PRIMARY_TRANSLATION_MODEL` +
+  `FALLBACK_TRANSLATION_MODELS` (`DEFAULT_MODELS` bunlardan türer). Varsayılanı
+  değiştirmek tek satırdır; `GET /api/settings/model` → `yapilandirma.etkin_zincir`.
+  Çeviren model künyede (`chapters.model`); önbellek model değişince geçersizleşmez.
+
 **Test tuzakları (ölçüldü):**
+* **Simetrik ilişki testleri iki yönü de aramalı:** bağ kimliğe göre sıralanıp saklanır
+  ve kimlikler rastgeledir — tek yön arayan test rastgele düşer (ölçüldü: 5 koşuda 4).
 - **`page.wait_for_function` ASYNC yüklemi BEKLEMEZ** — dönen Promise truthy, anında geçer
   (`"async () => false"` 0,03 sn). Sunucu durumunu fetch ile bekleyen her iddia için
   `tests/tarayici/yardimci.js_bekle`. Statik tel tuzağı var. Yeni tarayıcı testini
