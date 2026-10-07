@@ -28,7 +28,10 @@ _AD_DEGIL = frozenset(("The", "He", "She", "It", "They", "But", "And", "Then", "
 # model yanlış ipucuna UYUP "Aziz" yazdı. `one` bu yüzden listede yok.
 _EDAT = r"(?!(?:to|of|for|with|at|from|by|on|in|into|onto|than|as)\s)"
 _BELIRSIZ_ARTIKEL = re.compile(
-    r"\b(?:a|an|another|every|no|any)\s+(?:" + _EDAT + r"[A-Za-z]+\s+)?$", re.IGNORECASE)
+    # En fazla İKİ sıfat: ölçülen (önbellek denetimi, 479) "a friendly local Saint".
+    r"\b(?:a|an|another|every|no|any)\s+(?:" + _EDAT + r"[A-Za-z]+\s+){0,2}$", re.IGNORECASE)
+# Kekeleme / tekrar: "Saint... Saint Tyris?" — ilk geçiş de unvandır (ölçülen: 856).
+_UNVAN_TEKRARI = r"\W{1,6}{kayit}\s+(?!(?:The|He|She|It|They|But|And|Then)\b)[A-Z][a-z]+"
 # "the / that / this + (sıfat) + Saint" belirsizdir: ölçülen (856. bölüm) "that handsome
 # Saint" rütbeli bir KİŞİYDİ, gölge değil.
 _BELIRLI_ARTIKEL = re.compile(r"\b(?:the|that|this|those|these)\s+(?:[a-z]+\s+)?$", re.IGNORECASE)
@@ -68,6 +71,9 @@ def gecisleri_siniflandir(paragraf: str, kayit: str, bolum_no: int | None, kural
         sonraki = _SONRAKI_SOZCUK.match(sonra)
         if sonraki and sonraki.group(1) not in _AD_DEGIL:
             out.append((m.start(), "taban"))  # unvan + ad: Saint Tyris
+            continue
+        if re.match(_UNVAN_TEKRARI.replace("{kayit}", re.escape(kayit)), sonra):
+            out.append((m.start(), "taban"))  # kekeleme: "Saint... Saint Tyris"
             continue
         if _BELIRSIZ_ARTIKEL.search(once) or _RUTBE_SAYIMI.search(once) \
                 or (taban_oncesi and taban_oncesi.search(once)):

@@ -34,6 +34,10 @@ def test_golge_ve_belirsiz():
     # Vertex A/B'de ölçülen iki sınıflayıcı hatası:
     assert _sinif("He reluctantly sent one to Saint.") == ["anlam"]             # 585: edat, artikel değil
     assert _sinif("Remember that handsome Saint who flirted?") == ["belirsiz"]  # 856: rütbeli kişi
+    # Önbellek denetiminde ölçülen iki sınıflayıcı hatası:
+    assert _sinif("Unless one of you knows a friendly local Saint.") == ["taban"]  # 479: iki sıfat
+    assert _sinif('"Saint... Saint Tyris? What are you doing?"') == ["taban", "taban"]  # 856: kekeleme
+    assert _sinif("He looked at Saint. Saint nodded.") == ["anlam", "anlam"]  # tekrar ama ad yok
 
 
 def test_bicim_adi_ve_erken_bolum():
