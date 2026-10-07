@@ -276,12 +276,45 @@ def anlam_adi(kimlik: str) -> str | None:
     return kimlik.split(ANLAM_AYRACI, 1)[1] if ANLAM_AYRACI in kimlik else None
 
 
+# Sözlükten (ek anlam, `ad_mi`) gelen anlam düğümlerinin VARSAYILAN kuralları.
+# Profilde elle yazılmış kural (Saint) bunları ezer.
+VARSAYILAN_TABAN_ILISKILERI = (
+    ("nesne", "rutbesi"), ("nesne", "unvani"), ("ozne", "ust_basamak"), ("nesne", "ust_basamak"),
+    ("nesne", "turu"), ("nesne", "sinifi"), ("nesne", "esya_turu"),
+)
+VARSAYILAN_TABAN_ONCESI = ("rank", "ranks", "become", "became", "becoming")
+
+
+def _sozluk_anlam_kurallari(book_slug: str) -> dict[str, dict]:
+    """Sözlükte "bu bir ad" diye işaretlenmiş ek anlamlardan kurallar.
+
+    Bileşik kayıtlar (`Stone Saint`) sözlükten KENDİLİĞİNDEN bulunur: kaynağı
+    "<sözcük> <kayıt>" olan her kaydın ilk sözcüğü biçim önekidir."""
+    anlamlar = glossary.ad_anlamlari(book_slug)
+    if not anlamlar:
+        return {}
+    kaynaklar = [r["source"] for r in glossary.get_glossary_rows(book_slug)]
+    out: dict[str, dict] = {}
+    for a in anlamlar:
+        desen = re.compile(rf"^(\S+)\s+{re.escape(a['kaynak'])}$", re.IGNORECASE)
+        onekler = tuple(sorted({m.group(1) for k in kaynaklar if (m := desen.match(k))}))
+        out.setdefault(a["kimlik"], {
+            "anlam": f"a{a['anlam_no']}", "etiket": a["etiket"] or a["target"], "karsilik": a["target"],
+            "taban_iliskileri": VARSAYILAN_TABAN_ILISKILERI, "takma_adlari": (),
+            "ayirici": {"baslangic_bolumu": a["ilk_bolum"] or 0, "bicim_onekleri": onekler,
+                        "taban_oncesi": VARSAYILAN_TABAN_ONCESI},
+        })
+    return out
+
+
 def anlam_kurallari(book_slug: str) -> dict[str, dict]:
-    """{taban kimlik: kural} — profildeki anlam düğümlerinin sözlükteki kimlikleri."""
+    """{taban kimlik: kural} — profildeki anlam düğümleri + sözlükte "ad" diye
+    işaretlenmiş ek anlamlar (profil önceliklidir)."""
     p = profil(book_slug) or {}
     tanim = p.get("anlam_dugumleri") or {}
+    sozlukten = _sozluk_anlam_kurallari(book_slug)
     if not tanim:
-        return {}
+        return sozlukten
     conn = db.connect()
     try:
         out = {}
@@ -290,8 +323,8 @@ def anlam_kurallari(book_slug: str) -> dict[str, dict]:
                 "SELECT kimlik FROM glossary WHERE book_slug = ? AND source = ?", (book_slug, kaynak)
             ).fetchone()
             if r and r[0]:
-                out[r[0]] = kural
-        return out
+                out[r[0]] = {**kural, "kaynak": kaynak}
+        return {**sozlukten, **out}
     finally:
         conn.close()
 

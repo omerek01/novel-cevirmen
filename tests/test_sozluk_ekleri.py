@@ -210,7 +210,7 @@ def test_birlestirme_yazim_anlam_ve_reddi_tasir_kitap_silme_temizler():
     library.upsert_book(KITAP, "H", "https://h/1", "c", 1)
     library.merge_books("kaynak-k", KITAP)
     assert glossary.ekler(KITAP)["Great"] == {
-        "yazimlar": ["Grate"], "anlamlar": [{"target": "Harika", "kosul": "ünlem"}],
+        "yazimlar": ["Grate"], "anlamlar": [{"target": "Harika", "kosul": "ünlem", "ad_mi": False, "etiket": None, "ilk_bolum": None}],
     }
     assert [r["source"] for r in glossary.red_listesi(KITAP)] == ["Bad"]
     library.delete_book(KITAP)
@@ -242,7 +242,7 @@ def test_uclar():
     r = c.put(f"/api/book/{KITAP}/glossary/anlamlar",
               json={"source": "Orc Empire", "anlamlar": [{"target": "Ork", "kosul": "kısaltma"}],
                     "taban_surum": 3})
-    assert r.status_code == 200 and r.json()["anlamlar"] == [{"target": "Ork", "kosul": "kısaltma"}]
+    assert r.status_code == 200 and r.json()["anlamlar"] == [{"target": "Ork", "kosul": "kısaltma", "ad_mi": False, "etiket": None, "ilk_bolum": None}]
 
     glossary.merge_terms(KITAP, {"Great": "Ulu"}, "auto", 1)
     liste = c.get(f"/api/book/{KITAP}/glossary/review").json()
@@ -261,3 +261,26 @@ def test_stil_uyarisi_yalniz_kaynagindan_ayrisan_uyeyi_isaretler():
     liste = {x["source"]: x for x in glossary.inceleme_listesi(KITAP)}
     stil = {k for k, x in liste.items() if any(n["tur"] == "kardes_tutarsizligi" for n in x["nedenler"])}
     assert stil == {"beast"}
+
+
+
+def test_ek_anlam_ad_alanlari_saklanir_ve_grafik_kurali_uretir():
+    from core import varlik_grafigi as vg
+    for k, v in {"Nightmare": "Kabus", "Dark Nightmare": "Kara Kabus", "Sunny": "Sunny", "Dream": "Rüya"}.items():
+        glossary.set_term(KITAP, k, v)
+    glossary.anlamlari_yaz(KITAP, "Nightmare", [{"target": "Nightmare", "kosul": "Sunny'nin atının adı",
+                                                  "ad_mi": True, "etiket": "at", "ilk_bolum": "300"}])
+    a = glossary.ekler(KITAP)["Nightmare"]["anlamlar"][0]
+    assert (a["ad_mi"], a["etiket"], a["ilk_bolum"]) == (True, "at", 300)
+    kural = vg.anlam_kurallari(KITAP)[vg.DugumCozucu(KITAP).coz("Nightmare")]
+    assert kural["etiket"] == "at" and kural["karsilik"] == "Nightmare"
+    assert kural["ayirici"]["baslangic_bolumu"] == 300
+    assert kural["ayirici"]["bicim_onekleri"] == ("Dark",)  # sözlükten kendiliğinden
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Sunny"), "golgesi", k("Nightmare"), 310, "x", "sistem", 1.0)
+    vg.bag_ekle(KITAP, k("Nightmare"), "turu", k("Dream"), 5, "y", "manual", 1.0)  # ters yön: özne
+    bag = {b["iliski"]: b for b in vg.baglar(KITAP)}
+    assert bag["golgesi"]["hedef_anlam"] == "a2"
+    # İşaretsiz ek anlam (yalnız koşullu karşılık) grafik düğümü AÇMAZ.
+    glossary.anlamlari_yaz(KITAP, "Dream", [{"target": "Düş", "kosul": "mecaz"}])
+    assert vg.DugumCozucu(KITAP).coz("Dream") not in vg.anlam_kurallari(KITAP)

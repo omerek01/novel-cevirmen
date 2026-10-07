@@ -250,6 +250,11 @@ class GlossaryYazim(BaseModel):
 class GlossaryAnlam(BaseModel):
     target: str
     kosul: str
+    # Ek anlam bir varlığın ADI mı (grafikte ikinci düğüm + geçiş sınıflayıcısı)?
+    # Prompt'a girmez; verilmezse eski davranış (yalnız koşullu karşılık).
+    ad_mi: bool = False
+    etiket: str | None = None
+    ilk_bolum: int | None = None
 
 
 class GlossaryAnlamlar(BaseModel):

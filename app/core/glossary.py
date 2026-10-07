@@ -153,6 +153,13 @@ def _connect() -> sqlite3.Connection:
         "anlam_no INTEGER NOT NULL, target TEXT NOT NULL, kosul TEXT, "
         "PRIMARY KEY (book_slug, kimlik, anlam_no))"
     )
+    # Ek anlam bir VARLIĞIN ADI olabilir (Saint: rütbe / Sunny'nin gölgesi). Bu üç alan
+    # prompt'a GİRMEZ; varlık grafiği ikinci düğümü ve geçiş sınıflayıcısını bunlardan
+    # kurar (`varlik_grafigi.anlam_kurallari`). Kullanıcı isteği (2026-10-07): "başka
+    # bir durum olursa ben nasıl kaydedeceğim ki anlasın" — kod değişikliği gerekmesin.
+    db.ensure_column(conn, "sozluk_anlam", "ad_mi", "ad_mi INTEGER")
+    db.ensure_column(conn, "sozluk_anlam", "etiket", "etiket TEXT")
+    db.ensure_column(conn, "sozluk_anlam", "ilk_bolum", "ilk_bolum INTEGER")
     # Eski satırlar bir kez doldurulur. Önce OKUNUR: eşleşmeyen bir UPDATE bile
     # yazma kilidi alır ve her bağlantıda çeviri yoluyla yarışırdı.
     if conn.execute(
@@ -1393,7 +1400,12 @@ def anlamlari_yaz(
             continue
         if not kosul:
             raise ValueError("Her ek anlamın koşulu olmalı (hangi bağlamda geçerli).")
-        temiz.append({"target": hedef[:500], "kosul": kosul[:2000]})
+        ilk = a.get("ilk_bolum")
+        temiz.append({
+            "target": hedef[:500], "kosul": kosul[:2000], "ad_mi": bool(a.get("ad_mi")),
+            "etiket": ((a.get("etiket") or "").strip()[:40] or None),
+            "ilk_bolum": int(ilk) if isinstance(ilk, (int, float)) or (isinstance(ilk, str) and ilk.isdigit()) else None,
+        })
 
     def is_(conn, satir):
         onceki = _anlamlar(conn, book_slug, satir["kimlik"])
@@ -1404,8 +1416,10 @@ def anlamlari_yaz(
         )
         for no, a in enumerate(temiz, start=2):
             conn.execute(
-                "INSERT INTO sozluk_anlam (book_slug, kimlik, anlam_no, target, kosul) VALUES (?, ?, ?, ?, ?)",
-                (book_slug, satir["kimlik"], no, a["target"], a["kosul"]),
+                "INSERT INTO sozluk_anlam (book_slug, kimlik, anlam_no, target, kosul, ad_mi, etiket, ilk_bolum) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (book_slug, satir["kimlik"], no, a["target"], a["kosul"], int(a["ad_mi"]), a["etiket"],
+                 a["ilk_bolum"]),
             )
         _kayit_degisti(conn, book_slug, satir, "anlam", {"anlamlar": temiz})
         return temiz
@@ -1413,14 +1427,37 @@ def anlamlari_yaz(
     return _islem(book_slug, source, taban_surum, is_)
 
 
+def _anlam_satiri(r) -> dict:
+    return {"target": r[0], "kosul": r[1], "ad_mi": bool(r[2]), "etiket": r[3], "ilk_bolum": r[4]}
+
+
 def _anlamlar(conn, book_slug: str, kimlik: str) -> list[dict]:
     return [
-        {"target": r[0], "kosul": r[1]}
+        _anlam_satiri(r)
         for r in conn.execute(
-            "SELECT target, kosul FROM sozluk_anlam WHERE book_slug = ? AND kimlik = ? ORDER BY anlam_no",
+            "SELECT target, kosul, ad_mi, etiket, ilk_bolum FROM sozluk_anlam "
+            "WHERE book_slug = ? AND kimlik = ? ORDER BY anlam_no",
             (book_slug, kimlik),
         )
     ]
+
+
+def ad_anlamlari(book_slug: str) -> list[dict]:
+    """Varlık ADI olarak işaretli ek anlamlar: [{kimlik, kaynak, anlam_no, target, etiket,
+    ilk_bolum}] (`varlik_grafigi.anlam_kurallari` okur)."""
+    conn = _connect()
+    try:
+        return [
+            {"kimlik": r[0], "kaynak": r[1], "anlam_no": r[2], "target": r[3], "etiket": r[4], "ilk_bolum": r[5]}
+            for r in conn.execute(
+                "SELECT a.kimlik, g.source, a.anlam_no, a.target, a.etiket, a.ilk_bolum FROM sozluk_anlam a "
+                "JOIN glossary g ON g.book_slug = a.book_slug AND g.kimlik = a.kimlik "
+                "WHERE a.book_slug = ? AND a.ad_mi = 1 ORDER BY a.anlam_no",
+                (book_slug,),
+            )
+        ]
+    finally:
+        conn.close()
 
 
 def ekler(book_slug: str) -> dict[str, dict]:
@@ -1438,13 +1475,14 @@ def ekler(book_slug: str) -> dict[str, dict]:
         ):
             if kimlik in kimlikten:
                 out.setdefault(kimlikten[kimlik], {"yazimlar": [], "anlamlar": []})["yazimlar"].append(yazim)
-        for kimlik, hedef, kosul in conn.execute(
-            "SELECT kimlik, target, kosul FROM sozluk_anlam WHERE book_slug = ? ORDER BY anlam_no",
+        for kimlik, *r in conn.execute(
+            "SELECT kimlik, target, kosul, ad_mi, etiket, ilk_bolum FROM sozluk_anlam "
+            "WHERE book_slug = ? ORDER BY anlam_no",
             (book_slug,),
         ):
             if kimlik in kimlikten:
                 out.setdefault(kimlikten[kimlik], {"yazimlar": [], "anlamlar": []})["anlamlar"].append(
-                    {"target": hedef, "kosul": kosul}
+                    _anlam_satiri(r)
                 )
         return out
     finally:
