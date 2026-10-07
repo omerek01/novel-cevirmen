@@ -78,3 +78,15 @@ def test_ceviri_anlamlari_rutbe_sozcuklerini_grafikten_alir():
     assert "Paragon" in a["ayirici"]["taban_oncesi"]  # grafikteki rütbe, kodda yok
     assert [s for _b, s in aa.gecisleri_siniflandir("Every Paragon and Saint knelt.", "Saint", 400,
                                                   a["ayirici"])] == ["taban"]
+
+
+def test_anlam_ihlalleri_isaretler():
+    anlamlar = [{"kayit": "Saint", "taban_karsilik": "Aziz", "anlam_karsilik": "Saint",
+                 "anlam_aciklama": "gölge", "ayirici": KURAL}]
+    en = ["He summoned Saint.", "She became a Saint.", "The Saint sighed.", "Saint fought a Saint."]
+    dogru = ["Saint'i çağırdı.", "Aziz oldu.", "Aziz iç çekti.", "Saint bir Azizle dövüştü."]
+    assert aa.anlam_ihlalleri(en, dogru, anlamlar, 400) == {}
+    yanlis = ["Aziz'i çağırdı.", "Saint oldu.", "Saint iç çekti.", "Saint bir Azizle dövüştü."]
+    sonuc = aa.anlam_ihlalleri(en, yanlis, anlamlar, 400)["Saint"]
+    assert [(x["paragraf"], x["sinif"]) for x in sonuc] == [(0, "anlam"), (1, "taban")]  # 2 belirsiz
+    assert aa.anlam_ihlalleri(en, dogru[:3], anlamlar, 400) == {}  # hizasız: ölçülemez

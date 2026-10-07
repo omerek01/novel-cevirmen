@@ -88,3 +88,46 @@ def paragraf_isaretleri(paragraflar: list[str], kayit: str, bolum_no: int | None
         if siniflar:
             out[i] = siniflar
     return out
+
+
+def _karsilik_deseni(karsilik: str) -> re.Pattern:
+    """Karşılığın Türkçe ekli hâllerini de yakalayan desen ("Aziz" -> Azizin, Azizler;
+    "Saint" -> Saint'e)."""
+    return re.compile(rf"\b{re.escape(karsilik)}\w*", re.IGNORECASE)
+
+
+def anlam_ihlalleri(
+    en_paras: list[str], tr_paras: list[str], anlamlar: list[dict] | None, bolum_no: int | None
+) -> dict[str, list[dict]]:
+    """Çeviri SONRASI denetim: kesin sınıflanmış paragrafta beklenen karşılık yok mu?
+
+    `anlamlar`: `varlik_grafigi.ceviri_anlamlari` girdisi. Döner {kayıt: [{"paragraf",
+    "beklenen", "sinif"}]}; boş sözlük = denetlendi, temiz. Hizalı çeviri ister
+    (paragraf sayıları eşit değilse ölçülemez, çağıran NULL yazar).
+
+    KARAR VERMEZ, İŞARETLER: ölçülen (Vertex A/B, 2026-10-07) sınıflayıcının kendisi
+    yanılabiliyor ve talimata kural olarak giren yanlış ipucuna model UYUYOR. Bayrak
+    okura ve bakım aracına gider; çeviriyi kendiliğinden değiştirmez.
+    - `anlam` paragrafı: ikinci anlamın karşılığı geçmeli, asıl karşılık GEÇMEMELİ.
+    - `taban` paragrafı: asıl karşılık geçmeli.
+    Aynı paragrafta iki sınıf birden varsa (hem gölge hem rütbe) yalnız VARLIK
+    denetlenir — "geçmemeli" kuralı orada uygulanamaz."""
+    out: dict[str, list[dict]] = {}
+    if not anlamlar or len(en_paras) != len(tr_paras):
+        return out
+    for a in anlamlar:
+        taban_d = _karsilik_deseni(a["taban_karsilik"])
+        anlam_d = _karsilik_deseni(a["anlam_karsilik"])
+        ayni = a["taban_karsilik"].casefold() == a["anlam_karsilik"].casefold()
+        for i, siniflar in paragraf_isaretleri(en_paras, a["kayit"], bolum_no, a["ayirici"]).items():
+            tr = tr_paras[i]
+            hata = None
+            if "anlam" in siniflar and not anlam_d.search(tr):
+                hata = ("anlam", a["anlam_karsilik"])
+            elif "anlam" in siniflar and "taban" not in siniflar and not ayni and taban_d.search(tr):
+                hata = ("anlam", a["anlam_karsilik"])
+            elif "taban" in siniflar and not taban_d.search(tr):
+                hata = ("taban", a["taban_karsilik"])
+            if hata:
+                out.setdefault(a["kayit"], []).append({"paragraf": i, "sinif": hata[0], "beklenen": hata[1]})
+    return out
