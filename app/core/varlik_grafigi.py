@@ -110,6 +110,13 @@ KITAP_PROFILLERI: dict[str, dict] = {
                 "taban_iliskileri": (("nesne", "rutbesi"), ("nesne", "unvani"),
                                      ("ozne", "ust_basamak"), ("nesne", "ust_basamak")),
                 "takma_adlari": ("Shadow Saint",),
+                # Metindeki geçişi sınıflayan kurallar (`anlam_ayirici`). Gölge 106'da geliyor.
+                "ayirici": {
+                    "baslangic_bolumu": 106,
+                    "bicim_onekleri": ("Stone", "Marble", "Shadow"),
+                    "taban_oncesi": ("rank", "ranks", "Master", "Masters", "Sovereign", "Sovereigns",
+                                     "Transcendent", "Transcendents", "become", "became", "becoming"),
+                },
             },
         },
         # SABİT bağlar: rünlerde geçmeyen ama kesin bilinen ilişkiler (kullanıcı
