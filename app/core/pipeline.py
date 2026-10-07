@@ -167,6 +167,15 @@ def kosullu_denetlenmeyen(book_slug: str | None, kaynak: str | None) -> list[str
 
 
 
+def _anlam_tanimlari(book_slug: str) -> list[dict] | None:
+    """Çeviri SONRASI çift anlamlı ad denetiminin tanımları (Faz 1H). Grafik/sözlük
+    okuma hatası ÇEVİRİYİ düşürmez: denetim atlanır (künyede NULL = denetlenmedi)."""
+    try:
+        return varlik_grafigi.ceviri_anlamlari(book_slug) or None
+    except sqlite3.Error:
+        return None
+
+
 def _sozluge_isle(
     slug: str, veri: dict, chapter_no: int | None = None, kaynak_metin: str | None = None
 ) -> dict[str, str]:
@@ -420,11 +429,13 @@ def _do_fetch_translate_save(
             result = translate_chapter(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
                 prev_context=prev_context, kosullar=book_kosullar,
+                anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
             )
     else:
         result = translate_chapter(
             chapter["text"], api_key=api_key, glossary=book_glossary,
             prev_context=prev_context, kosullar=book_kosullar,
+            anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
         )
 
     # Sözlüğe işleme uçuşun İÇİNDE: eklenen terimler künyenin parçası ve bölümle
@@ -456,6 +467,7 @@ def _do_fetch_translate_save(
         # İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş
         # paragraflar. Boş = temiz.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        "anlam_denetimi": result.get("anlam_denetimi"),
         # KISALMA ölçümü: Türkçe/İngilizce karakter oranı. Modelin çevirmek yerine
         # ÖZETLEDİĞİNİ gören TEK ölçüt (gerçek vaka: shadow-slave #787) ve
         # ötekilerden farklı olarak hizalamaya İHTİYAÇ DUYMAZ — özetleme
@@ -601,6 +613,7 @@ def fetch_into_book(
             chapter["text"], api_key=api_key, glossary=book_glossary,
             prev_context=cache.prev_translation(target_slug, prev_url, no),
             kosullar=book_kosullar,
+            anlam_denetimi=_anlam_tanimlari(target_slug), bolum_no=no,
         )
     book_title = (book and book.get("title")) or chapter["book_title"]
     eklenen = _sozluge_isle(target_slug, result, no, chapter["text"])  # künyeye girecek, kayıttan ÖNCE
@@ -629,6 +642,7 @@ def fetch_into_book(
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        "anlam_denetimi": result.get("anlam_denetimi"),
         # Kısalma ölçümü de `_fetch_translate_save` ile AYNI: bayrağı üreten
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # ölçümsüz olur — `model` alanında tam bu hata yaşandı.

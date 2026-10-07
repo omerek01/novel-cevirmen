@@ -72,6 +72,9 @@ def _connect() -> sqlite3.Connection:
     # — `_split_by_markers` yalnız YAPIYI, `glossary_leaks` yalnız KAYITLI terimleri
     # denetliyor. NULL = hiç denetlenmedi (eski satır), "{}" = denetlendi ve temiz.
     db.ensure_column(conn, "chapters", "ingilizce_kalinti", "ingilizce_kalinti TEXT")
+    # Çift anlamlı ad denetiminin sayaçları (Faz 1H): JSON. NULL = denetlenmedi.
+    # Okura GÖSTERİLMEZ; `scripts/anlam_denetle.py --metrik` toplar.
+    db.ensure_column(conn, "chapters", "anlam_denetimi", "anlam_denetimi TEXT")
     # KISALMA ÖLÇÜMÜ (2026-09-28): Türkçe çıktı / İngilizce kaynak KARAKTER oranı.
     # Model çevirmek yerine ÖZETLEDİĞİNDE (gerçek vaka: shadow-slave #787) bunu
     # gören başka hiçbir denetim yok — hizalama yalnız YAPIYI, glossary_leaks
@@ -659,8 +662,8 @@ def save_chapter(url: str, data: dict) -> None:
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text, content_type, engine, added_terms, model,
-                 glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu, anlam_denetimi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -676,7 +679,8 @@ def save_chapter(url: str, data: dict) -> None:
                 ingilizce_kalinti = COALESCE(
                     excluded.ingilizce_kalinti, ingilizce_kalinti),
                 uzunluk_orani = COALESCE(excluded.uzunluk_orani, uzunluk_orani),
-                sozluk_surumu = COALESCE(excluded.sozluk_surumu, sozluk_surumu)
+                sozluk_surumu = COALESCE(excluded.sozluk_surumu, sozluk_surumu),
+                anlam_denetimi = COALESCE(excluded.anlam_denetimi, anlam_denetimi)
             """,
             (
                 url,
@@ -714,6 +718,9 @@ def save_chapter(url: str, data: dict) -> None:
                 # koruyabilsin ve "ölçülmedi" ile "ölçüldü" ayrışsın.
                 data.get("uzunluk_orani"),
                 data.get("sozluk_surumu"),
+                json.dumps(data["anlam_denetimi"], ensure_ascii=False)
+                if data.get("anlam_denetimi") is not None
+                else None,
             ),
         )
         conn.commit()

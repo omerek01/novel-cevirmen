@@ -9,11 +9,14 @@ kitapta `varlik_grafigi.ceviri_anlamlari`'dan (sözlükte "bu bir ad" işaretli 
 Kullanım:
   python scripts/anlam_denetle.py --kitap shadow-slave            # özet (modele göre)
   python scripts/anlam_denetle.py --kitap shadow-slave --ayrinti  # bölüm listesi
+  python scripts/anlam_denetle.py --kitap shadow-slave --metrik   # çeviri yolundaki
+      denetim + onarım sayaçlarının toplamı (chapters.anlam_denetimi, Faz 1H)
 """
 from __future__ import annotations
 
 import argparse
 import sys
+import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
@@ -27,8 +30,25 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--kitap", required=True)
     ap.add_argument("--ayrinti", action="store_true")
+    ap.add_argument("--metrik", action="store_true", help="çeviri yolundaki sayaçların toplamı")
     args = ap.parse_args()
     slug = library.resolve_slug(args.kitap)
+    if args.metrik:
+        conn = cache._connect()
+        try:
+            satirlar = conn.execute(
+                "SELECT anlam_denetimi FROM chapters WHERE book_slug = ? AND anlam_denetimi IS NOT NULL", (slug,)
+            ).fetchall()
+        finally:
+            conn.close()
+        toplam: Counter = Counter()
+        for (ham,) in satirlar:
+            toplam.update(json.loads(ham))
+        print(f"denetlenen bölüm: {len(satirlar)}")
+        for k in ("saint_checks", "saint_flags", "saint_repairs_attempted", "saint_repairs_accepted",
+                  "saint_false_positive_or_rejected", "kalan"):
+            print(f"  {k:34} {toplam[k]}")
+        return 0
     anlamlar = varlik_grafigi.ceviri_anlamlari(slug)
     if not anlamlar:
         print("Bu kitapta 'ad' diye işaretlenmiş çift anlamlı kayıt yok.")

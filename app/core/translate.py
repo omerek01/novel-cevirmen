@@ -1188,8 +1188,13 @@ def translate_chapter(
     kosullar: dict[str, str] | None = None,
     anlamlar: list[dict] | None = None,
     bolum_no: int | None = None,
+    anlam_denetimi: list[dict] | None = None,
 ) -> dict:
     """Tüm bölümü parçalayıp çevirir; bağlamı taşır, yeni isimleri biriktirir.
+
+    ``anlam_denetimi``: çift anlamlı adların tanımları (`varlik_grafigi.ceviri_anlamlari`).
+    Ana talimata GİRMEZ; çeviriden SONRA denetim + hedefli onarım için kullanılır
+    (`_anlam_denetle_ve_onar`, Faz 1H).
 
     ``anlamlar``: çift anlamlı ADLARIN tanımları (`varlik_grafigi.ceviri_anlamlari`);
     verilirse her parçada geçişler sınıflanır ve talimata paragraf numaralı ipucu
@@ -1316,6 +1321,14 @@ def translate_chapter(
                     client_factory, models, tr_paras, en_paras, sorted(ihlalli),
                     glossary, used_models, new_names, new_terms, kosullar,
                 )
+    # ÇİFT ANLAMLI AD denetimi (Saint gölge/rütbe, Faz 1H). Terminoloji onarımından
+    # SONRA: o tur paragrafı zaten yenilemiş olabilir. Hizalama şart (paragraf eşlemesi).
+    anlam_metrik = None
+    if aligned and anlam_denetimi:
+        anlam_metrik = _anlam_denetle_ve_onar(
+            client_factory, models, tr_paras, en_paras, anlam_denetimi, bolum_no,
+            kosullar, used_models,
+        )
 
     new_terms = ayikla_terim_anahtarlari(new_terms, text)
     translation = "\n\n".join(tr_paras)
@@ -1355,6 +1368,9 @@ def translate_chapter(
         # hizalamayı öldürdüğü için hizalama isteyen bir bayrak tam da gerektiği
         # anda susardı. NULL = hiç ölçülmedi (eski satırlar, kaynaksız bölüm).
         "uzunluk_orani": uzunluk_orani(translation, text),
+        # Çift anlamlı ad denetiminin sayaçları (künyeye yazılır, okura GÖSTERİLMEZ).
+        # None = denetlenmedi (tanım yok ya da hizalama tutmadı).
+        "anlam_denetimi": anlam_metrik,
         "chunk_count": len(chunks),
         # MOTOR fiilen çeviren model(ler)den türetilir. Sabit "gemini" yazmak,
         # Mistral zincirin ilk halkası olduğundan doğrudan yanlış bilgiydi:
@@ -2321,6 +2337,113 @@ def _paragraflari_yeniden_cevir(
         if yeni[sira].strip():
             tr_paras[i] = yeni[sira]
     return True
+
+
+ANLAM_ONARIM_INSTRUCTION = (
+    "Sen bir İngilizce -> Türkçe roman çevirisinin DÜZELTMENİSİN. Sana bir paragrafın "
+    "İngilizce aslı, çevresindeki paragraflar (bağlam) ve mevcut Türkçe çevirisi "
+    "verilecek. Paragrafta geçen bir kelimenin İKİ ANLAMI var ve hangisinin kastedildiği "
+    "bağlamdan anlaşılır. Görevin YALNIZ bu kelimenin çevirisini denetlemek:\n"
+    "- Bağlama bakarak her geçişte HANGİ anlamın kastedildiğine KENDİN karar ver.\n"
+    "- Mevcut çeviri doğruysa HİÇBİR şeyi değiştirme ve {\"degisiklik\": false} döndür.\n"
+    "- Yanlışsa YALNIZ o kelimenin karşılığını (gerekirse ekini) düzelt; paragrafın geri "
+    "kalanını HARFİ HARFİNE koru, yeniden çevirme, kısaltma, üslubu değiştirme.\n"
+    "- Yanıtı SADECE şu JSON ile ver: {\"degisiklik\": true, \"ceviri\": \"...\"} "
+    "ya da {\"degisiklik\": false}."
+)
+# Onarım paragrafın geri kalanına dokunmamalı: ölçüt benzerlik. Model talimata
+# rağmen paragrafı yeniden yazarsa onarım REDDEDİLİR, eski çeviri korunur.
+ANLAM_ONARIM_MIN_BENZERLIK = 0.85
+
+
+def _anlam_onarim_istemi(tanim: dict, kosul: str | None, en_paras: list[str], tr: str, i: int) -> str:
+    onceki = en_paras[i - 1] if i > 0 else "(yok)"
+    sonraki = en_paras[i + 1] if i + 1 < len(en_paras) else "(yok)"
+    return (
+        f'KELİME: "{tanim["kayit"]}"\n'
+        f'ANLAM 1 (asıl): karşılığı "{tanim["taban_karsilik"]}"'
+        + (f" — sözlük koşulu: {kosul}" if kosul else "") + "\n"
+        f'ANLAM 2: {tanim["anlam_aciklama"]} — bu anlamda "{tanim["anlam_karsilik"]}" olarak AYNEN kalır\n\n'
+        f"ÖNCEKİ PARAGRAF (bağlam): {onceki}\n\n"
+        f"DENETLENECEK PARAGRAF (İngilizce): {en_paras[i]}\n\n"
+        f"SONRAKİ PARAGRAF (bağlam): {sonraki}\n\n"
+        f"MEVCUT TÜRKÇE ÇEVİRİ: {tr}"
+    )
+
+
+def _onarim_yaniti(metin: str | None) -> dict | None:
+    ham = (metin or "").strip()
+    if ham.startswith("```"):
+        ham = ham.strip("`").removeprefix("json").strip()
+    try:
+        veri = json.loads(ham)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    return veri if isinstance(veri, dict) else None
+
+
+def _anlam_denetle_ve_onar(
+    client_factory, models: tuple[str, ...], tr_paras: list[str], en_paras: list[str],
+    tanimlar: list[dict], bolum_no: int | None, kosullar: dict[str, str] | None,
+    used_models: dict[str, None],
+) -> dict:
+    """Çift anlamlı ad: denetle -> yüksek güvenli ihlalde HEDEFLİ onar -> doğrula -> kabul/ret.
+
+    Sınıflayıcı (`anlam_ayirici`) yalnız ADAY paragrafı seçer, KARAR VERMEZ: ölçülen
+    (Vertex A/B, önbellek denetimi) onun da yanılabildiği ve modelin yanlış ipucuna
+    uyduğu. Kararı onarım isteğindeki model İKİ ANLAMI ve yerel bağlamı görerek verir;
+    "değişiklik yok" derse çeviri KORUNUR (yanlış alarm). Onarım ancak (1) aynı
+    denetimden geçerse, (2) paragrafın geri kalanını korursa (benzerlik) kabul edilir.
+    Bölümün tamamı YENİDEN GÖNDERİLMEZ; dize değiştirme (Saint -> Aziz) YAPILMAZ.
+    `tr_paras` yerinde güncellenir. Döner: sayaçlar (künyeye yazılır, okura gösterilmez)."""
+    import difflib
+    import logging
+
+    from . import anlam_ayirici
+
+    metrik = {"saint_checks": 1, "saint_flags": 0, "saint_repairs_attempted": 0,
+              "saint_repairs_accepted": 0, "saint_false_positive_or_rejected": 0, "kalan": 0}
+    ihlaller = anlam_ayirici.anlam_ihlalleri(en_paras, tr_paras, tanimlar, bolum_no)
+    tanim_ad = {t["kayit"]: t for t in tanimlar}
+    for kayit, liste in ihlaller.items():
+        tanim = tanim_ad[kayit]
+        for x in liste:
+            i = x["paragraf"]
+            metrik["saint_flags"] += 1
+            metrik["saint_repairs_attempted"] += 1
+            istem = _anlam_onarim_istemi(tanim, (kosullar or {}).get(kayit), en_paras, tr_paras[i], i)
+            try:
+                with api_durum.baglam(asama="anlam_onarimi"):
+                    yanit, model = _generate_with_fallback(
+                        client_factory, models, istem, system=ANLAM_ONARIM_INSTRUCTION,
+                        max_tokens=MAX_OUTPUT_TOKENS,
+                    )
+            except Exception:
+                # BEST-EFFORT: bölüm zaten çevrildi; onarım hatası çeviriyi düşürmez.
+                metrik["saint_false_positive_or_rejected"] += 1
+                continue
+            veri = _onarim_yaniti(getattr(yanit, "text", None))
+            yeni = (veri or {}).get("ceviri") if (veri or {}).get("degisiklik") else None
+            if not isinstance(yeni, str) or not yeni.strip():
+                metrik["saint_false_positive_or_rejected"] += 1  # model: değişiklik yok
+                continue
+            gecici = list(tr_paras)
+            gecici[i] = yeni.strip()
+            hala = any(y["paragraf"] == i for y in anlam_ayirici.anlam_ihlalleri(
+                en_paras, gecici, [tanim], bolum_no).get(kayit, []))
+            benzerlik = difflib.SequenceMatcher(None, tr_paras[i], gecici[i]).ratio()
+            if hala or benzerlik < ANLAM_ONARIM_MIN_BENZERLIK:
+                metrik["saint_false_positive_or_rejected"] += 1
+                continue
+            tr_paras[i] = gecici[i]
+            metrik["saint_repairs_accepted"] += 1
+            if model:
+                used_models[model] = None
+    metrik["kalan"] = sum(len(v) for v in anlam_ayirici.anlam_ihlalleri(
+        en_paras, tr_paras, tanimlar, bolum_no).values())
+    if metrik["saint_flags"]:
+        logging.getLogger(__name__).info("anlam denetimi bölüm %s: %s", bolum_no, metrik)
+    return metrik
 
 
 def metinde_gecen_terimler(glossary: dict[str, str] | None, metin: str) -> list[str]:
