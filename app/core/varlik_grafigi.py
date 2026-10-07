@@ -375,6 +375,60 @@ def nesneler(book_slug: str, iliski: str, en_az: int = 1) -> set[str]:
     return {ad for ad, n in sayac.items() if n >= en_az}
 
 
+# Kişi adının önüne gelen HİTAP unvanları ("Master Roan" = Roan).
+HITAP_UNVANLARI = ("Master", "Saint", "Lord", "Lady", "Sir", "Prince", "Princess", "Queen",
+                   "King", "Teacher", "Instructor", "Sovereign")
+# Rütbe sözcükleri de ad önüne gelir ("Ascended Dale") ama kategorilerle de birleşir
+# ("Ascended Demon"); YALNIZ arkasından İngilizce korunan bir KİŞİ adı gelirse unvandır.
+RUTBE_ONEKLERI = ("Ascended", "Awakened", "Transcendent", "Sleeper", "Dreamer")
+
+
+def unvanli_adlari_bagla(book_slug: str) -> int:
+    """"Unvan + kayıtlı ad" düğümlerini asıl kişiye `takma_adi` ile bağla (API'siz).
+
+    Ölçülen (altın standart, 2026-10-07): eksik bağların yarısı aynı varlığın iki
+    düğüme bölünmesinden geliyordu — "Master Roan" / "Roan", "Lady Hope" / "Hope".
+    Bağ `manual` kökenli ve onaylıdır (kural deterministik); ardından
+    `takma_adlari_birlestir` bağları asıl kişiye taşır. Döner: eklenen bağ sayısı.
+
+    Eşleşme kuralları (yanlış pozitife karşı, ölçüldü): hitap unvanı + kişi adı her
+    zaman; rütbe öneki + kişi adı YALNIZ ad İngilizce korunuyorsa (`Ascended Demon ->
+    Demon` bir kategori çiftidir, takma ad değil). Türkçeleştirilmiş kişide
+    (`Lady Hope -> Leydi Umut`, `Hope -> Umut`) karşılık da karşılığı içermeli.
+    """
+    satirlar = glossary.get_glossary_rows(book_slug)
+    katlanmis = {glossary.fold_term(r["source"]): r for r in satirlar}
+    eklenen = 0
+    conn = _connect()
+    try:
+        for r in satirlar:
+            parca = r["source"].split(" ", 1)
+            if len(parca) != 2:
+                continue
+            onek, ad = parca
+            asil = katlanmis.get(glossary.fold_term(ad))
+            if asil is None or asil["kimlik"] == r["kimlik"]:
+                continue
+            korunan = glossary.fold_term(asil["source"]) == glossary.fold_term(asil.get("target") or "")
+            if onek in HITAP_UNVANLARI:
+                if not korunan and glossary.fold_term(asil.get("target") or "") not in glossary.fold_term(
+                    r.get("target") or ""
+                ):
+                    continue
+            elif onek in RUTBE_ONEKLERI:
+                if not korunan:
+                    continue
+            else:
+                continue
+            if bag_ekle(book_slug, asil["kimlik"], "takma_adi", r["kimlik"], r.get("first_chapter"),
+                        None, "manual", 1.0, conn=conn):
+                eklenen += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return eklenen
+
+
 def takma_adlari_birlestir(book_slug: str) -> int:
     """ONAYLI takma ad / Gerçek Ad düğümlerindeki bağları asıl kişiye taşı.
 

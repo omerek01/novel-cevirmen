@@ -203,6 +203,22 @@ def test_takma_ad_dugumundeki_baglar_asil_kisiye_tasinir():
     assert ("Nephis", "takma_adi", "Neph") in baglar  # kimlik bağı yerinde
 
 
+def test_unvanli_ad_asil_kisiye_baglanir_kategori_baglanmaz():
+    for k, v in {"Roan": "Roan", "Master Roan": "Master Roan", "Hope": "Umut", "Lady Hope": "Leydi Umut",
+                 "Demon": "İblis", "Ascended Demon": "Yükselmiş İblis", "Dale": "Dale",
+                 "Ascended Dale": "Ascended Dale", "Chained Isles": "Zincirli Adalar"}.items():
+        glossary.set_term(KITAP, k, v)
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Master Roan"), "bulundugu_yer", k("Chained Isles"), 381, "x", "model", 0.9)
+    assert vg.unvanli_adlari_bagla(KITAP) == 3
+    baglar = {(b["kaynak"], b["iliski"], b["hedef"]) for b in vg.baglar(KITAP)}
+    assert {("Roan", "takma_adi", "Master Roan"), ("Hope", "takma_adi", "Lady Hope"),
+            ("Dale", "takma_adi", "Ascended Dale")} <= baglar
+    assert ("Demon", "takma_adi", "Ascended Demon") not in baglar
+    vg.takma_adlari_birlestir(KITAP)
+    assert ("Roan", "bulundugu_yer", "Chained Isles") in {(b["kaynak"], b["iliski"], b["hedef"]) for b in vg.baglar(KITAP)}
+
+
 def test_bilinmeyen_iliski_reddedilir():
     import pytest
 

@@ -82,6 +82,7 @@ def main() -> int:
         sayac = uygula(slug, json.loads(Path(args.uygula).read_text(encoding="utf-8")))
         print("kararlar:", dict(sayac))
     if args.birlestir:
+        print(f"{varlik_grafigi.unvanli_adlari_bagla(slug)} unvanlı ad asıl kişiye bağlandı")
         print(f"{varlik_grafigi.takma_adlari_birlestir(slug)} bağ asıl kişiye taşındı")
     durum = Counter((b["origin"], b["durum"]) for b in varlik_grafigi.baglar(
         slug, durumlar=("aday", "onaylandi", "reddedildi")))
