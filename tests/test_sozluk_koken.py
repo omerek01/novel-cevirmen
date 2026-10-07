@@ -120,7 +120,10 @@ def test_uc_hem_terms_hem_rows_dondurur():
     """`terms` geriye dönük uyum için duruyor: çevrimdışı kuyruklu okuyucu onu bekliyor."""
     glossary.merge_terms("kitap", {"Zero Wing": "Sıfır Kanat"}, "auto", 5)
     with TestClient(server.app) as client:
-        veri = client.get("/api/book/kitap/glossary").json()
+        veri = client.get("/api/book/kitap/glossary", params={"spoiler": 1}).json()
+        # Okuma konumu YOK (0) ve kayıt 5. bölümde girdi: süzülmüş görünümde gizli
+        # (Faz 1A spoiler süzgeci; grafik ucuyla aynı varsayılan).
+        assert client.get("/api/book/kitap/glossary").json()["terms"] == {}
     assert veri["terms"] == {"Zero Wing": "Sıfır Kanat"}
     assert veri["rows"][0]["origin"] == "auto"
     assert veri["rows"][0]["first_chapter"] == 5

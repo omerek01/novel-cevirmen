@@ -695,10 +695,33 @@ def clearance_refresh() -> dict:
         raise HTTPException(status_code=502, detail=str(exc))
 
 
+def _okuma_konumu(slug: str) -> int:
+    """Kitabın kayıtlı okuma konumu (bölüm no); yoksa 0 — grafik ucuyla aynı kural."""
+    return (library.get_book(library.resolve_slug(slug)) or {}).get("chapter_no") or 0
+
+
+def _okur_bolumu(slug: str, konum: int | None, spoiler: bool) -> int | None:
+    """SPOILER süzgecinin etkin bölümü: `spoiler` -> None (süzgeç yok); açık `konum`;
+    yoksa kitabın okuma konumu."""
+    if spoiler:
+        return None
+    return konum if konum is not None else _okuma_konumu(slug)
+
+
+def _gorunur_terimler(slug: str, spoiler: bool) -> dict:
+    """Yazma uçlarının yanıtındaki `terms`/`kosullar` — GET ile AYNI süzgeç. Arayüz bu
+    yanıtla listesini tazeliyor (`sozluk.js`); süzülmeseydi bir düzenlemeden sonra
+    gizli kayıtlar ekrana geri gelirdi."""
+    g = glossary.gorunur_sozluk(slug, _okur_bolumu(slug, None, spoiler))
+    return {"terms": g["terms"], "kosullar": g["kosullar"]}
+
+
 @app.get("/api/book/{slug}/glossary")
 def get_book_glossary(
     slug: str,
     bolum: str | None = Query(None, description="Bu bölümün kaynağında geçen terimler de dönsün"),
+    konum: int | None = Query(None, description="Okur bölümü: bundan SONRA öğrenilen bilgi dönmez"),
+    spoiler: bool = Query(False, description="true: konum süzgeci uygulanmaz"),
 ) -> dict:
     """Sözlük: sade eşleme (`terms`) + köken bilgili satırlar (`rows`).
 
@@ -706,21 +729,28 @@ def get_book_glossary(
     eski önbelleğe alınmış istemci onu bekliyor. `rows` köken sütunlarını taşır
     (ne zaman, hangi yoldan, hangi bölümde girdi); sözlük ekranındaki süzme ve
     künye rozetindeki düzeltme bunu kullanır.
+
+    SPOILER (Faz 1A, 2026-10-07): okur N. bölümdeyse N'den sonra öğrenilen bilgi
+    HİÇ dönmez (`glossary.gorunur_sozluk`) — kayıt, kökeni bilinmeyen/geç koşul ve
+    tanım, ek anlam, uyarı çiftleri. Etkin bölüm `konum`, yoksa okuma konumu.
     """
+    etkin = _okur_bolumu(slug, konum, spoiler)
+    g = glossary.gorunur_sozluk(slug, etkin)
     veri = {
-        "terms": glossary.get_glossary(slug),
-        "kosullar": glossary.get_kosullar(slug),
-        "rows": glossary.get_glossary_rows(slug),
+        "terms": g["terms"],
+        "kosullar": g["kosullar"],
+        "rows": g["rows"],
         # Yazım hatası olabilecek çiftler (`Orc`/`Ore`). Otomatik birleştirme YOK —
         # tek harf farkı gerçek bir anlam farkı olabilir; karar kullanıcınındır.
-        "warnings": glossary.yakin_terimler(slug),
+        "warnings": g["warnings"],
         # Kitabın sözlük sürümü: bölüm künyesindeki `sozluk_surumu` ile kıyaslanır.
         "surum": glossary.kitap_surumu(slug),
         # Alternatif yazımlar + ek anlamlar (yalnız eki olan kayıtlar).
-        "ekler": glossary.ekler(slug),
+        "ekler": g["ekler"],
         # Yasak karşılıklar ve kategori politikası (`sozluk_kapi`).
-        "yasaklar": glossary.yasaklar(slug),
+        "yasaklar": g["yasaklar"],
         "politikalar": glossary.politikalar(slug),
+        "spoiler_suzgeci": {"bolum": etkin, "gizlenen_kayit": g["gizlenen_kayit"]},
     }
     if bolum is not None:
         # "Bu bölümde geçenler" süzgeci. null = bölümün kaynağı yok (bilinmiyor).
@@ -747,7 +777,7 @@ def _surum_cakismasi(exc: glossary.SurumCakismasi) -> HTTPException:
 
 
 @app.post("/api/book/{slug}/glossary")
-def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
+def set_book_glossary(slug: str, term: GlossaryTerm, spoiler: bool = Query(False)) -> dict:
     # Karşılık + koşul TEK işlemde yazılır: iki ayrı yazım iki sürüm artışı ve
     # arada yarım bir kayıt demekti. KOŞUL yalnız ALANI GÖNDERİLDİĞİNDE yazılır —
     # okuyucunun çevrimdışı kuyruğu çoğu zaman {source, target} gönderiyor.
@@ -762,9 +792,12 @@ def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
         raise _surum_cakismasi(exc) from exc
     if term.ornek is not None:
         glossary.ornek_doldur(slug, term.source, term.ornek.kaynak_cumle, term.ornek.bolum)
+    if term.kosul:
+        # Elle yazılan koşul YAZANIN okuma konumundaki bilgiyle yazılmıştır.
+        glossary.alan_kokeni_yaz(slug, term.source, "kosul", _okuma_konumu(slug))
+        kayit = _kayit(slug, term.source) or kayit
     return {
-        "terms": glossary.get_glossary(slug),
-        "kosullar": glossary.get_kosullar(slug),
+        **_gorunur_terimler(slug, spoiler),
         # İstemci bir sonraki düzenlemenin tabanını buradan alır.
         "kayit": kayit,
     }
@@ -772,7 +805,8 @@ def set_book_glossary(slug: str, term: GlossaryTerm) -> dict:
 
 @app.delete("/api/book/{slug}/glossary")
 def delete_book_glossary(
-    slug: str, source: str = Query(...), taban_surum: int | None = Query(None)
+    slug: str, source: str = Query(...), taban_surum: int | None = Query(None),
+    spoiler: bool = Query(False),
 ) -> dict:
     # `silinen` GERİ ALMA içindir: okuyucu onu içe aktarma ucuyla (dosya
     # stratejisi) geri yazar; koşul, köken ve kimlik kaybolmaz. Terim yoksa null.
@@ -780,7 +814,7 @@ def delete_book_glossary(
         silinen = glossary.delete_term(slug, source, taban_surum=taban_surum)
     except glossary.SurumCakismasi as exc:
         raise _surum_cakismasi(exc) from exc
-    return {"terms": glossary.get_glossary(slug), "silinen": silinen}
+    return {"terms": _gorunur_terimler(slug, spoiler)["terms"], "silinen": silinen}
 
 
 def _kayit_bulunamadi() -> HTTPException:
@@ -883,6 +917,8 @@ def set_glossary_definition(slug: str, req: GlossaryTanim) -> dict:
     """Kaydın tanımını ve türünü yaz (prompt'a girmez, sürüm artmaz)."""
     if not glossary.tanim_yaz(slug, req.source, req.tanim, req.tur):
         raise _kayit_bulunamadi()
+    if req.tanim:
+        glossary.alan_kokeni_yaz(slug, req.source, "tanim", _okuma_konumu(slug))
     return {"kayit": _kayit(slug, req.source)}
 
 
@@ -994,7 +1030,7 @@ def import_book_glossary(slug: str, req: GlossaryImportRequest) -> dict:
         raise HTTPException(status_code=400, detail="Bilinmeyen strateji.")
     if req.kayitlar is not None:
         sonuc = glossary.ice_aktar(canonical, req.kayitlar, req.strateji)
-        return {**sonuc, "terms": glossary.get_glossary(canonical)}
+        return {**sonuc, "terms": _gorunur_terimler(canonical, False)["terms"]}
     if req.terms is None:
         raise HTTPException(status_code=400, detail="Dosyada ne 'kayitlar' ne 'terms' var.")
     gelen = {k: v for k, v in req.terms.items() if (k or "").strip()}
@@ -1007,7 +1043,7 @@ def import_book_glossary(slug: str, req: GlossaryImportRequest) -> dict:
     return {
         "eklenen": eklenen,
         "gelen": len(gelen),
-        "terms": glossary.get_glossary(canonical),
+        "terms": _gorunur_terimler(canonical, False)["terms"],
     }
 
 

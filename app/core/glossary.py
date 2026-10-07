@@ -41,6 +41,14 @@ def _connect() -> sqlite3.Connection:
     db.ensure_column(conn, "glossary", "created_at", "created_at REAL")
     db.ensure_column(conn, "glossary", "origin", "origin TEXT")
     db.ensure_column(conn, "glossary", "first_chapter", "first_chapter INTEGER")
+    # ALAN KÖKENİ (Faz 1A, 2026-10-07): koşul/tanım metni HANGİ BÖLÜMÜN bilgisiyle
+    # yazıldı? JSON {"bolum": N, "ozet": metnin özeti}. Özet şart: metni değiştiren
+    # HER yol (bugünkü ya da ileride eklenecek) kökeni kendiliğinden geçersiz kılar —
+    # her yazma fonksiyonuna "kökeni sıfırla" eklemek, unutulan tek yolda sessiz bir
+    # spoiler sızıntısı demekti. Eski satırlarda NULL = BİLİNMİYOR; `sozluk_gecmis`
+    # yalnız ZAMAN tuttuğu için bölüm geriye dönük kurulamaz ve UYDURULMAZ.
+    db.ensure_column(conn, "glossary", "kosul_koken", "kosul_koken TEXT")
+    db.ensure_column(conn, "glossary", "tanim_koken", "tanim_koken TEXT")
     # KOŞUL: karşılığın HANGİ BAĞLAMDA geçerli olduğunu anlatan serbest metin.
     # Sözlük düz bir `kaynak -> karşılık` eşlemesiydi ve aynı İngilizce sözcüğün
     # bağlama göre iki farklı Türkçe karşılığı olduğu durumu İFADE EDEMİYORDU.
@@ -180,7 +188,7 @@ def _connect() -> sqlite3.Connection:
 _SATIR_ALANLARI = (
     "source", "target", "created_at", "origin", "first_chapter", "kosul", "kaynak_cumle",
     "kimlik", "surum", "updated_at", "inceleme", "tur",
-    "durum", "kapi", "tanim", "dogrulama", "dogrulama_notu",
+    "durum", "kapi", "tanim", "dogrulama", "dogrulama_notu", "kosul_koken", "tanim_koken",
 )
 _SATIR_SUTUNLARI = ", ".join(_SATIR_ALANLARI)
 # PROMPT'u etkileyen alanlar: yalnız bunlar değişince kayıt/kitap sürümü artar.
@@ -451,6 +459,107 @@ def set_kosul(book_slug: str, source: str, kosul: str | None) -> bool:
         conn.close()
     terimi_yaz(book_slug, mevcut["source"], mevcut["target"], kosul=kosul or "", origin=None)
     return True
+
+
+_KOKENLI_ALANLAR = ("kosul", "tanim")
+
+
+def _metin_ozeti(metin: str | None) -> str | None:
+    import hashlib
+
+    return hashlib.sha1(metin.encode("utf-8")).hexdigest()[:16] if metin else None
+
+
+def alan_kokeni_yaz(book_slug: str, source: str, alan: str, bolum: int | None) -> bool:
+    """Koşul/tanım metninin hangi bölümün bilgisiyle yazıldığını kaydet (prompt DIŞI).
+
+    Elle yazımda bölüm = yazanın o anki OKUMA KONUMU (sunucu verir). Köken metnin
+    özetine bağlıdır; metin sonra değişirse köken geçersiz sayılır (`_alan_bolumu`)."""
+    if alan not in _KOKENLI_ALANLAR:
+        raise ValueError(f"Kökenli alan değil: {alan!r}")
+    conn = _connect()
+    try:
+        satir = _bul(conn, book_slug, normalize_source(source) or source)
+        if satir is None or not satir.get(alan):
+            return False
+        koken = None if bolum is None else json.dumps({"bolum": int(bolum), "ozet": _metin_ozeti(satir[alan])})
+        conn.execute(
+            f"UPDATE glossary SET {alan}_koken = ? WHERE book_slug = ? AND source = ?",
+            (koken, book_slug, satir["source"]),
+        )
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def _alan_bolumu(metin: str | None, koken: str | None) -> int | None:
+    """Kökenin bölümü — yalnız köken BUGÜNKÜ metne aitse; değilse None (bilinmiyor)."""
+    if not metin or not koken:
+        return None
+    try:
+        veri = json.loads(koken)
+    except (ValueError, TypeError):
+        return None
+    return veri.get("bolum") if veri.get("ozet") == _metin_ozeti(metin) else None
+
+
+def gorunur_sozluk(book_slug: str, en_cok_bolum: int | None) -> dict:
+    """Sözlük ucunun SPOILER süzülmüş görünümü (Faz 1A).
+
+    `en_cok_bolum` None = süzgeç yok (bilinçli `spoiler=1`). Aksi hâlde:
+    * satır: `first_chapter` <= N ya da BİLİNMİYOR (eski kayıtların çoğu; bölüm
+      uydurulmaz — `scripts/sozluk_ilk_bolum.py` kaynak metinden doldurur);
+    * koşul / tanım: kökeni (`*_koken`) bugünkü metne ait ve <= N ise görünür;
+      kökeni bilinmeyen alan GİZLENİR, satır `gizli_alanlar` ile bunu söyler;
+    * doğrulama notu: süzülmüş görünümde gizli (modelin notu sonraki bilgi taşıyabilir);
+    * ek anlam: yalnız `ilk_bolum` bilinen ve <= N olanlar;
+    * uyarı çiftleri, yazımlar, yasaklar: yalnız GÖRÜNÜR kayıtlar için.
+    Döner: {terms, kosullar, rows, warnings, ekler, yasaklar, gizlenen_kayit}."""
+    satirlar = get_glossary_rows(book_slug)
+    ekler_ = ekler(book_slug)
+    yasaklar_ = yasaklar(book_slug)
+    uyarilar = yakin_terimler(book_slug)
+    if en_cok_bolum is None:
+        return {
+            "terms": get_glossary(book_slug), "kosullar": get_kosullar(book_slug), "rows": satirlar,
+            "warnings": uyarilar, "ekler": ekler_, "yasaklar": yasaklar_, "gizlenen_kayit": 0,
+        }
+    gorunur, gizlenen = [], 0
+    for r in satirlar:
+        ilk = r.get("first_chapter")
+        if ilk is not None and ilk > en_cok_bolum:
+            gizlenen += 1
+            continue
+        r = dict(r)
+        gizli = []
+        for alan in _KOKENLI_ALANLAR:
+            if r.get(alan):
+                bolum = _alan_bolumu(r[alan], r.get(f"{alan}_koken"))
+                if bolum is None or bolum > en_cok_bolum:
+                    r[alan] = None
+                    gizli.append(alan)
+        if r.get("dogrulama_notu"):
+            r["dogrulama_notu"] = None
+            gizli.append("dogrulama_notu")
+        r["gizli_alanlar"] = gizli
+        gorunur.append(r)
+    kaynaklar = {r["source"] for r in gorunur}
+    ekler_suz = {}
+    for kaynak, ek in ekler_.items():
+        if kaynak not in kaynaklar:
+            continue
+        anlamlar = [a for a in ek["anlamlar"] if a.get("ilk_bolum") is not None and a["ilk_bolum"] <= en_cok_bolum]
+        ekler_suz[kaynak] = {"yazimlar": ek["yazimlar"], "anlamlar": anlamlar}
+    return {
+        "terms": {r["source"]: r["target"] for r in gorunur},
+        "kosullar": {r["source"]: r["kosul"] for r in gorunur if r.get("kosul")},
+        "rows": gorunur,
+        "warnings": [(a, b) for a, b in uyarilar if a in kaynaklar and b in kaynaklar],
+        "ekler": ekler_suz,
+        "yasaklar": {k: v for k, v in yasaklar_.items() if k in kaynaklar},
+        "gizlenen_kayit": gizlenen,
+    }
 
 
 def get_glossary(book_slug: str) -> dict[str, str]:

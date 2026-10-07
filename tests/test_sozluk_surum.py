@@ -176,6 +176,8 @@ _GECMISSIZ_YAZABILIR = {
     # Yalnız prompt DIŞI alanlar (tanım, tür, doğrulama sonucu, kapı nedenleri,
     # inceleme bayrağı): prompt değişmez, sürüm artmaz (`sozluk_kapi`).
     "tanim_yaz", "dogrulama_yaz", "kapi_isaretle",
+    # Koşul/tanım metninin BÖLÜM KÖKENİ (spoiler süzgeci için): prompt dışı.
+    "alan_kokeni_yaz",
 }
 
 
