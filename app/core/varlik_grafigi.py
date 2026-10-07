@@ -506,11 +506,26 @@ _EVRIM = re.compile(r"\[(?:\.\.\.)?(?:The )?([A-Z][^\]]*?) is evolving\.{0,3}\]"
 
 # Blok başlığı -> (öznenin kim olduğu, alt satır anahtarları -> ilişki)
 _BLOK_ALT = {
-    "Memory": {"Memory Rank": "rutbesi", "Memory Type": "esya_turu", "Memory Enchantments": "efsunu"},
+    # Efsun satırı kitapta üç biçimde yazılıyor (ölçüldü): "Memory Enchantments:",
+    # tekil "Enchantment:" ve düz "Enchantments:" (923. bölüm, Bitter Cusp / Stifled Scream).
+    "Memory": {"Memory Rank": "rutbesi", "Memory Type": "esya_turu", "Memory Enchantments": "efsunu",
+               "Enchantments": "efsunu", "Enchantment": "efsunu"},
     "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi"},
     "Echo": {"Echo Type": "sinifi", "Echo Core": "rutbesi", "Echo Rank": "rutbesi"},
 }
 _BLOK_SAHIPLIK = {"Memory": "anisi", "Shadow": "golgesi", "Echo": "yanki"}
+# Sonraki bölümlerde Anı rünlerinin ARASINA anlatım giriyor ("He continued to study
+# the runes."); düz paragraf bloğu kapattığı için `Memory Description` ve efsun
+# satırları sahipsiz kalıyordu. YALNIZ Anıya özgü anahtarlar kapanmış bloğu bu kadar
+# paragraf içinde yeniden açar — başka bir bloğun satırı sanılamazlar. Genel kural
+# (düz paragraf bloğu kapatır) yerinde: ölçülen yanlış atıf başka anahtarlardaydı.
+_ANI_ANAHTARLARI = frozenset(
+    ("Memory Rank", "Memory Tier", "Memory Type", "Memory Description", "Memory Enchantments",
+     "Enchantments", "Enchantment", "Enchantment Description")
+)
+ANI_ANLATIM_PENCERESI = 12
+# "[Echoing Silence] Enchantment Description: ..." — açıklama efsun adıyla aynı paragrafta.
+_SATIR_ICI_EFSUN = re.compile(r"^\[([^\]]+)\]\s*Enchantment Description:")
 # Durum bloğu (`Name: X`) satırları -> ilişki (özne: X).
 _DURUM_SATIRLARI = {
     "True Name": "gercek_adi", "Rank": "rutbesi", "Memories": "anisi", "Echoes": "yanki",
@@ -539,6 +554,9 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
     blok_ozne: str | None = None
     blok_tur: str | None = None
     efsun_sirasi: list[int] = []  # açıklaması henüz gelmemiş efsunların `out` sırası
+    efsunlar: dict[str, int] = {}  # son Anının efsunları: ad -> `out` sırası
+    son_ani: str | None = None     # anlatımla kapanmış son Anı bloğunun öznesi
+    anlatim = 0                    # o bloktan beri geçen düz paragraf
     for paragraf in (p.strip() for p in metin.split("\n")):
         if not paragraf:
             continue
@@ -559,20 +577,33 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             out.append((m.group(1).strip(), "_evrim", "", paragraf))
         satir = _RUN_SATIRI.match(paragraf)
         if not satir:
+            ic = _SATIR_ICI_EFSUN.match(paragraf)
+            if ic and ic.group(1).strip() in efsunlar:
+                i = efsunlar[ic.group(1).strip()]
+                out[i] = (*out[i][:3], paragraf)
+                if i in efsun_sirasi:
+                    efsun_sirasi.remove(i)
+            if blok_tur == "Memory":
+                son_ani, anlatim = blok_ozne, 0
+            elif son_ani:
+                anlatim += 1
             blok_ozne = blok_tur = None
-            efsun_sirasi = []
             continue
         anahtar, deger = satir.group(1).strip(), satir.group(2)
+        if blok_tur is None and anahtar in _ANI_ANAHTARLARI and son_ani and anlatim < ANI_ANLATIM_PENCERESI:
+            blok_ozne, blok_tur = son_ani, "Memory"
         if anahtar == "Name":
             ad = _ogeler(deger)
             blok_ozne = ana_karakter if ad and ad[0] in ana_adlar else (ad[0] if ad else None)
             blok_tur = "durum"
+            son_ani, efsunlar, efsun_sirasi = None, {}, []
             continue
         if anahtar in _BLOK_SAHIPLIK:
             ogeler = _ogeler(deger)
             if ogeler:
                 blok_ozne, blok_tur = ogeler[0], anahtar
-                efsun_sirasi = []
+                efsun_sirasi, efsunlar = [], {}
+                son_ani = None
                 out.append((ana_karakter, _BLOK_SAHIPLIK[anahtar], ogeler[0], paragraf))
                 out.append((ogeler[0], "turu", anahtar, paragraf))
             continue
@@ -589,6 +620,7 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             for oge in _ogeler(deger):
                 if _BLOK_ALT[blok_tur][anahtar] == "efsunu":
                     efsun_sirasi.append(len(out))
+                    efsunlar[oge] = len(out)
                 out.append((blok_ozne, _BLOK_ALT[blok_tur][anahtar], oge, paragraf))
     return out
 
@@ -683,6 +715,26 @@ def sistemle_celisenleri_reddet(book_slug: str) -> int:
     return n
 
 
+def ani_niteliklerini_efsune_cevir(book_slug: str) -> int:
+    """Bir ANININ "niteliği" diye bağlanmış model bağını `efsunu`na çevir.
+
+    Nitelik ([Attribute]) kişiye aittir; eşyanın özelliği efsundur. Model bunu
+    ayıramıyordu (ölçülen: `Puppeteer's Shroud -> niteligi -> Doubtless`, kanıt
+    cümlesi "trait of the Puppeteer's Shroud"). Anı olduğu sistem bağıyla (`turu
+    Memory`) bilinen özneye uygulanır; eski bağ reddedilir, yenisi kanıtını, ilk
+    bölümünü ve durumunu korur. Döner: çevrilen sayısı."""
+    hepsi = baglar(book_slug, durumlar=("aday", "onaylandi"))
+    anilar = {b["kaynak_kimlik"] for b in hepsi if b["iliski"] == "turu" and b["hedef"] in ("Memory", "Memories")}
+    n = 0
+    for b in hepsi:
+        if b["origin"] == "model" and b["iliski"] == "niteligi" and b["kaynak_kimlik"] in anilar:
+            bag_durumu(book_slug, b["kaynak_kimlik"], "niteligi", b["hedef_kimlik"], "reddedildi")
+            bag_ekle(book_slug, b["kaynak_kimlik"], "efsunu", b["hedef_kimlik"], b["ilk_bolum"], b["kanit"],
+                     "model", b["guven"], durum=b["durum"])
+            n += 1
+    return n
+
+
 def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
     """Kitabın önbellekteki TÜM bölümlerinden sistem bağlarını çıkar (sırayla).
 
@@ -732,6 +784,7 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
             conn.close()
     if yaz:
         sonuc["reddedilen_model"] = sistemle_celisenleri_reddet(book_slug)
+        sonuc["efsune_cevrilen"] = ani_niteliklerini_efsune_cevir(book_slug)
     return sonuc
 
 

@@ -284,3 +284,48 @@ def test_sistemle_celisen_model_bagi_reddedilir_elle_kurulan_kalir():
     assert durum[("Bitter Peak", "efsunu", "Black Venom")] == "onaylandi"
     # Elle kurulan bağ, sistem başka ilişki söylese de reddedilmez.
     assert [d for (a, i, b), d in durum.items() if i == "yoldasi"] == ["onaylandi"]
+
+
+def test_anlatimla_bolunmus_ani_blogu_ve_efsun_bicimleri():
+    # Yapay metin; yapı 923. bölümdeki gibi: rün satırları arasına anlatım giriyor.
+    metin = "\n\n".join([
+        "Memory: [Bitter Cusp].", "Memory Rank: Ascended.", "Memory Type: Tool.",
+        "A tool, huh.", "He kept reading.",
+        "Memory Description: [Kısa.]", "He looked at the enchantments.",
+        "Enchantment: [Black Venom].", "Enchantment Description: [Zehir.]",
+        "Then he looked at the second one.",
+        "Memory: [Stifled Scream].", "Memory Type: Charm.", "Jackpot.",
+        "Enchantments: [Echoing Silence], [Word of Power].",
+        "[Echoing Silence] Enchantment Description: Sessizlik.",
+        "He tilted his head.",
+        "[Word of Power] Enchantment Description: Söz.",
+    ])
+    b = {x[:3]: x[3] for x in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
+    assert "Zehir" in b[("Bitter Cusp", "efsunu", "Black Venom")]
+    assert ("Bitter Cusp", "esya_turu", "Tool") in b
+    assert "Sessizlik" in b[("Stifled Scream", "efsunu", "Echoing Silence")]
+    assert "Söz" in b[("Stifled Scream", "efsunu", "Word of Power")]
+    # Efsunlar Anılar arasında karışmaz.
+    assert ("Bitter Cusp", "efsunu", "Echoing Silence") not in b
+
+
+def test_ani_blogu_pencere_disinda_yeniden_acilmaz():
+    metin = "\n\n".join(["Memory: [Bitter Cusp].", "Memory Rank: Ascended."]
+                          + [f"Anlatım {i}." for i in range(vg.ANI_ANLATIM_PENCERESI + 1)]
+                          + ["Enchantment: [Black Venom]."])
+    assert all(x[1] != "efsunu" for x in vg.sistem_baglarini_bul(metin, "Sunny", ()))
+
+
+def test_aninin_niteligi_efsune_cevrilir():
+    for k in ("Puppeteer's Shroud", "Doubtless", "Memory", "Nephis", "Fire"):
+        glossary.set_term(KITAP, k, k)
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Puppeteer's Shroud"), "turu", k("Memory"), 15, "x", "sistem", 1.0)
+    vg.bag_ekle(KITAP, k("Puppeteer's Shroud"), "niteligi", k("Doubtless"), 143, "trait", "model", 0.9, durum="onaylandi")
+    vg.bag_ekle(KITAP, k("Nephis"), "niteligi", k("Fire"), 50, "y", "model", 0.9, durum="onaylandi")
+    assert vg.ani_niteliklerini_efsune_cevir(KITAP) == 1
+    durum = {(b["kaynak"], b["iliski"], b["hedef"]): (b["durum"], b["ilk_bolum"])
+             for b in vg.baglar(KITAP, durumlar=("aday", "onaylandi", "reddedildi"))}
+    assert durum[("Puppeteer's Shroud", "efsunu", "Doubtless")] == ("onaylandi", 143)
+    assert durum[("Puppeteer's Shroud", "niteligi", "Doubtless")][0] == "reddedildi"
+    assert durum[("Nephis", "niteligi", "Fire")][0] == "onaylandi"  # kişi niteliği kalır
