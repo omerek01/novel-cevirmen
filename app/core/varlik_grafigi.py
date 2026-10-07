@@ -105,6 +105,11 @@ KITAP_PROFILLERI: dict[str, dict] = {
             # tanınmıyordu.
             "yaratik_sinifi": ("Beast", "Monster", "Demon", "Devil", "Tyrant", "Terror", "Titan"),
         },
+        # Dizi DIŞINDA kalan ama rütbe sayılan adlar (insan tarafının yaygın karşılıkları).
+        # `rutbesi` ilişkisinin nesnesi bunlardan ya da dizilerden değilse UNVANDIR
+        # (ölçülen, 502 bağlık inceleme: Artisan, Chain Lord, Prince of War, Dream
+        # Champion, Sorcerer of the East "rütbe" diye yazılmıştı — 20 bağ).
+        "ek_rutbeler": ("Aspirant", "Sleeper", "Dreamer", "Master", "Saint", "Sovereign"),
     },
 }
 
@@ -368,6 +373,56 @@ def nesneler(book_slug: str, iliski: str, en_az: int = 1) -> set[str]:
 
     sayac = Counter(b["hedef"] for b in baglar(book_slug) if b["iliski"] == iliski)
     return {ad for ad, n in sayac.items() if n >= en_az}
+
+
+def takma_adlari_birlestir(book_slug: str) -> int:
+    """ONAYLI takma ad / Gerçek Ad düğümlerindeki bağları asıl kişiye taşı.
+
+    Model bağları çoğu zaman metinde geçen adla kurulur (`Neph`, `Changing Star`,
+    `Sevras`); bilgi iki düğüme bölünür ve okur kişinin kartında eksik görür. Kimlik
+    bağı (takma_adi / gercek_adi) kendisi taşınmaz. Taşınan bağ `bag_ekle` ile
+    birleşir (ilk bölüm küçük olan kalır), eskisi silinir. Döner: taşınan bağ sayısı.
+    """
+    kimlik_baglari = [
+        b for b in baglar(book_slug, durumlar=("onaylandi",))
+        if b["iliski"] in ("takma_adi", "gercek_adi")
+    ]
+    asil = {b["hedef_kimlik"]: b["kaynak_kimlik"] for b in kimlik_baglari}
+    # Zincir (A -> B -> C): en üstteki asıl kişiye indir.
+    def kok(k: str) -> str:
+        gorulen = set()
+        while k in asil and k not in gorulen:
+            gorulen.add(k)
+            k = asil[k]
+        return k
+    tasinan = 0
+    conn = _connect()
+    try:
+        for b in baglar(book_slug, durumlar=("aday", "onaylandi")):
+            if b["iliski"] in ("takma_adi", "gercek_adi"):
+                continue
+            a, n = kok(b["kaynak_kimlik"]), kok(b["hedef_kimlik"])
+            if (a, n) == (b["kaynak_kimlik"], b["hedef_kimlik"]) or a == n:
+                continue
+            satir = conn.execute(
+                "SELECT ilk_bolum, kanit, origin, durum, guven FROM varlik_bag WHERE book_slug = ? "
+                "AND kaynak_kimlik = ? AND iliski = ? AND hedef_kimlik = ?",
+                (book_slug, b["kaynak_kimlik"], b["iliski"], b["hedef_kimlik"]),
+            ).fetchone()
+            if satir is None:
+                continue
+            bag_ekle(book_slug, a, b["iliski"], n, satir[0], satir[1], satir[2], satir[4],
+                     durum=satir[3], conn=conn)
+            conn.execute(
+                "DELETE FROM varlik_bag WHERE book_slug = ? AND kaynak_kimlik = ? AND iliski = ? "
+                "AND hedef_kimlik = ?",
+                (book_slug, b["kaynak_kimlik"], b["iliski"], b["hedef_kimlik"]),
+            )
+            tasinan += 1
+        conn.commit()
+    finally:
+        conn.close()
+    return tasinan
 
 
 # ---------- sistem mesajı çıkarımı (Shadow Slave rünleri) ----------

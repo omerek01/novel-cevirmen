@@ -185,6 +185,24 @@ def test_simetrik_iliski_tek_bagdir():
     assert len(baglar) == 1 and baglar[0]["ilk_bolum"] == 110
 
 
+def test_takma_ad_dugumundeki_baglar_asil_kisiye_tasinir():
+    _sozluk()
+    for k in ("Nephis", "Neph", "Dawn Shard", "Changing Star", "Tessai"):
+        glossary.set_term(KITAP, k, k)
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Nephis"), "takma_adi", k("Neph"), 209, None, "model", durum="onaylandi")
+    vg.bag_ekle(KITAP, k("Nephis"), "gercek_adi", k("Changing Star"), 28, None, "manual")
+    vg.bag_ekle(KITAP, k("Neph"), "anisi", k("Dawn Shard"), 296, "x", "model", 0.9)
+    vg.bag_ekle(KITAP, k("Changing Star"), "oldurdu", k("Tessai"), 313, "y", "model", 0.9)
+    vg.bag_ekle(KITAP, k("Nephis"), "anisi", k("Dawn Shard"), 400, "z", "model", 0.9)
+    assert vg.takma_adlari_birlestir(KITAP) == 2
+    baglar = {(b["kaynak"], b["iliski"], b["hedef"]): b for b in vg.baglar(KITAP)}
+    assert baglar[("Nephis", "anisi", "Dawn Shard")]["ilk_bolum"] == 296  # erken olan kalır
+    assert ("Nephis", "oldurdu", "Tessai") in baglar
+    assert ("Neph", "anisi", "Dawn Shard") not in baglar
+    assert ("Nephis", "takma_adi", "Neph") in baglar  # kimlik bağı yerinde
+
+
 def test_bilinmeyen_iliski_reddedilir():
     import pytest
 

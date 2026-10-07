@@ -212,6 +212,15 @@ def test_hiz_sinirinda_geri_cekilip_sonra_yeniden_dener(monkeypatch):
     assert ozet["bolum"] == 1 and ozet["hata"] == [] and sayac["n"] == 5
 
 
+def test_rutbe_olmayan_ad_unvana_cevrilir():
+    p = vg.KITAP_PROFILLERI["shadow-slave"]
+    duz = varlik_cikarim.duzen_iliskisini_duzelt
+    for nesne in ("Chain Lord", "Artisan", "Prince of War", "Lord"):
+        assert duz({"iliski": "rutbesi", "nesne": nesne}, p["diziler"], p["ek_rutbeler"])["iliski"] == "unvani"
+    for nesne in ("Master", "Ascended", "Ascended human", "Saint", "Sleeper", "Transcendent"):
+        assert duz({"iliski": "rutbesi", "nesne": nesne}, p["diziler"], p["ek_rutbeler"])["iliski"] == "rutbesi"
+
+
 def test_varsayilan_zincir_ucretsiz():
     kaynak = inspect.getsource(varlik_cikarim)
     assert "secili_zincir(" not in kaynak

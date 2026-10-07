@@ -110,7 +110,9 @@ def ad_temizle(ad: str) -> str:
     return _ETIKET_EKI.sub("", (ad or "").strip()).strip()
 
 
-def duzen_iliskisini_duzelt(bag: dict, diziler: dict[str, tuple[str, ...]]) -> dict:
+def duzen_iliskisini_duzelt(
+    bag: dict, diziler: dict[str, tuple[str, ...]], ek_rutbeler: tuple[str, ...] = (),
+) -> dict:
     """`rutbesi` ile `sinifi` karışmasını profildeki dizilere göre düzelt.
 
     Ölçülen: `Mountain King -> rutbesi -> Tyrant` (Tyrant bir SINIF). Nesne bir
@@ -125,6 +127,14 @@ def duzen_iliskisini_duzelt(bag: dict, diziler: dict[str, tuple[str, ...]]) -> d
         return {**bag, "iliski": "sinifi"}
     if nesne in rutbeler and bag["iliski"] == "sinifi":
         return {**bag, "iliski": "rutbesi"}
+    # `rutbesi` YALNIZ gerçek rütbe adlarına (dizi + ek rütbeler); sözcüklerinden biri
+    # rütbe değilse UNVANDIR. Ölçülen (502 bağ): Artisan, Chain Lord, Prince of War,
+    # Dream Champion, Sorcerer of the East, Lord — 20 bağ "rütbe" yazılmıştı.
+    tum_rutbe = rutbeler | siniflar | {x.casefold() for x in ek_rutbeler}
+    if bag["iliski"] == "rutbesi" and diziler and not any(
+        w.rstrip("s") in {r.rstrip("s") for r in tum_rutbe} for w in nesne.split()
+    ):
+        return {**bag, "iliski": "unvani"}
     # `sinifi` YALNIZ yaratık sınıfına ayrılır; başka kategori (Flaw, Legacy) türdür.
     # Ölçülen: `Clear Conscience -> sinifi -> Flaw`, `Caster -> sinifi -> Legacy`.
     if bag["iliski"] == "sinifi" and not any(
@@ -273,9 +283,10 @@ def bolum_cikar(
     yazimlar = {k: v["yazimlar"] for k, v in ekler.items()}
     gecerli, red = [], []
     diziler = (varlik_grafigi.profil(book_slug) or {}).get("diziler", {})
+    ek_rutbeler = (varlik_grafigi.profil(book_slug) or {}).get("ek_rutbeler", ())
     for b in veri["baglar"]:
         b = {**b, "ozne": ad_temizle(b.get("ozne") or ""), "nesne": ad_temizle(b.get("nesne") or "")}
-        b = duzen_iliskisini_duzelt(b, diziler)
+        b = duzen_iliskisini_duzelt(b, diziler, ek_rutbeler)
         sebep = kaniti_dogrula(b, kaynak_metin, yazimlar)
         a, n = cozucu.coz(b.get("ozne") or ""), cozucu.coz(b.get("nesne") or "")
         a, n = asil.get(a, a), asil.get(n, n)
@@ -401,6 +412,7 @@ def ciftleri_sor(
     havuz = [(no, s, _normal(s)) for c in ciftler for no, s in c["ornekler"]]
     yazimlar = {k: v["yazimlar"] for k, v in glossary.ekler(book_slug).items()}
     diziler = (varlik_grafigi.profil(book_slug) or {}).get("diziler", {})
+    ek_rutbeler = (varlik_grafigi.profil(book_slug) or {}).get("ek_rutbeler", ())
     sistem: dict[tuple[str, str], set[str]] = {}
     asil: dict[str, str] = {}
     for b in varlik_grafigi.baglar(book_slug):
@@ -411,7 +423,7 @@ def ciftleri_sor(
     gecerli, red = [], []
     for b in veri["baglar"]:
         b = {**b, "ozne": ad_temizle(b.get("ozne") or ""), "nesne": ad_temizle(b.get("nesne") or "")}
-        b = duzen_iliskisini_duzelt(b, diziler)
+        b = duzen_iliskisini_duzelt(b, diziler, ek_rutbeler)
         kanit = _normal(b.get("kanit") or "")
         eslesme = next(((no, s) for no, s, n in havuz if kanit and len(kanit) >= 8 and kanit in n), None)
         if eslesme is None:
