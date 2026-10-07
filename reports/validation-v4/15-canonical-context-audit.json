@@ -1,0 +1,26 @@
+{
+  "model_calls": 0,
+  "old_context": [
+    "BAĞ Puppeteer's Shroud --turu--> Memory (öğrenildi b15, confirmed, sistem)",
+    "BAĞ Sunny --rutbesi--> Dreamer (öğrenildi b15, confirmed, sistem)",
+    "BAĞ Sunny --gercek_adi--> Lost from Light (öğrenildi b15, confirmed, sistem)",
+    "PLAN (simulation, not persisted): Sunny --anisi--> Puppeteer’s Shroud",
+    "PLAN (simulation, not persisted): Puppeteer’s Shroud --turu--> Memory",
+    "PLAN (simulation, not persisted): Sunny --rutbesi--> Dreamer",
+    "PLAN (simulation, not persisted): Sunny --gercek_adi--> Lost from Light",
+    "PLAN (simulation, not persisted): Dormant Aspect Temple Slave --_evrim--> ",
+    "PLAN (simulation, not persisted): Sunny --gorunusu--> Shadow Slave",
+    "PLAN (simulation, not persisted): Shadow Slave --rutbesi--> Divine",
+    "PLAN (simulation, not persisted): Sunny --yetenegi--> Shadow Bond"
+  ],
+  "new_context": [
+    "{\"iliski\": \"turu\", \"nesne\": \"Memory\", \"ozne\": \"Puppeteer's Shroud\"}",
+    "{\"iliski\": \"rutbesi\", \"nesne\": \"Dreamer\", \"ozne\": \"Sunny\"}",
+    "{\"iliski\": \"gercek_adi\", \"nesne\": \"Lost from Light\", \"ozne\": \"Sunny\"}",
+    "{\"iliski\": \"anisi\", \"nesne\": \"Puppeteer's Shroud\", \"ozne\": \"Sunny\"}",
+    "{\"iliski\": \"gorunusu\", \"nesne\": \"Shadow Slave\", \"ozne\": \"Sunny\"}",
+    "{\"iliski\": \"rutbesi\", \"nesne\": \"Divine\", \"ozne\": \"Shadow Slave\"}",
+    "{\"iliski\": \"yetenegi\", \"nesne\": \"Shadow Bond\", \"ozne\": \"Sunny\"}"
+  ],
+  "total_context_tokens": 1387
+}

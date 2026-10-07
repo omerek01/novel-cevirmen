@@ -1,0 +1,33 @@
+{
+  "model_calls": 0,
+  "raw_responses_unchanged": true,
+  "protected_tables_unchanged": true,
+  "metrics": {
+    "schema_failures": 0,
+    "model_failures": 0,
+    "raw_relationships": 23,
+    "identity_revelations": 2,
+    "already_known_proposals": 0,
+    "deterministic_same_chapter_duplicates": 4,
+    "same_chapter_existing_proposals": 9,
+    "unsupported_state_keys": 0,
+    "new_entity_candidates": 1,
+    "direction_errors": 0,
+    "high_impact_evidence_failures": 3,
+    "unsupported_review_items": 3,
+    "review_items": 4,
+    "context_dropped": 1201,
+    "giris_tokeni": 266346,
+    "cikis_tokeni": 4814,
+    "dusunme_tokeni": 54441,
+    "model_retries": 0,
+    "future_knowledge_violations": 0,
+    "epistemic_non_confirmed": 1,
+    "accepted_relationships": 4,
+    "accepted_aliases": 1,
+    "accepted_state_changes": 0,
+    "evidence_failures": 9,
+    "same_delta_duplicates": 4
+  },
+  "schema_unchanged": true
+}

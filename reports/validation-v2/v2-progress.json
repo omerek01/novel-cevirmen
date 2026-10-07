@@ -1,0 +1,1006 @@
+[
+ {
+  "bolum": 2,
+  "durum": "dogrulama",
+  "girdi_bilgisi": [
+   "VARLIK Abilities -> Yetenekler",
+   "VARLIK Armor -> Zırh",
+   "VARLIK Aspect -> Görünüş",
+   "VARLIK Aspect Description -> Görünüş Açıklaması",
+   "VARLIK Aspects -> Görünüşler",
+   "VARLIK Aspirant -> Aday",
+   "VARLIK Aspirants -> Adaylar",
+   "VARLIK Attribute -> Nitelik",
+   "VARLIK Attributes -> Nitelikler",
+   "VARLIK Child of Shadows -> Gölgelerin Çocuğu",
+   "VARLIK Dormant -> Uykuda",
+   "VARLIK Echo -> Yankı",
+   "VARLIK Echoes -> Yankılar",
+   "VARLIK Empire -> İmparatorluk",
+   "VARLIK Fated -> Yazgılı",
+   "VARLIK First Nightmare -> İlk Kabus",
+   "VARLIK First Nightmares -> İlk Kabuslar",
+   "VARLIK First Trial -> İlk Sınav",
+   "VARLIK Fool -> Aptal",
+   "VARLIK Hollow -> Kovan",
+   "VARLIK Imperials -> İmparatorluk askerleri",
+   "VARLIK Lost -> Kayıplar",
+   "VARLIK Mark of Divinity -> İlahiyat İşareti",
+   "VARLIK Memories -> Anılar",
+   "VARLIK Nightmare -> Kabus",
+   "VARLIK Nightmare Spell -> Kabus Büyüsü",
+   "VARLIK Nightmares -> Kabuslar",
+   "VARLIK Rank -> Rütbe",
+   "VARLIK Shadow -> Gölge",
+   "VARLIK Shadow God -> Gölge Tanrısı",
+   "VARLIK Shadows -> Gölgeler",
+   "VARLIK Skill -> Beceri",
+   "VARLIK Skills -> Beceriler",
+   "VARLIK Soul Core -> Ruh Çekirdeği",
+   "VARLIK Spell -> Büyü",
+   "VARLIK Strong -> Güçlü",
+   "VARLIK Sun -> Güneş",
+   "VARLIK Sunless -> Sunless",
+   "VARLIK Sunny -> Sunny",
+   "VARLIK Temple Slave -> Tapınak Kölesi",
+   "VARLIK Trials -> Sınavlar",
+   "VARLIK True Name -> Gerçek İsim",
+   "VARLIK War -> Savaş",
+   "VARLIK War God -> Savaş Tanrısı",
+   "VARLIK Warriors -> Savaşçılar",
+   "BAĞ Sunny --takma_adi--> Sunless (öğrenildi b1, confirmed, manual)",
+   "BAĞ Dormant --ust_basamak--> Awakened (öğrenildi b1, confirmed, manual)"
+  ],
+  "deterministik_bilgi": [
+   "BAĞ Sunny --niteligi--> Fated (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Mark of Divinity (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Child of Shadows (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --gorunusu--> Temple Slave (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --rutbesi--> Aspirant (öğrenildi b2, confirmed, sistem)"
+  ],
+  "hata_sinifi": null,
+  "surumler": {
+   "cikarici": "2",
+   "istem": "2",
+   "sema": "delta-2"
+  },
+  "olcum": {
+   "kaynak_tokeni": 2196,
+   "baglam_tokeni": 507,
+   "run_tokeni": 94,
+   "kesilen_satir": 0,
+   "aday_satir": 52,
+   "giren_satir": 52,
+   "sinif": {
+    "varlik": {
+     "aday": 45,
+     "giren": 45,
+     "kesilen": 0
+    },
+    "kimlik": {
+     "aday": 1,
+     "giren": 1,
+     "kesilen": 0
+    },
+    "durum": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "dogrudan_yeni": {
+     "aday": 1,
+     "giren": 1,
+     "kesilen": 0
+    },
+    "dogrudan_eski": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "kimlik_sorusu": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "ayni_bolum_deterministik": {
+     "aday": 5,
+     "giren": 5,
+     "kesilen": 0
+    }
+   },
+   "fiili_model": "vertex/gemini-3.6-flash",
+   "giris_tokeni": 7709,
+   "cikis_tokeni": 68,
+   "dusunme_tokeni": 1655,
+   "sure_sn": 13.66,
+   "model_attempts": 1,
+   "model_retries": 0
+  },
+  "ham_yanit": "{\n  \"new_relationships\": [],\n  \"new_aliases\": [],\n  \"relationship_updates\": [],\n  \"state_changes\": [],\n  \"identity_revelations\": [],\n  \"contradictions\": [],\n  \"new_entities\": [],\n  \"review_items\": []\n}",
+  "model_deltasi": {
+   "new_relationships": [],
+   "new_aliases": [],
+   "relationship_updates": [],
+   "state_changes": [],
+   "identity_revelations": [],
+   "contradictions": [],
+   "new_entities": [],
+   "review_items": []
+  },
+  "sema_hatalari": [],
+  "degerlendirme": {
+   "oneriler": [],
+   "inceleme": [],
+   "sayac": {
+    "already_known_proposals": 0,
+    "deterministic_same_chapter_duplicates": 0,
+    "unsupported_state_keys": 0,
+    "new_entity_candidates": 0
+   }
+  },
+  "api_cagrilari": [
+   {
+    "model": "vertex/gemini-3.6-flash",
+    "sonuc": "basari",
+    "kod": null,
+    "sure_ms": null
+   }
+  ]
+ },
+ {
+  "bolum": 15,
+  "durum": "dogrulama",
+  "girdi_bilgisi": [
+   "VARLIK Ability -> Yetenek",
+   "VARLIK Ability Description -> Yetenek Açıklaması",
+   "VARLIK Appraisal -> Değerlendirme",
+   "VARLIK Ascended -> Yükselmiş",
+   "VARLIK Ascended Aspect -> Yükselmiş Görünüş",
+   "VARLIK Aspect -> Görünüş",
+   "VARLIK Aspect Description -> Görünüş Açıklaması",
+   "VARLIK Aspect Rank -> Görünüş Rütbesi",
+   "VARLIK Aspects -> Görünüşler",
+   "VARLIK Aspirant -> Aday",
+   "VARLIK Auro -> Auro",
+   "VARLIK Auro of the Nine -> Auro of the Nine",
+   "VARLIK Awakened -> Uyanmış",
+   "VARLIK Awakened Rank -> Uyanmış Rütbesi",
+   "VARLIK Awakened Tyrant -> Uyanmış Tiran",
+   "VARLIK Awakening -> Uyanış",
+   "VARLIK Black Mountain -> Kara Dağ",
+   "VARLIK Corrupted -> Yozlaşmış",
+   "VARLIK Cursed -> Lanetli",
+   "VARLIK Divine -> İlahi",
+   "VARLIK Dormant -> Uykuda",
+   "VARLIK Dream Realm -> Rüyalar Diyarı",
+   "VARLIK Dreamer -> Rüyacı",
+   "VARLIK Echo -> Yankı",
+   "VARLIK Echoes -> Yankılar",
+   "VARLIK Fallen -> Düşmüş",
+   "VARLIK First Nightmare -> İlk Kabus",
+   "VARLIK Forgotten God -> Unutulmuş Tanrı",
+   "VARLIK Great -> Ulu",
+   "VARLIK Innate Ability -> Doğuştan Gelen Yetenek",
+   "VARLIK Lost -> Kayıplar",
+   "VARLIK Lost from Light -> Işıktan Mahrum",
+   "VARLIK Master -> Efendi",
+   "VARLIK Memories -> Anılar",
+   "VARLIK Memory -> Anı",
+   "VARLIK Monster -> Canavar",
+   "VARLIK Monsters -> Canavarlar",
+   "VARLIK Mountain King -> Dağ Kralı",
+   "VARLIK Mountain King's Larva -> Dağ Kralı'nın Larvası",
+   "VARLIK Nightmare -> Kabus",
+   "VARLIK Nightmare Creature -> Kabus Yaratığı",
+   "VARLIK Nightmare Creatures -> Kabus Yaratıkları",
+   "VARLIK Nightmare Spell -> Kabus Büyüsü",
+   "VARLIK Not Really -> Pek Sayılmaz",
+   "VARLIK Puppeteer's Shroud -> Kuklacının Örtüsü",
+   "VARLIK Rank -> Rütbe",
+   "VARLIK Ranks -> Rütbeler",
+   "VARLIK Sacred -> Kutsal",
+   "VARLIK Saint -> Aziz",
+   "VARLIK Saints -> Azizler",
+   "VARLIK Seven -> Yediler",
+   "VARLIK Shadow -> Gölge",
+   "VARLIK Shadow Bond -> Gölge Bağı",
+   "VARLIK Shadow God -> Gölge Tanrısı",
+   "VARLIK Shadow Slave -> Gölge Kölesi",
+   "VARLIK Soul Core -> Ruh Çekirdeği",
+   "VARLIK Spell -> Büyü",
+   "VARLIK Sunless -> Sunless",
+   "VARLIK Sunny -> Sunny",
+   "VARLIK Supreme -> Yüce",
+   "VARLIK Supreme Rank -> Yüce Rütbe",
+   "VARLIK Temple Slave -> Tapınak Kölesi",
+   "VARLIK Third Nightmare -> Üçüncü Kabus",
+   "VARLIK Transcendent -> Aşkın",
+   "VARLIK Transcendents -> Aşkınlar",
+   "VARLIK Trials -> Sınavlar",
+   "VARLIK True Name -> Gerçek İsim",
+   "VARLIK Tyrant -> Tiran",
+   "VARLIK Unbroken -> Kırılmaz",
+   "VARLIK Unholy -> Kutsal Olmayan",
+   "VARLIK Unknown -> Bilinmeyenler",
+   "VARLIK beast -> Mahluk",
+   "VARLIK divine Aspect -> İlahi Görünüş",
+   "VARLIK dormant beast -> uykudaki mahluk",
+   "VARLIK glorious -> şanlı",
+   "BAĞ Sunny --takma_adi--> Sunless (öğrenildi b1, confirmed, manual)",
+   "BAĞ Mountain King --rutbesi--> Awakened (öğrenildi b14, confirmed, sistem)",
+   "BAĞ Mountain King --turu--> Awakened Tyrant (öğrenildi b14, değerlendirilmemiş, model)",
+   "BAĞ Sunny --oldurdu--> Mountain King (öğrenildi b14, confirmed, sistem)",
+   "BAĞ Sunny --yoldasi--> Auro of the Nine (öğrenildi b10, değerlendirilmemiş, model)",
+   "BAĞ Mountain King --sinifi--> Tyrant (öğrenildi b9, confirmed, sistem)",
+   "BAĞ Silver Bell --turu--> Memory (öğrenildi b8, confirmed, sistem)",
+   "BAĞ Mountain King's Larva --sinifi--> beast (öğrenildi b4, confirmed, sistem)",
+   "BAĞ Mountain King's Larva --rutbesi--> Dormant (öğrenildi b4, confirmed, sistem)",
+   "BAĞ Sunny --oldurdu--> Mountain King's Larva (öğrenildi b4, confirmed, sistem)",
+   "BAĞ Imperials --dusmani--> Shadow God (öğrenildi b2, değerlendirilmemiş, model)",
+   "BAĞ Sunny --niteligi--> Fated (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Mark of Divinity (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Child of Shadows (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --gorunusu--> Temple Slave (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --rutbesi--> Aspirant (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Ascended --ust_basamak--> Transcendent (öğrenildi b1, confirmed, manual)",
+   "BAĞ Awakened --ust_basamak--> Ascended (öğrenildi b1, confirmed, manual)",
+   "BAĞ Awakened --ust_basamak--> Fallen (öğrenildi b1, confirmed, manual)",
+   "BAĞ Corrupted --ust_basamak--> Great (öğrenildi b1, confirmed, manual)",
+   "BAĞ Cursed --ust_basamak--> Unholy (öğrenildi b1, confirmed, manual)",
+   "BAĞ Devil --ust_basamak--> Tyrant (öğrenildi b1, confirmed, manual)",
+   "BAĞ Dormant --ust_basamak--> Awakened (öğrenildi b1, confirmed, manual)",
+   "BAĞ Fallen --ust_basamak--> Corrupted (öğrenildi b1, confirmed, manual)",
+   "BAĞ Great --ust_basamak--> Cursed (öğrenildi b1, confirmed, manual)",
+   "BAĞ Monster --ust_basamak--> Demon (öğrenildi b1, confirmed, manual)",
+   "BAĞ Sacred --ust_basamak--> Divine (öğrenildi b1, confirmed, manual)",
+   "BAĞ Supreme --ust_basamak--> Sacred (öğrenildi b1, confirmed, manual)",
+   "BAĞ Transcendent --ust_basamak--> Supreme (öğrenildi b1, confirmed, manual)",
+   "BAĞ Tyrant --ust_basamak--> Terror (öğrenildi b1, confirmed, manual)",
+   "BAĞ beast --ust_basamak--> Monster (öğrenildi b1, confirmed, manual)"
+  ],
+  "deterministik_bilgi": [
+   "BAĞ Puppeteer's Shroud --turu--> Memory (öğrenildi b15, confirmed, sistem)",
+   "BAĞ Sunny --rutbesi--> Dreamer (öğrenildi b15, confirmed, sistem)",
+   "BAĞ Sunny --gercek_adi--> Lost from Light (öğrenildi b15, confirmed, sistem)"
+  ],
+  "hata_sinifi": null,
+  "surumler": {
+   "cikarici": "2",
+   "istem": "2",
+   "sema": "delta-2"
+  },
+  "olcum": {
+   "kaynak_tokeni": 1828,
+   "baglam_tokeni": 1323,
+   "run_tokeni": 58,
+   "kesilen_satir": 0,
+   "aday_satir": 109,
+   "giren_satir": 109,
+   "sinif": {
+    "varlik": {
+     "aday": 75,
+     "giren": 75,
+     "kesilen": 0
+    },
+    "kimlik": {
+     "aday": 1,
+     "giren": 1,
+     "kesilen": 0
+    },
+    "durum": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "dogrudan_yeni": {
+     "aday": 30,
+     "giren": 30,
+     "kesilen": 0
+    },
+    "dogrudan_eski": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "kimlik_sorusu": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "ayni_bolum_deterministik": {
+     "aday": 3,
+     "giren": 3,
+     "kesilen": 0
+    }
+   },
+   "fiili_model": "vertex/gemini-3.6-flash",
+   "giris_tokeni": 8321,
+   "cikis_tokeni": 412,
+   "dusunme_tokeni": 5125,
+   "sure_sn": 26.81,
+   "model_attempts": 1,
+   "model_retries": 0
+  },
+  "ham_yanit": "{\"new_relationships\":[{\"ozne\":\"Sunny\",\"iliski\":\"gorunusu\",\"nesne\":\"Shadow Slave\",\"kanit\":\"[Aspect Name: Shadow Slave.]\",\"durum_bilgisi\":\"confirmed\",\"gecerli_baslangic\":null,\"gecerli_bitis\":null},{\"ozne\":\"Shadow Slave\",\"iliski\":\"rutbesi\",\"nesne\":\"Divine\",\"kanit\":\"[Aspect Rank: Divine.]\",\"durum_bilgisi\":\"confirmed\",\"gecerli_baslangic\":null,\"gecerli_bitis\":null},{\"ozne\":\"Sunny\",\"iliski\":\"yetenegi\",\"nesne\":\"Shadow Bond\",\"kanit\":\"Innate Ability: [Shadow Bond].\",\"durum_bilgisi\":\"confirmed\",\"gecerli_baslangic\":null,\"gecerli_bitis\":null},{\"ozne\":\"Auro of the Nine\",\"iliski\":\"rutbesi\",\"nesne\":\"Awakened\",\"kanit\":\"[You have defeated an awakened human: Auro of the Nine.]\",\"durum_bilgisi\":\"confirmed\",\"gecerli_baslangic\":null,\"gecerli_bitis\":null}],\"new_aliases\":[],\"relationship_updates\":[{\"ozne\":\"Sunny\",\"iliski\":\"gorunusu\",\"nesne\":\"Temple Slave\",\"degisim\":\"ended\",\"kanit\":\"[Dormant Aspect Temple Slave is evolving...]\",\"durum_bilgisi\":\"confirmed\",\"gecerli_bitis\":null},{\"ozne\":\"Sunny\",\"iliski\":\"rutbesi\",\"nesne\":\"Aspirant\",\"degisim\":\"ended\",\"kanit\":\"He was an Aspirant no more.\",\"durum_bilgisi\":\"confirmed\",\"gecerli_bitis\":null}],\"state_changes\":[],\"identity_revelations\":[],\"contradictions\":[],\"new_entities\":[{\"ad\":\"First Seal\",\"kanit\":\"[The First Seal is broken.]\",\"tur\":\"kavram\"}],\"review_items\":[]}",
+  "model_deltasi": {
+   "new_relationships": [
+    {
+     "ozne": "Sunny",
+     "iliski": "gorunusu",
+     "nesne": "Shadow Slave",
+     "kanit": "[Aspect Name: Shadow Slave.]",
+     "durum_bilgisi": "confirmed",
+     "gecerli_baslangic": null,
+     "gecerli_bitis": null
+    },
+    {
+     "ozne": "Shadow Slave",
+     "iliski": "rutbesi",
+     "nesne": "Divine",
+     "kanit": "[Aspect Rank: Divine.]",
+     "durum_bilgisi": "confirmed",
+     "gecerli_baslangic": null,
+     "gecerli_bitis": null
+    },
+    {
+     "ozne": "Sunny",
+     "iliski": "yetenegi",
+     "nesne": "Shadow Bond",
+     "kanit": "Innate Ability: [Shadow Bond].",
+     "durum_bilgisi": "confirmed",
+     "gecerli_baslangic": null,
+     "gecerli_bitis": null
+    },
+    {
+     "ozne": "Auro of the Nine",
+     "iliski": "rutbesi",
+     "nesne": "Awakened",
+     "kanit": "[You have defeated an awakened human: Auro of the Nine.]",
+     "durum_bilgisi": "confirmed",
+     "gecerli_baslangic": null,
+     "gecerli_bitis": null
+    }
+   ],
+   "new_aliases": [],
+   "relationship_updates": [
+    {
+     "ozne": "Sunny",
+     "iliski": "gorunusu",
+     "nesne": "Temple Slave",
+     "degisim": "ended",
+     "kanit": "[Dormant Aspect Temple Slave is evolving...]",
+     "durum_bilgisi": "confirmed",
+     "gecerli_bitis": null
+    },
+    {
+     "ozne": "Sunny",
+     "iliski": "rutbesi",
+     "nesne": "Aspirant",
+     "degisim": "ended",
+     "kanit": "He was an Aspirant no more.",
+     "durum_bilgisi": "confirmed",
+     "gecerli_bitis": null
+    }
+   ],
+   "state_changes": [],
+   "identity_revelations": [],
+   "contradictions": [],
+   "new_entities": [
+    {
+     "ad": "First Seal",
+     "kanit": "[The First Seal is broken.]",
+     "tur": "kavram"
+    }
+   ],
+   "review_items": []
+  },
+  "sema_hatalari": [],
+  "degerlendirme": {
+   "oneriler": [
+    {
+     "tur": "new_relationships",
+     "sinif": "NEEDS_REVIEW",
+     "karar": "reddedildi:ozne kanıt cümlesinde geçmiyor",
+     "veri": {
+      "ozne": "Sunny",
+      "iliski": "gorunusu",
+      "nesne": "Shadow Slave",
+      "kanit": "[Aspect Name: Shadow Slave.]",
+      "durum_bilgisi": "confirmed",
+      "gecerli_baslangic": null,
+      "gecerli_bitis": null,
+      "kaynak_tur": "new_relationships",
+      "guven": 0.9,
+      "sebep": "ozne kanıt cümlesinde geçmiyor",
+      "ozne_kimlik": "517c3ecb0cdf23ba",
+      "nesne_kimlik": "3c3eab70998fa6c1",
+      "bolum": 15
+     }
+    },
+    {
+     "tur": "new_relationships",
+     "sinif": "NEEDS_REVIEW",
+     "karar": "reddedildi:ozne kanıt cümlesinde geçmiyor",
+     "veri": {
+      "ozne": "Shadow Slave",
+      "iliski": "rutbesi",
+      "nesne": "Divine",
+      "kanit": "[Aspect Rank: Divine.]",
+      "durum_bilgisi": "confirmed",
+      "gecerli_baslangic": null,
+      "gecerli_bitis": null,
+      "kaynak_tur": "new_relationships",
+      "guven": 0.9,
+      "sebep": "ozne kanıt cümlesinde geçmiyor",
+      "ozne_kimlik": "3c3eab70998fa6c1",
+      "nesne_kimlik": "009bc95d2faa14a2",
+      "bolum": 15
+     }
+    },
+    {
+     "tur": "new_relationships",
+     "sinif": "NEEDS_REVIEW",
+     "karar": "reddedildi:ozne kanıt cümlesinde geçmiyor",
+     "veri": {
+      "ozne": "Sunny",
+      "iliski": "yetenegi",
+      "nesne": "Shadow Bond",
+      "kanit": "Innate Ability: [Shadow Bond].",
+      "durum_bilgisi": "confirmed",
+      "gecerli_baslangic": null,
+      "gecerli_bitis": null,
+      "kaynak_tur": "new_relationships",
+      "guven": 0.9,
+      "sebep": "ozne kanıt cümlesinde geçmiyor",
+      "ozne_kimlik": "517c3ecb0cdf23ba",
+      "nesne_kimlik": "76a7ed6b263e7fb1",
+      "bolum": 15
+     }
+    },
+    {
+     "tur": "new_relationships",
+     "sinif": "ALREADY_EXISTS",
+     "karar": "atla:zaten var",
+     "veri": {
+      "ozne": "Auro of the Nine",
+      "iliski": "rutbesi",
+      "nesne": "Awakened",
+      "kanit": "[You have defeated an awakened human: Auro of the Nine.]",
+      "durum_bilgisi": "confirmed",
+      "gecerli_baslangic": null,
+      "gecerli_bitis": null,
+      "kaynak_tur": "new_relationships",
+      "guven": 0.9,
+      "sebep": null,
+      "ozne_kimlik": "a89ddb4dbc0ee051",
+      "nesne_kimlik": "2a426cdc9ea9bebb",
+      "bolum": 15
+     }
+    },
+    {
+     "tur": "relationship_updates",
+     "sinif": "CONFLICTS_WITH_EXISTING",
+     "karar": "inceleme",
+     "veri": {
+      "ozne": "Sunny",
+      "iliski": "gorunusu",
+      "nesne": "Temple Slave",
+      "degisim": "ended",
+      "kanit": "[Dormant Aspect Temple Slave is evolving...]",
+      "durum_bilgisi": "confirmed",
+      "gecerli_bitis": null,
+      "kaynak_kimlik": "517c3ecb0cdf23ba",
+      "hedef_kimlik": "956ba551feb95a96"
+     }
+    },
+    {
+     "tur": "relationship_updates",
+     "sinif": "CONFLICTS_WITH_EXISTING",
+     "karar": "inceleme",
+     "veri": {
+      "ozne": "Sunny",
+      "iliski": "rutbesi",
+      "nesne": "Aspirant",
+      "degisim": "ended",
+      "kanit": "He was an Aspirant no more.",
+      "durum_bilgisi": "confirmed",
+      "gecerli_bitis": null,
+      "kaynak_kimlik": "517c3ecb0cdf23ba",
+      "hedef_kimlik": "cbeb1fe379be7364"
+     }
+    },
+    {
+     "tur": "new_entities",
+     "sinif": "NEEDS_REVIEW",
+     "karar": "inceleme",
+     "veri": {
+      "ad": "First Seal",
+      "kanit": "[The First Seal is broken.]",
+      "tur": "kavram"
+     }
+    }
+   ],
+   "inceleme": [
+    [
+     "temporal_conflict",
+     "high",
+     "Elle/rün bağı için 'ended' önerisi: Sunny gorunusu Temple Slave",
+     {
+      "oneri": {
+       "ozne": "Sunny",
+       "iliski": "gorunusu",
+       "nesne": "Temple Slave",
+       "degisim": "ended",
+       "kanit": "[Dormant Aspect Temple Slave is evolving...]",
+       "durum_bilgisi": "confirmed",
+       "gecerli_bitis": null
+      }
+     }
+    ],
+    [
+     "temporal_conflict",
+     "high",
+     "Elle/rün bağı için 'ended' önerisi: Sunny rutbesi Aspirant",
+     {
+      "oneri": {
+       "ozne": "Sunny",
+       "iliski": "rutbesi",
+       "nesne": "Aspirant",
+       "degisim": "ended",
+       "kanit": "He was an Aspirant no more.",
+       "durum_bilgisi": "confirmed",
+       "gecerli_bitis": null
+      }
+     }
+    ],
+    [
+     "new_entity_candidate",
+     "low",
+     "Sözlükte olmayan ad: First Seal",
+     {
+      "ad": "First Seal",
+      "oneri": {
+       "ad": "First Seal",
+       "kanit": "[The First Seal is broken.]",
+       "tur": "kavram"
+      },
+      "kanit": "[The First Seal is broken.]"
+     }
+    ]
+   ],
+   "sayac": {
+    "already_known_proposals": 0,
+    "deterministic_same_chapter_duplicates": 0,
+    "unsupported_state_keys": 0,
+    "new_entity_candidates": 1
+   }
+  },
+  "api_cagrilari": [
+   {
+    "model": "vertex/gemini-3.6-flash",
+    "sonuc": "basari",
+    "kod": null,
+    "sure_ms": null
+   }
+  ]
+ },
+ {
+  "bolum": 24,
+  "durum": "dogrulama",
+  "girdi_bilgisi": [
+   "VARLIK Abilities -> Yetenekler",
+   "VARLIK Ability -> Yetenek",
+   "VARLIK Academy -> Akademi",
+   "VARLIK Armor -> Zırh",
+   "VARLIK Aspect -> Görünüş",
+   "VARLIK Aspect Ability -> Görünüş Yeteneği",
+   "VARLIK Awakened -> Uyanmış",
+   "VARLIK Awakened Rank -> Uyanmış Rütbesi",
+   "VARLIK Below -> Aşağı",
+   "VARLIK Cassia -> Cassia",
+   "VARLIK Caster -> Caster",
+   "VARLIK Castle -> Kale",
+   "VARLIK Changing Star -> Değişen Yıldız",
+   "VARLIK Dormant -> Uykuda",
+   "VARLIK First Nightmare -> İlk Kabus",
+   "VARLIK Great -> Ulu",
+   "VARLIK Guard -> Muhafız",
+   "VARLIK Guards -> Muhafızlar",
+   "VARLIK Jet -> Jet",
+   "VARLIK Master -> Efendi",
+   "VARLIK Master Jet -> Efendi Jet",
+   "VARLIK Memory -> Anı",
+   "VARLIK Memory Description -> Anı Açıklaması",
+   "VARLIK Memory Rank -> Anı Rütbesi",
+   "VARLIK Memory Type -> Anı Türü",
+   "VARLIK Monster -> Canavar",
+   "VARLIK Monsters -> Canavarlar",
+   "VARLIK Mountain King -> Dağ Kralı",
+   "VARLIK Nephis -> Nephis",
+   "VARLIK Nightmare -> Kabus",
+   "VARLIK Not Really -> Pek Sayılmaz",
+   "VARLIK Puppeteer Worm -> Kuklacı Solucanı",
+   "VARLIK Puppeteer's Shroud -> Kuklacının Örtüsü",
+   "VARLIK Rank -> Rütbe",
+   "VARLIK Shadow -> Gölge",
+   "VARLIK Shadows -> Gölgeler",
+   "VARLIK Sleeper -> Uyuyan",
+   "VARLIK Sleepers -> Uyuyanlar",
+   "VARLIK Spell -> Büyü",
+   "VARLIK Sunny -> Sunny",
+   "VARLIK True Name -> Gerçek İsim",
+   "VARLIK Tyrant -> Tiran",
+   "VARLIK communicator -> komünikatör",
+   "BAĞ Sunny --takma_adi--> Sunless (öğrenildi b1, confirmed, manual)",
+   "BAĞ Sunny --gercek_adi--> Lost from Light (öğrenildi b15, confirmed, sistem)",
+   "DURUM Sunny.Shadow Fragments = 12/1000 (b16, confirmed)",
+   "BAĞ Rock --rutbesi--> Awakened (öğrenildi b22, değerlendirilmemiş, model)",
+   "BAĞ Shadow God --oldurdu--> Mountain King (öğrenildi b21, değerlendirilmemiş, model)",
+   "BAĞ Jet --rutbesi--> Ascended (öğrenildi b17, değerlendirilmemiş, model)",
+   "BAĞ Sunny --rutbesi--> Sleeper (öğrenildi b17, değerlendirilmemiş, model)",
+   "BAĞ Shadow Control --turu--> Aspect Ability (öğrenildi b16, değerlendirilmemiş, model)",
+   "BAĞ Sunny --gorunusu--> Shadow Slave (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Sunny --anisi--> Silver Bell (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Sunny --yetenegi--> Shadow Control (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Sunny --anisi--> Puppeteer's Shroud (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Auro of the Nine --rutbesi--> Awakened (öğrenildi b15, değerlendirilmemiş, model)",
+   "BAĞ Puppeteer's Shroud --turu--> Memory (öğrenildi b15, confirmed, sistem)",
+   "BAĞ Shadow Slave --turu--> Aspect (öğrenildi b15, değerlendirilmemiş, model)",
+   "BAĞ Sunny --rutbesi--> Dreamer (öğrenildi b15, confirmed, sistem)",
+   "BAĞ Temple Slave --turu--> Aspect (öğrenildi b15, değerlendirilmemiş, model)",
+   "BAĞ Temple Slave --rutbesi--> Dormant (öğrenildi b15, değerlendirilmemiş, model)",
+   "BAĞ Mountain King --rutbesi--> Awakened (öğrenildi b14, confirmed, sistem)",
+   "BAĞ Mountain King --turu--> Awakened Tyrant (öğrenildi b14, değerlendirilmemiş, model)",
+   "BAĞ Sunny --oldurdu--> Mountain King (öğrenildi b14, confirmed, sistem)",
+   "BAĞ Sunny --yoldasi--> Auro of the Nine (öğrenildi b10, değerlendirilmemiş, model)",
+   "BAĞ Mountain King --sinifi--> Tyrant (öğrenildi b9, confirmed, sistem)",
+   "BAĞ Silver Bell --turu--> Memory (öğrenildi b8, confirmed, sistem)",
+   "BAĞ Mountain King's Larva --rutbesi--> Dormant (öğrenildi b4, confirmed, sistem)",
+   "BAĞ Sunny --oldurdu--> Mountain King's Larva (öğrenildi b4, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Fated (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Mark of Divinity (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Child of Shadows (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --gorunusu--> Temple Slave (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --rutbesi--> Aspirant (öğrenildi b2, confirmed, sistem) [BİTTİ (öğrenildi b15)]",
+   "BAĞ Awakened --ust_basamak--> Ascended (öğrenildi b1, confirmed, manual)",
+   "BAĞ Awakened --ust_basamak--> Fallen (öğrenildi b1, confirmed, manual)",
+   "BAĞ Corrupted --ust_basamak--> Great (öğrenildi b1, confirmed, manual)",
+   "BAĞ Devil --ust_basamak--> Tyrant (öğrenildi b1, confirmed, manual)",
+   "BAĞ Dormant --ust_basamak--> Awakened (öğrenildi b1, confirmed, manual)",
+   "BAĞ Great --ust_basamak--> Cursed (öğrenildi b1, confirmed, manual)",
+   "BAĞ Monster --ust_basamak--> Demon (öğrenildi b1, confirmed, manual)",
+   "BAĞ Tyrant --ust_basamak--> Terror (öğrenildi b1, confirmed, manual)",
+   "BAĞ beast --ust_basamak--> Monster (öğrenildi b1, confirmed, manual)"
+  ],
+  "deterministik_bilgi": [
+   "BAĞ Puppeteer's Shroud --rutbesi--> Awakened (öğrenildi b24, confirmed, sistem)",
+   "BAĞ Puppeteer's Shroud --esya_turu--> Armor (öğrenildi b24, confirmed, sistem)"
+  ],
+  "hata_sinifi": null,
+  "surumler": {
+   "cikarici": "2",
+   "istem": "2",
+   "sema": "delta-2"
+  },
+  "olcum": {
+   "kaynak_tokeni": 2025,
+   "baglam_tokeni": 1184,
+   "run_tokeni": 42,
+   "kesilen_satir": 0,
+   "aday_satir": 85,
+   "giren_satir": 85,
+   "sinif": {
+    "varlik": {
+     "aday": 43,
+     "giren": 43,
+     "kesilen": 0
+    },
+    "kimlik": {
+     "aday": 2,
+     "giren": 2,
+     "kesilen": 0
+    },
+    "durum": {
+     "aday": 1,
+     "giren": 1,
+     "kesilen": 0
+    },
+    "dogrudan_yeni": {
+     "aday": 37,
+     "giren": 37,
+     "kesilen": 0
+    },
+    "dogrudan_eski": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "kimlik_sorusu": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "ayni_bolum_deterministik": {
+     "aday": 2,
+     "giren": 2,
+     "kesilen": 0
+    }
+   },
+   "fiili_model": "vertex/gemini-3.6-flash",
+   "giris_tokeni": 8401,
+   "cikis_tokeni": 265,
+   "dusunme_tokeni": 2838,
+   "sure_sn": 20.25,
+   "model_attempts": 1,
+   "model_retries": 0
+  },
+  "ham_yanit": "{\n  \"new_relationships\": [\n    {\n      \"ozne\": \"Nephis\",\n      \"iliski\": \"gercek_adi\",\n      \"nesne\": \"Changing Star\",\n      \"kanit\": \"To the right of it, two simple lines of text were displayed: \\\"Name: Nephis\\\" \\\"True Name: Changing Star\\\"\",\n      \"durum_bilgisi\": \"confirmed\",\n      \"gecerli_baslangic\": null,\n      \"gecerli_bitis\": null\n    }\n  ],\n  \"new_aliases\": [\n    {\n      \"asil\": \"Nephis\",\n      \"ad\": \"Changing Star\",\n      \"tur\": \"gercek_adi\",\n      \"kanit\": \"To the right of it, two simple lines of text were displayed: \\\"Name: Nephis\\\" \\\"True Name: Changing Star\\\"\",\n      \"durum_bilgisi\": \"confirmed\"\n    }\n  ],\n  \"relationship_updates\": [],\n  \"state_changes\": [],\n  \"identity_revelations\": [],\n  \"contradictions\": [],\n  \"new_entities\": [],\n  \"review_items\": []\n}",
+  "model_deltasi": {
+   "new_relationships": [
+    {
+     "ozne": "Nephis",
+     "iliski": "gercek_adi",
+     "nesne": "Changing Star",
+     "kanit": "To the right of it, two simple lines of text were displayed: \"Name: Nephis\" \"True Name: Changing Star\"",
+     "durum_bilgisi": "confirmed",
+     "gecerli_baslangic": null,
+     "gecerli_bitis": null
+    }
+   ],
+   "new_aliases": [
+    {
+     "asil": "Nephis",
+     "ad": "Changing Star",
+     "tur": "gercek_adi",
+     "kanit": "To the right of it, two simple lines of text were displayed: \"Name: Nephis\" \"True Name: Changing Star\"",
+     "durum_bilgisi": "confirmed"
+    }
+   ],
+   "relationship_updates": [],
+   "state_changes": [],
+   "identity_revelations": [],
+   "contradictions": [],
+   "new_entities": [],
+   "review_items": []
+  },
+  "sema_hatalari": [],
+  "degerlendirme": {
+   "oneriler": [
+    {
+     "tur": "new_relationships",
+     "sinif": "NEEDS_REVIEW",
+     "karar": "reddedildi:kanıt verilen cümlelerden değil",
+     "veri": {
+      "ozne": "Nephis",
+      "iliski": "gercek_adi",
+      "nesne": "Changing Star",
+      "kanit": "To the right of it, two simple lines of text were displayed: \"Name: Nephis\" \"True Name: Changing Star\"",
+      "durum_bilgisi": "confirmed",
+      "gecerli_baslangic": null,
+      "gecerli_bitis": null,
+      "kaynak_tur": "new_relationships",
+      "guven": 0.9,
+      "sebep": "kanıt verilen cümlelerden değil",
+      "ozne_kimlik": "12eff46c3e682be1",
+      "nesne_kimlik": "0d85acd402da1b72",
+      "bolum": null
+     }
+    },
+    {
+     "tur": "new_aliases",
+     "sinif": "NEEDS_REVIEW",
+     "karar": "reddedildi:kanıt verilen cümlelerden değil",
+     "veri": {
+      "ozne": "Nephis",
+      "iliski": "gercek_adi",
+      "nesne": "Changing Star",
+      "kanit": "To the right of it, two simple lines of text were displayed: \"Name: Nephis\" \"True Name: Changing Star\"",
+      "durum_bilgisi": "confirmed",
+      "guven": 0.9,
+      "kaynak_tur": "new_aliases",
+      "sebep": "kanıt verilen cümlelerden değil",
+      "ozne_kimlik": "12eff46c3e682be1",
+      "nesne_kimlik": "0d85acd402da1b72",
+      "bolum": null
+     }
+    }
+   ],
+   "inceleme": [],
+   "sayac": {
+    "already_known_proposals": 0,
+    "deterministic_same_chapter_duplicates": 0,
+    "unsupported_state_keys": 0,
+    "new_entity_candidates": 0
+   }
+  },
+  "api_cagrilari": [
+   {
+    "model": "vertex/gemini-3.6-flash",
+    "sonuc": "basari",
+    "kod": null,
+    "sure_ms": null
+   }
+  ]
+ },
+ {
+  "bolum": 61,
+  "durum": "dogrulama",
+  "girdi_bilgisi": [
+   "VARLIK Ability -> Yetenek",
+   "VARLIK Ashen Barrow -> Kül Höyüğü",
+   "VARLIK Aspect -> Görünüş",
+   "VARLIK Aspect Ability -> Görünüş Yeteneği",
+   "VARLIK Attribute -> Nitelik",
+   "VARLIK Attributes -> Nitelikler",
+   "VARLIK Azure Blade -> Gök Mavisi Bıçak",
+   "VARLIK Barrow -> Barrow",
+   "VARLIK Cassie -> Cassie",
+   "VARLIK Changing Star -> Değişen Yıldız",
+   "VARLIK Child of Shadows -> Gölgelerin Çocuğu",
+   "VARLIK Crimson Labyrinth -> Kızıl Labirent",
+   "VARLIK Dark Mirror -> Karanlık Ayna",
+   "VARLIK Domain -> Diyar",
+   "VARLIK Echo -> Yankı",
+   "VARLIK Flaw -> Kusur",
+   "VARLIK Fool -> Aptal",
+   "VARLIK Forgotten Shore -> Unutulmuş Sahil",
+   "VARLIK Guard -> Muhafız",
+   "VARLIK Hope -> Umut",
+   "VARLIK Labyrinth -> Labirent",
+   "VARLIK Memory -> Anı",
+   "VARLIK Mimic -> Taklitçi",
+   "VARLIK Monster -> Canavar",
+   "VARLIK Monsters -> Canavarlar",
+   "VARLIK Neph -> Neph",
+   "VARLIK Nephis -> Nephis",
+   "VARLIK Nightmare -> Kabus",
+   "VARLIK Nightmare Creature -> Kabus Yaratığı",
+   "VARLIK Nightmare Creatures -> Kabus Yaratıkları",
+   "VARLIK Shadow -> Gölge",
+   "VARLIK Shadows -> Gölgeler",
+   "VARLIK Skill -> Beceri",
+   "VARLIK Skills -> Beceriler",
+   "VARLIK Sleeper -> Uyuyan",
+   "VARLIK Sleepers -> Uyuyanlar",
+   "VARLIK Sun -> Güneş",
+   "VARLIK Sunny -> Sunny",
+   "VARLIK Tower -> Kule",
+   "VARLIK Unknown -> Bilinmeyenler",
+   "VARLIK dark sea -> Karanlık Deniz",
+   "VARLIK leviathan -> leviyatan",
+   "BAĞ Sunny --takma_adi--> Sunless (öğrenildi b1, confirmed, manual)",
+   "BAĞ Sunny --gercek_adi--> Lost from Light (öğrenildi b15, confirmed, sistem)",
+   "BAĞ Starless Void --takma_adi--> Forgotten Shore (öğrenildi b56, değerlendirilmemiş, model)",
+   "DURUM Sunny.Shadow Fragments = 12/1000 (b16, confirmed)",
+   "BAĞ Sunny --ogretmeni--> Julius (öğrenildi b57, değerlendirilmemiş, model)",
+   "BAĞ Sunny --anisi--> Starlight Legion Armor (öğrenildi b54, confirmed, sistem)",
+   "BAĞ Carapace Centurion --sinifi--> Monster (öğrenildi b52, confirmed, sistem)",
+   "BAĞ Starlight Legion Armor --turu--> Memory (öğrenildi b52, confirmed, sistem)",
+   "BAĞ Sunny --oldurdu--> Carapace Centurion (öğrenildi b52, confirmed, sistem)",
+   "BAĞ Nephis --yoldasi--> Cassie (öğrenildi b48, değerlendirilmemiş, model)",
+   "BAĞ Sunny --yoldasi--> Cassie (öğrenildi b48, değerlendirilmemiş, model)",
+   "BAĞ Carapace Scavenger --turu--> Echo (öğrenildi b47, confirmed, sistem)",
+   "BAĞ Sunny --yanki--> Carapace Scavenger (öğrenildi b47, confirmed, sistem)",
+   "BAĞ Sunny --bulundugu_yer--> Academy (öğrenildi b42, değerlendirilmemiş, model)",
+   "BAĞ Azure Blade --rutbesi--> Awakened (öğrenildi b34, confirmed, sistem)",
+   "BAĞ Sunny --anisi--> Azure Blade (öğrenildi b34, confirmed, sistem)",
+   "BAĞ Azure Blade --turu--> Memory (öğrenildi b33, confirmed, sistem)",
+   "BAĞ Sunny --oldurdu--> Carapace Scavenger (öğrenildi b33, confirmed, sistem)",
+   "BAĞ Sunny --bulundugu_yer--> Dream Realm (öğrenildi b30, değerlendirilmemiş, model)",
+   "BAĞ Nephis --klani--> Immortal Flame clan (öğrenildi b27, değerlendirilmemiş, model)",
+   "BAĞ Nephis --akrabasi--> Broken Sword (öğrenildi b27, değerlendirilmemiş, model)",
+   "BAĞ Nephis --rutbesi--> Sleeper (öğrenildi b26, değerlendirilmemiş, model)",
+   "BAĞ Sunny --rutbesi--> Sleeper (öğrenildi b17, değerlendirilmemiş, model)",
+   "BAĞ Shadow Control --turu--> Aspect Ability (öğrenildi b16, değerlendirilmemiş, model)",
+   "BAĞ Sunny --gorunusu--> Shadow Slave (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Sunny --anisi--> Silver Bell (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Sunny --yetenegi--> Shadow Control (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Sunny --anisi--> Puppeteer's Shroud (öğrenildi b16, confirmed, sistem)",
+   "BAĞ Puppeteer's Shroud --turu--> Memory (öğrenildi b15, confirmed, sistem)",
+   "BAĞ Shadow Slave --turu--> Aspect (öğrenildi b15, değerlendirilmemiş, model)",
+   "BAĞ Sunny --rutbesi--> Dreamer (öğrenildi b15, confirmed, sistem)",
+   "BAĞ Temple Slave --turu--> Aspect (öğrenildi b15, değerlendirilmemiş, model)",
+   "BAĞ Sunny --oldurdu--> Mountain King (öğrenildi b14, confirmed, sistem)",
+   "BAĞ Sunny --yoldasi--> Auro of the Nine (öğrenildi b10, değerlendirilmemiş, model)",
+   "BAĞ Silver Bell --turu--> Memory (öğrenildi b8, confirmed, sistem)",
+   "BAĞ Fated --turu--> Attribute (öğrenildi b4, değerlendirilmemiş, model)",
+   "BAĞ Sunny --oldurdu--> Mountain King's Larva (öğrenildi b4, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Fated (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Mark of Divinity (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Child of Shadows (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --gorunusu--> Temple Slave (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --rutbesi--> Aspirant (öğrenildi b2, confirmed, sistem) [BİTTİ (öğrenildi b15)]",
+   "BAĞ Monster --ust_basamak--> Demon (öğrenildi b1, confirmed, manual)",
+   "BAĞ beast --ust_basamak--> Monster (öğrenildi b1, confirmed, manual)"
+  ],
+  "deterministik_bilgi": [],
+  "hata_sinifi": null,
+  "surumler": {
+   "cikarici": "2",
+   "istem": "2",
+   "sema": "delta-2"
+  },
+  "olcum": {
+   "kaynak_tokeni": 2397,
+   "baglam_tokeni": 1222,
+   "run_tokeni": 0,
+   "kesilen_satir": 0,
+   "aday_satir": 86,
+   "giren_satir": 86,
+   "sinif": {
+    "varlik": {
+     "aday": 42,
+     "giren": 42,
+     "kesilen": 0
+    },
+    "kimlik": {
+     "aday": 3,
+     "giren": 3,
+     "kesilen": 0
+    },
+    "durum": {
+     "aday": 1,
+     "giren": 1,
+     "kesilen": 0
+    },
+    "dogrudan_yeni": {
+     "aday": 15,
+     "giren": 15,
+     "kesilen": 0
+    },
+    "dogrudan_eski": {
+     "aday": 25,
+     "giren": 25,
+     "kesilen": 0
+    },
+    "kimlik_sorusu": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "ayni_bolum_deterministik": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    }
+   },
+   "fiili_model": "vertex/gemini-3.6-flash",
+   "giris_tokeni": 8665,
+   "cikis_tokeni": 68,
+   "dusunme_tokeni": 1527,
+   "sure_sn": 13.12,
+   "model_attempts": 1,
+   "model_retries": 0
+  },
+  "ham_yanit": "{\n  \"new_relationships\": [],\n  \"new_aliases\": [],\n  \"relationship_updates\": [],\n  \"state_changes\": [],\n  \"identity_revelations\": [],\n  \"contradictions\": [],\n  \"new_entities\": [],\n  \"review_items\": []\n}",
+  "model_deltasi": {
+   "new_relationships": [],
+   "new_aliases": [],
+   "relationship_updates": [],
+   "state_changes": [],
+   "identity_revelations": [],
+   "contradictions": [],
+   "new_entities": [],
+   "review_items": []
+  },
+  "sema_hatalari": [],
+  "degerlendirme": {
+   "oneriler": [],
+   "inceleme": [],
+   "sayac": {
+    "already_known_proposals": 0,
+    "deterministic_same_chapter_duplicates": 0,
+    "unsupported_state_keys": 0,
+    "new_entity_candidates": 0
+   }
+  },
+  "api_cagrilari": [
+   {
+    "model": "vertex/gemini-3.6-flash",
+    "sonuc": "basari",
+    "kod": null,
+    "sure_ms": null
+   }
+  ]
+ }
+]

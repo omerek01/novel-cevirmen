@@ -1,0 +1,205 @@
+{
+  "stage": "holdout",
+  "chapters": [
+    33,
+    141,
+    199,
+    322,
+    460,
+    556,
+    659,
+    740,
+    769,
+    888
+  ],
+  "completed": [
+    33,
+    141,
+    199,
+    322,
+    460,
+    556,
+    659,
+    740,
+    769,
+    888
+  ],
+  "protected_tables_unchanged": true,
+  "before": {
+    "chapters": {
+      "rows": 1213,
+      "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+    },
+    "glossary": {
+      "rows": 1468,
+      "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+    },
+    "sozluk_yazim": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "varlik_bag": {
+      "rows": 1036,
+      "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+    },
+    "varlik_deger": {
+      "rows": 48,
+      "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+    },
+    "bilgi_bas": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_inceleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_isleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_oneri": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "after": {
+    "chapters": {
+      "rows": 1213,
+      "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+    },
+    "glossary": {
+      "rows": 1468,
+      "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+    },
+    "sozluk_yazim": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "varlik_bag": {
+      "rows": 1036,
+      "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+    },
+    "varlik_deger": {
+      "rows": 48,
+      "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+    },
+    "bilgi_bas": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_inceleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_isleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_oneri": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "gold_sha256": "dfd7d35fa18353a38ab16b1b72c23b2fa26017fd3bb119edfc2a875b83d10fc1",
+  "holdout_sha256": "87be1b88969091f18214140eefb2dbd7fae55127674838d31cab59113d8aab52",
+  "provider": "VERTEX",
+  "model": "vertex/gemini-3.8-flash",
+  "talimat_sha256": "d23b268726a16dc776c0c0e994d4b5cbad26ea2cd5e4bc26f9d332def05ccf8c",
+  "versions": {
+    "extractor": "7",
+    "prompt": "6",
+    "schema": "delta-3-v4-final"
+  },
+  "model_chains_requested": [
+    "vertex/gemini-3.8-flash"
+  ],
+  "provider_attempts": [
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 63927
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "gecici",
+      "kod": 429,
+      "sure_ms": 13120
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 38519
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 32576
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 35661
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 76022
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "gecici",
+      "kod": 504,
+      "sure_ms": 87241
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 81572
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 24166
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 59637
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 11759
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 76874
+    }
+  ],
+  "free_gemini_calls": 0,
+  "logical_calls": 10
+}

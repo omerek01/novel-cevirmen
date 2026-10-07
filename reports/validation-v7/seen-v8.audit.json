@@ -1,0 +1,155 @@
+{
+  "stage": "seen",
+  "chapters": [
+    141,
+    374,
+    460,
+    556,
+    659,
+    681
+  ],
+  "completed": [
+    141,
+    374,
+    460,
+    556,
+    659,
+    681
+  ],
+  "protected_tables_unchanged": true,
+  "before": {
+    "chapters": {
+      "rows": 1213,
+      "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+    },
+    "glossary": {
+      "rows": 1468,
+      "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+    },
+    "sozluk_yazim": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "varlik_bag": {
+      "rows": 1036,
+      "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+    },
+    "varlik_deger": {
+      "rows": 48,
+      "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+    },
+    "bilgi_bas": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_inceleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_isleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_oneri": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "after": {
+    "chapters": {
+      "rows": 1213,
+      "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+    },
+    "glossary": {
+      "rows": 1468,
+      "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+    },
+    "sozluk_yazim": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "varlik_bag": {
+      "rows": 1036,
+      "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+    },
+    "varlik_deger": {
+      "rows": 48,
+      "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+    },
+    "bilgi_bas": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_inceleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_isleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_oneri": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "gold_sha256": "5bef4de11349c237d10ef494783ddef7f72cacaede969e247f8183082c9efcd5",
+  "holdout_sha256": null,
+  "provider": "VERTEX",
+  "model": "vertex/gemini-3.8-flash",
+  "talimat_sha256": "ffbbc5d91162b48ff8ac34c34cce94b3a83df91ea207c86384f9aa5e5de11cb0",
+  "versions": {
+    "extractor": "8",
+    "prompt": "7",
+    "schema": "delta-4-span-evidence"
+  },
+  "model_chains_requested": [
+    "vertex/gemini-3.8-flash"
+  ],
+  "provider_attempts": [
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 24593
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 43202
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 24193
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 31320
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 14979
+    },
+    {
+      "anahtar": "vertex",
+      "model": "vertex/gemini-3.8-flash",
+      "sonuc": "basari",
+      "kod": 200,
+      "sure_ms": 52512
+    }
+  ],
+  "free_gemini_calls": 0,
+  "logical_calls": 6
+}

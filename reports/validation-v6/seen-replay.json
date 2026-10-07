@@ -1,0 +1,181 @@
+[
+ {
+  "run": "v5.2-holdout",
+  "chapter": 83,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 187,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 343,
+  "before_accepted": 0,
+  "after_accepted": 1,
+  "differences": [
+   [
+    "('state_changes', 'Crimson Terror', 'dead', None)",
+    "reddedildi:kanıt:life_status_not_established",
+    "işle"
+   ]
+  ]
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 374,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": [
+   [
+    "('new_relationships', 'Kai', 'gercek_adi', 'Nightingale')",
+    "reddedildi:kanıt:ordinary_name_is_not_true_name",
+    "inceleme:yön doğrulanamadı"
+   ]
+  ]
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 542,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 590,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 681,
+  "before_accepted": 1,
+  "after_accepted": 1,
+  "differences": []
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 744,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 782,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5.2-holdout",
+  "chapter": 887,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v4final",
+  "chapter": 431,
+  "before_accepted": 2,
+  "after_accepted": 2,
+  "differences": []
+ },
+ {
+  "run": "v4final",
+  "chapter": 360,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v4final",
+  "chapter": 848,
+  "before_accepted": 1,
+  "after_accepted": 1,
+  "differences": []
+ },
+ {
+  "run": "v4final",
+  "chapter": 162,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v4final",
+  "chapter": 313,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v4final",
+  "chapter": 670,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v4final",
+  "chapter": 691,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5-3.6",
+  "chapter": 313,
+  "before_accepted": 1,
+  "after_accepted": 1,
+  "differences": []
+ },
+ {
+  "run": "v5-3.6",
+  "chapter": 670,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5-3.6",
+  "chapter": 691,
+  "before_accepted": 1,
+  "after_accepted": 1,
+  "differences": []
+ },
+ {
+  "run": "v5.1-3.8",
+  "chapter": 313,
+  "before_accepted": 1,
+  "after_accepted": 1,
+  "differences": []
+ },
+ {
+  "run": "v5.1-3.8",
+  "chapter": 670,
+  "before_accepted": 0,
+  "after_accepted": 0,
+  "differences": []
+ },
+ {
+  "run": "v5.1-3.8",
+  "chapter": 691,
+  "before_accepted": 3,
+  "after_accepted": 2,
+  "differences": [
+   [
+    "('new_relationships', 'Sunny', 'bulundugu_yer', 'Altar Island')",
+    "işle",
+    "inceleme:yön doğrulanamadı"
+   ]
+  ]
+ }
+]

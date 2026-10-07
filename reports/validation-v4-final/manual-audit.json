@@ -1,0 +1,346 @@
+[
+  {
+    "chapter": 431,
+    "context_tokens": 4000,
+    "provider_attempts": [
+      {
+        "model": "vertex/gemini-3.6-flash",
+        "sonuc": "basari",
+        "kod": null,
+        "sure_ms": null
+      }
+    ],
+    "accepted_or_skipped": [
+      {
+        "tur": "new_relationships",
+        "sinif": "NEEDS_REVIEW",
+        "karar": "inceleme:yön doğrulanamadı",
+        "veri": {
+          "ozne": "Tear",
+          "iliski": "parcasi",
+          "nesne": "Chained Isles",
+          "kanit": "The Tear was situated in the center of the Chained Isles, and was both vast and absolutely empty.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null,
+          "kaynak_tur": "new_relationships",
+          "guven": 0.9
+        }
+      },
+      {
+        "tur": "new_relationships",
+        "sinif": "NEW",
+        "karar": "işle",
+        "veri": {
+          "ozne": "Ivory Tower",
+          "iliski": "bulundugu_yer",
+          "nesne": "Tear",
+          "kanit": "The Tear was situated in the center of the Chained Isles, and was both vast and absolutely empty. Some people believed that the Ivory Tower had once stood in its middle, and was the first island to break free of its chains.",
+          "durum_bilgisi": "believed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null,
+          "kaynak_tur": "new_relationships",
+          "guven": 0.9,
+          "ozne_kimlik": "1e0d17cbfd3db355",
+          "nesne_kimlik": "37604569647fa47c",
+          "bolum": 431,
+          "sebep": null
+        }
+      },
+      {
+        "tur": "new_relationships",
+        "sinif": "NEW",
+        "karar": "işle",
+        "veri": {
+          "ozne": "Sunny",
+          "iliski": "bulundugu_yer",
+          "nesne": "Sky Below",
+          "kanit": "Sunny had fallen into the Sky Below.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null,
+          "kaynak_tur": "new_relationships",
+          "guven": 0.9,
+          "ozne_kimlik": "517c3ecb0cdf23ba",
+          "nesne_kimlik": "171e0786fea2dc5d",
+          "bolum": 431,
+          "sebep": null
+        }
+      }
+    ],
+    "reviews": [],
+    "raw_evidence_checks": [
+      {
+        "item": {
+          "ozne": "Tear",
+          "iliski": "parcasi",
+          "nesne": "Chained Isles",
+          "kanit": "The Tear was situated in the center of the Chained Isles, and was both vast and absolutely empty.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null
+        },
+        "source_span_valid": true
+      },
+      {
+        "item": {
+          "ozne": "Ivory Tower",
+          "iliski": "bulundugu_yer",
+          "nesne": "Tear",
+          "kanit": "The Tear was situated in the center of the Chained Isles, and was both vast and absolutely empty. Some people believed that the Ivory Tower had once stood in its middle, and was the first island to break free of its chains.",
+          "durum_bilgisi": "believed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null
+        },
+        "source_span_valid": true
+      },
+      {
+        "item": {
+          "ozne": "Sunny",
+          "iliski": "bulundugu_yer",
+          "nesne": "Sky Below",
+          "kanit": "Sunny had fallen into the Sky Below.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null
+        },
+        "source_span_valid": true
+      }
+    ]
+  },
+  {
+    "chapter": 360,
+    "context_tokens": 3424,
+    "provider_attempts": [
+      {
+        "model": "vertex/gemini-3.6-flash",
+        "sonuc": "basari",
+        "kod": 200,
+        "sure_ms": 22568
+      }
+    ],
+    "accepted_or_skipped": [],
+    "reviews": [
+      [
+        "relationship_conflict",
+        "medium",
+        "Mevcut yoldaşlık: Sunny ↔ Cassie. Kanıt ilişkiyle çelişen açık ihanet/güven kırılması içeriyor. İnsan kararı: ilişki bu bölümde bitmeli mi? Otomatik kapanış yok.",
+        {
+          "ozne": "Sunny",
+          "iliski": "yoldasi",
+          "nesne": "Cassie",
+          "kanit": "\"But that doesn’t mean that I can forgive it. You go to hell, Cassie. Go to hell and die there, for all I care. I hope that I will never see you again.\" With that, Sunny turned around to leave, but then stopped.",
+          "existing_first_chapter": 48,
+          "auto_close": false
+        }
+      ]
+    ],
+    "raw_evidence_checks": []
+  },
+  {
+    "chapter": 848,
+    "context_tokens": 3996,
+    "provider_attempts": [
+      {
+        "model": "vertex/gemini-3.6-flash",
+        "sonuc": "basari",
+        "kod": 200,
+        "sure_ms": 24385
+      }
+    ],
+    "accepted_or_skipped": [
+      {
+        "tur": "state_changes",
+        "sinif": "NEW",
+        "karar": "işle",
+        "veri": {
+          "varlik": "Soul Serpent",
+          "anahtar": "Yaşam",
+          "deger": "alive",
+          "kanit": "The name of the Soul Serpent was dim and lifeless. Sunny could not dismiss or summon the Shadow back after gifting it to Rain, at least not from a distance. He still felt a subtle connection to it, though. He knew that Serpent was alive and well.",
+          "durum_bilgisi": "confirmed",
+          "makine_anahtari": "life_status",
+          "kimlik": "9c846cc74f75252e"
+        }
+      }
+    ],
+    "reviews": [
+      [
+        "relation_capability_gap",
+        "medium",
+        "MISSING_RELATION_CAPABILITY: Soul Serpent öğesinin Rain tarafına teslim/emanet devri; mevcut graph'ta genel transfer/custody temsili yok. Mastership veya yeni ilişki yazımı önerilmedi.",
+        {
+          "new_holder": "Rain",
+          "transferred_entity": "Soul Serpent",
+          "kanit": "The name of the Soul Serpent was dim and lifeless. Sunny could not dismiss or summon the Shadow back after gifting it to Rain, at least not from a distance.",
+          "capability_gap": true
+        }
+      ]
+    ],
+    "raw_evidence_checks": []
+  },
+  {
+    "chapter": 162,
+    "context_tokens": 1897,
+    "provider_attempts": [
+      {
+        "model": "vertex/gemini-3.6-flash",
+        "sonuc": "basari",
+        "kod": 200,
+        "sure_ms": 8587
+      }
+    ],
+    "accepted_or_skipped": [],
+    "reviews": [],
+    "raw_evidence_checks": []
+  },
+  {
+    "chapter": 313,
+    "context_tokens": 3983,
+    "provider_attempts": [
+      {
+        "model": "vertex/gemini-3.6-flash",
+        "sonuc": "basari",
+        "kod": 200,
+        "sure_ms": 30665
+      }
+    ],
+    "accepted_or_skipped": [
+      {
+        "tur": "new_relationships",
+        "sinif": "ALREADY_EXISTS",
+        "karar": "atla:aynı bölüm eski grafik",
+        "veri": {
+          "ozne": "Artisans",
+          "iliski": "lideri",
+          "nesne": "Kido",
+          "kanit": "Kido had been the leader of the Artisans.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null,
+          "kaynak_tur": "new_relationships",
+          "guven": 0.9,
+          "ozne_kimlik": "aa8544e3c162033a",
+          "nesne_kimlik": "8d544bdd8250789b"
+        }
+      }
+    ],
+    "reviews": [],
+    "raw_evidence_checks": [
+      {
+        "item": {
+          "ozne": "Artisans",
+          "iliski": "lideri",
+          "nesne": "Kido",
+          "kanit": "Kido had been the leader of the Artisans.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null
+        },
+        "source_span_valid": true
+      },
+      {
+        "item": {
+          "ozne": "Effie",
+          "iliski": "oldurdu",
+          "nesne": "Lord of the Dead",
+          "kanit": "At that moment, Effie suddenly stepped forward, twisted her body... and threw the Dusk Shard as a discus with a deafening cry. The shield that was said to contain the weight of the heavens streaked through the air with terrible speed and hit the inner core of the tyrant, crushing through it like a wrecking ball. It cut the maggot in half and exited the body of the Lord of the Dead from the other side in a torrent of broken bones.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null
+        },
+        "source_span_valid": true
+      }
+    ]
+  },
+  {
+    "chapter": 670,
+    "context_tokens": 3987,
+    "provider_attempts": [
+      {
+        "model": "vertex/gemini-3.6-flash",
+        "sonuc": "basari",
+        "kod": 200,
+        "sure_ms": 13361
+      }
+    ],
+    "accepted_or_skipped": [],
+    "reviews": [],
+    "raw_evidence_checks": []
+  },
+  {
+    "chapter": 691,
+    "context_tokens": 3989,
+    "provider_attempts": [
+      {
+        "model": "vertex/gemini-3.6-flash",
+        "sonuc": "basari",
+        "kod": 200,
+        "sure_ms": 29137
+      }
+    ],
+    "accepted_or_skipped": [
+      {
+        "tur": "new_relationships",
+        "sinif": "ALREADY_EXISTS",
+        "karar": "atla:aynı bölüm eski grafik",
+        "veri": {
+          "ozne": "Nether",
+          "iliski": "unvani",
+          "nesne": "Demon of Destiny",
+          "kanit": "Then there is the youngest, Nether — the Demon of Destiny, who secluded himself in the darkness of the Underworld.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null,
+          "kaynak_tur": "new_relationships",
+          "guven": 0.9,
+          "ozne_kimlik": "92cfe4e1764c45df",
+          "nesne_kimlik": "b004cb9107cd4d5f"
+        }
+      }
+    ],
+    "reviews": [],
+    "raw_evidence_checks": [
+      {
+        "item": {
+          "ozne": "Nether",
+          "iliski": "unvani",
+          "nesne": "Demon of Destiny",
+          "kanit": "Then there is the youngest, Nether — the Demon of Destiny, who secluded himself in the darkness of the Underworld.",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null
+        },
+        "source_span_valid": true
+      },
+      {
+        "item": {
+          "ozne": "Nether",
+          "iliski": "unvani",
+          "nesne": "Prince of the Underworld",
+          "kanit": "’Huh... so the Prince of the Underworld was actually called Nether? I wonder which came first, the name or the title... and he was also the Demon of Destiny, it seems.’",
+          "durum_bilgisi": "confirmed",
+          "gecerli_baslangic": null,
+          "gecerli_bitis": null
+        },
+        "source_span_valid": false
+      },
+      {
+        "item": {
+          "ad_1": "Demon of Desire",
+          "ad_2": "Hope",
+          "kanit": "Or at least they were, until the Demon of Desire decided to come and live among us mortals, becoming known as Hope."
+        },
+        "source_span_valid": true
+      },
+      {
+        "item": {
+          "ad_1": "Nether",
+          "ad_2": "Prince of the Underworld",
+          "kanit": "’Huh... so the Prince of the Underworld was actually called Nether? I wonder which came first, the name or the title... and he was also the Demon of Destiny, it seems.’"
+        },
+        "source_span_valid": false
+      }
+    ]
+  }
+]

@@ -1,0 +1,399 @@
+{
+ "items": [
+  {
+   "chapter": 83,
+   "subject": "Puppeteer's Shroud",
+   "relation_or_state": "memory_tier",
+   "object_or_value": "V",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 83,
+   "subject": "Midnight Shard",
+   "relation_or_state": "memory_tier",
+   "object_or_value": "III",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 83,
+   "subject": "Puppeteer's Shroud",
+   "relation_or_state": "efsunu",
+   "object_or_value": "Doubtless",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 83,
+   "subject": "Midnight Shard",
+   "relation_or_state": "efsunu",
+   "object_or_value": "Unbroken",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 83,
+   "subject": "Sunny",
+   "relation_or_state": "niteligi",
+   "object_or_value": "Blood Weave",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "deterministic_covered_GOLD_ISSUE",
+   "failure_class": "GOLD ISSUE"
+  },
+  {
+   "chapter": 343,
+   "subject": "Nephis",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Crimson Terror",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "missing",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  },
+  {
+   "chapter": 343,
+   "subject": "Crimson Terror",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "rejected:life_status_not_established ('corpse of the Crimson Terror')",
+   "failure_class": "VALIDATOR"
+  },
+  {
+   "chapter": 343,
+   "subject": "Sunny",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Caster",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "missing",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  },
+  {
+   "chapter": 343,
+   "subject": "Sunny",
+   "relation_or_state": "niteligi",
+   "object_or_value": "Soul Conduit",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "missing",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  },
+  {
+   "chapter": 374,
+   "subject": "Kai",
+   "relation_or_state": "gercek_adi",
+   "object_or_value": "Nightingale",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "rejected:ordinary_name_is_not_true_name ('True Names' çoğul)",
+   "failure_class": "VALIDATOR"
+  },
+  {
+   "chapter": 374,
+   "subject": "Nephis",
+   "relation_or_state": "life_status",
+   "object_or_value": "alive",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "rejected:life_status_not_established (zamir 'she')",
+   "failure_class": "VALIDATOR"
+  },
+  {
+   "chapter": 374,
+   "subject": "Rock",
+   "relation_or_state": "role",
+   "object_or_value": "instructor",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "missing",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  },
+  {
+   "chapter": 590,
+   "subject": "Mordret",
+   "relation_or_state": "akrabasi",
+   "object_or_value": "War God",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "missing",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  },
+  {
+   "chapter": 681,
+   "subject": "Hope",
+   "relation_or_state": "unvani",
+   "object_or_value": "Demon of Desire",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "missing",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  },
+  {
+   "chapter": 681,
+   "subject": "Solvane",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Elyas",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "rejected:high_impact_evidence_missing (zamir 'She')",
+   "failure_class": "VALIDATOR"
+  },
+  {
+   "chapter": 681,
+   "subject": "Elyas",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "ACCEPTED",
+   "failure_class": null
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "relation_or_state": "rutbesi",
+   "object_or_value": "Ascended",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "relation_or_state": "shadow_fragments",
+   "object_or_value": "744/4000",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "relation_or_state": "niteligi",
+   "object_or_value": "Master of Shadows",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "needs_review:yön doğrulanamadı (rün listesi kalıbı yok)",
+   "failure_class": "VALIDATOR"
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "relation_or_state": "yetenegi",
+   "object_or_value": "Shadow Manifestation",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "needs_review:yön doğrulanamadı (rün listesi kalıbı yok)",
+   "failure_class": "VALIDATOR"
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "relation_or_state": "niteligi:ended",
+   "object_or_value": "Child of Shadows",
+   "representation": "review",
+   "model_found": false,
+   "outcome": "missing (review beklenirdi)",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  },
+  {
+   "chapter": 782,
+   "subject": "Nephis",
+   "relation_or_state": "life_status",
+   "object_or_value": "alive",
+   "representation": "model",
+   "model_found": true,
+   "outcome": "rejected:life_status_not_established (zamir 'She')",
+   "failure_class": "VALIDATOR"
+  },
+  {
+   "chapter": 887,
+   "subject": "Sunny",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Bone Slayer",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 887,
+   "subject": "Bone Slayer",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 887,
+   "subject": "Sunny",
+   "relation_or_state": "yetenegi",
+   "object_or_value": "Shadow Manifestation",
+   "representation": "model",
+   "model_found": false,
+   "outcome": "missing",
+   "failure_class": "MODEL CAPABILITY / PROMPT"
+  }
+ ],
+ "per_chapter": {
+  "83": {
+   "expected": 5,
+   "deterministic": 4,
+   "model_found": 0,
+   "accepted": 0,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 0
+  },
+  "343": {
+   "expected": 4,
+   "deterministic": 0,
+   "model_found": 1,
+   "accepted": 0,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 4
+  },
+  "374": {
+   "expected": 3,
+   "deterministic": 0,
+   "model_found": 2,
+   "accepted": 0,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 3
+  },
+  "590": {
+   "expected": 1,
+   "deterministic": 0,
+   "model_found": 0,
+   "accepted": 0,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 1
+  },
+  "681": {
+   "expected": 3,
+   "deterministic": 0,
+   "model_found": 2,
+   "accepted": 1,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 2
+  },
+  "744": {
+   "expected": 5,
+   "deterministic": 2,
+   "model_found": 2,
+   "accepted": 0,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 3
+  },
+  "782": {
+   "expected": 1,
+   "deterministic": 0,
+   "model_found": 1,
+   "accepted": 0,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 1
+  },
+  "887": {
+   "expected": 3,
+   "deterministic": 2,
+   "model_found": 0,
+   "accepted": 0,
+   "review_correct": 0,
+   "capability_gap": 0,
+   "wrong": 0,
+   "missing": 1
+  }
+ },
+ "categories": {
+  "other_state": {
+   "expected": 4,
+   "found": 3,
+   "correct": 3
+  },
+  "relationship": {
+   "expected": 9,
+   "found": 5,
+   "correct": 3
+  },
+  "kill_death": {
+   "expected": 4,
+   "found": 2,
+   "correct": 1
+  },
+  "life_status": {
+   "expected": 5,
+   "found": 5,
+   "correct": 2
+  },
+  "identity_title": {
+   "expected": 2,
+   "found": 1,
+   "correct": 0
+  },
+  "conflict_update": {
+   "expected": 1,
+   "found": 0,
+   "correct": 0
+  }
+ },
+ "metrics": {
+  "expected_total": 25,
+  "deterministic_expected": 8,
+  "deterministic_covered": 8,
+  "model_expected_as_frozen": 17,
+  "model_expected_after_fixture_correction": 16,
+  "model_found": 8,
+  "model_correctly_represented": 1,
+  "review_expected": 1,
+  "review_correct": 0,
+  "capability_gap_correct": 0,
+  "recall_proxy_as_frozen": 0.059,
+  "recall_proxy_corrected": 0.062,
+  "found_rate_corrected": 0.5,
+  "effective_fixture_coverage_as_frozen": 0.36,
+  "effective_fixture_coverage_corrected": 0.4,
+  "validator_accepted_all": [
+   [
+    681,
+    "state_changes",
+    "Elyas",
+    "dead",
+    null
+   ]
+  ],
+  "precision_proxy": "1/1 = 1.0",
+  "tokens": {
+   "giris_tokeni": 149877,
+   "cikis_tokeni": 2346,
+   "dusunme_tokeni": 45150
+  },
+  "cost_usd": 0.2905,
+  "latency_sn": [
+   32.69,
+   19.15,
+   70.68,
+   55.95,
+   24.97,
+   57.83,
+   36.4,
+   42.34,
+   40.74,
+   28.36
+  ],
+  "latency_total": 409.1,
+  "latency_avg": 40.9
+ }
+}

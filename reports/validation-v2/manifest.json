@@ -1,0 +1,58 @@
+{
+  "model": "vertex/gemini-3.6-flash",
+  "versions": {
+    "extractor": "2",
+    "prompt": "2",
+    "schema": "delta-2"
+  },
+  "chapters": [
+    2,
+    15,
+    24,
+    61,
+    106,
+    162,
+    273,
+    313,
+    352,
+    360,
+    381,
+    394,
+    479,
+    555,
+    670,
+    691,
+    822,
+    848,
+    923
+  ],
+  "raw_outputs_unchanged_on_replay": true,
+  "code_sha256": {
+    "app/core/bilgi_delta.py": "f1c79e5726f5561a4d1fb4070ad76c4309b1a23dfbad9ac26f770a8f7cd8af0a",
+    "app/core/translate.py": "b5152949abc2c55b7baeeeda97f32457c04bb99aa89e8e27a7477f04d48dbe61",
+    "app/core/varlik_cikarim.py": "177ac441fd1782415725d1b1fe1a2e3aca106d51446f531f0ea6e3150906ff68",
+    "tests/test_bilgi_delta.py": "33f120c5508aca8ffada14ff834e7187c1abb0a67cefe072a3c78117025989e9",
+    "scripts/validation_v2.py": "3f302638450a4157a04710406c7e34650f98aa589b57e8db3ab730d2b89aceae"
+  },
+  "raw_response_sha256": {
+    "2": "38ee3954943c8f93eb2b295afd1ae65fbd8d5230cc9dbdb94d2ae12ad30ee872",
+    "15": "051b4f3362c9de3745d7bcce0144c41fd3cdf1b1117687261294c067200507d7",
+    "24": "0dcdb446fbf5fdb9236f23346daab54483fee080cd99ba3dc815c4371bf9f53c",
+    "61": "38ee3954943c8f93eb2b295afd1ae65fbd8d5230cc9dbdb94d2ae12ad30ee872",
+    "106": "eba8b91bee0056030346c960311217b2d8dc5bd254d3f7fd9f85f0d1023de94a",
+    "162": "c2bb1a12b2cea714c5519f9e5901e6d0e6a38d001e63ca78f2f8d44dcb8c3396",
+    "273": "fb75ca7ab80e3b89ce4f071001cf85c06af9237b142839ff3dc0499863e7f153",
+    "313": "6024b69813a138652d6802aae1d8fee37bd1cf10a5854f2c1108202e70dbc9ef",
+    "352": "38ee3954943c8f93eb2b295afd1ae65fbd8d5230cc9dbdb94d2ae12ad30ee872",
+    "360": "2402f50c12b171aed5d99b59f64f82fcee2e4bba9d7d8863d3e254093475dd40",
+    "381": "8c24598654cce172d5886b62fc6eada7eccbaea85069733bd2d8c904183fb8c7",
+    "394": "0cb075d0770ce082a5e422eeb67a3d70041f005e3291675169f8534abcc19bcc",
+    "479": "38ee3954943c8f93eb2b295afd1ae65fbd8d5230cc9dbdb94d2ae12ad30ee872",
+    "555": "38ee3954943c8f93eb2b295afd1ae65fbd8d5230cc9dbdb94d2ae12ad30ee872",
+    "670": "e0ee270e2faefe2c826824bd37a94594e695feb9edbd4f5d48ae05cb7c0de865",
+    "691": "48ebd16314e539250f486d21c05b340b971d5cd094bb92c609ac036b869e8d40",
+    "822": "9fe9ba20c46bb18e037e5ac6e4e7d896b2f425c9320eedb81ab8d340154adcb0",
+    "848": "7a87f60076bdde2418c284c91dd8fc9a379d6f4e30765efdc05b66acc89788e9",
+    "923": "fb6192e00feaa1f4ddfbc62ac189f11b7aaa47e8fc24e6ff80ccaf92263fed18"
+  }
+}

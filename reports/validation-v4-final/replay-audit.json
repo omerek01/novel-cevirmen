@@ -1,0 +1,89 @@
+{
+  "model_calls": 0,
+  "raw_hashes": {
+    "431": "6f0bf73546206771fa52199b5cba181f59fcb97af1121996913fcdbdf20560a6",
+    "360": "81ccd01d3188388ef8fc827c1d44b1b43a702c4e293d120275add95d5d7d5857",
+    "848": "47adc20f478b4efc86a283ded4ca5fbc6ea2ab69ca6cb35a0d591a115ce86189",
+    "162": "7a87f60076bdde2418c284c91dd8fc9a379d6f4e30765efdc05b66acc89788e9",
+    "313": "44827b53c0057cdc88e1c3957ec08008486ec8fe3b9fe4b0a2a700d1e1e67eb1",
+    "670": "38ee3954943c8f93eb2b295afd1ae65fbd8d5230cc9dbdb94d2ae12ad30ee872",
+    "691": "d483af245efea833f4b2a6e312a682fadd2d1e4bd212fe4a283fe78216daac6f"
+  },
+  "protected_tables_unchanged": true,
+  "before": {
+    "chapters": {
+      "rows": 1213,
+      "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+    },
+    "glossary": {
+      "rows": 1468,
+      "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+    },
+    "sozluk_yazim": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "varlik_bag": {
+      "rows": 1036,
+      "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+    },
+    "varlik_deger": {
+      "rows": 48,
+      "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+    },
+    "bilgi_bas": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_inceleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_isleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_oneri": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  },
+  "after": {
+    "chapters": {
+      "rows": 1213,
+      "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+    },
+    "glossary": {
+      "rows": 1468,
+      "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+    },
+    "sozluk_yazim": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "varlik_bag": {
+      "rows": 1036,
+      "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+    },
+    "varlik_deger": {
+      "rows": 48,
+      "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+    },
+    "bilgi_bas": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_inceleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_isleme": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "bilgi_oneri": {
+      "rows": 0,
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

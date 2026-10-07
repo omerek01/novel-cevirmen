@@ -1,0 +1,146 @@
+{
+  "360": {
+    "relationships": [
+      {
+        "kaynak_kimlik": "517c3ecb0cdf23ba",
+        "kaynak": "Sunny",
+        "kaynak_karsilik": "Sunny",
+        "iliski": "yoldasi",
+        "hedef_kimlik": "61a60074b4d0fe56",
+        "hedef": "Cassie",
+        "hedef_karsilik": "Cassie",
+        "ilk_bolum": 48,
+        "kanit": "As Nephis turned to him, Sunny grabbed Cassie and helped her stand up.",
+        "kanit_bolum": 48,
+        "origin": "model",
+        "durum": "onaylandi",
+        "guven": 0.9,
+        "kaynak_anlam": null,
+        "hedef_anlam": null,
+        "gecerli_baslangic": null,
+        "gecerli_bitis": null,
+        "bitis_ogrenildigi": null,
+        "aktif": true,
+        "durum_bilgisi": null
+      }
+    ],
+    "states": {
+      "Sunny": {
+        "517c3ecb0cdf23ba": {
+          "Shadow Fragments": {
+            "deger": "0/2000",
+            "ilk_bolum": 354,
+            "durum_bilgisi": "confirmed"
+          },
+          "Shadow Cores": {
+            "deger": "2/7",
+            "ilk_bolum": 352,
+            "durum_bilgisi": "confirmed"
+          }
+        }
+      },
+      "Cassie": {}
+    }
+  },
+  "431": {
+    "relationships": [],
+    "states": {
+      "Ivory Tower": {},
+      "Tear": {}
+    }
+  },
+  "848": {
+    "relationships": [
+      {
+        "kaynak_kimlik": "517c3ecb0cdf23ba",
+        "kaynak": "Sunny",
+        "kaynak_karsilik": "Sunny",
+        "iliski": "akrabasi",
+        "hedef_kimlik": "b162d7719811a5b1",
+        "hedef": "Rain",
+        "hedef_karsilik": "Rain",
+        "ilk_bolum": 163,
+        "kanit": "Several months after his sister, Rain, was born, when Sunny was around four, his father was killed in a work accident, which was not a rare occurrence among the city maintenance workers.",
+        "kanit_bolum": 163,
+        "origin": "model",
+        "durum": "onaylandi",
+        "guven": 0.95,
+        "kaynak_anlam": null,
+        "hedef_anlam": null,
+        "gecerli_baslangic": null,
+        "gecerli_bitis": null,
+        "bitis_ogrenildigi": null,
+        "aktif": true,
+        "durum_bilgisi": null
+      },
+      {
+        "kaynak_kimlik": "517c3ecb0cdf23ba",
+        "kaynak": "Sunny",
+        "kaynak_karsilik": "Sunny",
+        "iliski": "golgesi",
+        "hedef_kimlik": "9c846cc74f75252e",
+        "hedef": "Soul Serpent",
+        "hedef_karsilik": "Ruh Yılanı",
+        "ilk_bolum": 358,
+        "kanit": "[You have received a Shadow: Soul Serpent.]",
+        "kanit_bolum": 358,
+        "origin": "sistem",
+        "durum": "onaylandi",
+        "guven": 1.0,
+        "kaynak_anlam": null,
+        "hedef_anlam": null,
+        "gecerli_baslangic": null,
+        "gecerli_bitis": null,
+        "bitis_ogrenildigi": null,
+        "aktif": true,
+        "durum_bilgisi": "confirmed"
+      },
+      {
+        "kaynak_kimlik": "b162d7719811a5b1",
+        "kaynak": "Rain",
+        "kaynak_karsilik": "Rain",
+        "iliski": "ogretmeni",
+        "hedef_kimlik": "517c3ecb0cdf23ba",
+        "hedef": "Sunny",
+        "hedef_karsilik": "Sunny",
+        "ilk_bolum": 530,
+        "kanit": "Sunny spent some time explaining the fundamental laws of combat — at least to the extent that he himself understood them — to Rain.",
+        "kanit_bolum": 530,
+        "origin": "model",
+        "durum": "onaylandi",
+        "guven": 0.95,
+        "kaynak_anlam": null,
+        "hedef_anlam": null,
+        "gecerli_baslangic": null,
+        "gecerli_bitis": null,
+        "bitis_ogrenildigi": null,
+        "aktif": true,
+        "durum_bilgisi": null
+      }
+    ],
+    "states": {
+      "Rain": {},
+      "Soul Serpent": {},
+      "Sunny": {
+        "517c3ecb0cdf23ba": {
+          "Shadow Fragments": {
+            "deger": "744/4000",
+            "ilk_bolum": 744,
+            "durum_bilgisi": "confirmed"
+          },
+          "Shadow Cores": {
+            "deger": "4/7",
+            "ilk_bolum": 702,
+            "durum_bilgisi": "confirmed"
+          }
+        }
+      }
+    }
+  },
+  "313": {
+    "relationships": [],
+    "states": {
+      "Kido": {}
+    }
+  }
+}

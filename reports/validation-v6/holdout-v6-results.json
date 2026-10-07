@@ -1,0 +1,279 @@
+{
+ "items": [
+  {
+   "chapter": 33,
+   "subject": "Sunny",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Carapace Scavenger",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 33,
+   "subject": "Carapace Scavenger",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 33,
+   "subject": "Sunny",
+   "relation_or_state": "anisi",
+   "object_or_value": "Azure Blade",
+   "representation": "deterministic",
+   "outcome": "deterministic_covered"
+  },
+  {
+   "chapter": 141,
+   "subject": "Castle Guard",
+   "relation_or_state": "lideri",
+   "object_or_value": "Tessai",
+   "representation": "model",
+   "model_found": true,
+   "converted": false,
+   "outcome": "rejected: epistemik (kanıt 'perhaps the oldest Sleeper' yan cümlesini içeriyor)",
+   "owner": "VALIDATOR CONVERSION"
+  },
+  {
+   "chapter": 141,
+   "subject": "Hunters",
+   "relation_or_state": "lideri",
+   "object_or_value": "Gemma",
+   "representation": "model",
+   "model_found": true,
+   "converted": false,
+   "outcome": "needs_review: yön doğrulanamadı (edilgen 'were led by' kalıbı yok)",
+   "owner": "VALIDATOR CONVERSION"
+  },
+  {
+   "chapter": 141,
+   "subject": "Pathfinders",
+   "relation_or_state": "lideri",
+   "object_or_value": "Gemma",
+   "representation": "model",
+   "model_found": true,
+   "converted": false,
+   "outcome": "needs_review: yön doğrulanamadı (edilgen 'were led by' kalıbı yok)",
+   "owner": "VALIDATOR CONVERSION"
+  },
+  {
+   "chapter": 141,
+   "subject": "Tessai",
+   "relation_or_state": "role",
+   "object_or_value": "lieutenant",
+   "representation": "model",
+   "model_found": false,
+   "converted": false,
+   "outcome": "missing (model 'Tessai rutbesi Sleeper' üretti)",
+   "owner": "MODEL DISCOVERY"
+  },
+  {
+   "chapter": 460,
+   "subject": "Mordret",
+   "relation_or_state": "unvani",
+   "object_or_value": "Prince of Nothing",
+   "representation": "model",
+   "model_found": true,
+   "converted": true,
+   "outcome": "equivalent skip (aynı-N eski grafik)",
+   "owner": null
+  },
+  {
+   "chapter": 460,
+   "subject": "Sunny",
+   "relation_or_state": "lineage(Weaver)",
+   "object_or_value": "Weaver",
+   "representation": "capability_gap_allowed",
+   "model_found": false,
+   "converted": false,
+   "outcome": "missing (relation_capability_gap üretilmedi)",
+   "owner": "MODEL DISCOVERY / RELATION VOCABULARY"
+  },
+  {
+   "chapter": 556,
+   "subject": "Effie",
+   "relation_or_state": "identity",
+   "object_or_value": "Athena",
+   "representation": "review",
+   "model_found": false,
+   "converted": false,
+   "outcome": "missing (kimlik/takma ad üretilmedi)",
+   "owner": "MODEL DISCOVERY"
+  },
+  {
+   "chapter": 556,
+   "subject": "Night Temple",
+   "relation_or_state": "bulundugu_yer",
+   "object_or_value": "Northern Island",
+   "representation": "model",
+   "model_found": true,
+   "converted": false,
+   "outcome": "needs_review: yön doğrulanamadı (cümle içi 'it's' zamiri)",
+   "owner": "VALIDATOR CONVERSION"
+  },
+  {
+   "chapter": 659,
+   "subject": "Elyas",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "representation": "model",
+   "model_found": true,
+   "converted": false,
+   "outcome": "rejected: life_status_not_established ('the young man's death' adlaştırması)",
+   "owner": "VALIDATOR CONVERSION"
+  },
+  {
+   "chapter": 740,
+   "subject": "Ivory Dragon",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "representation": "model",
+   "model_found": true,
+   "converted": true,
+   "outcome": "ACCEPTED",
+   "owner": null
+  }
+ ],
+ "per_chapter": {
+  "33": {
+   "expected": 3,
+   "deterministic": 3,
+   "model_found": 0,
+   "converted": 0,
+   "missing": 0
+  },
+  "141": {
+   "expected": 4,
+   "deterministic": 0,
+   "model_found": 3,
+   "converted": 0,
+   "missing": 4
+  },
+  "460": {
+   "expected": 2,
+   "deterministic": 0,
+   "model_found": 1,
+   "converted": 1,
+   "missing": 1
+  },
+  "556": {
+   "expected": 2,
+   "deterministic": 0,
+   "model_found": 1,
+   "converted": 0,
+   "missing": 2
+  },
+  "659": {
+   "expected": 1,
+   "deterministic": 0,
+   "model_found": 1,
+   "converted": 0,
+   "missing": 1
+  },
+  "740": {
+   "expected": 1,
+   "deterministic": 0,
+   "model_found": 1,
+   "converted": 1,
+   "missing": 0
+  }
+ },
+ "categories": {
+  "relationship": {
+   "expected": 3,
+   "found": 3,
+   "converted": 0
+  },
+  "role_state": {
+   "expected": 1,
+   "found": 0,
+   "converted": 0
+  },
+  "identity_title": {
+   "expected": 2,
+   "found": 1,
+   "converted": 1
+  },
+  "lineage": {
+   "expected": 1,
+   "found": 0,
+   "converted": 0
+  },
+  "location": {
+   "expected": 1,
+   "found": 1,
+   "converted": 0
+  },
+  "life_status": {
+   "expected": 2,
+   "found": 2,
+   "converted": 1
+  }
+ },
+ "metrics": {
+  "gold_total": 13,
+  "deterministic_expected": 3,
+  "deterministic_covered": 3,
+  "model_expected": 10,
+  "model_found": 7,
+  "converted": 2,
+  "model_discovery_recall": 0.7,
+  "validator_conversion_rate": 0.286,
+  "effective_fixture_coverage": 0.385,
+  "accepted_all": [
+   [
+    740,
+    "state_changes",
+    "Ivory Dragon",
+    "dead",
+    null
+   ]
+  ],
+  "precision_proxy": "1/1 = 1.0",
+  "tokens": {
+   "giris_tokeni": 149446,
+   "cikis_tokeni": 2628,
+   "dusunme_tokeni": 62153
+  },
+  "cost_usd": 0.355,
+  "latency": [
+   66.89,
+   57.16,
+   36.2,
+   39.59,
+   80.33,
+   176.13,
+   29.69,
+   65.2,
+   17.34,
+   83.19
+  ],
+  "latency_avg": 65.2,
+  "latency_total": 651.7,
+  "cue_counts": {
+   "33": 3,
+   "141": 3,
+   "199": 4,
+   "322": 1,
+   "460": 6,
+   "556": 2,
+   "659": 1,
+   "740": 5,
+   "769": 2,
+   "888": 2
+  },
+  "cue_tokens": {
+   "33": 69,
+   "141": 121,
+   "199": 71,
+   "322": 40,
+   "460": 228,
+   "556": 43,
+   "659": 40,
+   "740": 124,
+   "769": 34,
+   "888": 54
+  }
+ }
+}

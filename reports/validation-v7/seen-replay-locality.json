@@ -1,0 +1,224 @@
+[
+ {
+  "chapter": 141,
+  "before": [
+   [
+    "Castle Guard",
+    "lideri",
+    "Tessai",
+    "accepted"
+   ],
+   [
+    "Hunters",
+    "lideri",
+    "Gemma",
+    "accepted"
+   ],
+   [
+    "Host",
+    "lideri",
+    "Gunlaug",
+    "accepted"
+   ],
+   [
+    "Pathfinders",
+    "lideri",
+    "Gemma",
+    "accepted"
+   ],
+   [
+    "Tessai",
+    "rutbesi",
+    "Sleeper",
+    "rejected"
+   ]
+  ],
+  "after": [
+   [
+    "Castle Guard",
+    "lideri",
+    "Tessai",
+    "accepted"
+   ],
+   [
+    "Hunters",
+    "lideri",
+    "Gemma",
+    "accepted"
+   ],
+   [
+    "Host",
+    "lideri",
+    "Gunlaug",
+    "accepted"
+   ],
+   [
+    "Pathfinders",
+    "lideri",
+    "Gemma",
+    "accepted"
+   ],
+   [
+    "Tessai",
+    "rutbesi",
+    "Sleeper",
+    "rejected"
+   ]
+  ]
+ },
+ {
+  "chapter": 374,
+  "before": [
+   [
+    "Rock",
+    "role",
+    "Instructor",
+    "accepted"
+   ],
+   [
+    "Nephis",
+    "life_status",
+    "alive",
+    "rejected"
+   ]
+  ],
+  "after": [
+   [
+    "Rock",
+    "role",
+    "Instructor",
+    "accepted"
+   ],
+   [
+    "Nephis",
+    "life_status",
+    "alive",
+    "review"
+   ]
+  ]
+ },
+ {
+  "chapter": 460,
+  "before": [
+   [
+    "Hope",
+    "takma_adi",
+    "Desire",
+    "review"
+   ],
+   [
+    "Mordret",
+    "unvani",
+    "Prince of Nothing",
+    "accepted"
+   ]
+  ],
+  "after": [
+   [
+    "Hope",
+    "takma_adi",
+    "Desire",
+    "review"
+   ],
+   [
+    "Mordret",
+    "unvani",
+    "Prince of Nothing",
+    "accepted"
+   ]
+  ]
+ },
+ {
+  "chapter": 556,
+  "before": [
+   [
+    "Night Temple",
+    "bulundugu_yer",
+    "Northern Island",
+    "review"
+   ]
+  ],
+  "after": [
+   [
+    "Night Temple",
+    "bulundugu_yer",
+    "Northern Island",
+    "review"
+   ]
+  ]
+ },
+ {
+  "chapter": 659,
+  "before": [
+   [
+    "Elyas",
+    "life_status",
+    "dead",
+    "review"
+   ],
+   [
+    "Sunny",
+    "bulundugu_yer",
+    "Sanctuary",
+    "review"
+   ]
+  ],
+  "after": [
+   [
+    "Elyas",
+    "life_status",
+    "dead",
+    "review"
+   ],
+   [
+    "Sunny",
+    "bulundugu_yer",
+    "Sanctuary",
+    "review"
+   ]
+  ]
+ },
+ {
+  "chapter": 681,
+  "before": [
+   [
+    "Hope",
+    "identity_revelation",
+    "Demon of Desire",
+    "review"
+   ],
+   [
+    "Solvane",
+    "oldurdu",
+    "Elyas",
+    "rejected"
+   ],
+   [
+    "Elyas",
+    "life_status",
+    "dead",
+    "accepted"
+   ]
+  ],
+  "after": [
+   [
+    "Hope",
+    "identity_revelation",
+    "Demon of Desire",
+    "review"
+   ],
+   [
+    "Solvane",
+    "oldurdu",
+    "Elyas",
+    "review"
+   ],
+   [
+    "Elyas",
+    "life_status",
+    "dead",
+    "accepted"
+   ]
+  ]
+ }
+]

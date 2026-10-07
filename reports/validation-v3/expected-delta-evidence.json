@@ -1,0 +1,146 @@
+[
+  {
+    "chapter": 15,
+    "subject": "Sunny",
+    "relation": "gorunusu",
+    "object": "Shadow Slave",
+    "coverage": "deterministic",
+    "evidence": "[Aspect Name: Shadow Slave.]",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 15,
+    "subject": "Sunny",
+    "relation": "gercek_adi",
+    "object": "Lost from Light",
+    "coverage": "deterministic",
+    "evidence": "[You have been bestowed a True Name: Lost from Light.]",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 15,
+    "subject": "Sunny",
+    "relation": "yetenegi",
+    "object": "Shadow Bond",
+    "coverage": "deterministic",
+    "evidence": "Innate Ability: [Shadow Bond].",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 15,
+    "subject": "Sunny",
+    "relation": "rutbesi",
+    "object": "Dreamer",
+    "coverage": "deterministic",
+    "evidence": "[Dreamer Sunless, receive your boon!]",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 15,
+    "subject": "Sunny",
+    "relation": "anisi",
+    "object": "Puppeteer’s Shroud",
+    "coverage": "deterministic",
+    "evidence": "[You have received a Memory: Puppeteer’s Shroud]",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 15,
+    "subject": "Shadow Slave",
+    "relation": "rutbesi",
+    "object": "Divine",
+    "coverage": "deterministic",
+    "evidence": "[Aspect Rank: Divine.]",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 106,
+    "subject": "Stone Saint",
+    "relation": "niteligi",
+    "object": "Spark of Divinity",
+    "coverage": "deterministic",
+    "evidence": "Shadow Attributes: [Battle Master], [Stalwart], [Spark of Divinity].",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 106,
+    "subject": "Stone Saint",
+    "relation": "_deger",
+    "object": "Shadow Fragments\t0/200",
+    "coverage": "deterministic",
+    "evidence": "[Shadow Fragments: 0/200.]",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 106,
+    "subject": "Stone Saint",
+    "relation": "turu",
+    "object": "Shadow",
+    "coverage": "deterministic",
+    "evidence": "Shadow: Stone Saint.",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 360,
+    "subject": "Sunny",
+    "relation": "friendship_conflict",
+    "object": "Cassie",
+    "coverage": "model_review",
+    "evidence": ".\n\nAn oppressive silence settled between them, and remained unbroken for several minutes.\n\nAfter a while, he finally said:\n\n\"...I can understand. Rationally, I do. You were forced to make a terrible decision, with both choices being a betrayal. And you chose to help Neph, who was with you first. Who saved you when I would have just left you to die.\"\n\nBut then, a cold gleam appeared in his eyes.\n\n\"But that doesn’t mean that I can forgive it. You go to hell, Cassie. Go to hell and die there, for all I care. I hope that I will never see you again.\"\n\nWith that, Sunny turned around to leave, but then stopped.\n\nHe couldn’t help but be cruel to her one last time.\n\n\"Oh, and that secret? It was the reason why she got stuck there all alone. So, in a ",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 670,
+    "subject": "Sunny",
+    "relation": "ogretmeni",
+    "object": "Effie",
+    "coverage": "model",
+    "evidence": "Sunny knew of her abilities better than most, since Effie had taught him how to wield a spear. However, due to the fact that their lessons had taken place in the real world, where the huntress was bound to a wheelchair, he never experienced her full strength in a fight himself.",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 691,
+    "subject": "Nether",
+    "relation": "unvani",
+    "object": "Demon of Destiny",
+    "coverage": "model",
+    "evidence": "\"However, people had never worshipped a daemon... before Hope. The daemons, you see, are elusive and solitary creatures by nature. There is the eldest, mysterious Weaver — the Demon of Fate, who is shrouded in countless layers of lies. Then there is the youngest, Nether — the Demon of Destiny, who secluded himself in the darkness of the Underworld. There is the Demon of Oblivion, whose name is long forgotten...\"",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 691,
+    "subject": "Nether",
+    "relation": "unvani",
+    "object": "Prince of the Underworld",
+    "coverage": "model",
+    "evidence": "’Huh... so the Prince of the Underworld was actually called Nether? I wonder which came first, the name or the title... and he was also the Demon of Destiny, it seems. Wait, aren’t fate and destiny the same thing? I guess they’re not... the rune for destiny can also mean choice, after all... so, was he actually the Demon of Choice?’",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 691,
+    "subject": "Hope",
+    "relation": "unvani",
+    "object": "Demon of Desire",
+    "coverage": "model",
+    "evidence": "\"...and the rest, each a personification of calamity and disaster. Mysterious, distant, and terrifying, each and every one of them. Or at least they were, until the Demon of Desire decided to come and live among us mortals, becoming known as Hope. She built her kingdom here, and soon, people learned to love her. And not long after that, they started to worship her.\"",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 848,
+    "subject": "Rain",
+    "relation": "golgesi",
+    "object": "Soul Serpent",
+    "coverage": "model",
+    "evidence": "The name of the Soul Serpent was dim and lifeless. Sunny could not dismiss or summon the Shadow back after gifting it to Rain, at least not from a distance. He still felt a subtle connection to it, though. He knew that Serpent was alive and well.",
+    "evidence_selected_after_model_run": true
+  },
+  {
+    "chapter": 848,
+    "subject": "Soul Serpent",
+    "relation": "_deger",
+    "object": "Yaşam\talive",
+    "coverage": "model",
+    "evidence": "The name of the Soul Serpent was dim and lifeless. Sunny could not dismiss or summon the Shadow back after gifting it to Rain, at least not from a distance. He still felt a subtle connection to it, though. He knew that Serpent was alive and well.",
+    "evidence_selected_after_model_run": true
+  }
+]

@@ -1,0 +1,30 @@
+{
+ "frozen_before_new_holdout_source_read": true,
+ "files": {
+  "app/core/bilgi_delta.py": "3baa296aa5221f5ef3f19957e7d99dc69fbc519122504daa20b3d940c37919bb",
+  "app/core/bilgi_kanit.py": "d232e5516c5845f9c72c70cd49e3f015a02e5c88a3d3ee24a70130efef08c0c3",
+  "app/core/varlik_grafigi.py": "8de8b7d723365bace19694c63a23252f0907dd39b810b2e87f805471b848ddf3",
+  "app/core/kapsama_ipuclari.py": "211889195e07e14fcacfb31db4d2c76a1afb53cdb874054773a3ea9e573b7dc1",
+  "app/core/varlik_cikarim.py": "177ac441fd1782415725d1b1fe1a2e3aca106d51446f531f0ea6e3150906ff68",
+  "app/core/translate.py": "b5152949abc2c55b7baeeeda97f32457c04bb99aa89e8e27a7477f04d48dbe61",
+  "app/core/glossary.py": "48f14e50b86e0b8fbfdde408a10c1aef99798bfee37e9acdd288f640a4b2f90a",
+  "scripts/validation_v5.py": "fcec1c8293c163dd8301221b3837ebde8149e56fafe57025ff4b4d1708d061dd",
+  "scripts/validation_v3.py": "b4c0c5ffb15a1736885eb5f0136ea9d64c156adf19603480030c167bf259657e"
+ },
+ "prompt_sha256": "d23b268726a16dc776c0c0e994d4b5cbad26ea2cd5e4bc26f9d332def05ccf8c",
+ "schema_sha256": "a3ee7cac9bd586ff908b046051fdb0a3b85666e84c5089b948433886bf8cae08",
+ "versions": {
+  "extractor": "7",
+  "prompt": "6",
+  "schema": "delta-3-v4-final"
+ },
+ "context_budget": 4000,
+ "cue_limits": {
+  "max_cues": 12,
+  "per_category": 4,
+  "token_budget": 800
+ },
+ "holdout_model": "vertex/gemini-3.8-flash",
+ "default_CIKARICI_MODELI_unchanged": "vertex/gemini-3.6-flash",
+ "holdout_v6_sha256": "87be1b88969091f18214140eefb2dbd7fae55127674838d31cab59113d8aab52"
+}

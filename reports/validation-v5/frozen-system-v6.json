@@ -1,0 +1,23 @@
+{
+ "frozen_before_holdout_gold": true,
+ "files": {
+  "app/core/bilgi_delta.py": "2da92f5db7f0a4c781c00060ebd1bc95ff03391441e4e1860bb840d10ada187e",
+  "app/core/bilgi_kanit.py": "8bf3a628cb053ced46c38163da5674641eef19a30b4aaad1fc6cadaeca09402f",
+  "app/core/varlik_grafigi.py": "6f6dca815f47b16b57afd54a938cb7f69751a49ec27296889c2b4f5bfa5d12e8",
+  "app/core/varlik_cikarim.py": "177ac441fd1782415725d1b1fe1a2e3aca106d51446f531f0ea6e3150906ff68",
+  "app/core/translate.py": "b5152949abc2c55b7baeeeda97f32457c04bb99aa89e8e27a7477f04d48dbe61",
+  "app/core/glossary.py": "48f14e50b86e0b8fbfdde408a10c1aef99798bfee37e9acdd288f640a4b2f90a",
+  "scripts/validation_v5.py": "6c6ae42c4350434a07a33ab5d7c6545de2c499d7f995724e2455ef1c5d1914f3",
+  "scripts/validation_v3.py": "b4c0c5ffb15a1736885eb5f0136ea9d64c156adf19603480030c167bf259657e"
+ },
+ "prompt_sha256": "15453c393f890727bb91fae8a9b85bc46659439116dee68662bca31383199bc2",
+ "schema_sha256": "a3ee7cac9bd586ff908b046051fdb0a3b85666e84c5089b948433886bf8cae08",
+ "versions": {
+  "extractor": "6",
+  "prompt": "5",
+  "schema": "delta-3-v4-final"
+ },
+ "context_budget": 4000,
+ "holdout_model": "vertex/gemini-3.8-flash",
+ "default_CIKARICI_MODELI_unchanged": "vertex/gemini-3.6-flash"
+}

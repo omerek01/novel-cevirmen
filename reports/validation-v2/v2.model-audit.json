@@ -1,0 +1,4507 @@
+{
+ "model": "vertex/gemini-3.6-flash",
+ "v1": {
+  "schema_failures": 14,
+  "model_failures": 0,
+  "raw_relationships": 48,
+  "identity_revelations": 2,
+  "epistemic_non_confirmed": 1,
+  "review_items": 0,
+  "accepted_relationships": 0,
+  "accepted_aliases": 0,
+  "accepted_state_changes": 0,
+  "evidence_failures": 14,
+  "context_dropped": 896,
+  "giris_tokeni": 124185,
+  "cikis_tokeni": 6645,
+  "dusunme_tokeni": 51693,
+  "model_retries": 0,
+  "future_knowledge_violations": 0,
+  "cost_usd_estimate": 0.31190625
+ },
+ "v2": {
+  "schema_failures": 0,
+  "model_failures": 0,
+  "raw_relationships": 21,
+  "identity_revelations": 2,
+  "already_known_proposals": 0,
+  "deterministic_same_chapter_duplicates": 0,
+  "unsupported_state_keys": 0,
+  "new_entity_candidates": 2,
+  "review_items": 9,
+  "context_dropped": 918,
+  "giris_tokeni": 202350,
+  "cikis_tokeni": 3999,
+  "dusunme_tokeni": 58129,
+  "model_retries": 2,
+  "future_knowledge_violations": 0,
+  "epistemic_non_confirmed": 0,
+  "accepted_relationships": 4,
+  "accepted_aliases": 0,
+  "accepted_state_changes": 3,
+  "evidence_failures": 9,
+  "cost_usd_estimate": 0.3847425
+ },
+ "price_basis": {
+  "giris": 0.75,
+  "cikis": 3.75
+ },
+ "before": {
+  "chapters": {
+   "rows": 1213,
+   "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+  },
+  "glossary": {
+   "rows": 1468,
+   "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+  },
+  "sozluk_yazim": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "varlik_bag": {
+   "rows": 1036,
+   "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+  },
+  "varlik_deger": {
+   "rows": 48,
+   "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+  },
+  "bilgi_bas": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_inceleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_isleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_oneri": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ },
+ "after": {
+  "chapters": {
+   "rows": 1213,
+   "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+  },
+  "glossary": {
+   "rows": 1468,
+   "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+  },
+  "sozluk_yazim": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "varlik_bag": {
+   "rows": 1036,
+   "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+  },
+  "varlik_deger": {
+   "rows": 48,
+   "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+  },
+  "bilgi_bas": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_inceleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_isleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_oneri": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ },
+ "protected_tables_unchanged": true,
+ "chapters": [
+  2,
+  15,
+  24,
+  61,
+  106,
+  162,
+  273,
+  313,
+  352,
+  360,
+  381,
+  394,
+  479,
+  555,
+  670,
+  691,
+  822,
+  848,
+  923
+ ],
+ "completed": 19,
+ "elapsed_seconds": 463.77,
+ "manual_sources": {
+  "15": "[Prepare for appraisal...]\n\nSunny found himself in a space between dream and reality. It was an endless black void illuminated by a myriad of stars. Between those stars, countless strings of silver light were woven into a beautiful and inconceivably complex net, forming various nexuses and constellations. It was truly breathtaking.\n\nSomehow, Sunny understood that he was seeing the inner workings of the Nightmare Spell. He also couldn’t help but think that it looked a lot like the celestial equivalent of a neural network. If so... was the Spell alive?\n\nThis was a question that countless people had been asking themselves for the past few decades. The best answer they had come up with was that there was no way to know. The Spell was neither alive nor dead; neither sentient nor mindless.\n\nIt was more of a function than a creature.\n\nBut Sunny was in no mood to ponder philosophical questions. He was eagerly awaiting his boon.\n\nThe Spell was still appraising his performance. However, the first reward had nothing to do with it.\n\n[You have received a Memory: Puppeteer’s Shroud]\n\n’Yes!’\n\nSunny felt incredibly elated. He was almost ready to do a happy dance. That Memory belonged to Mountain King, who was an awakened tyrant — which meant that the Memory itself was of the Awakened rank. Getting it was a stroke of incredible luck!\n\nThere were seven ranks to everything in the Spell. These ranks were, in order of growing power: Dormant, Awakened, Ascended, Transcendent, Supreme, Sacred and Divine (with the exclusion of Nightmare Creatures, who were ranked as Dormant, Awakened, Fallen, Corrupted, Great, Cursed and Unholy).\n\nFrom the Spell’s point of view, Sunny was a dormant human. Having a Memory of a higher rank than his own soul core would be of great help once he enters the Dream Realm. The power gap between different ranks simply could not be overestimated.\n\nHe wanted to take a look at the Puppeteer’s Shroud, but there was no more time. The Spell was done with its appraisal.\n\nHere in the void, its voice didn’t sound subtle and familiar anymore. Rather, it seemed like the universe itself was speaking. Sunny held his breath, listening.\n\n[Aspirant! Your trial is over.]\n\n[A nameless slave ascended the Black Mountain. Both heroes and monsters fell by his hand. Unbroken, he entered the ruined temple of a long-forgotten god and spilled his blood on the sacred altar. The gods were dead, and yet they listened.]\n\n[You have defeated a dormant beast: Mountain King’s Larva.]\n\n[You have defeated three dormant humans, names unknown.]\n\n[You have defeated an awakened human: Auro of the Nine.]\n\n[You have defeated an awakened tyrant: Mountain King.]\n\n[You have received the Shadow God’s blessing.]\n\n[You have achieved the impossible!]\n\n[Final appraisal: glorious. Your treachery truly knows no bounds.]\n\nThat final part was not really necessary, as far as Sunny was concerned, but he was still pretty satisfied with the praise from the Spell. He felt like his chances of evolving his Aspect to an Awakened, or even Ascended one were pretty high.\n\nHis overall power was still dependent on the rank of his soul core, which would remain dormant until much later, but the rank of the Aspect itself would do wonders for his overall potential.\n\n[Dreamer Sunless, receive your boon!]\n\nHe was an Aspirant no more. Sunny grinned.\n\n[You have been bestowed a True Name: Lost from Light.]\n\nHis jaw dropped. A true name! He had received a true name! Never in his wildest dreams did Sunny dream of becoming one of the chosen few to accomplish such feat — and in his very first Nightmare to boot! Not even all of the Saints could boast of having one. He was an elite now, a bonafide cream of the crop! He was going to be rich!\n\nBut the rewards kept coming.\n\n[Your Aspect is ready to evolve. Evolve Aspect?]\n\n’What kind of a question is that?!’\n\nSunny crossed his fingers and said \"yes\".\n\n[Dormant Aspect Temple Slave is evolving...]\n\n[New Aspect acquired.]\n\n[Aspect Rank: Divine.]\n\nSunny fell over.\n\n[Aspect Name: Shadow Slave.]\n\n***\n\n’Divine... it’s Divine.’\n\nSunny was standing on his knees, stupefied. The shock was so great that for a second there he lost all control over his limbs and fell.\n\n’It said \"divine\"... right?’\n\nHe raised a trembling hand and rubbed his eyes, making sure that he was awake. Or rather conscious, since, technically, he was still sleeping in the underground vault of the police station.\n\nConfused by all this terminology, Sunny silently summoned the runes and found the lines describing his aspect.\n\nAspect: [Shadow Slave].\n\nAspect Rank: Divine.\n\nAspect Description: [You are a miraculous shadow left behind by a dead god. As a divine shadow, you possess plenty of strange and wondrous powers. However, your existence is empty and lonesome; you mourn the passing of your former master and long to find a new one.]\n\nInnate Ability: [Shadow Bond].\n\nAbility Description: [Find a worthy master and let them know your True Name. Once they recite it out loud, you will be bound to their will, unable to disobey any command. It is improper for a shadow, let alone a divine one, to walk around without a master.]\n\nThat was... a lot to digest.\n\nFirst of all, Sunny felt his heart beating faster. He heard it right! All the suffering and horror he had experienced in the First Nightmare paid off in the end. A divine Aspect, he had received a divine Aspect! Anything above Awakened was rare and immensely valuable!\n\nPeople with Ascended Aspects were rare enough to be fought over by various factions. The factions themselves were built around singular powerhouses with Transcendent or Supreme Aspects. And he had never, ever heard of anyone acquiring a Divine one. Never!\n\nAnything with the \"divine\" prefix was so hard to find that it mostly lived in the realm of myths and legends. After all, the human race had not reached that high yet; it was only slightly more than a decade since humans managed to finally conquer the Third Nightmare and receive the ability to evolve their cores to Transcendent rank.\n\nAs Transcendents — or Saints, as they were called in the real world — powerful Awakened ruled over the Dream Realm, but even they did not dare to face Nightmare Creatures of higher ranks. Subsequently, there were not a lot of Memories and Echoes of Supreme rank around, let alone Sacred... or Divine. The same went for Aspects.\n\nAnd yet Sunny just got one!\n\nHe grinned, driven half-mad by joy and arrogance. However, his jubilation was a little muddied. After all, there was that weird innate ability. Of course, he had no intention of becoming someone’s magical slave, with no free will of his own. To hell with that!\n\nBut it wasn’t that bad. All he had to do to avoid that fate was to conceal his True Name. No one except for him could see his status. That meant that Sunny just had to keep his mouth shut, and no one will know that he even had one.\n\nIt meant giving up on all the benefits that someone who was bestowed a True Name after the First Nightmare was entitled to, but it all paled in comparison with a Divine Aspect.\n\n’Not a problem,’ Sunny thought with a smirk.\n\nIf the Spell had the ability to laugh, it would surely do so after hearing his thoughts. However, it didn’t. Instead, it began to speak again:\n\n[The First Seal is broken.]\n\n[Awakening dormant powers...]",
+  "106": "Under Sunny’s watchful eyes, the Echo began to change.\n\nThe light falling from the Shadow Core seemed to seep into the flesh of the stone creature, making it shine with dark radiance. Wisps of shadowy fog emanated from beneath her impervious plate armor, slowly merging with it. It looked as though the Stone Saint was engulfed in ghostly black flame, being remade by it.\n\nWhat little color there was on her body was washed away and replaced with nothing but darkness. Only two crimson fires burning in her ruby eyes remained, slightly changing their hue and becoming more menacing.\n\nOf course, all these changes were happening on the surface. If not for the traumatic transformation that Sunny had gone through to inherit a part of Weaver’s forbidden lineage, this would have been all he saw.\n\nHowever, with his eyes altered by the agony of consuming the drop of divine blood, he was able to see much more.\n\nBeneath the surface, the essence of the Echo was being changed as well, in a way much more fundamental than its outer appearance.\n\nThe shining embers that served as anchors for the weave of diamond strings had lost their radiance, becoming as transparent and empty as the Shadow Core itself. The diamond strings were gone, replaced by a sea of darkness. That darkness had a form, a shape that perfectly followed the lines of the Stone Saint’s body.\n\nIt was as though a living shadow was now inhabiting it, usurping the role that had been played by the pattern of the sorcerous strings once.\n\nAlthough similar in appearance to the original Echo, this new creature was a completely different type of existence. Sunny had never seen anything like it before.\n\nIt was created by his Aspect, after all.\n\nThe process of transformation, meanwhile, was coming to the end. The ray of dark light cast by the Shadow Core was disappearing, its reflection drowning in the calm water of the silent sea. The black flames were already fully absorbed by the stonelike armor of the Saint, gone with the dark radiance of her smooth granite skin.\n\nSunny observed the Stone Saint. Clad in the lusterless black armor, with two ruby flames burning in the deep shadows of the visor, she looked like an incarnation of pure darkness, a noble demon sent to wage war against heaven from the depths of hell. What changed the most, however, was her presence.\n\nBefore, the Echo felt like an empty shell, a magical tool rather than an actual being. Now, however, there were hints of mysterious will in her crimson eyes, a subtle sense there was a nascent spark of sentience burning somewhere deep within her lightless soul. Or whatever it was that the menacing monster had instead of a soul.\n\nThis was a Shadow.\n\nJust as this thought appeared in Sunny’s mind, the faintly familiar voice of the Spell resounded above the dark waters of the Soul Sea:\n\n[You have created a Shadow Monster: Stone Saint.]\n\n***\n\nHearing these words, Sunny smiled. However, a second later, the smile disappeared from his lips, replaced by a pained expression.\n\nOnly now, after the process was complete, he felt a subtle emptiness permeating his whole body. He felt... weakened. The loss of a hundred shadow fragments was finally making its effect known. He had suspected that spending them in this way would reverse the process of power accumulation that had consumed him for these last few months, but it was still an unpleasant feeling.\n\nHe was much stronger than he had been during the journey through the Labyrinth, however, some of his physical might was unmistakably gone, leaving him with a bitter feeling of regret.\n\nNo, no... he had known that this would happen, and decided to proceed with the experiment anyway.\n\nIt was well worth it.\n\nForgetting about the change in his physical state, Sunny walked around his Shadow and observed her from different sides. The Stone Saint’s eyes silently followed his movements, sending glints of crimson light reflecting from the black surface of the tranquil sea.\n\n’This is... amazing. I wonder what she is capable of...’\n\nSummoning the runes, Sunny immediately noticed that there was a new cluster shining right beneath the one describing his Echoes.\n\nShadows: [Stone Saint].\n\nExcited to learn more about his new pet monster, Sunny was about to concentrate his attention on the runes, but then stopped and glanced down at his own shadow, a little embarrassed.\n\n\"Uh... sorry. How are you feeling, buddy? You aren’t, uh, you know... jealous or anything?\"\n\nThe shadow looked away and pretended that it didn’t know him. It was seemingly indifferent to the appearance of a new shadow creature in his service, even though this new Shadow had a capital letter to its name.\n\n\"Well, I just wanted to say that you shouldn’t be. I still value you very much! Even though the Stone Saint is probably capable of slicing powerful monsters into tiny pieces with her sword, while you’re still just a useless piece of... uh... an incredibly capable scout and my most trusted confidant, I still appreciate you. Yeah.\"\n\nHe stared at the shadow for a bit and, seeing that it didn’t react in any way, turned away.\n\n’This guy, he’d better step up his game. Ha!’\n\nFocusing on the runes, Sunny summoned the description of the Shadow and read:\n\nShadow: Stone Saint.\n\nShadow Rank: Awakened.\n\nShadow Class: Monster.\n\nShadow Attributes: [Battle Master], [Stalwart], [Spark of Divinity].\n\nSunny blinked. It seemed as though Stone Saint’s divine Attribute had evolved to match his own. Was it because he was her master? This was a nice surprise. However, he still didn’t see how she was different from before.\n\nFrowning, he continued to look through the shimmering runes:\n\nShadow Description: [Shadow Saint was created by the treacherous Lost From Light in the cursed darkness of the Forgotten Shore.]\n\n’Again with this whole treachery stuff. Can I get another epithet, huh?’\n\nBut in the next moment, he forgot all about this little frustration. Because the following line of runes showed him something really unexpected.\n\nJust beneath the description, a familiar set of runes shined in the air:\n\n[Shadow Fragments: 0/200.]",
+  "360": "In a heavily guarded underground room, a young woman with silver hair was sleeping in a transparent machine that kept her body alive. Her face was pale and thin, painted by the ghostly glow of machine lights and deep, angular shadows.\n\nThe room was peaceful and silent, the hum of machinery creating low background noise. From time to time, a piece of medical equipment produced a sound and grew quiet again.\n\nA blind girl with piercing blue eyes stood quietly near the sleeping pod, an empty expression written in the delicate lines of her beautiful face. If it wasn’t for the fact that her hand rested on the hilt of an elegant rapier, a person would easily mistake her for one of the Hollows that were cared for on another level of the hospital complex.\n\nThe door of the room did not open, however, there was suddenly another presence inside. A young man with pale skin and dark, cruel eyes appeared out of the shadows and walked over to stand on the opposite side of the sleeping pod. His steps were soft and quiet.\n\nHe lingered for a while, then looked down, at the young woman sleeping beneath the glass lid of the mechanical coffin.\n\nFor a second, his face became contorted by a terrible grimace. Grief, anger, fear, and longing mixed in his eyes, then disappeared, hidden behind a mask of cold indifference.\n\nSunny stared at Nephis for a long time, trying to get his emotions under control. He knew that seeing her like this, weak and helpless, would affect him. But he didn’t know just how much it was going to hurt him.\n\n...He also had not anticipated how dark the thoughts entering his mind would be.\n\n’...I can kill her right now. One strike of the Moonlight Shard, and I’ll be free again.’\n\nBut no, he couldn’t.\n\nFirstly, because there was no guarantee that Nephis would die if her body was destroyed. Just like there were Hollows, people whose souls had been destroyed while leaving an empty body behind, there were Lost — people whose bodies in the real world had died, leaving their souls wandering the Dream Realm.\n\nHe suspected that this was the reason why the people who wanted Changing Star dead had sent Caster to kill her in the Dream Realm instead of infiltrating the Academy.\n\nAnd secondly, and maybe more importantly... he simply could not bring himself to harm Nephis. Not again, not anymore, and not... not like this.\n\n’Cassie, on the other hand...’\n\nWith a dark grimace, Sunny slowly moved his gaze to the blind girl.\n\nAs if noticing it, she turned slightly and said:\n\n\"Hello, Sunny.\"\n\nHe stared at her, his eyes burning with fury.\n\n\"What, you can see now?\"\n\nCassie lingered for a moment, then shook her head.\n\n\"No. But... something like that.\"\n\nA wild grin appeared on his face.\n\n\"Congratulations. Really, good for you! You won’t be useless anymore, at least.\"\n\nHe knew that his words were going to hurt her, and was glad to say them for that reason.\n\nThe blind girl didn’t react, and just continued staring into the emptiness, her eyes cold and distant. But he wasn’t fooled. He knew her well enough to recognize the ocean of pain hiding behind that coldness.\n\n’Good... suffer! You deserve this!’\n\nSunny opened his mouth, wishing to accuse her, but then forced himself to stop. He had to keep himself under control...\n\nSwallowing his angry words, Sunny gritted his teeth and spat:\n\n\"How? How did you even know?!\"\n\nCassie hesitated for a bit, then answered quietly:\n\n\"When you killed that spy from the Castle. You said it out loud then. I saw it... in a vision. After that, the rest was not impossible to figure out.\"\n\nHis eyes widened.\n\nSunny remained silent for a long time, trying to deal with the shock that her words had caused him.\n\n’Harper... when I killed Harper?’\n\nThe memory of that horrible day sent a shudder through his soul. He remembered it so vividly... the blood streaming down his hands as he held the pitiful young man down, murdering him, giving in to the agony of the Flaw.\n\nAnd whispering in a hoarse, barely audible voice:\n\n\"Lost from Light! I am... Lost... Lost from Light...\"\n\nStanding in the underground room of the hospital complex, Sunny wanted to both laugh and cry.\n\n’So this is it... this was what did me in... one mistake, I only made one mistake, and it was all it took to undo me!’\n\nIt was almost as if Harper had managed to avenge himself from beyond the grave. Well... he had never gotten a grave, really. Sunny just dumped his body in the ruins, for the Nightmare Creatures to feast on.\n\nA lot of good it did him, in the end.\n\nPiercing the blind girl with a burning look, he said through gritted teeth:\n\n\"So that was why you were waiting for me back then, why you gave me the Eternal Spring? You were... you were ready to say goodbye. You knew?\"\n\nCassie slowly faced him, then said in a steady, even tone:\n\n\"Yes. I did.\"\n\nSunny looked down, clenching his fists.\n\n\"You knew... if you knew... then why didn’t you try to change anything?! Why, curse you?!\"\n\nCassie stared at him, her calm expression finally collapsing. Pain, sorrow, and anger contorted her face, and with a voice so hurt that it almost sounded as if she was bleeding, she answered:\n\n\"Didn’t try?! Of course, I tried! I tried everything I could to make the future I saw change! But no matter how much I tried, it never did. It always remained the same! Even worse, my attempts only made it... appear even more inevitable...\"\n\nTurning away, she gritted her teeth and remained silent for a while, her hands trembling.\n\n\"I... I... I was the first one to understand what my vision of the Crimson Spire meant. Shadows devouring a dying angel... I understood it on that very day.\"\n\nCassie closed her eyes for a moment, then spoke again, her voice quiet.\n\n\"Don’t you remember? I even asked you to promise to always protect her. And what did you say?\"\n\nSunny stared at her, remembering. Yes, at the very start, there had been a conversation like that.\n\n\"...No. I said no.\"\n\nA fragile smile appeared on Cassie’s face.\n\n\"Yes. You said no. And on that day, I knew that I had to make a choice. And I made it. I chose Neph.\"\n\nShe shivered and hugged herself, as if dying of cold.\n\n\"I had to betray one of my best friends to save the other. And I did. I chose to sacrifice you to save Neph. Of course, I fooled myself for a while, telling myself that nothing bad would happen. That if I help Neph, maybe both of you would survive. But deep down, I knew that it was just one of the possible outcomes, so what was the difference? I betrayed you. And you know what?\"\n\nA small, bitter laugh escaped from her lips.\n\n\"It was for nothing. I betrayed my best friend, and nothing still changed. I sacrificed you, but couldn’t save anyone. Despite it all, I couldn’t... couldn’t change fate.\"\n\nSunny stared at her for a while, then snarled:\n\n\"...That’s it? That’s your speech? That’s what you have to say for yourself? What do you want me to do, pity you?\"\n\nA furious gleam appeared in his eyes.\n\n\"After everything I have done for you, after I saved your life countless times, took care of you as if you were my sister, this is how you chose to repay me? By giving my biggest secret to Neph, so that she could use it against me when the time came?\"\n\nCassie remained silent, not saying anything.\n\n\"Do you even know what you’ve done?! Do you even know what you’ve taken from me?!\"\n\nShe hesitated for a bit, then answered quietly:\n\n\"I didn’t know why, or how my vision would come true. I only knew that it would happen in the Spire. So I gave your secret to Nephis, hoping that she would survive thanks to it.\"\n\nSunny laughed, then grew quiet.\n\nAn oppressive silence settled between them, and remained unbroken for several minutes.\n\nAfter a while, he finally said:\n\n\"...I can understand. Rationally, I do. You were forced to make a terrible decision, with both choices being a betrayal. And you chose to help Neph, who was with you first. Who saved you when I would have just left you to die.\"\n\nBut then, a cold gleam appeared in his eyes.\n\n\"But that doesn’t mean that I can forgive it. You go to hell, Cassie. Go to hell and die there, for all I care. I hope that I will never see you again.\"\n\nWith that, Sunny turned around to leave, but then stopped.\n\nHe couldn’t help but be cruel to her one last time.\n\n\"Oh, and that secret? It was the reason why she got stuck there all alone. So, in a sense, you have doomed both of your friends.\"\n\nAs he spoke those words, Cassie flinched.\n\nA satisfied, vindictive smile appeared on Sunny’s face.\n\n...But why did it hurt him so much to say those words?\n\n\"So, congratulations. You’ve made it back, Cassie. Go back home, spend time with your family. Didn’t you tell me that your mother makes the best eggs? Eat your fill. Try to enjoy them, knowing what you did.\"\n\nAs the blind girl paled and turned away with a broken expression on her face, he smiled bitterly and dissolved into the shadows.\n\nBonds of friendship were such a fragile thing.\n\nThey were so hard to create, but so easy to break.\n\nAll it took was a moment...",
+  "670": "Because of Effie’s easygoing personality and affable attitude, it was easy to forget just how fearsome of a warrior she was.\n\nOut of all the members of the cohort, she had survived on the Forgotten Shore the longest... she had done so while hunting down Nightmare Creatures on the cursed streets of the Dark City all alone, as well. Mostly because anyone willing to help her would have been disposed of by the ruler of the Bright Castle, who had been scorned by her rejection.\n\nThe fact that the young huntress had never bowed to his demands despite the black mark placed on her only went to show how unyielding her will really was.\n\nHer Aspect made Effie a perfect instrument of war. While not as drastic as the dire but narrow speed augmentation Caster had possessed, it was still great and wondrous. More importantly, it was an all-around enhancement — speed, strength, agility, endurance, resilience... every facet of her physicality was elevated to an inhuman level.\n\nSunny knew of her abilities better than most, since Effie had taught him how to wield a spear. However, due to the fact that their lessons had taken place in the real world, where the huntress was bound to a wheelchair, he never experienced her full strength in a fight himself.\n\nUntil now.\n\n’Crap... that really hurt...’\n\nBefore, Sunny had hoped that their strength would be more or less equal, considering that he was augmented by three shadows. However, it was not even close... that one blow almost shattered his body into pieces. That was only made more bizarre by the fact that it had been delivered by a scrawny child.\n\nMaybe if he had an additional shadow, or two...\n\nSunny had become much more powerful, but Effie had grown much stronger after the Forgotten Shore, as well. Her core was now fully saturated... more than that, while Sunny had been surviving in the Red Colosseum, she had survived a hell of her own, it seemed.\n\nBeing tortured, taught, and tempered by the cult that had created Solvane, of all people.\n\nSunny spat some blood, gritted his teeth, and slowly stood up.\n\n’This is... not good...’\n\nThe little girl glanced at him with surprise and tilted her head a little.\n\n\"Huh... still alive? Damn... tough bastard...\"\n\nHe thought of taking out the emerald amulet once again, but Effie gave him no time. A split second later, she was already upon him, her leg flying through the air toward his ribcage.\n\nSunny had no time to think about anything. He didn’t want to hurt his friend, but he also didn’t want to die. And getting hit by this bruised, wild, monstrous girl was going to kill him soon enough, no doubt...\n\n’I need to slow her down.’\n\nEven if his ribs survived Effie’s wicked kick due to Bone Weave, the organs protected by them were not that resilient. The shock would surely rupture something important...\n\nGritting his teeth, Sunny thrust one of his lower hands forward, putting the sharp blade of the dagger in the path of Effie’s small, bony, and bruised leg. She was going to have to rethink that attack or risk having her calf cut wide open.\n\nUnless... she was using her second Aspect Ability, of course.\n\n’Curse it a...’\n\nThe dagger slid off the girl’s skin without leaving even a scratch on it, as though it was made out of tempered steel. Luckily, Sunny had expected this outcome and was already dodging out of the way.\n\nEffie’s shin hit the pillar instead of his side, sending a rain of large stone chunks and sharp shards flying through the air. Before Sunny could regain his balance, the next attack came... and then the next, and the next, and the next...\n\nUnable to seriously hurt the girl, he had no choice but to retreat under the onslaught of deadly strikes, receiving several glancing blows that left him reeling and in pain. The scrawny girl was very small, but made up for it by being incredibly nimble and swift. The little imp was so wily and fast, in fact, that it almost felt as though she was in several places at the same time.\n\n\"Stop running, big guy! Let us... let us finish this quickly... I am hella hungry, you know!\"\n\n’Argh... would you slow down for a second, you devil child!’\n\nSunny growled with unrestrained fury and brought the greatsword down, creating some space between himself and the advancing girl. He felt very, very... very frustrated.\n\nAll he had to do, for now, was to let Effie know who he was. That was not very hard to do... there were many ways, really. He could use one of his shadows, or summon a familiar Memory... if only she gave him a damned moment to breathe and think!\n\nThe problem was that Effie did not. She was also not fighting in any style Sunny was familiar with. He knew her usual technique pretty well, but this assault had nothing in common with it. In fact, her current ferocious style was leagues beyond what the huntress had been capable of in the past, both in terms of purpose and lethality.\n\nIt was sort of... breathtaking. Even when performed by a scrawny child.\n\nA Memory... a Memory was the easiest option, since summoning one took only a thought and several seconds. However, that was also the worst option, because doing so would reveal his ability to summon things out of thin air to the Maidens. He and Kai had not gone through the trouble of appearing unarmed just to give that advantage away immediately.\n\n’Think, you fool!’\n\nThere had to be a better way...\n\nSunny deflected another devastating kick and took a step back, then froze for a split second... and threw his buckler away.\n\nThe thing was hideously bent by now, anyway.\n\nWith one of his hands now free, he made it into a fist, sent it flying forward...\n\nAnd extended his middle finger with a vicious snarl.\n\nEffie, who was already preparing to launch another attack, blinked a couple of times, then looked up at the towering demon with confusion.\n\n\"...Huh?\"\n\n’Finally!’\n\nUsing Effie’s momentary confusion, Sunny lowered his hand and mimed grabbing the rim of a wheel and moving it forward and backward, as if pushing a wheelchair.\n\nThe little girl frowned, then lunged forward and delivered a crushing strike, but this time, her movements were a bit slower, allowing him to easily dodge out of the way... purposefully so.\n\nMaking sure that Effie could see his hand, he attacked with the greatsword while simultaneously making a fist again and pretending to have an arm wrestling match with an invisible opponent.\n\nThe little girl swatted the sword away with her naked forearm, and then, her bloodred eyes suddenly widened.\n\nShe craned her neck and stared at the towering demon with an inexorable expression, then blurted out in a soft, childish voice:\n\n\"D—doofus?!\"\n\n’Thank god... took you long enough.’\n\nSunny pretended to attack her with the dagger, then dodged a similarly half-hearted kick, and gave the little girl a short nod.\n\nEffie’s face trembled, and then, she whispered:\n\n\"Why... why the Spell are you so damn tall?!\"",
+  "691": "Sunny remained silent for a few moments, absorbing what Noctis had told him. The Altar Island was calm and tranquil, the lake surrounding it shimmering in the darkness with the reflected moonlight. The branches of the ancient tree swayed gently above his head.\n\n’Because she was worshipped...’\n\nHe snorted and looked away, feeling bitterly disappointed, for some reason. After a while, he said darkly: 𝚏𝐫𝚎𝗲𝕨𝐞𝐛𝕟𝚘𝐯𝚎𝗹.𝕔𝐨𝗺\n\n\"So, what? That is all there is? Sun God was jealous?\"\n\nThe sorcerer glanced at him, lingered for a moment, and then slowly shook his head.\n\n\"No... no, he wasn’t.\"\n\nNoctis remained silent for a bit, then sighed.\n\n\"The gods had never shown any animosity toward daemons. In fact, their relationship was somewhat friendly. In the battles of the ancient times, they even fought side by side as allies.\"\n\nHe frowned.\n\n\"Neither had the gods ever cared about whom or what the mortals worshipped. Ah, there were all kinds of silly cults before! There were rulers that proclaimed themselves divine, people who built temples to beasts and spirits... some oddballs even worshipped rocks. Or the Corrupted abominations... by the Moon, can you imagine? But the gods did not mind at all.\"\n\nThe sorcerer glanced up at the sky, thought for a bit, and then said somberly:\n\n\"However, people had never worshipped a daemon... before Hope. The daemons, you see, are elusive and solitary creatures by nature. There is the eldest, mysterious Weaver — the Demon of Fate, who is shrouded in countless layers of lies. Then there is the youngest, Nether — the Demon of Destiny, who secluded himself in the darkness of the Underworld. There is the Demon of Oblivion, whose name is long forgotten...\"\n\nSunny listened attentively, absorbing the new information. Already accustomed to wielding the emerald medallion, he reflexively let go of the beautiful stone and allowed it to hang from the chain wrapped around his fingers, so that his thoughts remained private.\n\n’Huh... so the Prince of the Underworld was actually called Nether? I wonder which came first, the name or the title... and he was also the Demon of Destiny, it seems. Wait, aren’t fate and destiny the same thing? I guess they’re not... the rune for destiny can also mean choice, after all... so, was he actually the Demon of Choice?’\n\nHis thoughts were interrupted by the sorcerer’s wistful voice:\n\n\"...and the rest, each a personification of calamity and disaster. Mysterious, distant, and terrifying, each and every one of them. Or at least they were, until the Demon of Desire decided to come and live among us mortals, becoming known as Hope. She built her kingdom here, and soon, people learned to love her. And not long after that, they started to worship her.\"\n\nNoctis paused and then continued, his face growing darker:\n\n\"And that was when we learned that while the gods were friendly to daemons and indifferent to mortals building temples to beasts, spirits, and rocks... they would not allow a daemon to be worshipped. They were so unwilling, in fact, that the Lord of Light brought down his flames upon the mortal realm, obliterating a whole chunk of it.\"\n\nSunny frowned, feeling a cold sense of dread permeate his heart. Remembering one of his nightmares, he shivered.\n\n\"...But why?\"\n\nThe sorcerer looked at him with a bit of surprise and shrugged.\n\n\"Who knows? I guess only the gods do... well, and maybe a daemon or two. I doubt that even Hope knew what she had done wrong... but maybe she does, now. In any case, after her imprisonment, slowly, the idea of worshipping a daemon became tantamount to heresy.\"\n\nNoctis suddenly laughed.\n\n\"What a strange word, heresy! Don’t you think? It had not even existed when I was young, you know. But then, suddenly, each of the six cults started treating daemon worshippers as criminals, pests who were spreading a vile disease... and the concept of heresy was invented. Now, becoming a heretic means being hunted down and saying goodbye to your life...\"\n\nHe grew silent, and then sighed.\n\n\"...We did not know it at the time, of course, but the destruction of the Kingdom of Hope was a turning point in history. With it, the Age of Heroes ended, and the current one — whatever it will be called one day — began. Ah, what a dreadful era! Nothing has gone right from then on...\"\n\nSunny remained silent for a while, thinking that there was something strange about this whole story. Nothing made sense... the gods and the daemons had been allies once? Knowing that they would eventually clash in a devastating war, he could not quite believe it... however, on second thought, the Prince of the Underworld... Nether... was indeed described as having been close with the Goddess of the Black Skies once.\n\nWho was to say that the other daemons had not consorted with the gods, as well?\n\nBut that only made the divine punishment that the Lord of Light had brought down upon the Kingdom of Hope more inexplicable and strange. And who had they been allied together against? The creatures of the Void? What was the exact timeline of all this convoluted nonsense? The Age of Heroes had ended with the imprisonment of Hope... but when had it started? And what had been happening before?\n\n’Damn, so many questions...’\n\nSunny glanced at Noctis, hesitated for a few moments, and then grasped the emerald amulet again...\n\nHowever, the sorcerer was having none of it. He glanced at Sunny and said with a smile:\n\n\"...I feel like you are about to ask me a question. That would be the second question... wait, no, the second one was whether or not Sun God was jealous! Wicked demon... you tricked me!\"\n\nNoctis shook his head, looked at Sunny with reproach, and stood up.\n\n\"Shame on you, Sunless! Good night. Tell your friends to prepare well in the time that we have left...\"\n\nWith that, the sorcerer gave him another hurt look, then turned away and started walking back toward his residence.\n\nAfter a few steps, however, he stopped and said in his usual carefree manner:\n\n\"Oh, yes... I almost forgot... you will have to go and retrieve the third knife, too. Don’t worry, though, it is not going to be hard. Rather easy, really...\"\n\nSunny, who was staring at the tranquil lake with a dark expression, simply nodded.\n\n\"Sure... wait, what? Why do we have to do it?! Go and get it yourself!\"\n\nNoctis hesitated for a bit, then sighed.\n\n\"Ah, I wish that I could. But... well... I might have said some nonsense about how my friend should only give the knife to someone of pure thought and heart... or something like that. And sadly, while I am the most outstanding person in all of the Kingdom of Hope in many regards... uh... purity is not my strong suit. You and your friends, however! You reek of purity... well, one or two of you, at least... for now...\"\n\nWith that, the sorcerer winked at Sunny and strolled away, whistling a jovial tune.\n\nSunny watched him go, and then shook his head with a bewildered expression on his face.\n\n’Wait... did he just... swindle me into getting another knife for him? Again?!’\n\nHe blinked a couple of times and clenched his four fists.\n\n’...Damnation!’",
+  "848": "In the end, the cohort eradicated the swarm of the eyeless Nightmare Creatures. It was not easy, and there were moments when each of them brushed with death. But eventually, the seven humans observed the vast killing field with tired expressions — exhausted, but alive.\n\nHundreds of cut, crushed, and torn bodies littered the broken asphalt of the mountain road. Blood flowed down the hill, pooling into crimson puddles at its base. The carcasses of the Fallen abominations towered above the corpses of their lesser ilk like mounds of rotten meat.\n\nLooking at the ghastly sight, Sunny felt very happy that the army supplied them with actual food. Right now, he was very reluctant to go back to the familiar diet of only eating monster meat.\n\nWith a sigh, he turned away and glanced at his ragged band of soldiers. Despite the fact that their battle was over, time was still of the essence.\n\n\"Luster, go inform the Army Command that the road is secured, then bring the Rhino to the crest and park it on the slope. The rest of you, rest while you can. Oh... and also, good work.\"\n\nThe members of the cohort looked at each other, lively smiles appearing on their tired faces.\n\n\"We did do alright, didn’t we?\"\n\nWith that, they walked away from the mass of mangled bodies and sprawled on the ground, steam rising from their blood-covered armors into the cold air. Soon, the Rhino arrived, its headlights painting a much more morbid picture of the recent battleground. The soldiers rested and recovered their essence. Since no one was seriously injured, Quentin was in no hurry to tend to the wounded.\n\nNo one stood guard, as well, since Sunny’s shadows could fulfill that role better than any human.\n\nEverything seemed to be peaceful and safe... however, he was not fooled.\n\nDown in the valley, the ugly rift in the fabric of reality was still pulsing with eerie darkness, silently calling to Sunny. The Gate was still open. Although they had defeated the initial wave of Nightmare Creatures that had emerged from it, more could arrive at any moment.\n\nThe first wave was usually the most dangerous, but not always. It ordinarily consisted of the abominations that had been close to the Seed of Nightmare when it bloomed, but as long as the Gate remained open, more monsters could wander through it into the real world.\n\nIn fact, Sunny suspected that Nightmare Creatures experienced a Call that was very similar to the one that Awakened felt. It drew them from the reaches of the Dream Realm toward the blooming Seed. Those that had been near it arrived first, but many more could eventually come.\n\nThat was why if a Gate could not be closed, it had to be contained and constantly monitored by the government forces... at least near or within the population centers. With time, the number of such containment zones grew, stretching the ability of the government to secure them.\n\nSo, the cohort was not entirely safe.\n\n...He stared at the eerie rift for some time, feeling the Call slowly eating away at his sanity. Then, Sunny shook his head, walked over to the Rhino and sat down in its shadow.\n\nHe was tired, as well.\n\nIt was time to sort out the results of the battle.\n\nSummoning the runes, he thoughtfully studied them.\n\nName: Sunless.\n\nTrue Name: Lost from Light.\n\nRank: Ascended.\n\nClass: Devil.\n\nShadow Cores: [4/7].\n\nShadow Fragments: [777/4000]. 𝙧𝙚𝙚𝔀𝒆𝓫𝓷𝙤𝓿𝒆𝙡.𝒄𝙤𝓶\n\n’Curses...’\n\nDespite the scope and ferocity of the recent battle, he had only received thirty or so shadow fragments from it — four for killing the Gate Guardian, the rest for slaying the Fallen abominations. Since Sunny was Ascended now, he gained nothing from slaying Nightmare Creatures of the Dormant and Awakened Ranks.\n\nBecoming a Tyrant... was not going to be easy.\n\n’Whatever.’\n\nHe continued to read the runes with a sour expression.\n\nMemories: [Silver Bell], [Puppeteer’s Shroud], [Midnight Shard], [Extraordinary Rock], [Prowling Thorn], [Endless Spring], [Dark Wing], [Moonlight Shard], [Mantle of the Underworld], [Weaver’s Mask], [Broken Oath], [Autumn Leaf], [Cruel Sight], [Covetous Coffer], [Undying Chain], [Heavenly Burden], [Memory of Fire], [Memory of Ice], [Strike of Thunder], [Morgan’s Warbow], [Shadow Lantern], [Bone Singer], [Shadow Chair], [Overpriced Saddle], [Dying Wish], [Evil Eye]...\n\nSunny had learned to weave names into the Memories he created after coming back from the Nightmare. [Shadow Chair] was the exquisite wooden chair he had borrowed from Noctis... sadly, no other item Sunny had tried to bring back to the real world survived. Everything had simply ceased to exist once he returned, to his bitter disappointment. However, the artificial Memory remained.\n\nThe [Overpriced Saddle] was the stupidly expensive saddle he had commissioned for Nightmare. The [Evil Eye] was the new Memory he had just received for killing the Devil named Defiled Witness. There were also a few Awakened Memories he had gained, but they seemed only good enough to be fed to his Shadows.\n\n’I’ll deal with them later.’\n\nHe turned his attention back to the runes:\n\nEchoes: —\n\nShadows: [Marble Saint], [Nightmare], [Soul Serpent].\n\nAttributes: [Fated], [Flame of Divinity], [Master of Shadows], [Blood Weave], [Bone Weave].\n\nAspect: [Shadow Slave].\n\nAspect Rank: Divine.\n\nAspect Abilities: [Shadow Control], [Shadow Step], [Shadow Manifestation].\n\nAspect Legacy: [Shadow Dance].\n\nFlaw: [Clear Conscience].\n\nDream Anchor: Tower of Longing.\n\nThe name of the Soul Serpent was dim and lifeless. Sunny could not dismiss or summon the Shadow back after gifting it to Rain, at least not from a distance. He still felt a subtle connection to it, though. He knew that Serpent was alive and well.\n\n’That’s something, at least. They are both alright.’\n\nWith a sigh, Sunny concentrated on his new Memory, the [Evil Eye]. After reading the description, he learned that it was capable of enhancing one’s vision, making a person capable of discerning more details, and seeing things clearly from a greater distance. The effect had to be rather powerful since it came from a Fallen Devil, but he had to decide what to do with it.\n\nSunny could either use it himself, feed it to one of his Shadows, or give it to one of his soldiers.\n\nSamara and Kim were the best candidates. The Awakened sharpshooter would be able to pick off targets from much further away, which was an obvious benefit. The timid seer, however... Sunny was very curious to find out how the augmentation of the Evil Eye would affect her Ability to see the vulnerabilities of his enemies.\n\nAfter thinking about it for a bit, he turned his head and said:\n\n\"Hey, Kimmy... come here for a second...\""
+ },
+ "epistemic_candidates": [
+  {
+   "bolum": 1,
+   "cumle": "With that last thought, Sunny finally slipped into a deep slumber."
+  },
+  {
+   "bolum": 4,
+   "cumle": "’That thing must be at least four meters tall,’ Sunny thought, a bit stunned."
+  },
+  {
+   "bolum": 4,
+   "cumle": "The thing that at first glance looked like dirty snow turned out to be its fur, yellowish-grey and ragged, thick enough to stop arrows and swords."
+  },
+  {
+   "bolum": 4,
+   "cumle": "too much,’ he thought, stupefied."
+  },
+  {
+   "bolum": 4,
+   "cumle": "As soon as Sunny finished that thought, all hell broke loose."
+  },
+  {
+   "bolum": 4,
+   "cumle": "’You just had to think about how things could get worse, right, you idiot?’ he thought, and then flinched back."
+  },
+  {
+   "bolum": 4,
+   "cumle": "’Great!’ Sunny thought."
+  },
+  {
+   "bolum": 5,
+   "cumle": "You can rest for three more seconds,’ Sunny thought."
+  },
+  {
+   "bolum": 5,
+   "cumle": "’Damn it all!’ he thought."
+  },
+  {
+   "bolum": 5,
+   "cumle": "Awesome,’ Sunny thought before catching himself."
+  },
+  {
+   "bolum": 6,
+   "cumle": "’Don’t die yet!’ he thought."
+  },
+  {
+   "bolum": 7,
+   "cumle": "’Go and die, bastard.’ Sunny thought."
+  },
+  {
+   "bolum": 7,
+   "cumle": "Scholar opened his mouth, planning to say something, but then thought better of it and remained silent."
+  },
+  {
+   "bolum": 8,
+   "cumle": "’What irony,’ he thought."
+  },
+  {
+   "bolum": 8,
+   "cumle": "But, as it turned out, the Spell wasn’t done speaking."
+  },
+  {
+   "bolum": 8,
+   "cumle": "One received from a dormant-rank enemy wouldn’t be too powerful, but it was still a boon: weightless and undetectable, able to be summoned from nothingness with a simple thought, a Memory was incredibly useful."
+  },
+  {
+   "bolum": 8,
+   "cumle": "’What a piece of crap,’ Sunny thought, dejected."
+  },
+  {
+   "bolum": 8,
+   "cumle": "His first Memory turned out to be pretty much useless..."
+  },
+  {
+   "bolum": 8,
+   "cumle": "’Perfect,’ he thought."
+  },
+  {
+   "bolum": 8,
+   "cumle": "Unseen to them, Sunny hesitated, considering if he had really thought things through well."
+  },
+  {
+   "bolum": 9,
+   "cumle": "Walking up the mountain road with the weight of the supplies on his shoulders was already hard enough, but climbing up the mountain itself turned out to be pure torture."
+  },
+  {
+   "bolum": 9,
+   "cumle": "’Just think about something pleasant,’ he thought."
+  },
+  {
+   "bolum": 9,
+   "cumle": "’I wonder what type of Ability a temple slave would get,’ Sunny thought, not too optimistic about his prospects."
+  },
+  {
+   "bolum": 9,
+   "cumle": "’At least it helped me pass the time,’ Sunny thought."
+  },
+  {
+   "bolum": 10,
+   "cumle": "Falling asleep inside a dream was a new experience for him, but, unexpectedly, it turned out to be quite mundane."
+  },
+  {
+   "bolum": 10,
+   "cumle": "’This is hell,’ he thought."
+  },
+  {
+   "bolum": 11,
+   "cumle": "’A bit heartless, but not wrong,’ Sunny thought, giving the older slave a careful look."
+  },
+  {
+   "bolum": 11,
+   "cumle": "Actually, Sunny had not believed in his benevolent act for a second."
+  },
+  {
+   "bolum": 11,
+   "cumle": "’Why do I feel so guilty?’ he thought, bewildered by this unexpected reaction."
+  },
+  {
+   "bolum": 11,
+   "cumle": "The boy might prove useful later on.\" These words, which had sounded benevolent then, now turned out to hide a much more sinister meaning."
+  },
+  {
+   "bolum": 13,
+   "cumle": "I thought that if I do it when you sleep, you won’t have to suffer.\""
+  },
+  {
+   "bolum": 13,
+   "cumle": "He thought about something, then looked at Sunny with surprise."
+  },
+  {
+   "bolum": 14,
+   "cumle": "Bloodbane poison was supposed to be his hidden card, but turned out to be nearly useless."
+  },
+  {
+   "bolum": 14,
+   "cumle": "\"I’m sorry, Hero,\" he thought."
+  },
+  {
+   "bolum": 14,
+   "cumle": "Because he believed that the Nightmare will be over once he reaches the peak."
+  },
+  {
+   "bolum": 14,
+   "cumle": "’See this, Hero?’ he thought, forgetting for a second that Hero was already dead."
+  },
+  {
+   "bolum": 14,
+   "cumle": "’What an ugly bastard,’ Sunny thought and suddenly clutched his chest, convulsing in a fit of torturous coughing."
+  },
+  {
+   "bolum": 14,
+   "cumle": "’I guess this is the end,’ he thought, resigned to his fate."
+  },
+  {
+   "bolum": 16,
+   "cumle": "At a closer examination, it actually turned out to be transparent."
+  },
+  {
+   "bolum": 16,
+   "cumle": "The moment of truth,’ Sunny thought."
+  },
+  {
+   "bolum": 17,
+   "cumle": "’Three stars, huh,’ he thought, distracted."
+  },
+  {
+   "bolum": 17,
+   "cumle": "I definitely will not!\"’ Sunny thought."
+  },
+  {
+   "bolum": 17,
+   "cumle": "Sunny thought that he was going to get slapped again."
+  },
+  {
+   "bolum": 18,
+   "cumle": "’Ah, I’m in heaven,’ Sunny thought, willing himself to temporarily forget about the looming disaster of the Flaw."
+  },
+  {
+   "bolum": 18,
+   "cumle": "’Flower boy, huh?’ Sunny thought, full of bitterness."
+  },
+  {
+   "bolum": 18,
+   "cumle": "Then, with a thought, he willed it to raise an arm."
+  },
+  {
+   "bolum": 18,
+   "cumle": "’You know what, Sunny,’ he thought with dark irony."
+  },
+  {
+   "bolum": 18,
+   "cumle": "Sunny thought about it."
+  },
+  {
+   "bolum": 19,
+   "cumle": "Sunny thought about it."
+  },
+  {
+   "bolum": 19,
+   "cumle": "It was so obvious, yet he never even thought about these seemingly simple things."
+  },
+  {
+   "bolum": 20,
+   "cumle": "The more it strayed from the initial thought, the more resistance he would meet — once again in the form of pressure, then pain."
+  },
+  {
+   "bolum": 21,
+   "cumle": "’Just great!’ he thought bitterly and made his frown deepen."
+  },
+  {
+   "bolum": 21,
+   "cumle": "They thought that he was weak, grew up without any education in the outskirts, and had no training."
+  },
+  {
+   "bolum": 22,
+   "cumle": "’And I thought my Flaw was bad.’"
+  },
+  {
+   "bolum": 22,
+   "cumle": "’When will the damn induction ceremony start?’ Sunny thought, irritated."
+  },
+  {
+   "bolum": 22,
+   "cumle": "’Thanks for the encouragement,’ Sunny thought sarcastically."
+  },
+  {
+   "bolum": 23,
+   "cumle": "He thought about how things would have ended up without his involvement."
+  },
+  {
+   "bolum": 23,
+   "cumle": "’That’s good to know,’ Sunny thought, unconvinced."
+  },
+  {
+   "bolum": 25,
+   "cumle": "Sunny even thought that he was mistaken, but then spotted a gloomy instructor sitting behind a wide wooden desk."
+  },
+  {
+   "bolum": 25,
+   "cumle": "Who would have thought that a barbarian like her would know the value of intricate knowledge.\""
+  },
+  {
+   "bolum": 25,
+   "cumle": "’I would beg to differ,’ Sunny thought sarcastically, but didn’t say anything out loud."
+  },
+  {
+   "bolum": 25,
+   "cumle": "’Why would I need to learn new languages?’ Sunny thought with self-pity."
+  },
+  {
+   "bolum": 26,
+   "cumle": "’This is not scientific at all,’ he thought with an amused smile."
+  },
+  {
+   "bolum": 26,
+   "cumle": "’Oh my!’ he thought, blushing."
+  },
+  {
+   "bolum": 26,
+   "cumle": "’I would probably get ten or eleven,’ Sunny thought, feeling a little bored."
+  },
+  {
+   "bolum": 26,
+   "cumle": "is she even human?’ Sunny thought, suddenly apprehensive."
+  },
+  {
+   "bolum": 27,
+   "cumle": "’What a monster,’ Sunny thought, full of unease."
+  },
+  {
+   "bolum": 27,
+   "cumle": "’No!’ Sunny thought impatiently."
+  },
+  {
+   "bolum": 28,
+   "cumle": "Well, as it turned out, the Dream Realm was not consistent in terms of star geography."
+  },
+  {
+   "bolum": 28,
+   "cumle": "Most of these lessons were, supposedly, already included in the various school curriculums and known to the majority of Sleepers."
+  },
+  {
+   "bolum": 28,
+   "cumle": "Even the lessons in dead languages, which Sunny had initially judged to be useless, turned out to be much more interesting than he could ever imagine."
+  },
+  {
+   "bolum": 28,
+   "cumle": "The only problem with this arrangement was that the shadow, despite its outward snarkiness, turned out to be rather naive."
+  },
+  {
+   "bolum": 29,
+   "cumle": "Sunny thought about the last time he was preparing to enter the Spell and, with a bit of trepidation, approached the coffee machine."
+  },
+  {
+   "bolum": 30,
+   "cumle": "The black mass he climbed onto turned out to be a single stone platform of around twelve meters in diameter."
+  },
+  {
+   "bolum": 30,
+   "cumle": "’Of course not,’ he thought with a bit of resentment."
+  },
+  {
+   "bolum": 31,
+   "cumle": "Sunny slowly rose and, after some thought, carefully approached the edge of the stone platform."
+  },
+  {
+   "bolum": 31,
+   "cumle": "’I’m not seeing things, am I?’ Sunny thought, pinching himself."
+  },
+  {
+   "bolum": 31,
+   "cumle": "In fact, the roughly circular platform Sunny was standing on turned out to be the top of his neck."
+  },
+  {
+   "bolum": 33,
+   "cumle": "This was the only thought in Sunny’s head as he awkwardly fell backward, allowing the pincer to close right in front of his face with a loud \"clack\"."
+  },
+  {
+   "bolum": 33,
+   "cumle": "’I take it back!’ Sunny thought, remembering his sarcastic critique of Hero’s battle rolls."
+  },
+  {
+   "bolum": 33,
+   "cumle": "He was hoping that the bulky, heavily armored, wounded creature would not be able to match his speed, but unfortunately, it turned out to be surprisingly agile."
+  },
+  {
+   "bolum": 34,
+   "cumle": "Previously, Sunny thought that he at least had the choice to choose a relatively safe path."
+  },
+  {
+   "bolum": 35,
+   "cumle": "What a sight...’ Sunny thought."
+  },
+  {
+   "bolum": 35,
+   "cumle": "Because of her hard-to-read face, it was almost impossible to determine whether she believed him or not."
+  },
+  {
+   "bolum": 36,
+   "cumle": "’Stop being paranoid!’ Sunny thought, trying to calm himself down."
+  },
+  {
+   "bolum": 36,
+   "cumle": "Simultaneously scared and reassured by this thought, Sunny nimbly climbed up and joined Nephis at the top of the coral mound."
+  },
+  {
+   "bolum": 36,
+   "cumle": "But it turned out to be a really bad mistake.\""
+  },
+  {
+   "bolum": 37,
+   "cumle": "Feeling his head hurting, Sunny decided to avoid this line of thought for now."
+  },
+  {
+   "bolum": 38,
+   "cumle": "\"I thought you Legacies come into the Spell with a whole inherited arsenal of Memories."
+  },
+  {
+   "bolum": 38,
+   "cumle": "Realizing that her answer wasn’t really an answer, Nephis thought for a while and added:"
+  },
+  {
+   "bolum": 38,
+   "cumle": "Sunny realized that the fall of the Immortal Flame clan might have been more thorough than he had thought."
+  },
+  {
+   "bolum": 38,
+   "cumle": "But the more he thought about it, the more disturbed he felt."
+  },
+  {
+   "bolum": 38,
+   "cumle": "He thought for a bit, and then said without too much conviction:"
+  },
+  {
+   "bolum": 38,
+   "cumle": "a prophetic dream?’ Sunny thought, trying to come to terms with this new reality of someone being able to see the future."
+  },
+  {
+   "bolum": 39,
+   "cumle": "After some thought, he added:"
+  },
+  {
+   "bolum": 39,
+   "cumle": "Without showing much emotion, she thought for a while, and then slowly nodded."
+  },
+  {
+   "bolum": 39,
+   "cumle": "However, that impression turned out to be completely wrong!"
+  },
+  {
+   "bolum": 39,
+   "cumle": "No, that line of thought was also wrong."
+  },
+  {
+   "bolum": 40,
+   "cumle": "Sunny thought for a moment and then shook his head."
+  },
+  {
+   "bolum": 40,
+   "cumle": "After some thought, she added."
+  },
+  {
+   "bolum": 42,
+   "cumle": "Nephis thought for a while and then said:"
+  },
+  {
+   "bolum": 42,
+   "cumle": "This was an uncomfortable thought."
+  },
+  {
+   "bolum": 42,
+   "cumle": "With this thought, Sunny fell asleep."
+  },
+  {
+   "bolum": 43,
+   "cumle": "Then, after some thought, she added:"
+  },
+  {
+   "bolum": 43,
+   "cumle": "However, \"strong\" was the last word that came to his mind when he thought about the delicate, beautiful, blind girl."
+  },
+  {
+   "bolum": 43,
+   "cumle": "Changing Star tilted her head and thought for some time."
+  },
+  {
+   "bolum": 43,
+   "cumle": "As Sunny raised his sword and slashed down, over and over again, only one thought eventually remained in his mind:"
+  },
+  {
+   "bolum": 44,
+   "cumle": "Sunny thought for a while, then opened his mouth to offer his own opinion."
+  },
+  {
+   "bolum": 44,
+   "cumle": "Sunny belatedly realized that he was much closer to death on that first night than he had previously thought."
+  },
+  {
+   "bolum": 47,
+   "cumle": "With a thought, he commanded it to descend."
+  },
+  {
+   "bolum": 47,
+   "cumle": "’It seems my Aspect holds more secrets than I thought.’"
+  },
+  {
+   "bolum": 49,
+   "cumle": "It seemed the three humans were not the only ones who thought of taking shelter from the dark sea on these cliffs."
+  },
+  {
+   "bolum": 49,
+   "cumle": "With that thought, he silently lunged forward."
+  },
+  {
+   "bolum": 50,
+   "cumle": "When Sunny had first realized that the black shapes were, in fact, scavengers, he thought that the situation was as bad as it could get."
+  },
+  {
+   "bolum": 50,
+   "cumle": "Standing near the last scavenger, Sunny observed his surroundings and thought about returning to Neph and Cassie."
+  },
+  {
+   "bolum": 50,
+   "cumle": "Nephis thought for a while, leaning on her sword."
+  },
+  {
+   "bolum": 50,
+   "cumle": "have you thought this through?"
+  },
+  {
+   "bolum": 50,
+   "cumle": "He frowned, not happy about her line of thought."
+  },
+  {
+   "bolum": 50,
+   "cumle": "With this thought, he exhaled and raised his hand."
+  },
+  {
+   "bolum": 51,
+   "cumle": "’Hell yes!’ Sunny thought, triumphant."
+  },
+  {
+   "bolum": 51,
+   "cumle": "As that thought appeared in his mind, Sunny raised his head and looked at the monster."
+  },
+  {
+   "bolum": 52,
+   "cumle": "He was revolted at the thought of giving the world the satisfaction of the win."
+  },
+  {
+   "bolum": 52,
+   "cumle": "Suddenly, a simple thought caught his attention."
+  },
+  {
+   "bolum": 52,
+   "cumle": "But this was a useless thought."
+  },
+  {
+   "bolum": 52,
+   "cumle": "Looking right into the monster’s burning eyes, Sunny thought:"
+  },
+  {
+   "bolum": 52,
+   "cumle": "’Now what?’ he thought, momentarily lost for ideas."
+  },
+  {
+   "bolum": 53,
+   "cumle": "As it turned out, they were right."
+  },
+  {
+   "bolum": 54,
+   "cumle": "’No way, really?’ he thought to himself, full of sarcasm."
+  },
+  {
+   "bolum": 55,
+   "cumle": "In fact, Sunny thought that their group was rather eye-catching even by Awakened standards."
+  },
+  {
+   "bolum": 55,
+   "cumle": "What’s worse, my Aspect turned out to be completely useless."
+  },
+  {
+   "bolum": 55,
+   "cumle": "In a strange twist of fate, my useless Aspect turned out to be the only thing that could guide me through that mess alive."
+  },
+  {
+   "bolum": 55,
+   "cumle": "Cassie was silent for a long time, lost in thought."
+  },
+  {
+   "bolum": 56,
+   "cumle": "’What a creepy thought.’"
+  },
+  {
+   "bolum": 57,
+   "cumle": "Sunny thought for a bit before answering."
+  },
+  {
+   "bolum": 57,
+   "cumle": "\"We’re going to have guests soon,\" he said, disheartened at the thought that their short respite was about to end."
+  },
+  {
+   "bolum": 57,
+   "cumle": "Dealing with the climbing scavengers, indeed, turned out to be comparatively easy."
+  },
+  {
+   "bolum": 59,
+   "cumle": "Luckily, the carapace legion turned out to be extremely territorial and seemed to have the upper hand in this region of the crimson reef."
+  },
+  {
+   "bolum": 59,
+   "cumle": "Nephis thought for a bit, then said:"
+  },
+  {
+   "bolum": 60,
+   "cumle": "Regardless of what Sunny thought about the nature of the labyrinth, the beast whose remains formed the Bone Ridge was especially large."
+  },
+  {
+   "bolum": 60,
+   "cumle": "Luckily, their precautions turned out to be unnecessary."
+  },
+  {
+   "bolum": 62,
+   "cumle": "That thought, which was supposed to calm him down, had the opposite effect instead."
+  },
+  {
+   "bolum": 62,
+   "cumle": "Changing Star thought for a second and then nodded."
+  },
+  {
+   "bolum": 62,
+   "cumle": "Concentrate on the deadly monster!’ he thought angrily, berating himself."
+  },
+  {
+   "bolum": 63,
+   "cumle": "He was almost glad that the Carapace Demon had appeared at the perfect moment to take his thought away from that situation."
+  },
+  {
+   "bolum": 63,
+   "cumle": "She opened her mouth to say something, but then thought better of it and remained silent, simply giving him a nod."
+  },
+  {
+   "bolum": 64,
+   "cumle": "Changing Star thought about it, then raised an eyebrow and asked:"
+  },
+  {
+   "bolum": 64,
+   "cumle": "Sunny even entertained the thought of suggesting to Nephis that they should stay here for a while, a few weeks, or even months if needed."
+  },
+  {
+   "bolum": 65,
+   "cumle": "Cassie thought for a bit and then hesitantly answered:"
+  },
+  {
+   "bolum": 65,
+   "cumle": "However, making that fire had turned out to be a big mistake."
+  },
+  {
+   "bolum": 65,
+   "cumle": "I thought that Odysseus guy built a wooden animal?"
+  },
+  {
+   "bolum": 66,
+   "cumle": "He thought that they would have more time."
+  },
+  {
+   "bolum": 67,
+   "cumle": "’Oh no!’ Sunny thought, his heart skipping a beat."
+  },
+  {
+   "bolum": 68,
+   "cumle": "However, the centipede monster’s oil, which was capable of destroying the unbreakable chitin of both scavengers and centurions, turned out to be completely ineffective against the strange alloy covering the Carapace Demon’s body."
+  },
+  {
+   "bolum": 69,
+   "cumle": "At least that was what he thought until the cold fog touched his skin."
+  },
+  {
+   "bolum": 71,
+   "cumle": "With no room for error, Sunny pushed every unnecessary thought and emotion into the farthest corner of his mind, not allowing dread, doubt and his tendency to overthink things to slow him down even by a fraction of a second."
+  },
+  {
+   "bolum": 71,
+   "cumle": "Just as he thought, the Carapace Demon was already bringing the scythe down at him again, this time in a ruthless horizontal thrust."
+  },
+  {
+   "bolum": 72,
+   "cumle": "Things were happening too fast for Sunny to form a coherent thought."
+  },
+  {
+   "bolum": 73,
+   "cumle": "Since Cassie was still frowning, he thought for a moment and added:"
+  },
+  {
+   "bolum": 73,
+   "cumle": "I thought that stuff like that only happens in webtoons.\""
+  },
+  {
+   "bolum": 73,
+   "cumle": "Even if that creature was a bloodthirsty demon who would have swallowed them whole without a second thought."
+  },
+  {
+   "bolum": 73,
+   "cumle": "Changing Star thought things through before speaking."
+  },
+  {
+   "bolum": 73,
+   "cumle": "Sunny was also surprised by his reaction, considering that his own first thought after the Echo had died was about how much money he wouldn’t be able to make by selling it."
+  },
+  {
+   "bolum": 74,
+   "cumle": "Suddenly, a dark thought appeared in Sunny’s mind."
+  },
+  {
+   "bolum": 74,
+   "cumle": "’Good,’ he thought."
+  },
+  {
+   "bolum": 74,
+   "cumle": "’Strange,’ Sunny thought."
+  },
+  {
+   "bolum": 75,
+   "cumle": "He was distracted from this thought by the shadow, which waved its hands impatiently."
+  },
+  {
+   "bolum": 75,
+   "cumle": "Nephis thought for a while, then gave him a nod."
+  },
+  {
+   "bolum": 75,
+   "cumle": "’We’d better hide well.’ he thought, cold sweat running down his back."
+  },
+  {
+   "bolum": 75,
+   "cumle": "Sunny was left drenched in sweat and tired from anticipating a disaster, almost disappointed at the fact that all this worrying had turned out to be for nothing."
+  },
+  {
+   "bolum": 76,
+   "cumle": "Sunny trembled at the thought."
+  },
+  {
+   "bolum": 76,
+   "cumle": "Lying on the makeshift bed of fallen leaves, Sunny tiredly closed his eyes and thought:"
+  },
+  {
+   "bolum": 76,
+   "cumle": "With that thought disappearing from his mind, he fell asleep."
+  },
+  {
+   "bolum": 76,
+   "cumle": "’She saw something?’ Sunny thought, suddenly excited."
+  },
+  {
+   "bolum": 77,
+   "cumle": "I thought we had agreed to avoid eating them!\""
+  },
+  {
+   "bolum": 77,
+   "cumle": "Sunny took one more bite and looked at the shadow, lost in thought."
+  },
+  {
+   "bolum": 77,
+   "cumle": "Before falling asleep, he glanced at the mighty branches of the great tree and thought with a bit of regret:"
+  },
+  {
+   "bolum": 77,
+   "cumle": "However, one last thought entered Sunny’s mind right before he completely slipped into the embrace of darkness:"
+  },
+  {
+   "bolum": 78,
+   "cumle": "But a minute later, he would forget about these concerns, distracted by some innocuous thought or occurrence."
+  },
+  {
+   "bolum": 78,
+   "cumle": "The thought of leaving its gifts behind and returning to the horror of the outside world seemed less and less attractive."
+  },
+  {
+   "bolum": 79,
+   "cumle": "He could just summon the runes and check, but somehow that thought didn’t even occur to him."
+  },
+  {
+   "bolum": 79,
+   "cumle": "Sunny frowned, failing to recall his train of thought."
+  },
+  {
+   "bolum": 79,
+   "cumle": "He really thought that he would be able to."
+  },
+  {
+   "bolum": 80,
+   "cumle": "He had convinced himself that it was safe following an unexpected train of thought."
+  },
+  {
+   "bolum": 80,
+   "cumle": "There was so much spiderweb around that, for a moment, Sunny thought that he had fallen into a giant white cocoon."
+  },
+  {
+   "bolum": 80,
+   "cumle": "Looking at the giant egg, Sunny thought about how to get back at it."
+  },
+  {
+   "bolum": 81,
+   "cumle": "The more he thought about it, the less clear he became on what exactly he was thinking about."
+  },
+  {
+   "bolum": 81,
+   "cumle": "Before he finished his thought, the Spell spoke again."
+  },
+  {
+   "bolum": 83,
+   "cumle": "At the time, he believed so."
+  },
+  {
+   "bolum": 84,
+   "cumle": "What was it that she thought Sunny could do, but Changing Star could not?"
+  },
+  {
+   "bolum": 84,
+   "cumle": "\"...the more complex a thought, the harder it will be to hold on to it."
+  },
+  {
+   "bolum": 86,
+   "cumle": "Sunny’s thought process was very simple."
+  },
+  {
+   "bolum": 88,
+   "cumle": "Racing against time, Sunny frantically thought of another question."
+  },
+  {
+   "bolum": 88,
+   "cumle": "She thought about it for some time, then said indifferently:"
+  },
+  {
+   "bolum": 89,
+   "cumle": "sound like the beginning of a legend,’ he thought, temporarily mesmerized by the ghastly visage of the carapace vessel."
+  },
+  {
+   "bolum": 89,
+   "cumle": "As soon as he tried to think of what they had to do next, an invisible barrier appeared in his mind, blocking any attempt to continue that thought."
+  },
+  {
+   "bolum": 91,
+   "cumle": "For a moment, he thought that his words had awoken the stolen memories in her mind."
+  },
+  {
+   "bolum": 91,
+   "cumle": "Sunny had really thought that he stood a decent chance of standing his ground in a fight against Nephis, maybe even reaching a tie."
+  },
+  {
+   "bolum": 91,
+   "cumle": "He had thought that these weird words were just a part of some code to jog her memory awake."
+  },
+  {
+   "bolum": 91,
+   "cumle": "But, as it turned out, they were not..."
+  },
+  {
+   "bolum": 91,
+   "cumle": "Looking back in the direction of the Ashen Barrow, Sunny gritted his teeth and thought:"
+  },
+  {
+   "bolum": 93,
+   "cumle": "If Sunny didn’t know better, he would have thought that the hand belonged to a living, breathing being."
+  },
+  {
+   "bolum": 93,
+   "cumle": "A dark thought appeared in Sunny’s mind."
+  },
+  {
+   "bolum": 95,
+   "cumle": "With that thought, Sunny tiredly stood up and bent down to touch Cassie’s shoulder."
+  },
+  {
+   "bolum": 96,
+   "cumle": "Cassie’s vision turned out to be true."
+  },
+  {
+   "bolum": 97,
+   "cumle": "’Pathetic,’ Sunny thought, stalking the Nightmare Creature from the shadows."
+  },
+  {
+   "bolum": 97,
+   "cumle": "Just as he finished that thought, a distant sound of footsteps reached his ears."
+  },
+  {
+   "bolum": 98,
+   "cumle": "I thought they were just telling tales.\""
+  },
+  {
+   "bolum": 98,
+   "cumle": "Meanwhile, the helpful Sleeper thought for a bit and added:"
+  },
+  {
+   "bolum": 100,
+   "cumle": "However, Sunny wasn’t sure that he believed in this theory."
+  },
+  {
+   "bolum": 100,
+   "cumle": "Spending too many shards would make people doubt that he was as pathetic as everyone thought he was."
+  },
+  {
+   "bolum": 101,
+   "cumle": "...Luckily, his thought process was interrupted by a thunderous crash."
+  },
+  {
+   "bolum": 107,
+   "cumle": "If he could simply transfer some of his own to her, he would do it without a second thought, even though that would diminish his personal strength even further."
+  },
+  {
+   "bolum": 108,
+   "cumle": "Instead, the Stone Saint immediately leaned forward and punched him in the chest without a second thought."
+  },
+  {
+   "bolum": 108,
+   "cumle": "However, on second thought, there were better ways to measure her power..."
+  },
+  {
+   "bolum": 110,
+   "cumle": "he had received the Memory of the tower shield after slaying a particularly hardy wraith, who, despite its frightening appearance, had turned out to be merely an awakened monster."
+  },
+  {
+   "bolum": 110,
+   "cumle": "Sadly, the entire colony had turned out to be a single demonic being, landing him only six fragments."
+  },
+  {
+   "bolum": 112,
+   "cumle": "’Ninety-three left to four hundred,’ he thought automatically."
+  },
+  {
+   "bolum": 113,
+   "cumle": "However, that thought, no matter how seductive, left him uneasy."
+  },
+  {
+   "bolum": 115,
+   "cumle": "Which was logical, given that he believed him to be an eldritch horror."
+  },
+  {
+   "bolum": 116,
+   "cumle": "\"...You see, I just thought of something.\""
+  },
+  {
+   "bolum": 117,
+   "cumle": "However, for a moment, he wished that Kai actually turned out to be a demon."
+  },
+  {
+   "bolum": 118,
+   "cumle": "maybe it wasn’t as funny as I thought.’"
+  },
+  {
+   "bolum": 118,
+   "cumle": "Kai thought about it, then smiled."
+  },
+  {
+   "bolum": 118,
+   "cumle": "Then he stopped, thought about something, and said angrily:"
+  },
+  {
+   "bolum": 118,
+   "cumle": "The other Sleeper thought for a bit, then nodded."
+  },
+  {
+   "bolum": 118,
+   "cumle": "I thought there’ll be treasure hidden in the marked location."
+  },
+  {
+   "bolum": 118,
+   "cumle": "If Sunny didn’t know better, he would have thought that this part of Cassie’s prophecy talked about Kai."
+  },
+  {
+   "bolum": 119,
+   "cumle": "However, he thought better of it, afraid to attract unwanted attention."
+  },
+  {
+   "bolum": 119,
+   "cumle": "He was prepared to explain the reason behind this confidence, but, surprisingly, Kai immediately believed him and calmed down."
+  },
+  {
+   "bolum": 121,
+   "cumle": "Sunny hesitated for a bit, but then decided that he believed the other Sleeper."
+  },
+  {
+   "bolum": 121,
+   "cumle": "’What a stupid nickname,’ Sunny thought, and decided to get things done as quickly as possible."
+  },
+  {
+   "bolum": 122,
+   "cumle": "Then, a single thought appeared in it:"
+  },
+  {
+   "bolum": 123,
+   "cumle": "’...seven severed heads guarding seven seals,’ he thought, remembering Cassie’s frightening vision."
+  },
+  {
+   "bolum": 123,
+   "cumle": "The stone, which turned out to be a bizarre Nightmare Creature, revealed a mouth full of long, sharp teeth on its surface."
+  },
+  {
+   "bolum": 123,
+   "cumle": "It might have bitten Sunny’s leg clean off, but, luckily, the leather boot of the Puppeteer’s Shroud turned out to be too tough for the stone’s jaws."
+  },
+  {
+   "bolum": 123,
+   "cumle": "The only hope of killing me it has is if I die from annoyance,’ Sunny thought with a confused frown."
+  },
+  {
+   "bolum": 124,
+   "cumle": "Who would have thought that one day this great barrier would serve not to repel the horrible monsters, but to keep the true horrors imprisoned inside?"
+  },
+  {
+   "bolum": 125,
+   "cumle": "That was the only thought that kept him from falling into an irrational panic."
+  },
+  {
+   "bolum": 127,
+   "cumle": "At the time, he had thought that his patchy education was to blame."
+  },
+  {
+   "bolum": 128,
+   "cumle": "\"I like your train of thought, princess, but you should forget it."
+  },
+  {
+   "bolum": 130,
+   "cumle": "’What other physical needs do people have?’ Sunny thought, a little confused."
+  },
+  {
+   "bolum": 131,
+   "cumle": "Just like Effie had said, traversing the ruins turned out to be a slow ordeal."
+  },
+  {
+   "bolum": 133,
+   "cumle": "He thought that he had an inkling."
+  },
+  {
+   "bolum": 134,
+   "cumle": "Just as this thought appeared in his mind, a loud noise thundered behind their backs."
+  },
+  {
+   "bolum": 135,
+   "cumle": "I’ve never been to a hotel, but that was my first thought as well.\""
+  },
+  {
+   "bolum": 136,
+   "cumle": "With that thought, he fell asleep."
+  },
+  {
+   "bolum": 137,
+   "cumle": "Just as he had thought, this smelled like trouble."
+  },
+  {
+   "bolum": 137,
+   "cumle": "Who would have thought that the thing that landed him in trouble would be Cassie’s beauty, of all things?"
+  },
+  {
+   "bolum": 137,
+   "cumle": "For a second, Sunny almost believed that his threat worked."
+  },
+  {
+   "bolum": 139,
+   "cumle": "’...There was food, safety, and laughter,’ he thought suddenly, remembering how Cassie had described the Bright Castle after dreaming of it for the first time."
+  },
+  {
+   "bolum": 139,
+   "cumle": "Luckily, he had long thought of an exceptionally convincing excuse."
+  },
+  {
+   "bolum": 139,
+   "cumle": "Sunny was pretty sure that mentioning Neph’s name anywhere near the names of two losers like Cassie and him were believed to be would make anyone think that she had single-handedly carried the both of them to safety on her back."
+  },
+  {
+   "bolum": 139,
+   "cumle": "Up until today, I thought that I was the only one to survive."
+  },
+  {
+   "bolum": 140,
+   "cumle": "really hope that I won’t have to face this guy in battle one day,’ Sunny thought, feeling a cold sensation that he desperately hoped was not a premonition."
+  },
+  {
+   "bolum": 140,
+   "cumle": "Breakfast is ruined!’ he thought angrily, drilling two holes in the tall Sleeper’s back."
+  },
+  {
+   "bolum": 142,
+   "cumle": "Artisans, on the contrary, believed that the rarity of Utility Aspects and the vital role they played in maintaining the living conditions inside the castle should land them more prestige than the Castle Guard, which basically recruited any random nobody, enjoyed."
+  },
+  {
+   "bolum": 143,
+   "cumle": "As it turned out, when Golden Serpent did show up, he liked to leave an impression."
+  },
+  {
+   "bolum": 143,
+   "cumle": "what kind of a Memory can practically paralyze several hundred people just from its passive effect?’ Sunny thought, astonished."
+  },
+  {
+   "bolum": 144,
+   "cumle": "’That’s pure willpower,’ Sunny thought, impressed by the stranger."
+  },
+  {
+   "bolum": 146,
+   "cumle": "Leading Cassie away, he glanced at the plates full of food and thought without humor:"
+  },
+  {
+   "bolum": 146,
+   "cumle": "As soon as he finished this thought, Sunny realized that he didn’t actually know what life in the outer settlement was like."
+  },
+  {
+   "bolum": 147,
+   "cumle": "He thought for a few seconds, then shrugged."
+  },
+  {
+   "bolum": 147,
+   "cumle": "Nephis led them inside the stone lodge, which had turned out to be her new residence."
+  },
+  {
+   "bolum": 147,
+   "cumle": "We thought you would be starving here in the outer settlement!\""
+  },
+  {
+   "bolum": 147,
+   "cumle": "\"But I thought that Gunlaug’s men were supposed to fight off Nightmare Creatures!\""
+  },
+  {
+   "bolum": 148,
+   "cumle": "She thought for a bit, then said:"
+  },
+  {
+   "bolum": 148,
+   "cumle": "Changing Star thought for a bit, then asked:"
+  },
+  {
+   "bolum": 149,
+   "cumle": "\"But Gunlaug, he turned out to be mad even by those standards."
+  },
+  {
+   "bolum": 150,
+   "cumle": "Sunny was sure that she had already thought a lot about their future."
+  },
+  {
+   "bolum": 150,
+   "cumle": "Then, Sunny thought for a while, scratched his head, and said:"
+  },
+  {
+   "bolum": 150,
+   "cumle": "Nephis was in deep thought, digesting the mountain of information that Sunny had thrown at her."
+  },
+  {
+   "bolum": 152,
+   "cumle": "I thought that this recent show would teach them a lesson, but it seems as though it did not.\""
+  },
+  {
+   "bolum": 154,
+   "cumle": "To them, it didn’t matter who lived and who died, although none believed that the girl from the outer settlement had any chance of surviving in a duel against the experienced Pathfinder."
+  },
+  {
+   "bolum": 157,
+   "cumle": "Many even believed that Changing Star and her people were in no way inferior to the Hunters of the Bright Castle."
+  },
+  {
+   "bolum": 161,
+   "cumle": "I thought of sharing it with you!\""
+  },
+  {
+   "bolum": 163,
+   "cumle": "what Caster thought was going to happen and what would really happen was not as set in stone as it seemed."
+  },
+  {
+   "bolum": 164,
+   "cumle": "After that, he thought for a few moments and added:"
+  },
+  {
+   "bolum": 164,
+   "cumle": "He thought that he wouldn’t be able to sleep this night, tormented by both the knowledge of what Nephis was planning and the memories of Harper dying by his hand."
+  },
+  {
+   "bolum": 164,
+   "cumle": "While he was repeating the katas, he thought that he caught sight of Nephis observing the movements of his sword with a frown on her face."
+  },
+  {
+   "bolum": 165,
+   "cumle": "I thought that it was a game."
+  },
+  {
+   "bolum": 166,
+   "cumle": "\"I just was reminded of her recently, so I thought I’d share."
+  },
+  {
+   "bolum": 167,
+   "cumle": "I thought that you, of all people, would understand.\""
+  },
+  {
+   "bolum": 168,
+   "cumle": "If it was someone else, he would have thought that they were lying."
+  },
+  {
+   "bolum": 170,
+   "cumle": "but I thought that Nightingale was just on hiatus because of Gale’s solo project...\""
+  },
+  {
+   "bolum": 170,
+   "cumle": "I thought that he was a complete..."
+  },
+  {
+   "bolum": 171,
+   "cumle": "At least that was what he believed."
+  },
+  {
+   "bolum": 172,
+   "cumle": "Sunny felt a thundering thought explode in his mind."
+  },
+  {
+   "bolum": 173,
+   "cumle": "Supposedly, it had an enchantment that made it much lighter back then.\""
+  },
+  {
+   "bolum": 173,
+   "cumle": "The Stone Saint was, supposedly, created by one of the Unknown."
+  },
+  {
+   "bolum": 175,
+   "cumle": "For a moment, he even thought about rushing straight back to his cathedral without making good on his promise."
+  },
+  {
+   "bolum": 175,
+   "cumle": "\"I thought that Lady Nephis was your friend."
+  },
+  {
+   "bolum": 175,
+   "cumle": "...Granted, he never thought that his reunion with the cohort would happen in the presence of an unreasonably attractive, washed-out pop star."
+  },
+  {
+   "bolum": 175,
+   "cumle": "\"Huh, you won’t believe it guys, I thought I just heard Night from Nightingale say my name."
+  },
+  {
+   "bolum": 176,
+   "cumle": "In fact, the thought he looked great."
+  },
+  {
+   "bolum": 176,
+   "cumle": "Who could have thought?\""
+  },
+  {
+   "bolum": 177,
+   "cumle": "Kai enthusiastically went on to describe how he was kidnapped, put in the well, and then rescued by a mysterious stranger — who turned out to be Sunny."
+  },
+  {
+   "bolum": 177,
+   "cumle": "’What a lunatic.’ Sunny thought with scorn, making his shadow shake its head at the irony of that statement."
+  },
+  {
+   "bolum": 180,
+   "cumle": "Sunny thought for a bit..."
+  },
+  {
+   "bolum": 180,
+   "cumle": "With that thought, he summoned the Midnight Shard and gripped its hilt with the last bit of strength left in his body."
+  },
+  {
+   "bolum": 181,
+   "cumle": "Who would have thought?\""
+  },
+  {
+   "bolum": 181,
+   "cumle": "you know, Sunny, when I first saw you, I thought — look at this tiny boy!"
+  },
+  {
+   "bolum": 182,
+   "cumle": "After Sunny calmed down a little and had time to think about it, he realized that things weren’t as bad as he had thought."
+  },
+  {
+   "bolum": 182,
+   "cumle": "’Just as I thought.’"
+  },
+  {
+   "bolum": 183,
+   "cumle": "Back when he saw the Stone Saint shake off the blood of her sword, he had thought that this would be a cool trick to learn."
+  },
+  {
+   "bolum": 184,
+   "cumle": "The huntress crossed her arms, thought for a bit, then gave Sunny a strange look."
+  },
+  {
+   "bolum": 185,
+   "cumle": "Painful as they were, his training sessions with the menacing Shadow had turned out to be even more advantageous than he imagined."
+  },
+  {
+   "bolum": 185,
+   "cumle": "At first, he thought that the unruly huntress simply enjoyed watching him suffer in his suffering, but then he realized that she was actually trying to learn from his mistakes, too."
+  },
+  {
+   "bolum": 187,
+   "cumle": "However, Sunny just thought that he was unsuccessful and incredibly slow."
+  },
+  {
+   "bolum": 188,
+   "cumle": "But he never really thought about it that much."
+  },
+  {
+   "bolum": 189,
+   "cumle": "No matter how hard he thought, he couldn’t imagine a worthier cause."
+  },
+  {
+   "bolum": 190,
+   "cumle": "How have I never thought to check it?’"
+  },
+  {
+   "bolum": 190,
+   "cumle": "Sunny thought about it for a bit, then reluctantly agreed."
+  },
+  {
+   "bolum": 190,
+   "cumle": "how had he not thought about it before?"
+  },
+  {
+   "bolum": 190,
+   "cumle": "But now that he thought about it, Sunny felt that people who believed in the cyclic nature of the arrivals were almost right."
+  },
+  {
+   "bolum": 190,
+   "cumle": "He also believed that there would not be hundreds of new faces arriving on the Forgotten Shore in five months."
+  },
+  {
+   "bolum": 190,
+   "cumle": "But as it turned out, he did need help."
+  },
+  {
+   "bolum": 191,
+   "cumle": "However, if the creature turned out to be one of the truly horrifying existences that stalked the ancient ruins..."
+  },
+  {
+   "bolum": 191,
+   "cumle": "The others seemed to share the same thought."
+  },
+  {
+   "bolum": 191,
+   "cumle": "At first, Sunny thought that it was one of the revenants that populated the Dark City."
+  },
+  {
+   "bolum": 194,
+   "cumle": "A disturbing thought entered Sunny’s mind."
+  },
+  {
+   "bolum": 194,
+   "cumle": "’Well, at least this isn’t as bad as I thought it would be.’"
+  },
+  {
+   "bolum": 195,
+   "cumle": "Sunny even thought that this was an excellent opportunity to put everything that he had learned in the past week to practice."
+  },
+  {
+   "bolum": 196,
+   "cumle": "Just as this thought appeared in Sunny’s mind, a new wave of skeletons lunged at him from the depths of the tunnel."
+  },
+  {
+   "bolum": 201,
+   "cumle": "At first, Sunny thought that the unknown creature was sleeping inside the ghastly hill of bones."
+  },
+  {
+   "bolum": 203,
+   "cumle": "...It seemed that Blood Weave was far more odd and tenacious of an Attribute than he had thought."
+  },
+  {
+   "bolum": 204,
+   "cumle": "With a sigh, he closed his eyes and thought:"
+  },
+  {
+   "bolum": 204,
+   "cumle": "Sunny glanced at Kai and frowned, lost in thought."
+  },
+  {
+   "bolum": 205,
+   "cumle": "During one of these stops, Sunny rubbed his face and thought:"
+  },
+  {
+   "bolum": 209,
+   "cumle": "Effie stretched, making Sunny stutter and lose the train of thought for a second, then smiled with satisfaction and glanced at him."
+  },
+  {
+   "bolum": 209,
+   "cumle": "Sunny thought about it for a few moments and shrugged."
+  },
+  {
+   "bolum": 209,
+   "cumle": "I haven’t really thought about it.\""
+  },
+  {
+   "bolum": 209,
+   "cumle": "I thought she was dead.\""
+  },
+  {
+   "bolum": 210,
+   "cumle": "\"Actually, I thought that it’s natural too."
+  },
+  {
+   "bolum": 210,
+   "cumle": "as it turned out, life was full of surprises."
+  },
+  {
+   "bolum": 210,
+   "cumle": "Today, he learned not one, but two entirely new things about the person he had thought he knew the best in the world."
+  },
+  {
+   "bolum": 211,
+   "cumle": "After returning from my First Nightmare, I had to come to terms with the fact that most of the people in my life were not who I thought they were."
+  },
+  {
+   "bolum": 212,
+   "cumle": "When Sunny thought about it, he found that all members of the cohort were connected with each other by invisible strings."
+  },
+  {
+   "bolum": 212,
+   "cumle": "Effie thought for a moment, then shook her head."
+  },
+  {
+   "bolum": 213,
+   "cumle": "After the months of hunting monsters in the Dark City and his lessons with the Stone Saint, Sunny thought that he had developed his skill a lot."
+  },
+  {
+   "bolum": 213,
+   "cumle": "Before, he had sometimes entertained the thought of maybe being able to stand against them..."
+  },
+  {
+   "bolum": 215,
+   "cumle": "After all, what were the first two things that came to mind when one thought about shadows?"
+  },
+  {
+   "bolum": 215,
+   "cumle": "He was motionless like a statue and deep in thought."
+  },
+  {
+   "bolum": 215,
+   "cumle": "\"As I thought."
+  },
+  {
+   "bolum": 216,
+   "cumle": "Exhausted by all of it, he fell asleep before even finishing the thought."
+  },
+  {
+   "bolum": 217,
+   "cumle": "A subtle thought entered Sunny’s mind."
+  },
+  {
+   "bolum": 218,
+   "cumle": "As if echoing his last thought, the familiar voice of the Spell suddenly whispered into his ear."
+  },
+  {
+   "bolum": 219,
+   "cumle": "Turning his head slightly, he stared at the distant silhouette of the Crimson Spire and lost himself in thought."
+  },
+  {
+   "bolum": 219,
+   "cumle": "Have you ever thought about creating a clan, huh, Effie?\""
+  },
+  {
+   "bolum": 219,
+   "cumle": "Still lost in thought, Sunny tilted his head and glanced at her astutely."
+  },
+  {
+   "bolum": 219,
+   "cumle": "If Nephis had come to know of this secret from Cassie’s visions and believed that it was doable, then he did not have to worry."
+  },
+  {
+   "bolum": 221,
+   "cumle": "However, this thought disappeared from his head as quickly as it had appeared."
+  },
+  {
+   "bolum": 221,
+   "cumle": "With a deep frown, Sunny summoned the Midnight Shard and glanced at Nephis, putting all needless thought aside."
+  },
+  {
+   "bolum": 223,
+   "cumle": "Had they been commanded by a creature of a higher Class, one that was as cunning and smart as the humans it faced, things would have turned out very differently."
+  },
+  {
+   "bolum": 223,
+   "cumle": "’What a depressing thought.’"
+  },
+  {
+   "bolum": 223,
+   "cumle": "It turned out to be a cloak weaved from spider silk."
+  },
+  {
+   "bolum": 226,
+   "cumle": "all of it turned out to have been for nothing."
+  },
+  {
+   "bolum": 227,
+   "cumle": "...Just as that thought appeared in his mind, there was a subtle movement at the edges of his vision."
+  },
+  {
+   "bolum": 227,
+   "cumle": "’Truly insane,’ Sunny thought, stunned by the sheer scale of everything that was happening."
+  },
+  {
+   "bolum": 228,
+   "cumle": "Currently, there was only one thought on his mind."
+  },
+  {
+   "bolum": 228,
+   "cumle": "Placating himself with this thought, Sunny waited, and waited, and waited, struggling against the terrible current with all his strength."
+  },
+  {
+   "bolum": 228,
+   "cumle": "At some point, he thought that he sensed an unclear shape swim close to the walking statue, but then the sensation disappeared."
+  },
+  {
+   "bolum": 228,
+   "cumle": "Just as he thought so, Sunny felt one of the six shadows slipping from the circular platform."
+  },
+  {
+   "bolum": 228,
+   "cumle": "Surprisingly, the blind girl turned out to be more resilient than him in the end."
+  },
+  {
+   "bolum": 231,
+   "cumle": "Yesterday, he had thought that he would not be able to fall asleep atop the walking stone giant."
+  },
+  {
+   "bolum": 231,
+   "cumle": "I’m not going to finish that thought."
+  },
+  {
+   "bolum": 234,
+   "cumle": "’...Just as I thought.’"
+  },
+  {
+   "bolum": 236,
+   "cumle": "Just as Sunny was thinking that thought, a bloodied hand suddenly appeared from the other side of the platform."
+  },
+  {
+   "bolum": 236,
+   "cumle": "Before Sunny could finish the thought, he was distracted by the sight of an ugly primate head rising above the edge of the circular platform."
+  },
+  {
+   "bolum": 241,
+   "cumle": "As it turned out, the cohort had endured the fury of the heavens for almost an entire day."
+  },
+  {
+   "bolum": 241,
+   "cumle": "He wondered what this living statue thought of her strange colossal sibling."
+  },
+  {
+   "bolum": 242,
+   "cumle": "However, as far as these Memories went, Dark Wing turned out to be of the lowest standard."
+  },
+  {
+   "bolum": 242,
+   "cumle": "With a satisfied sigh, he rested his head on the stone and thought:"
+  },
+  {
+   "bolum": 244,
+   "cumle": "Consumed in thought, Sunny stared at the dark sea and waited."
+  },
+  {
+   "bolum": 244,
+   "cumle": "Echoing his thought, Effie scoffed."
+  },
+  {
+   "bolum": 244,
+   "cumle": "I never thought I would be impatient to return to that damned hellhole."
+  },
+  {
+   "bolum": 245,
+   "cumle": "’What a nice, but useless thought.’"
+  },
+  {
+   "bolum": 245,
+   "cumle": "It was situated in a valley just at the point where the foothills turned into proper mountains, and turned out to be something different from what everyone had imagined."
+  },
+  {
+   "bolum": 245,
+   "cumle": "the thought of it was nothing short of humbling."
+  },
+  {
+   "bolum": 246,
+   "cumle": "With a simple thought, Sunny summoned the Stone Saint and ordered her to keep close."
+  },
+  {
+   "bolum": 250,
+   "cumle": "Sunny was under the impression that the annihilation of the ancient civilization had been instantaneous, but as it turned out, humans had continued to fight against the curse for a long time."
+  },
+  {
+   "bolum": 251,
+   "cumle": "Gathering around the giant worm, everyone had the same thought:"
+  },
+  {
+   "bolum": 252,
+   "cumle": "Before Sunny could finish the thought, though, he suddenly froze, paralyzed by fear."
+  },
+  {
+   "bolum": 254,
+   "cumle": "months on the Forgotten Shore, Sunny had thought that he possessed a high tolerance for terror."
+  },
+  {
+   "bolum": 254,
+   "cumle": "But in the end, the wounds he had received there — or somewhere up ahead, perhaps — turned out to be too grievous."
+  },
+  {
+   "bolum": 255,
+   "cumle": "Only, as it turned out, there was no trap."
+  },
+  {
+   "bolum": 257,
+   "cumle": "The truth, however, turned out to be more complicated."
+  },
+  {
+   "bolum": 260,
+   "cumle": "But I never once thought that I would actually do something that impossible as well.\""
+  },
+  {
+   "bolum": 261,
+   "cumle": "People usually thought about the weight of their weapons only when they considered how much endurance they would need to wield them."
+  },
+  {
+   "bolum": 261,
+   "cumle": "Sunny thought for a bit."
+  },
+  {
+   "bolum": 263,
+   "cumle": "Sometimes, Sunny thought that he could even see a grey hair or two in his luscious mane."
+  },
+  {
+   "bolum": 264,
+   "cumle": "Night himself had turned out to be an astonishingly deadly presence on the battlefield, as well."
+  },
+  {
+   "bolum": 264,
+   "cumle": "That’s why Kai’s ability to fly had turned out to be priceless."
+  },
+  {
+   "bolum": 265,
+   "cumle": "Sunny thought for a bit, then said in a curious tone:"
+  },
+  {
+   "bolum": 265,
+   "cumle": "Nephis thought for a few moments before replying."
+  },
+  {
+   "bolum": 265,
+   "cumle": "The fight against the Spire Messenger, who had turned out to be a Fallen Monster, nearly cost several members of the cohort their lives."
+  },
+  {
+   "bolum": 267,
+   "cumle": "He had never thought that one day he would feel sentimental about returning to this cursed, ancient prison."
+  },
+  {
+   "bolum": 267,
+   "cumle": "Regardless of the strange ideas the huntress had, he believed that humans weren’t meant to live in a paradise."
+  },
+  {
+   "bolum": 267,
+   "cumle": "The journey through the Dark City had turned out to be uneventful thanks to Effie’s masterful guidance and the shadow scouting ahead to help her learn of any dangers ahead of time."
+  },
+  {
+   "bolum": 274,
+   "cumle": "Sunny gave her a menacing look, but thought better of saying anything."
+  },
+  {
+   "bolum": 276,
+   "cumle": "The second thought was even more disturbing."
+  },
+  {
+   "bolum": 276,
+   "cumle": "Sunny thought for a while, and then ordered his own shadow to stay back."
+  },
+  {
+   "bolum": 276,
+   "cumle": "It had turned out to be correct one too many times."
+  },
+  {
+   "bolum": 277,
+   "cumle": "Before, Sunny had thought that there was a single entity that the Spell refused to call by its name and simply described as \"-unknown-\" — leading him to call it the Unknown."
+  },
+  {
+   "bolum": 278,
+   "cumle": "Sunny didn’t know anything about the mysterious mask, but he believed that this relic of the past was truly unusual."
+  },
+  {
+   "bolum": 278,
+   "cumle": "Memory Description: [Weaver believed that knowledge was the origin of power and so always hid behind numerous lies, wearing them as a mantle."
+  },
+  {
+   "bolum": 279,
+   "cumle": "After a while, he thought:"
+  },
+  {
+   "bolum": 279,
+   "cumle": "And I thought I was good at deceit and manipulation.’"
+  },
+  {
+   "bolum": 280,
+   "cumle": "As he sneaked toward it, Sunny thought about the Weaver’s Mask and the ways it could change his life."
+  },
+  {
+   "bolum": 280,
+   "cumle": "At first, he thought about simply never taking it off and walking around while delivering a deluge of lies."
+  },
+  {
+   "bolum": 282,
+   "cumle": "...What a foolish thought."
+  },
+  {
+   "bolum": 283,
+   "cumle": "At first, a dark thought entered his mind."
+  },
+  {
+   "bolum": 283,
+   "cumle": "But he quickly dismissed that thought."
+  },
+  {
+   "bolum": 283,
+   "cumle": "All this time, he thought that this sentence simply meant that the legacy of the seven heroes lived on even after their deaths."
+  },
+  {
+   "bolum": 285,
+   "cumle": "\"...Actually, for a long time, I thought that it was you.\""
+  },
+  {
+   "bolum": 286,
+   "cumle": "And eventually, a day came when I thought that, maybe, I should stop."
+  },
+  {
+   "bolum": 288,
+   "cumle": "And I thought I was rich...’"
+  },
+  {
+   "bolum": 289,
+   "cumle": "’What a monster,’ Sunny thought indifferently, pondering on what the quickest way to kill the morose giant would be."
+  },
+  {
+   "bolum": 290,
+   "cumle": "I thought that you, of all people, would not get in the way of fairness.\""
+  },
+  {
+   "bolum": 291,
+   "cumle": "In the grand scheme of things, people thought of him as an insignificant piece, if at all."
+  },
+  {
+   "bolum": 293,
+   "cumle": "I couldn’t believe how naive, self-righteous, and stupid you turned out to be."
+  },
+  {
+   "bolum": 293,
+   "cumle": "while I can’t help but applaud your effort, in the end, you still turned out to be just another fool.\""
+  },
+  {
+   "bolum": 294,
+   "cumle": "doesn’t look good,’ Sunny thought, evaluating the two fighters."
+  },
+  {
+   "bolum": 300,
+   "cumle": "Before, he had thought that this was just intuition, but now he knew that his occasional and subtle premonitions were anything but random."
+  },
+  {
+   "bolum": 301,
+   "cumle": "Not even Caster, who by then many had believed to be one of the strongest fighters in all of Dark City due to his incredible skill, powerful Aspect, and noble background."
+  },
+  {
+   "bolum": 302,
+   "cumle": "Some even thought that it was Gunlaug himself, who returned from the grave to bring vengeance to his killers."
+  },
+  {
+   "bolum": 302,
+   "cumle": "Sunny thought for a moment and then said honestly:"
+  },
+  {
+   "bolum": 303,
+   "cumle": "And I thought that you would be able to help...\""
+  },
+  {
+   "bolum": 304,
+   "cumle": "He thought for a couple of moments, and then corrected himself:"
+  },
+  {
+   "bolum": 308,
+   "cumle": "But I thought that either your cooperation ended with Gunlaug’s death, or that they double-crossed you as soon as you got rid of him for them.\""
+  },
+  {
+   "bolum": 308,
+   "cumle": "I thought I lost it.\""
+  },
+  {
+   "bolum": 310,
+   "cumle": "Before, he had sometimes thought that Saint was really suited to command an army."
+  },
+  {
+   "bolum": 311,
+   "cumle": "All of it took effort and a lot of thought to achieve."
+  },
+  {
+   "bolum": 311,
+   "cumle": "Just as I thought.’"
+  },
+  {
+   "bolum": 311,
+   "cumle": "But Sunny never believed in that theory."
+  },
+  {
+   "bolum": 311,
+   "cumle": "He had always thought that, instead, they were meant to be the last."
+  },
+  {
+   "bolum": 314,
+   "cumle": "He threw a sideways glance at Kai, thought for a bit, and then added:"
+  },
+  {
+   "bolum": 316,
+   "cumle": "She was at the center of the front row of these frightened people, supposedly in command of them."
+  },
+  {
+   "bolum": 316,
+   "cumle": "Looking at the rolling horde of abominable horrors with a grim expression, the huntress lowered her head a little and summoned the helm of her armor, which was crowned with a tall crest of blue horsehair, and thought:"
+  },
+  {
+   "bolum": 316,
+   "cumle": "Who would have thought that one day she and the leader of Gunlaug’s Hunters were going to fight side by side?"
+  },
+  {
+   "bolum": 319,
+   "cumle": "Before he had time to process that thought, however, someone had already thrown two fresh quivers on the ground in front of him."
+  },
+  {
+   "bolum": 320,
+   "cumle": "...But as it turned out, there wasn’t a lot of wounded in this battle."
+  },
+  {
+   "bolum": 320,
+   "cumle": "Just as she thought about that, someone fell to the ground a few meters away from her."
+  },
+  {
+   "bolum": 320,
+   "cumle": "He was thought to be a competent fighter, but actually, no one had really seen him fight."
+  },
+  {
+   "bolum": 321,
+   "cumle": "Sunny wanted to say something, but then thought better of it."
+  },
+  {
+   "bolum": 321,
+   "cumle": "As Effie fought, a sudden thought entered her mind, sending a slight shiver running through her body."
+  },
+  {
+   "bolum": 322,
+   "cumle": "A few times, he thought that he would be noticed."
+  },
+  {
+   "bolum": 327,
+   "cumle": "But no matter how swift and skilled he was, it all turned out to be useless."
+  },
+  {
+   "bolum": 330,
+   "cumle": "A stunned thought entered his mind..."
+  },
+  {
+   "bolum": 331,
+   "cumle": "Or so he thought — in reality, it wasn’t narrow at all."
+  },
+  {
+   "bolum": 333,
+   "cumle": "He had honestly thought that the number of people who would make it this far was going to be in the single digits."
+  },
+  {
+   "bolum": 333,
+   "cumle": "So was the young man who had thought that talking to Sunny was a headache."
+  },
+  {
+   "bolum": 333,
+   "cumle": "He felt that it reached such depths that mere thought of light would be impossible there."
+  },
+  {
+   "bolum": 335,
+   "cumle": "...And just as he thought that, the shadow finally found what it had been looking for all that time."
+  },
+  {
+   "bolum": 336,
+   "cumle": "Most of them had spent so long on the Forgotten Shore that the thought of ever being able to escape it became nothing more than a distant dream."
+  },
+  {
+   "bolum": 338,
+   "cumle": "At first, I thought that you have lost your mind, too."
+  },
+  {
+   "bolum": 341,
+   "cumle": "Then, another thought entered his mind."
+  },
+  {
+   "bolum": 343,
+   "cumle": "\"Have you not thought about what we have done?\""
+  },
+  {
+   "bolum": 343,
+   "cumle": "Sunny had always thought that the sun was restraining the dark sea."
+  },
+  {
+   "bolum": 345,
+   "cumle": "Before the thought could fully form, Sunny ruthlessly destroyed it and banished it from his mind."
+  },
+  {
+   "bolum": 345,
+   "cumle": "or so he thought before sensing warm drops rolling down his cheek."
+  },
+  {
+   "bolum": 346,
+   "cumle": "However, his thought was instantly interrupted."
+  },
+  {
+   "bolum": 348,
+   "cumle": "No matter how much he thought, he couldn’t imagine anything that would defeat Nephis."
+  },
+  {
+   "bolum": 350,
+   "cumle": "\"I would have believed that, maybe, if not for your other mistakes."
+  },
+  {
+   "bolum": 351,
+   "cumle": "Who could have thought?"
+  },
+  {
+   "bolum": 353,
+   "cumle": "In hindsight, this decision had turned out to be a wrong one..."
+  },
+  {
+   "bolum": 353,
+   "cumle": "He often thought that it was tied to drive, battle prowess, or will."
+  },
+  {
+   "bolum": 353,
+   "cumle": "Before he could finish that thought, however, the Spell spoke again, its voice filling the black void with melodious whispers:"
+  },
+  {
+   "bolum": 354,
+   "cumle": "Sleepers thought much like mundane humans, only with more power and tools."
+  },
+  {
+   "bolum": 355,
+   "cumle": "The decision to cloth himself turned out to be the correct one."
+  },
+  {
+   "bolum": 356,
+   "cumle": "She began to type and thought:"
+  },
+  {
+   "bolum": 357,
+   "cumle": "Walking through the corridors of the hospital complex, Sunny was engrossed in thought."
+  },
+  {
+   "bolum": 358,
+   "cumle": "With how extraordinary the hundred survivors of the Forgotten Shore were, and how unusual their circumstances turned out to be, there was going to be a small recruitment war happening in the next few days."
+  },
+  {
+   "bolum": 359,
+   "cumle": "Perplexed, Sunny thought for a bit, then finally concentrated on the runes once again."
+  },
+  {
+   "bolum": 361,
+   "cumle": "Who would have thought that one day, he would not only escape the Forgotten Shore, but also become vastly more powerful than he had ever dreamed..."
+  },
+  {
+   "bolum": 362,
+   "cumle": "Sunny had sometimes thought about this beautiful woman during his journey into the Dream Realm."
+  },
+  {
+   "bolum": 362,
+   "cumle": "But since there’s some procedure you still have to go through and we already know each other, I thought that I’d do the honors.\""
+  },
+  {
+   "bolum": 362,
+   "cumle": "Sunny had thought that Master Jet would take him to the cafeteria there, but instead, she headed toward the exit."
+  },
+  {
+   "bolum": 362,
+   "cumle": "I thought that cafeteria was this way?\""
+  },
+  {
+   "bolum": 362,
+   "cumle": "As he thought about how different things had become, the two of them approached a small, picturesque building near the center of the Academy."
+  },
+  {
+   "bolum": 364,
+   "cumle": "’It’s not as bad as I thought.’"
+  },
+  {
+   "bolum": 365,
+   "cumle": "Master Jet thought for a few seconds, and then said:"
+  },
+  {
+   "bolum": 366,
+   "cumle": "It’s just Sunny had never thought about it before."
+  },
+  {
+   "bolum": 366,
+   "cumle": "At least Sunny thought that it was a name."
+  },
+  {
+   "bolum": 367,
+   "cumle": "Of course, almost all of them were only of the Dormant rank, but even that turned out to be too much for the armies of the already reeling humanity to handle."
+  },
+  {
+   "bolum": 368,
+   "cumle": "Many people thought that the words used by the Spell described the ascent toward godhood..."
+  },
+  {
+   "bolum": 369,
+   "cumle": "And yet, one thing was certain: the choice presented to him by Master Jet was not as straightforward as he had thought."
+  },
+  {
+   "bolum": 370,
+   "cumle": "’Weaver believed that knowledge was the origin of power, and so always hid behind numerous lies...’"
+  },
+  {
+   "bolum": 371,
+   "cumle": "Not only because of how instrumental the things he had learned from the old instructor turned out to be for his survival, but also because of the history books he had just read."
+  },
+  {
+   "bolum": 371,
+   "cumle": "Sunny had never thought about it, but after learning more about Immortal Flame and the first generation of the Awakened, he couldn’t help but see his mentor in a new light."
+  },
+  {
+   "bolum": 372,
+   "cumle": "He thought for a few moments, then said:"
+  },
+  {
+   "bolum": 372,
+   "cumle": "Teacher Julius thought for a few moments, then shrugged."
+  },
+  {
+   "bolum": 375,
+   "cumle": "He thought for a bit, then shrugged."
+  },
+  {
+   "bolum": 376,
+   "cumle": "Even though the coral golem had turned out to be just an Awakened Monster, Sunny had high hopes for this Memory."
+  },
+  {
+   "bolum": 377,
+   "cumle": "When Teacher Julius mentioned that daemons had enough power to wage war against the heavens, Sunny had thought of it as a figure of speech."
+  },
+  {
+   "bolum": 378,
+   "cumle": "Pondering about that strange and miraculous enchantment, Sunny couldn’t help but think about the First Lord of the Bright Castle, who had supposedly been the first master of the Mantle of the Underworld."
+  },
+  {
+   "bolum": 378,
+   "cumle": "or so he had thought."
+  },
+  {
+   "bolum": 378,
+   "cumle": "I thought about it long and hard.\""
+  },
+  {
+   "bolum": 379,
+   "cumle": "As though trying to add insult to injury, the Nightmare Creature interrupted his thought by letting out a deafening growl and doubling its efforts to devour him."
+  },
+  {
+   "bolum": 380,
+   "cumle": "The task of pursuing power had turned out to be much more difficult than he had anticipated, and for one simple reason: after becoming an Awakened, he now received fewer fragments from killing Nightmare Creatures."
+  },
+  {
+   "bolum": 380,
+   "cumle": "Alas, it had turned out to be a waste of his time."
+  },
+  {
+   "bolum": 380,
+   "cumle": "Or at least he had thought that way, at the start..."
+  },
+  {
+   "bolum": 382,
+   "cumle": "Many even believed it to be a mirage."
+  },
+  {
+   "bolum": 383,
+   "cumle": "Sunny thought for a bit, then said:"
+  },
+  {
+   "bolum": 383,
+   "cumle": "The famed Master had turned out to be a rather pleasant person."
+  },
+  {
+   "bolum": 384,
+   "cumle": "If not for the swaying of the chain, Sunny would have thought that he had entered a completely new world."
+  },
+  {
+   "bolum": 385,
+   "cumle": "Sunny studied the coin some more, and then thought despondently:"
+  },
+  {
+   "bolum": 387,
+   "cumle": "After receiving the contribution points for his Forgotten Shore report and making some money by selling soul shards to other Awakened on the Chained Isles, Sunny had done something that he had never thought that he would be able to do in this life."
+  },
+  {
+   "bolum": 388,
+   "cumle": "I remember that you didn’t like the thought of her being alone, so I went to see her."
+  },
+  {
+   "bolum": 388,
+   "cumle": "He looked around, then thought:"
+  },
+  {
+   "bolum": 389,
+   "cumle": "Sunny kept a straight face and tried to understand what the hell Lanard was talking about, and who he thought Sunny was."
+  },
+  {
+   "bolum": 389,
+   "cumle": "Sunny looked at the cozy grey home, thought for a bit, and then answered honestly:"
+  },
+  {
+   "bolum": 391,
+   "cumle": "The onyx armor had turned out to be even more remarkable than he had anticipated, so he easily hunted down several abominations."
+  },
+  {
+   "bolum": 392,
+   "cumle": "Surprisingly, the task had turned out much easier than he had thought."
+  },
+  {
+   "bolum": 392,
+   "cumle": "After some thought, Sunny remembered the legend of Odysseus that Neph liked to talk about, and smiled."
+  },
+  {
+   "bolum": 392,
+   "cumle": "Sunny shut his mouth, then thought for a while."
+  },
+  {
+   "bolum": 393,
+   "cumle": "In the end, however, the strain of the duel turned out to be too much for the other fighter — he wasn’t very strategic at how he spent his soul essence, so after five minutes or so, his speed and strength decreased sharply."
+  },
+  {
+   "bolum": 395,
+   "cumle": "The Fool turned out to be more nimble and aware than the last two fighters."
+  },
+  {
+   "bolum": 395,
+   "cumle": "sadly, it had turned out to be just a feint."
+  },
+  {
+   "bolum": 397,
+   "cumle": "For a moment, I thought that Sunny’s Echo had run wild."
+  },
+  {
+   "bolum": 398,
+   "cumle": "For a second, he had thought that he was back in that godforsaken place..."
+  },
+  {
+   "bolum": 399,
+   "cumle": "Suddenly in a sullen mood, Sunny sighed and thought about his plans."
+  },
+  {
+   "bolum": 400,
+   "cumle": "Before the thought fully formed in his mind, Sunny was already leaving the Altar Island."
+  },
+  {
+   "bolum": 400,
+   "cumle": "As if to answer his thought, a gust of wind suddenly crashed into him from the side, and a distant bolt of lightning illuminated the sky."
+  },
+  {
+   "bolum": 401,
+   "cumle": "Pacing back and forth, he thought for a while, and then said to himself:"
+  },
+  {
+   "bolum": 402,
+   "cumle": "There was a whole separate world above the Citadel, as it turned out."
+  },
+  {
+   "bolum": 403,
+   "cumle": "Once he thought about it, everything made sense."
+  },
+  {
+   "bolum": 404,
+   "cumle": "His eyes gleamed when he thought about the mysterious treasure hidden somewhere out there, in the darkness."
+  },
+  {
+   "bolum": 405,
+   "cumle": "But, deep down, he still believed that the statement held true."
+  },
+  {
+   "bolum": 405,
+   "cumle": "Rain went to a rather elite school, as it turned out."
+  },
+  {
+   "bolum": 406,
+   "cumle": "However, once Sunny thought about it a bit more, he realized that it was not."
+  },
+  {
+   "bolum": 406,
+   "cumle": "...The lessons themselves, surprisingly, turned out to be very interesting."
+  },
+  {
+   "bolum": 406,
+   "cumle": "Who knew how his life would have turned out otherwise?"
+  },
+  {
+   "bolum": 406,
+   "cumle": "The instructor, surprisingly, turned out to be an actual Awakened."
+  },
+  {
+   "bolum": 407,
+   "cumle": "Before Sunny entered the Forgotten Shore, he had thought himself to be strong."
+  },
+  {
+   "bolum": 407,
+   "cumle": "...Granted, his previous visit to the Colosseum had turned out to be a fiasco."
+  },
+  {
+   "bolum": 409,
+   "cumle": "As the lid of the sarcophagus closed, he sighed and thought:"
+  },
+  {
+   "bolum": 409,
+   "cumle": "As it turned out, the journey promised to be even more perilous than he had expected."
+  },
+  {
+   "bolum": 410,
+   "cumle": "Initially, Sunny thought of traversing the Reckoning in his usual manner, on foot."
+  },
+  {
+   "bolum": 411,
+   "cumle": "That was the thought that had saved him."
+  },
+  {
+   "bolum": 411,
+   "cumle": "Backing away and grimacing because of the pain radiating from the deep wound in his side, Sunny stared at the enemy and thought feverishly:"
+  },
+  {
+   "bolum": 411,
+   "cumle": "Before he could finish that thought, though, he had to defend himself against a lightning-fast strike of the enemy’s sword."
+  },
+  {
+   "bolum": 412,
+   "cumle": "And those Awakened who had escaped despite everything mistakenly believed that their companions fell to a creature that could mess with people’s sight..."
+  },
+  {
+   "bolum": 412,
+   "cumle": "why had no one thought that it was an actual copy and not a trick on the eye, damn it?!"
+  },
+  {
+   "bolum": 413,
+   "cumle": "However, Sunny thought that he had managed to read a few words:"
+  },
+  {
+   "bolum": 419,
+   "cumle": "Sunny thought for a few moments, and then decided to keep both shadows wrapped around his body instead of sending them to explore the ship."
+  },
+  {
+   "bolum": 420,
+   "cumle": "Sunny had even thought how lucky he was that the demon decided to feast on the metal reinforcing the chest and bit a chunk out of it, swallowing the coins in the process."
+  },
+  {
+   "bolum": 420,
+   "cumle": "Before Sunny could finish the thought, though, the chest seemed to have sensed his hesitation."
+  },
+  {
+   "bolum": 421,
+   "cumle": "However, its jaws turned out to be horribly powerful."
+  },
+  {
+   "bolum": 422,
+   "cumle": "Perhaps there weren’t as many as he had thought, since the chest turned out to have a false..."
+  },
+  {
+   "bolum": 422,
+   "cumle": "He thought that the Dolls learned to fall apart and reassemble themselves as a way to combat the Crushing, since many Nightmare Creatures on the Isles had adapted to its harsh reality in one way or another..."
+  },
+  {
+   "bolum": 423,
+   "cumle": "The vines were trying to hold it down, but either they were much weaker here, far away from the wreck, or the abomination was much stronger than Sunny had thought."
+  },
+  {
+   "bolum": 423,
+   "cumle": "In the end, what made him decide was not greed, emotions, or even rational thought."
+  },
+  {
+   "bolum": 424,
+   "cumle": "...His calculations, though, had turned out to be for naught."
+  },
+  {
+   "bolum": 424,
+   "cumle": "Full of dark emotions, he thought:"
+  },
+  {
+   "bolum": 426,
+   "cumle": "As the soles of his boots scraped against the dark stone, a fleeting thought passed through his mind:"
+  },
+  {
+   "bolum": 427,
+   "cumle": "Since it had turned out that only the upper layer of the treasure pile was real, he now had much more options..."
+  },
+  {
+   "bolum": 430,
+   "cumle": "Those threads transfixed everything in existence, connecting every living being and every object, every thought and every concept, every dream and every nightmare, stretching infinitely into every direction, as well as into the past, the present, and the future."
+  },
+  {
+   "bolum": 430,
+   "cumle": "As this thought formed in Sunny’s mind, he suddenly came to his senses..."
+  },
+  {
+   "bolum": 431,
+   "cumle": "But then, a sudden thought appeared in his mind."
+  },
+  {
+   "bolum": 431,
+   "cumle": "Some people believed that the Ivory Tower had once stood in its middle, and was the first island to break free of its chains."
+  },
+  {
+   "bolum": 432,
+   "cumle": "Falling through the endless abyss turned out to be way less exciting than he had thought."
+  },
+  {
+   "bolum": 432,
+   "cumle": "After a while, he thought:"
+  },
+  {
+   "bolum": 432,
+   "cumle": "Then, he did something that he had never thought he would ever do..."
+  },
+  {
+   "bolum": 433,
+   "cumle": "Sunny scratched the back of his head, thought about this predicament, then summoned the Endless Spring and drank some water."
+  },
+  {
+   "bolum": 433,
+   "cumle": "After a while, he thought:"
+  },
+  {
+   "bolum": 433,
+   "cumle": "Sunny thought about it for a while, then frowned."
+  },
+  {
+   "bolum": 433,
+   "cumle": "Yesterday, he had thought that the speed of his fall was going to increase exponentially, which meant that at some point his body was bound to be simply torn apart..."
+  },
+  {
+   "bolum": 433,
+   "cumle": "The task turned out to be far more difficult than Sunny had anticipated."
+  },
+  {
+   "bolum": 434,
+   "cumle": "Just as Sunny had expected, the entire top layer of the treasure pile had turned out to be real."
+  },
+  {
+   "bolum": 435,
+   "cumle": "His first thought was that he had gone crazy again and was now hearing things."
+  },
+  {
+   "bolum": 435,
+   "cumle": "His second thought was much less comforting..."
+  },
+  {
+   "bolum": 436,
+   "cumle": "To him, it was a matter of instinct — he just thought about making his hand stronger, and the essence flowed like a torrent to achieve the desired effect."
+  },
+  {
+   "bolum": 436,
+   "cumle": "Directing the flow of essence into his right hand, Sunny sighed and thought:"
+  },
+  {
+   "bolum": 436,
+   "cumle": "Sunny thought about what he just heard, then tilted his head to the side."
+  },
+  {
+   "bolum": 437,
+   "cumle": "As soon as he thought that, the void suddenly spoke again:"
+  },
+  {
+   "bolum": 437,
+   "cumle": "As it turned out, his face had not reached its maximum paleness before."
+  },
+  {
+   "bolum": 437,
+   "cumle": "\"Have you thought of a way to survive the divine flames?\""
+  },
+  {
+   "bolum": 437,
+   "cumle": "I have thought about it, as well...\""
+  },
+  {
+   "bolum": 438,
+   "cumle": "Sunny thought for a bit, then said:"
+  },
+  {
+   "bolum": 438,
+   "cumle": "’And I thought that I was unlucky...’"
+  },
+  {
+   "bolum": 439,
+   "cumle": "Silently, though, he thought:"
+  },
+  {
+   "bolum": 439,
+   "cumle": "on second thought, forget that!"
+  },
+  {
+   "bolum": 439,
+   "cumle": "The lost prince thought for a few moments, then said:"
+  },
+  {
+   "bolum": 440,
+   "cumle": "After more than three weeks of falling into the Sky Below — at least Sunny thought that it had been that long — he sighed and stood up, balancing on the dangerously swaying treasure chest."
+  },
+  {
+   "bolum": 440,
+   "cumle": "Mordret thought for a few seconds, then said:"
+  },
+  {
+   "bolum": 440,
+   "cumle": "I just thought that you are stuck somewhere out there, beyond the stars.\""
+  },
+  {
+   "bolum": 442,
+   "cumle": "But in the end, it turned out to be just a little bit too far."
+  },
+  {
+   "bolum": 442,
+   "cumle": "As it turned out, the divine flame didn’t care."
+  },
+  {
+   "bolum": 443,
+   "cumle": "The two pagodas were so alike that for a moment, Sunny even thought that he had somehow found himself high up in the Sky Above."
+  },
+  {
+   "bolum": 444,
+   "cumle": "It turned out to be much larger than Sunny had thought, but nowhere near the scale of the Crimson Spire."
+  },
+  {
+   "bolum": 444,
+   "cumle": "He had thought that it was what made the stone warriors alive, in the first place."
+  },
+  {
+   "bolum": 446,
+   "cumle": "Remembering fairy tales where similar things often happened, Sunny felt a hint of horror, but then thought about it for a few moments and calmed down."
+  },
+  {
+   "bolum": 446,
+   "cumle": "Unlike the ground level, the basement of the Obsidian Tower turned out to be one giant hall."
+  },
+  {
+   "bolum": 447,
+   "cumle": "A frightening thought appeared in Sunny’s head."
+  },
+  {
+   "bolum": 448,
+   "cumle": "Feeling irrational panic at the thought of turning his back to the silver brazier, Sunny gritted his teeth, and then cautiously ascended the spiraling stairs."
+  },
+  {
+   "bolum": 448,
+   "cumle": "As it turns out, the porcelain dolls were much more complex than he had thought."
+  },
+  {
+   "bolum": 449,
+   "cumle": "He thought for a bit, then summoned the Covetous Coffer and carefully placed the needle inside."
+  },
+  {
+   "bolum": 451,
+   "cumle": "He blinked a few times, then suddenly thought:"
+  },
+  {
+   "bolum": 451,
+   "cumle": "What a random and ridiculous thought..."
+  },
+  {
+   "bolum": 451,
+   "cumle": "That made it seem as though Weaver alone had turned out to be more terrible than both the six daemons and the six gods combined, in the end."
+  },
+  {
+   "bolum": 452,
+   "cumle": "For a second, he thought that his loyal Shadow had only been pretending to be mute all this time, instead simply choosing not to speak to him..."
+  },
+  {
+   "bolum": 452,
+   "cumle": "\"As it turned out, I was more or less falling toward it the whole time."
+  },
+  {
+   "bolum": 452,
+   "cumle": "\"That was what I thought."
+  },
+  {
+   "bolum": 452,
+   "cumle": "Mordret thought for a few moments, then answered wistfully:"
+  },
+  {
+   "bolum": 453,
+   "cumle": "Mordret thought for a bit, then said uncertainly:"
+  },
+  {
+   "bolum": 453,
+   "cumle": "I thought knowledge of daemons was really scarce...’"
+  },
+  {
+   "bolum": 453,
+   "cumle": "Their relationship, it seemed, was not as simple as Sunny had thought."
+  },
+  {
+   "bolum": 455,
+   "cumle": "Sunny had always thought that it was an integral part of her design, a fundamental aspect of the vision her creator had for the living statues."
+  },
+  {
+   "bolum": 458,
+   "cumle": "Mordred thought for a bit, then said:"
+  },
+  {
+   "bolum": 458,
+   "cumle": "Sunny thought back on his own arsenal of Memories, and had to admit that the more unique Nightmare Creatures he had fought, the greater the reward was."
+  },
+  {
+   "bolum": 459,
+   "cumle": "Sunny thought for a bit, trying to correct the way he used to think about the Chained Isles."
+  },
+  {
+   "bolum": 459,
+   "cumle": "He thought for a few seconds, then asked:"
+  },
+  {
+   "bolum": 460,
+   "cumle": "Full of thought, Sunny passed between the jaws of the dead dragon and slowly headed toward the lake."
+  },
+  {
+   "bolum": 460,
+   "cumle": "A single thought rang in his mind:"
+  },
+  {
+   "bolum": 461,
+   "cumle": "As it turned out, back when Sunny had been falling into the Sky Below and thinking about how no one would miss him..."
+  },
+  {
+   "bolum": 461,
+   "cumle": "Anyway, I thought that I was going to find your corpse in the sleeping pod."
+  },
+  {
+   "bolum": 462,
+   "cumle": "at least he thought that that was what they were, since he had never actually bought one before."
+  },
+  {
+   "bolum": 463,
+   "cumle": "He thought for a bit, and then added:"
+  },
+  {
+   "bolum": 463,
+   "cumle": "\"Every piece of information he had given me turned out to be true, so far."
+  },
+  {
+   "bolum": 465,
+   "cumle": "Sunny thought for a few moments."
+  },
+  {
+   "bolum": 467,
+   "cumle": "despite the fact that Effie and Kai had easily believed him, telling total strangers that there were voices in his head was not the best of decisions."
+  },
+  {
+   "bolum": 468,
+   "cumle": "Back then, he thought that the owner of the pack had been killed by the Mirror Beast."
+  },
+  {
+   "bolum": 468,
+   "cumle": "The journey to the remote island that Cassie named in her note indeed turned out to be uneventful."
+  },
+  {
+   "bolum": 470,
+   "cumle": "The girl who had led him to Cassie glanced at them, then made an excuse and went back to the camp, tactfully deciding to remove herself from what she thought was going to be an emotional meeting of two old friends."
+  },
+  {
+   "bolum": 470,
+   "cumle": "He thought for a bit, then said:"
+  },
+  {
+   "bolum": 472,
+   "cumle": "Sunny thought for a while, then shrugged."
+  },
+  {
+   "bolum": 472,
+   "cumle": "At least he thought that this was the best course."
+  },
+  {
+   "bolum": 472,
+   "cumle": "Initially, Sunny thought of going about using the coins in a slow and deliberate manner, throwing a dozen or so on the altar each time he had to return to the real world — to minimize the chances of being noticed and well as arising suspicion."
+  },
+  {
+   "bolum": 474,
+   "cumle": "Visiting the White Feather compound in the middle of the night was a bit strange, but luckily for him, the older man turned out to be up."
+  },
+  {
+   "bolum": 474,
+   "cumle": "He thought for a bit, and then smiled."
+  },
+  {
+   "bolum": 475,
+   "cumle": "Some superstitious Awakened also believed, for some reason, that absorbing \"bad\" shards would be detrimental to the purity of their souls."
+  },
+  {
+   "bolum": 480,
+   "cumle": "That was his thought after Aiko joined the Brilliant Emporium as a manager."
+  },
+  {
+   "bolum": 480,
+   "cumle": "That second task, however, had turned out to be much harder than Sunny expected."
+  },
+  {
+   "bolum": 480,
+   "cumle": "And as it turned out..."
+  },
+  {
+   "bolum": 482,
+   "cumle": "Rain just thought of him as a neighbor."
+  },
+  {
+   "bolum": 482,
+   "cumle": "But as it turned out, he was not."
+  },
+  {
+   "bolum": 482,
+   "cumle": "Sunny thought that the conversation would be over after that, but Rain lingered."
+  },
+  {
+   "bolum": 483,
+   "cumle": "With that thought, he frowned, finished his tea, and went inside."
+  },
+  {
+   "bolum": 485,
+   "cumle": "if he suddenly showed up near your school in your moment of need, and turned out to be one of the most deadly Awakened of his generation, though..."
+  },
+  {
+   "bolum": 488,
+   "cumle": "As soon as he thought that, the first of the hunters came out of the darkness, following their hounds into the real world."
+  },
+  {
+   "bolum": 489,
+   "cumle": "He thought back to what had happened until now..."
+  },
+  {
+   "bolum": 493,
+   "cumle": "This childish thought appeared in her mind, as it had undoubtedly appeared in the minds of countless people just before they were killed."
+  },
+  {
+   "bolum": 494,
+   "cumle": "This thought did not console him very much, though."
+  },
+  {
+   "bolum": 495,
+   "cumle": "Sunny thought for a few moments, then reached for his communicator."
+  },
+  {
+   "bolum": 496,
+   "cumle": "Previously, we all thought that his Ability had to do with physical enhancement or perception, right?"
+  },
+  {
+   "bolum": 497,
+   "cumle": "Who would have thought that one day in a not-too-distant future, he would be able to slaughter a hundred Nightmare Creatures of similar and greater power without being torn to pieces?"
+  },
+  {
+   "bolum": 498,
+   "cumle": "I thought you rich kids get taught everything you need in school.\""
+  },
+  {
+   "bolum": 499,
+   "cumle": "Nephis stopped and stared at its white bark, its scarlet leaves, and the shapes she had thought were fruit."
+  },
+  {
+   "bolum": 501,
+   "cumle": "He didn’t care about fame and recognition, and was too busy to even spare it a thought."
+  },
+  {
+   "bolum": 501,
+   "cumle": "When I asked you to train me, I thought...\""
+  },
+  {
+   "bolum": 501,
+   "cumle": "\"You thought what?"
+  },
+  {
+   "bolum": 501,
+   "cumle": "He glanced at Rain, thought for a bit, then said cautiously:"
+  },
+  {
+   "bolum": 503,
+   "cumle": "What a funny thought that was."
+  },
+  {
+   "bolum": 504,
+   "cumle": "Everything that he thought he knew about Master Jet had come from what others told him about her, painting an intimidating and imposing picture of the fearsome Soul Reaper."
+  },
+  {
+   "bolum": 505,
+   "cumle": "Once again, reality turned out to be very different from how storytellers liked to portray it."
+  },
+  {
+   "bolum": 505,
+   "cumle": "Slightly amused by this thought, he turned to Master Jet and asked:"
+  },
+  {
+   "bolum": 506,
+   "cumle": "Sunny thought for a bit, then shrugged."
+  },
+  {
+   "bolum": 507,
+   "cumle": "He thought on it for a bit, then said with confusion:"
+  },
+  {
+   "bolum": 508,
+   "cumle": "Jet’s voice tore this thought to shreds:"
+  },
+  {
+   "bolum": 508,
+   "cumle": "Before she could finish the thought, a dark smile appeared on Kurt’s face."
+  },
+  {
+   "bolum": 509,
+   "cumle": "Sunny dismissed the Cruel Sight, thought for a few moments, and then asked the question he really wanted to ask:"
+  },
+  {
+   "bolum": 509,
+   "cumle": "The bastard massacred twenty people, and thought that I would let him go after a stern reprimand."
+  },
+  {
+   "bolum": 510,
+   "cumle": "As the thought of becoming a Demon drifted into his mind, Sunny read further."
+  },
+  {
+   "bolum": 510,
+   "cumle": "Full of thought, Sunny looked at the last string of runes."
+  },
+  {
+   "bolum": 510,
+   "cumle": "What a funny thought that was."
+  },
+  {
+   "bolum": 511,
+   "cumle": "The thought filled Sunny with a jubilant thrill."
+  },
+  {
+   "bolum": 512,
+   "cumle": "Sunny thought for a bit, and then enhanced the Heavenly Burden with one of his shadows."
+  },
+  {
+   "bolum": 513,
+   "cumle": "From the look of it, they were well-thought-out and as safe as could be."
+  },
+  {
+   "bolum": 514,
+   "cumle": "The thought that it had actually been designed to fly through the skies had crossed his mind, among other things."
+  },
+  {
+   "bolum": 514,
+   "cumle": "He thought for a bit, and finally asked:"
+  },
+  {
+   "bolum": 516,
+   "cumle": "Who had turned out to be perhaps the most deadly of them all."
+  },
+  {
+   "bolum": 518,
+   "cumle": "Sunny’s first thought was to retreat and run as fast as he could."
+  },
+  {
+   "bolum": 520,
+   "cumle": "The thing that he had thought to be a splinter turned out to be something else."
+  },
+  {
+   "bolum": 521,
+   "cumle": "The plan worked, in the end, even if killing the Wormvine had turned out to be much more complicated than anyone would have thought."
+  },
+  {
+   "bolum": 521,
+   "cumle": "As Sunny considered all these questions and found no answers, one thought gradually encompassed all the others:"
+  },
+  {
+   "bolum": 522,
+   "cumle": "Full of thought, but extremely satisfied, Sunny stood up."
+  },
+  {
+   "bolum": 522,
+   "cumle": "’...Disabuse yourself of that thought, fool.’"
+  },
+  {
+   "bolum": 524,
+   "cumle": "Sunny thought about it."
+  },
+  {
+   "bolum": 525,
+   "cumle": "Fighting phantoms had turned out to be much harder than he had anticipated, even if the [Ghost Blade] enchantment of the Cruel Sight allowed him to strike them down."
+  },
+  {
+   "bolum": 527,
+   "cumle": "Just as I thought.’"
+  },
+  {
+   "bolum": 527,
+   "cumle": "Sunny had long thought that the Shadow’s Rank depended on the level of Shadow Dance comprehension he was able to achieve, while its Class depended on his own."
+  },
+  {
+   "bolum": 528,
+   "cumle": "Observing the teenage girl, who continued to swing her practice sword while drops of sweat rolled down her face, Sunny was in deep thought."
+  },
+  {
+   "bolum": 528,
+   "cumle": "The girl thought for a second, and then gave him an understanding nod."
+  },
+  {
+   "bolum": 529,
+   "cumle": "Have I not turned out just fine?\""
+  },
+  {
+   "bolum": 529,
+   "cumle": "The teenage girl thought for a few moments, then paled a little, and nodded."
+  },
+  {
+   "bolum": 530,
+   "cumle": "He thought for a bit before saying:"
+  },
+  {
+   "bolum": 532,
+   "cumle": "Just as he thought that, the voice of the Dreamscape suddenly announced:"
+  },
+  {
+   "bolum": 533,
+   "cumle": "Before Sunny could finish this thought, an ancient tree next to him suddenly exploded into a cloud of splinters, and something sharp shot at him with incredible speed."
+  },
+  {
+   "bolum": 534,
+   "cumle": "Syclus wasn’t sure, but he thought that he saw a couple of them die from friendly fire."
+  },
+  {
+   "bolum": 536,
+   "cumle": "The qualifier round had turned out to be much more demanding than Sunny had thought."
+  },
+  {
+   "bolum": 536,
+   "cumle": "As it turned out, out of the thousand Awakened who had fought in his battle royale, two more qualified to participate in the tournament — one of them was Fireshing, the young woman whom he had faced last, and Dar of the Maharana clan, the archer who had almost skewered Sunny with his giant arrows."
+  },
+  {
+   "bolum": 536,
+   "cumle": "I thought you weren’t very interested in that kind of stuff.\""
+  },
+  {
+   "bolum": 536,
+   "cumle": "I just thought that maybe I’ll see that Awakened again..."
+  },
+  {
+   "bolum": 536,
+   "cumle": "As it turned out, he had to hurry, too."
+  },
+  {
+   "bolum": 539,
+   "cumle": "Initially, Sunny had only joined the Dream Tournament to reap the alluring rewards, so he had not thought much of it."
+  },
+  {
+   "bolum": 541,
+   "cumle": "Dimi thought for a bit, then shook his head."
+  },
+  {
+   "bolum": 541,
+   "cumle": "At first, Sunny thought that this was another sorcerer..."
+  },
+  {
+   "bolum": 541,
+   "cumle": "What a terrifying thought!"
+  },
+  {
+   "bolum": 542,
+   "cumle": "But people believed what they wanted to believe..."
+  },
+  {
+   "bolum": 544,
+   "cumle": "As if to answer his thought, the voice of the Dreamscape announced:"
+  },
+  {
+   "bolum": 546,
+   "cumle": "She thought for a bit, and then smiled again."
+  },
+  {
+   "bolum": 547,
+   "cumle": "He had never thought that he would meet a more terrifying swordsman than Nephis, but compared to this knight of Valor, the daughter of the Immortal Flame clan almost seemed like a novice."
+  },
+  {
+   "bolum": 548,
+   "cumle": "Sitting in the darkness with his eyes closed, Sunny thought back to the revelation he had received during the battle with the monstrous Master and started to slowly digest it."
+  },
+  {
+   "bolum": 548,
+   "cumle": "And just as that last thought disappeared, he finally felt that the process was complete."
+  },
+  {
+   "bolum": 549,
+   "cumle": "Sunny thought for a second, then glanced at the runes describing the Mantle of the Underworld first."
+  },
+  {
+   "bolum": 550,
+   "cumle": "Sunny thought for a bit."
+  },
+  {
+   "bolum": 551,
+   "cumle": "Were time, space, and other concepts Sunny had always thought to be absolute also created as weapons in the war of the gods against the -unknown-?"
+  },
+  {
+   "bolum": 554,
+   "cumle": "Sunny thought for a bit, then said with uncertainty:"
+  },
+  {
+   "bolum": 557,
+   "cumle": "\"...I thought Sky Tide was the only Saint on the Chained Isles.\""
+  },
+  {
+   "bolum": 557,
+   "cumle": "Sunny thought for a bit, then said:"
+  },
+  {
+   "bolum": 557,
+   "cumle": "Cassie thought for a few moments, then shook her head."
+  },
+  {
+   "bolum": 558,
+   "cumle": "As he thought about it, suddenly, a sound of light steps could be heard on the path leading to the porch."
+  },
+  {
+   "bolum": 559,
+   "cumle": "He looked down, thought for a few moments, and then said:"
+  },
+  {
+   "bolum": 559,
+   "cumle": "I thought things through before deciding to challenge a Seed."
+  },
+  {
+   "bolum": 559,
+   "cumle": "\"My thought exactly."
+  },
+  {
+   "bolum": 560,
+   "cumle": "He lingered for a bit, and then thought:"
+  },
+  {
+   "bolum": 560,
+   "cumle": "I thought that maybe it would be better for you to die."
+  },
+  {
+   "bolum": 561,
+   "cumle": "As it turned out, she also had an Ascended charm that provided a powerful augmentation to a single Echo, which she used on her rapier."
+  },
+  {
+   "bolum": 563,
+   "cumle": "Cassie thought for a few moments before answering."
+  },
+  {
+   "bolum": 564,
+   "cumle": "He considered hiding the existence of the Covetous Coffer, but thought better of it."
+  },
+  {
+   "bolum": 564,
+   "cumle": "For a moment, he thought that he heard someone sigh deeply behind him."
+  },
+  {
+   "bolum": 565,
+   "cumle": "Sunny thought about summoning the Cruel Sight, but before he could even move, the tall man was already beside him, grabbing him by the shoulder."
+  },
+  {
+   "bolum": 565,
+   "cumle": "Suddenly, another thought occurred to Sunny."
+  },
+  {
+   "bolum": 567,
+   "cumle": "I just thought that it was curious and picked it up...\""
+  },
+  {
+   "bolum": 568,
+   "cumle": "Never thought I’ll be eating this crap again...\""
+  },
+  {
+   "bolum": 569,
+   "cumle": "Sunny wanted to try to get the Lost to speak to him again, as usual, but then thought better of it."
+  },
+  {
+   "bolum": 570,
+   "cumle": "Sunny thought that he knew what madness felt like, but after spending several days — at least he thought that a few had passed — without drinking anything, he learned that there was a completely different realm of crazed delirium."
+  },
+  {
+   "bolum": 571,
+   "cumle": "Sunny strained his eyes, and thought that he had noticed a slender sword being dragged behind the person."
+  },
+  {
+   "bolum": 574,
+   "cumle": "Sunny thought for a few seconds."
+  },
+  {
+   "bolum": 575,
+   "cumle": "He wasn’t too happy about how things had turned out, and knew that their conflict with the forces of Valor was not over."
+  },
+  {
+   "bolum": 576,
+   "cumle": "...Mordret turned out to be more lethal and terrifying than even his jailers had expected."
+  },
+  {
+   "bolum": 576,
+   "cumle": "They were obviously fatigued, both mentally and physically, but not nearly as beaten and unsteady as Sunny had thought."
+  },
+  {
+   "bolum": 577,
+   "cumle": "or so we thought."
+  },
+  {
+   "bolum": 579,
+   "cumle": "Before he could finish the thought, Pierce appeared from behind the bend of the corridor, glanced at Welthe, shook his head briefly, and then growled at the Lost:"
+  },
+  {
+   "bolum": 579,
+   "cumle": "She thought for a bit, then frowned."
+  },
+  {
+   "bolum": 579,
+   "cumle": "might not have been as crazed as Sunny had thought before."
+  },
+  {
+   "bolum": 582,
+   "cumle": "If Sunny had thought otherwise, he would have never allowed himself to end up in this situation."
+  },
+  {
+   "bolum": 582,
+   "cumle": "For that reason, he believed that staring into a mirror was perfectly safe for him, at least right now."
+  },
+  {
+   "bolum": 586,
+   "cumle": "Just as Sunny thought that, two more strikes landed on the shield, and the angry orange glow turned brighter, slowly turning incandescent white."
+  },
+  {
+   "bolum": 587,
+   "cumle": "had turned out to be much more powerful than he had expected."
+  },
+  {
+   "bolum": 587,
+   "cumle": "even the wielder was not safe from the consequences, as it turned out."
+  },
+  {
+   "bolum": 589,
+   "cumle": "He thought that he had been betrayed again..."
+  },
+  {
+   "bolum": 590,
+   "cumle": "Indeed, it was as Sunny had thought."
+  },
+  {
+   "bolum": 590,
+   "cumle": "...Or so Sunny thought."
+  },
+  {
+   "bolum": 590,
+   "cumle": "Sunny thought feverishly, trying to come up with some trick, some way for him to survive and prevail."
+  },
+  {
+   "bolum": 591,
+   "cumle": "\"...to tell you the truth, Sunless, your body fits me so perfectly that I even thought, for a second, that the old man had sent you to me as a gift."
+  },
+  {
+   "bolum": 592,
+   "cumle": "Before he could form a single thought, however, another shadow lunged at him from the darkness, and suddenly, he was in the throes of indescribable agony, his very soul damaged and cracked."
+  },
+  {
+   "bolum": 593,
+   "cumle": "Just as he thought that, Cassie suddenly pulled him into a barely visible mouth of a narrow corridor, which then led them to a small staircase."
+  },
+  {
+   "bolum": 597,
+   "cumle": "whatever had happened in the Night Temple, we thought that Ascending should take priority."
+  },
+  {
+   "bolum": 600,
+   "cumle": "He didn’t get to finish that thought, though."
+  },
+  {
+   "bolum": 602,
+   "cumle": "His vertical pupils narrowed, a single thought ringing in his mind:"
+  },
+  {
+   "bolum": 605,
+   "cumle": "’Who would have thought that I would miss being short one day?’"
+  },
+  {
+   "bolum": 607,
+   "cumle": "Sunny thought back to his battle in the arena."
+  },
+  {
+   "bolum": 607,
+   "cumle": "It seemed as though the very foundation of his worldview had suddenly turned out to be built on shifting sand..."
+  },
+  {
+   "bolum": 608,
+   "cumle": "Who would have thought?"
+  },
+  {
+   "bolum": 608,
+   "cumle": "At first, Sunny had thought that his luck was just this bad, but after he and the young Awakened had barely survived the first two boxes, the youth shared a bit of knowledge that put everything into perspective."
+  },
+  {
+   "bolum": 608,
+   "cumle": "He had not fared as well as he had thought he would in the battle against the gargoyles, in large part because the monsters had turned out to be much more powerful and swift than the similar creatures he had fought before..."
+  },
+  {
+   "bolum": 608,
+   "cumle": "On the other hand, his only ally in the battle arena also turned out to possess an Aspect that was absolutely useless in a fight..."
+  },
+  {
+   "bolum": 610,
+   "cumle": "It was the willingness to shift the way he thought that was needed."
+  },
+  {
+   "bolum": 610,
+   "cumle": "The thought sent a cold shiver running down his spine."
+  },
+  {
+   "bolum": 611,
+   "cumle": "The poor kid was deceiving himself if he thought that the worshippers of War were going to just let them go."
+  },
+  {
+   "bolum": 611,
+   "cumle": "They believed in struggle, and glory."
+  },
+  {
+   "bolum": 613,
+   "cumle": "The first one he was familiar with the best — the spellweave, which he believed to be Weaver’s own sorcery."
+  },
+  {
+   "bolum": 613,
+   "cumle": "This was the magic that all humans knew, and most believed to be the only kind there is."
+  },
+  {
+   "bolum": 615,
+   "cumle": "Plus, he was also having trouble determining how the irregularly shaped killing boxes were situated in relation to each other, since that wasn’t something he had thought about before."
+  },
+  {
+   "bolum": 615,
+   "cumle": "but the Trial of the Red Colosseum had turned out to be a hell so dire that even he was having difficulty enduring its burden."
+  },
+  {
+   "bolum": 616,
+   "cumle": "Locked inside the narrow cage, surrounded by the smell of Nightmare Creatures and filth, Sunny stared into the darkness and thought."
+  },
+  {
+   "bolum": 619,
+   "cumle": "He wasn’t sure, but he thought that he noticed a slight change to the set of the taciturn knight’s shoulders."
+  },
+  {
+   "bolum": 622,
+   "cumle": "He thought feverishly, trying to come up with some way to escape the Priestess of War..."
+  },
+  {
+   "bolum": 622,
+   "cumle": "The fairy tale about a wooden sword Elyas had once shared with him had actually, inexplicably, turned out to be true."
+  },
+  {
+   "bolum": 625,
+   "cumle": "The mere thought of caring seemed exhausting."
+  },
+  {
+   "bolum": 626,
+   "cumle": "As it turned out, there were far fewer Nightmare Creatures populating the Kingdom of Hope in this era than there were in the future."
+  },
+  {
+   "bolum": 628,
+   "cumle": "And just as this thought entered his mind, he noticed that there was a thin layer of black tar spread around the point of impact — and dozens of similar ones nearby."
+  },
+  {
+   "bolum": 629,
+   "cumle": "Without sparing a single thought to these questions, he dove down from the edge and fell through the air, reaching another chain and escaping further south."
+  },
+  {
+   "bolum": 630,
+   "cumle": "But then, he thought for a moment and shuddered."
+  },
+  {
+   "bolum": 632,
+   "cumle": "I thought that this was why you came here, to spend your last few days near his resting place.\""
+  },
+  {
+   "bolum": 633,
+   "cumle": "He believed that Sunny was uniquely suited for the task and had a good chance of accomplishing it alive."
+  },
+  {
+   "bolum": 633,
+   "cumle": "if not for the moss covering its walls, the lack of lights, and the deathly silence that enveloped it, Sunny would have thought that the castle was still inhabited by humans."
+  },
+  {
+   "bolum": 633,
+   "cumle": "...And just a moment before falling into deep slumber, with his mind already half-gone, he thought that he heard an unexpected sound somewhere close, but also far away."
+  },
+  {
+   "bolum": 635,
+   "cumle": "Now that Sunny was old and didn’t have a lot of time left to live, that thought was very comforting."
+  },
+  {
+   "bolum": 635,
+   "cumle": "He thought for a few moments, and then said:"
+  },
+  {
+   "bolum": 636,
+   "cumle": "As this strange thought rang in his mind, a trunk of an ancient tree suddenly fell nearby, a whirlwind of fiery sparks and burning debris raising into the air."
+  },
+  {
+   "bolum": 636,
+   "cumle": "That bitter thought was the last one that appeared in Sunny’s mind before he fell into the searing darkness."
+  },
+  {
+   "bolum": 640,
+   "cumle": "Back then, I thought them insane..."
+  },
+  {
+   "bolum": 640,
+   "cumle": "...With that, he dashed in the opposite direction from where the hunter’s sword flashed, abandoning the young girl he was sworn to protect without a second thought."
+  },
+  {
+   "bolum": 641,
+   "cumle": "skills, fragments of knowledge, insights, patterns of thought..."
+  },
+  {
+   "bolum": 642,
+   "cumle": "...Or so he thought."
+  },
+  {
+   "bolum": 642,
+   "cumle": "He thought that he saw strange tears appear in the very fabric of reality..."
+  },
+  {
+   "bolum": 642,
+   "cumle": "Sunny was already trying to stand up, a desperate thought trying to form in his mind:"
+  },
+  {
+   "bolum": 644,
+   "cumle": "His mind was forged into a single sharp edge, all of his thought dedicated to the battle, clear, purposeful, and swift."
+  },
+  {
+   "bolum": 644,
+   "cumle": "He felt a vast amount of shadow fragments flow into his cores, reinforcing them, and thought tiredly:"
+  },
+  {
+   "bolum": 645,
+   "cumle": "the thought of making the deceitful sorcerer squirm felt very nice."
+  },
+  {
+   "bolum": 646,
+   "cumle": "He thought for a second, and then gave one of the chests a playful kick."
+  },
+  {
+   "bolum": 647,
+   "cumle": "However, no matter how alluring the image of the miraculous coins was, the second thought took precedence:"
+  },
+  {
+   "bolum": 647,
+   "cumle": "The mystery of the seemingly innocuous description of the Covetous Coffer had turned out to hold a key to a very important piece of the grand puzzle, one that was too important to be considered hastily."
+  },
+  {
+   "bolum": 647,
+   "cumle": "It can project someone’s thoughts outward and vocalize them, turning thought into sound."
+  },
+  {
+   "bolum": 648,
+   "cumle": "While the ability to communicate with people was something he had been thinking about from the first day of entering the Nightmare, sharing his every thought was not something Sunny was ready to deal with yet."
+  },
+  {
+   "bolum": 648,
+   "cumle": "Sunny, of course, meant for that last thought to remain unsaid, but sadly, one of his fists was still touching the enchanted amulet."
+  },
+  {
+   "bolum": 648,
+   "cumle": "I just thought that since you are both shadow creatures, it might have liked you."
+  },
+  {
+   "bolum": 648,
+   "cumle": "\"Actually, on second thought, maybe I’ll have the tea first...\""
+  },
+  {
+   "bolum": 649,
+   "cumle": "A grim and somber thought formed in his mind all by itself:"
+  },
+  {
+   "bolum": 649,
+   "cumle": "A seed of a thought..."
+  },
+  {
+   "bolum": 649,
+   "cumle": "I thought you would have known already, judging by the scars covering your body."
+  },
+  {
+   "bolum": 650,
+   "cumle": "He looked grimly at Noctis, and then said — or rather, thought — hoarsely:"
+  },
+  {
+   "bolum": 650,
+   "cumle": "Sunny grasped the emerald amulet and channeled a somber thought, which came out in a hoarse voice."
+  },
+  {
+   "bolum": 652,
+   "cumle": "He thought about it for a bit, stunned, and then tilted his head a little."
+  },
+  {
+   "bolum": 653,
+   "cumle": "What the hell was he going to do if the third Relic turned out to be another drop of ichor?"
+  },
+  {
+   "bolum": 653,
+   "cumle": "Finally, he inhaled deeply and thought:"
+  },
+  {
+   "bolum": 654,
+   "cumle": "Due to his closeness and affinity to shadows, he had never thought about the God of Shadows as terrifying."
+  },
+  {
+   "bolum": 654,
+   "cumle": "that was unless one really thought about the meaning behind those words."
+  },
+  {
+   "bolum": 654,
+   "cumle": "...Then, when it thought that no one was watching, the shadow shuddered and hugged itself for a moment."
+  },
+  {
+   "bolum": 654,
+   "cumle": "Then, feeling extremely stupid, Sunny thought aloud:"
+  },
+  {
+   "bolum": 654,
+   "cumle": "Sunny was still a little bit sad that the Relic had not turned out to be a destructive weapon, but his disappointment waned."
+  },
+  {
+   "bolum": 655,
+   "cumle": "Tiredly closing his eyes, he thought:"
+  },
+  {
+   "bolum": 656,
+   "cumle": "Sunny hesitated, then took the emerald amulet out of the folds of his black garment and thought:"
+  },
+  {
+   "bolum": 657,
+   "cumle": "Sunny hesitated for a bit, then answered with a measured thought:"
+  },
+  {
+   "bolum": 657,
+   "cumle": "or rather, thought:"
+  },
+  {
+   "bolum": 658,
+   "cumle": "Who could have thought that someone would actually be crazy enough to collect them all?"
+  },
+  {
+   "bolum": 659,
+   "cumle": "Suddenly in a somber mood, he put the amulet away and thought:"
+  },
+  {
+   "bolum": 660,
+   "cumle": "But just the thought of staring at the inhuman complexity of weaves again made his mood grow foul, so Sunny decided to return to that task sometime later."
+  },
+  {
+   "bolum": 660,
+   "cumle": "Sunny thought for a bit, then stood up and summoned Morgan’s Warbow."
+  },
+  {
+   "bolum": 660,
+   "cumle": "Producing the emerald amulet, Sunny thought with some irritation:"
+  },
+  {
+   "bolum": 660,
+   "cumle": "Sunny just wanted to mock the guy a little, but the poor fool seemed to have actually believed him."
+  },
+  {
+   "bolum": 661,
+   "cumle": "He dismissed his bow, and then thought tensely:"
+  },
+  {
+   "bolum": 661,
+   "cumle": "As it turned out, Kai had reached the Sanctuary two weeks before Sunny."
+  },
+  {
+   "bolum": 661,
+   "cumle": "although Lord Noctis is rumored to possess a merciful heart, he is still dangerous and terrifying."
+  },
+  {
+   "bolum": 662,
+   "cumle": "He thought for a bit, and then raised a third finger."
+  },
+  {
+   "bolum": 663,
+   "cumle": "He thought for a few moments and added absentmindedly:"
+  },
+  {
+   "bolum": 663,
+   "cumle": "Holding the emerald amulet in one of his calloused hands, he thought:"
+  },
+  {
+   "bolum": 664,
+   "cumle": "Noticing a slight confusion on the archer’s face, he thought for a moment, and then added:"
+  },
+  {
+   "bolum": 665,
+   "cumle": "Lost in thought, Sunny simply nodded."
+  },
+  {
+   "bolum": 665,
+   "cumle": "He grew silent, reluctant to finish the thought."
+  },
+  {
+   "bolum": 668,
+   "cumle": "...All things considered, things had turned out well."
+  },
+  {
+   "bolum": 669,
+   "cumle": "Before he could finish the thought, however, the scrawny girl suddenly lunged forward with shocking speed and struck him in the abdomen with her tiny fist."
+  },
+  {
+   "bolum": 671,
+   "cumle": "As they continued to fight, Sunny thought feverishly."
+  },
+  {
+   "bolum": 671,
+   "cumle": "But no matter how hard Sunny thought, he couldn’t come up with anything else to do."
+  },
+  {
+   "bolum": 672,
+   "cumle": "Just as he thought that, the shadows slid between the dancing flames and attached themselves to his feet, one cradling its damaged arm with three hands."
+  },
+  {
+   "bolum": 676,
+   "cumle": "He tilted his head a little and thought about it."
+  },
+  {
+   "bolum": 677,
+   "cumle": "It gave him food for thought, however."
+  },
+  {
+   "bolum": 677,
+   "cumle": "Sunny had thought of destroying the chalice because he had already seen it destroyed in the future, and so, the cycle had been complete without any ominous reasons."
+  },
+  {
+   "bolum": 677,
+   "cumle": "that was a thought that terrified Sunny beyond belief."
+  },
+  {
+   "bolum": 680,
+   "cumle": "he had never even thought that Mordret would be capable of committing something like that..."
+  },
+  {
+   "bolum": 681,
+   "cumle": "He thought that fate had brought us together..."
+  },
+  {
+   "bolum": 682,
+   "cumle": "The others were digesting all the information he had shared with them, full of thought."
+  },
+  {
+   "bolum": 682,
+   "cumle": "\"...In the end, everyone turned out to be weak."
+  },
+  {
+   "bolum": 682,
+   "cumle": "I think she thought of me as her own daughter."
+  },
+  {
+   "bolum": 683,
+   "cumle": "\"At least that was what I thought, at the start of it."
+  },
+  {
+   "bolum": 683,
+   "cumle": "He glanced at them, thought for a second, as though carefully choosing his words, and said:"
+  },
+  {
+   "bolum": 684,
+   "cumle": "had never felt as disturbed and afraid as when that thought first entered my mind."
+  },
+  {
+   "bolum": 684,
+   "cumle": "\"You see, as it turned out, the Ivory City was indeed prosperous, safe, and beautiful because of the dragon."
+  },
+  {
+   "bolum": 685,
+   "cumle": "Among the people, it is believed that his soul resides inside the metal colossus that guards the Ivory City and sometimes leads the Sun Legion into battle."
+  },
+  {
+   "bolum": 686,
+   "cumle": "only, by then, no one thought of them as mere rumors anymore.\""
+  },
+  {
+   "bolum": 686,
+   "cumle": "And as soon as I did, I realized that what we thought of as a trap for the fiend was, instead, a trap that the Prince of War lured us in instead.\""
+  },
+  {
+   "bolum": 686,
+   "cumle": "Suddenly, a frightening thought entered his mind."
+  },
+  {
+   "bolum": 688,
+   "cumle": "he had thought about it a lot, not knowing if it was the right thing to do, or a giant mistake."
+  },
+  {
+   "bolum": 689,
+   "cumle": "In fact, it went against everything that Sunny believed in..."
+  },
+  {
+   "bolum": 690,
+   "cumle": "At some point, however, a slightly disconcerting thought entered his mind:"
+  },
+  {
+   "bolum": 693,
+   "cumle": "As Sunny smiled tentatively, he looked at the sky to gauge the time of day, thought for a bit, and then added:"
+  },
+  {
+   "bolum": 694,
+   "cumle": "By recognizing these three universal parts of the weave patterns, he thought that he had learned how to reproduce these simplest enchantments, at least to the point where he managed to create a simple pattern that allowed an item to be dismissed and summoned from essence."
+  },
+  {
+   "bolum": 694,
+   "cumle": "...However, there was a fourth quality that all Memories shared, one that he had not thought about."
+  },
+  {
+   "bolum": 694,
+   "cumle": "or so he thought."
+  },
+  {
+   "bolum": 694,
+   "cumle": "Sunny stared at the part of the weave that he had thought was representing the enchantment for a long time, then summoned another Memory and studied it, as well."
+  },
+  {
+   "bolum": 696,
+   "cumle": "However, the resulting pattern turned out to be unstable."
+  },
+  {
+   "bolum": 696,
+   "cumle": "in heart and thought..."
+  },
+  {
+   "bolum": 696,
+   "cumle": "Of all the creatures in the world, I thought that you would be the last to judge someone on their appearance..."
+  },
+  {
+   "bolum": 697,
+   "cumle": "She thought for a bit, and then added thoughtfully:"
+  },
+  {
+   "bolum": 698,
+   "cumle": "who would have thought!\""
+  },
+  {
+   "bolum": 698,
+   "cumle": "She thought for a bit, and then shrugged."
+  },
+  {
+   "bolum": 698,
+   "cumle": "At first, Sunny thought that she had failed as well..."
+  },
+  {
+   "bolum": 698,
+   "cumle": "So, to him, purity of heart and thought meant something very specific..."
+  },
+  {
+   "bolum": 700,
+   "cumle": "He thought for a bit, and then added:"
+  },
+  {
+   "bolum": 700,
+   "cumle": "He thought for a bit, and then added:"
+  },
+  {
+   "bolum": 701,
+   "cumle": "After the initial success of transplanting enchantments, Sunny found out that it was not as easy as he had thought..."
+  },
+  {
+   "bolum": 701,
+   "cumle": "He had transferred the [Sonorous] enchantments to the Silver Bell and the Ordinary Rock, and also made the Ordinary Rock, which had been able to repeat the sounds it heard, repeat the words Sunny thought of as well."
+  },
+  {
+   "bolum": 702,
+   "cumle": "It was as though the very thought of looking away was beneath it."
+  },
+  {
+   "bolum": 702,
+   "cumle": "He was beginning to miss the happy shadow, that hopeless fool — something that had never thought he would ever feel."
+  },
+  {
+   "bolum": 703,
+   "cumle": "Today, he had accomplished something that he never thought would be possible in such a short span of time..."
+  },
+  {
+   "bolum": 704,
+   "cumle": "However, he thought better of asking any questions and simply followed Noctis to the stone stairs situated on the other side of the chamber."
+  },
+  {
+   "bolum": 708,
+   "cumle": "just be happy he believed my bluff."
+  },
+  {
+   "bolum": 709,
+   "cumle": "Before, Sunny had thought that the task of the challenger was to resolve a conflict that would have otherwise remained unresolved."
+  },
+  {
+   "bolum": 710,
+   "cumle": "we thought that we’d at least try."
+  },
+  {
+   "bolum": 710,
+   "cumle": "Turning his full attention back to the training fight, he thought:"
+  },
+  {
+   "bolum": 711,
+   "cumle": "And no matter how many times Sunny tried, he simply could not understand how Mordret thought, what his motives were, and what was he scheming behind that friendly smile."
+  },
+  {
+   "bolum": 711,
+   "cumle": "I thought you did not enjoy killing innocent people."
+  },
+  {
+   "bolum": 712,
+   "cumle": "\"I thought a lot about what you have told me, Sunless."
+  },
+  {
+   "bolum": 712,
+   "cumle": "At the same time, Sunny thought that he noticed a movement under the sorcerer’s skin."
+  },
+  {
+   "bolum": 712,
+   "cumle": "I do trust in your abilities, but what would people say if I turned out to be the only Chain Lord without an army?"
+  },
+  {
+   "bolum": 713,
+   "cumle": "Just as Sunny thought it, Noctis suddenly moved, and then looked up, a wild smile slowly appearing on his lips."
+  },
+  {
+   "bolum": 718,
+   "cumle": "Before he could finish the thought..."
+  },
+  {
+   "bolum": 719,
+   "cumle": "Moving through the dim crimson light, he killed another human, gritted his teeth, and then thought:"
+  },
+  {
+   "bolum": 720,
+   "cumle": "a useless piece of knowledge he had never thought would become so vital one day."
+  },
+  {
+   "bolum": 720,
+   "cumle": "By now, both shields were riddled with arrows, and this time, their protection turned out to be lacking."
+  },
+  {
+   "bolum": 721,
+   "cumle": "The thought of being the big dreadful threat, for once, was refreshing..."
+  },
+  {
+   "bolum": 725,
+   "cumle": "And then, finally, he thought that he noticed weak movement under a pile of debris."
+  },
+  {
+   "bolum": 728,
+   "cumle": "He believed in the value of retribution."
+  },
+  {
+   "bolum": 728,
+   "cumle": "That was why the very thought of letting Solvane die in peace seemed abhorrent to him."
+  },
+  {
+   "bolum": 728,
+   "cumle": "He was also really outraged at the thought of Hope messing with his mind."
+  },
+  {
+   "bolum": 732,
+   "cumle": "It did not matter how vile and tragic the fate of the Ivory Dragon, and his city, had turned out to be..."
+  },
+  {
+   "bolum": 734,
+   "cumle": "Who could have thought that the Beast of Twilight would still win, despite not having the Night Oracle’s support?"
+  },
+  {
+   "bolum": 734,
+   "cumle": "He thought for a moment, then shook his head with a smile."
+  },
+  {
+   "bolum": 735,
+   "cumle": "He thought for a bit, and then added:"
+  },
+  {
+   "bolum": 735,
+   "cumle": "I have to admit, though, with how paranoid you are, I thought that you would try to silence me at all costs."
+  },
+  {
+   "bolum": 735,
+   "cumle": "\"...I thought you couldn’t lie."
+  },
+  {
+   "bolum": 737,
+   "cumle": "Today, he turned out to be the more devious of the two, even if just barely."
+  },
+  {
+   "bolum": 737,
+   "cumle": "Only the Demon turned out to be smart enough to stop himself and consider the consequences."
+  },
+  {
+   "bolum": 739,
+   "cumle": "Who could have thought that he would be back to this cursed place so soon?"
+  },
+  {
+   "bolum": 739,
+   "cumle": "But if there was one thing he believed, it was that Sevirax had to die, and that his ghastly reign had to end."
+  },
+  {
+   "bolum": 741,
+   "cumle": "\"...I thought you said that she can break one chain on her own.\""
+  },
+  {
+   "bolum": 742,
+   "cumle": "Now that his paralysis was broken, however, another thought suddenly entered his mind."
+  },
+  {
+   "bolum": 742,
+   "cumle": "For a moment, Sunny thought that he would not receive an answer."
+  },
+  {
+   "bolum": 743,
+   "cumle": "If there was one thing that became clear, however, it was that the relationship between the gods and the daemons was even more complicated than he had thought."
+  },
+  {
+   "bolum": 745,
+   "cumle": "His train of thought was interrupted, however, because in the next moment, the whole home suddenly shook, and a strangely exhilarated howl resounded from somewhere above."
+  },
+  {
+   "bolum": 746,
+   "cumle": "If not for the broken door of the guest bedroom and the debris of the collapsed wall laying on the floor, he could have thought that he had left only yesterday."
+  },
+  {
+   "bolum": 750,
+   "cumle": "...As he thought about all these things, a familiar figure suddenly appeared on the crosswalk."
+  },
+  {
+   "bolum": 751,
+   "cumle": "Stranger still, that Memory turned out to be in the shape of an exquisite wooden chair."
+  },
+  {
+   "bolum": 752,
+   "cumle": "One of the more valuable discoveries he made during this time was that the inherent problem he had been struggling with — the threat of losing himself to the formlessness of Shadow Dance — was easily remedied by a simple thought exercise."
+  },
+  {
+   "bolum": 753,
+   "cumle": "She thought for a bit, and then added:"
+  },
+  {
+   "bolum": 754,
+   "cumle": "either he was not as proficient at reading maps as he had thought, or he had never seen this land."
+  },
+  {
+   "bolum": 754,
+   "cumle": "I just thought it’s called..."
+  },
+  {
+   "bolum": 755,
+   "cumle": "\"We thought that there would be much more time to get everything ready."
+  },
+  {
+   "bolum": 758,
+   "cumle": "She, too, believed that the waking world was dying, and that the Dream Realm could become humanity’s salvation."
+  },
+  {
+   "bolum": 760,
+   "cumle": "Sunny thought for a bit, then shrugged."
+  },
+  {
+   "bolum": 760,
+   "cumle": "I thought you were still moping around because Effie is not around that much, anymore.\""
+  },
+  {
+   "bolum": 761,
+   "cumle": "Some believed that Nephis would not die as long as at least one candle continued to burn."
+  },
+  {
+   "bolum": 764,
+   "cumle": "Or so the desperate Awakened thought, before a swift shadow suddenly appeared in their midst."
+  },
+  {
+   "bolum": 765,
+   "cumle": "It was just that her new Ability had turned out to be nothing short of devastating."
+  },
+  {
+   "bolum": 766,
+   "cumle": "As it turned out, Nephis had not found a Gateway to escape the Dream Realm and Awaken."
+  },
+  {
+   "bolum": 768,
+   "cumle": "For that reason, Sunny was mentally going over all the clever ways he had thought of to undermine her absolute authority as his master."
+  },
+  {
+   "bolum": 770,
+   "cumle": "Sunny did not really understand what exactly it was that she thought he lacked."
+  },
+  {
+   "bolum": 770,
+   "cumle": "However, he couldn’t help but feel a bit uncomfortable at the thought that someone with a greater purpose had an inherent advantage over someone who just wanted to be left alone, as he did."
+  },
+  {
+   "bolum": 770,
+   "cumle": "His visit to Neph’s dream had not turned out how he hoped it would."
+  },
+  {
+   "bolum": 771,
+   "cumle": "Neph herself seemed a bit disoriented, so their short reunion had turned out to be somewhat muddled."
+  },
+  {
+   "bolum": 773,
+   "cumle": "Have you thought about where you want to go?"
+  },
+  {
+   "bolum": 773,
+   "cumle": "He thought for a few moments, and then added awkwardly:"
+  },
+  {
+   "bolum": 774,
+   "cumle": "As the members of the cohort left the room to give Nephis time to rest, Sunny was deep in thought."
+  },
+  {
+   "bolum": 775,
+   "cumle": "He was darkly perplexed by the fact that his life had turned out in such a way that encountering words like \"loyalists\", \"government contact\", and \"allegiance\" in a casual conversation did not seem out of place."
+  },
+  {
+   "bolum": 775,
+   "cumle": "I thought that you, of all people, would have been chummy with the top Legacies, princess.\""
+  },
+  {
+   "bolum": 776,
+   "cumle": "While she thought, he reluctantly added:"
+  },
+  {
+   "bolum": 777,
+   "cumle": "Mordret thought for a bit, then nodded and sighed."
+  },
+  {
+   "bolum": 777,
+   "cumle": "However, with that Antarctica thing going on, I would have thought that she would be reluctant to move forward."
+  },
+  {
+   "bolum": 778,
+   "cumle": "To be honest, I thought that I was the first.\""
+  },
+  {
+   "bolum": 778,
+   "cumle": "\"Yeah, I thought so too."
+  },
+  {
+   "bolum": 778,
+   "cumle": "I thought that two years of despair would have made you a little smarter."
+  },
+  {
+   "bolum": 780,
+   "cumle": "He thought for a bit, and then said:"
+  },
+  {
+   "bolum": 781,
+   "cumle": "Then, a bizarre thought entered his mind."
+  },
+  {
+   "bolum": 781,
+   "cumle": "Usually, Sunny felt a lot of negative emotions every time he thought about the Innate Ability of his Aspect, Shadow Bond, which tied him to Changing Star’s will."
+  },
+  {
+   "bolum": 781,
+   "cumle": "Although neither spoke, their eyes were full of thought."
+  },
+  {
+   "bolum": 782,
+   "cumle": "There was only one thought on her mind."
+  },
+  {
+   "bolum": 783,
+   "cumle": "In the next moment, she thought that she smelled smoke."
+  },
+  {
+   "bolum": 784,
+   "cumle": "The second lecture had turned out to be a challenge for Sunny."
+  },
+  {
+   "bolum": 784,
+   "cumle": "On the way home, he was deep in thought."
+  },
+  {
+   "bolum": 785,
+   "cumle": "\"I never thought that I would hear something like that from you, of all people."
+  },
+  {
+   "bolum": 786,
+   "cumle": "Sunny thought for a bit, then shrugged."
+  },
+  {
+   "bolum": 790,
+   "cumle": "So, a few days later, he found himself doing something that he had never thought he would ever do..."
+  },
+  {
+   "bolum": 790,
+   "cumle": "He turned and froze, unable to finish his thought."
+  },
+  {
+   "bolum": 790,
+   "cumle": "never thought I’d see you in a dress..."
+  },
+  {
+   "bolum": 793,
+   "cumle": "And now that I reached that future, it’s not like what I thought it would be."
+  },
+  {
+   "bolum": 793,
+   "cumle": "After I returned from the First Nightmare, I thought that I would soon be a full citizen, super rich, and have unlimited access to tasty food."
+  },
+  {
+   "bolum": 793,
+   "cumle": "Nephis took a sip of champagne, thought for a moment, and then said calmly:"
+  },
+  {
+   "bolum": 793,
+   "cumle": "Have you never thought why there are no Gates of the First Category?"
+  },
+  {
+   "bolum": 794,
+   "cumle": "then Saints held even more power among the Legacy clans than he had thought."
+  },
+  {
+   "bolum": 794,
+   "cumle": "The loudmouth scowled, then thought for a moment and ask with curiosity:"
+  },
+  {
+   "bolum": 794,
+   "cumle": "On second thought, we should be going."
+  },
+  {
+   "bolum": 796,
+   "cumle": "If belief in something could affect millions of people, cause them to throw themselves into a war, persecute a group of individuals, or build incredible miracles of architecture, it was indeed stupid to say that the thing they believed in was not real."
+  },
+  {
+   "bolum": 796,
+   "cumle": "When they had been alive, the gods did not care about who believed in them and why."
+  },
+  {
+   "bolum": 797,
+   "cumle": "Sunny had always thought of himself as someone from the outskirts, but now, after traveling through several regions of the Dream Realm and building a life for himself in the city, Sunny suddenly understood that the outskirts were not a monolithic place."
+  },
+  {
+   "bolum": 797,
+   "cumle": "The only world he had known for most of his life was even smaller than he had thought."
+  },
+  {
+   "bolum": 797,
+   "cumle": "were much greater than Sunny had ever thought."
+  },
+  {
+   "bolum": 798,
+   "cumle": "So I thought I would bring you to meet mine.\""
+  },
+  {
+   "bolum": 798,
+   "cumle": "\"I thought your mother was dead.\""
+  },
+  {
+   "bolum": 799,
+   "cumle": "I thought that she knew everything, could do anything."
+  },
+  {
+   "bolum": 799,
+   "cumle": "We are adults, which is a strange thought."
+  },
+  {
+   "bolum": 799,
+   "cumle": "Sunny thought about it for a moment."
+  },
+  {
+   "bolum": 799,
+   "cumle": "It’s just not what I thought I would feel.\""
+  },
+  {
+   "bolum": 799,
+   "cumle": "He hesitated for a few seconds, and then thought:"
+  },
+  {
+   "bolum": 800,
+   "cumle": "Wincing at the thought of how much money he had spent on that thing, Sunny donned a stylish black suit and briefly looked at himself in the mirror."
+  },
+  {
+   "bolum": 801,
+   "cumle": "In fact, if Sunny did not know any better, he would have thought that he was in the middle of a blissful garden district that was meant for people to relax in peace and tranquility."
+  },
+  {
+   "bolum": 803,
+   "cumle": "He had thought that becoming a Master would make him less susceptible to her presence, but it did not."
+  },
+  {
+   "bolum": 803,
+   "cumle": "Changing Star thought for a moment, then nodded."
+  },
+  {
+   "bolum": 804,
+   "cumle": "For a moment, Sunny thought that he was looking at Anvil of Valor himself..."
+  },
+  {
+   "bolum": 805,
+   "cumle": "He just thought that the Prince of Nothing would dearly regret trying to consume Changing Star’s soul."
+  },
+  {
+   "bolum": 809,
+   "cumle": "He believed that Nephis valued him."
+  },
+  {
+   "bolum": 810,
+   "cumle": "I was always thinking about becoming a Master, but weirdly, I never really thought about what I would do after."
+  },
+  {
+   "bolum": 811,
+   "cumle": "Sunny had never thought that he would leave the city one day."
+  },
+  {
+   "bolum": 811,
+   "cumle": "He had barely ever thought that there was anything beyond the city, actually."
+  },
+  {
+   "bolum": 814,
+   "cumle": "As it turned out, his new superior had dismissed her usual uniform in favor of a tight-fitting black bodysuit."
+  },
+  {
+   "bolum": 815,
+   "cumle": "If not for the fact that Master Winter had stood up to salute Soul Reaper when they entered, Sunny would have thought that she was fast asleep."
+  },
+  {
+   "bolum": 818,
+   "cumle": "Sunny stared at the screen, deep in thought."
+  },
+  {
+   "bolum": 818,
+   "cumle": "Master Jet thought for a few moments."
+  },
+  {
+   "bolum": 818,
+   "cumle": "Sunny thought for a bit, then nodded."
+  },
+  {
+   "bolum": 819,
+   "cumle": "Leaning back, he then got lost in thought for a few minutes."
+  },
+  {
+   "bolum": 824,
+   "cumle": "Dorn thought for a bit."
+  },
+  {
+   "bolum": 826,
+   "cumle": "The guy turned out to be useful for something, after all!"
+  },
+  {
+   "bolum": 826,
+   "cumle": "Sunny initially thought that the rifle was a railgun, but was corrected and found out that it was actually a different type of a mass driver known as a coil gun, or Gauss rifle."
+  },
+  {
+   "bolum": 828,
+   "cumle": "Who could have thought?\""
+  },
+  {
+   "bolum": 828,
+   "cumle": "Sunny wanted to retort that he was not a kid, but thought better of it after glancing at the grizzled veteran."
+  },
+  {
+   "bolum": 828,
+   "cumle": "Master Jet thought for a bit."
+  },
+  {
+   "bolum": 829,
+   "cumle": "The swordsman thought for a bit."
+  },
+  {
+   "bolum": 831,
+   "cumle": "He thought for a bit, and then simply said:"
+  },
+  {
+   "bolum": 832,
+   "cumle": "I haven’t thought about that, sorry."
+  },
+  {
+   "bolum": 832,
+   "cumle": "Master Naeve had turned out to be unexpectedly friendly and pleasant to be around."
+  },
+  {
+   "bolum": 834,
+   "cumle": "Of course, the thought of being separated from the bottomless abyss of dark water by just a few layers of alloy was not too comforting..."
+  },
+  {
+   "bolum": 834,
+   "cumle": "From low-intensity training to mental exercises and games, anything that could give the members of the cohort a glimpse into how their comrades thought and acted was a step in the right direction."
+  },
+  {
+   "bolum": 834,
+   "cumle": "For example, Belle’s ability to sharpen his sword was actually more complicated than he had thought — as it turned out, the actual effect surrounded the blade with an incredibly thin, invisible displacement field instead of actually making the edge sharper."
+  },
+  {
+   "bolum": 834,
+   "cumle": "As it turned out, shadow essence did not react to Luster’s presence at all..."
+  },
+  {
+   "bolum": 836,
+   "cumle": "He even thought that he started to understand the meaning of some of the words of their beautiful song."
+  },
+  {
+   "bolum": 836,
+   "cumle": "With that thought, he swallowed the bitter feeling of powerlessness and disappeared into the shadows, leaving to join his soldiers."
+  },
+  {
+   "bolum": 837,
+   "cumle": "Luster opened his mouth to respond, but at that moment, something collided against the hull of the ship again, making him flinch and lose his train of thought."
+  },
+  {
+   "bolum": 837,
+   "cumle": "Before he could finish the thought, something collided against the ship once again, and the alloy wall visibly bent inward."
+  },
+  {
+   "bolum": 839,
+   "cumle": "The handsome Master thought for a bit."
+  },
+  {
+   "bolum": 841,
+   "cumle": "It didn’t take as long as we thought."
+  },
+  {
+   "bolum": 842,
+   "cumle": "’Never thought I would pity the Princess of War one day, but having both Mordret and Nephis as siblings..."
+  },
+  {
+   "bolum": 842,
+   "cumle": "I thought that Cassie would have informed you, anyway."
+  },
+  {
+   "bolum": 843,
+   "cumle": "The Gate was whispering into his ears, calling to him on a level much deeper than thought or emotion."
+  },
+  {
+   "bolum": 844,
+   "cumle": "Sunny thought for a few long moments, and then spoke:"
+  },
+  {
+   "bolum": 846,
+   "cumle": "just as he thought that, the situation suddenly and dreadfully changed."
+  },
+  {
+   "bolum": 849,
+   "cumle": "Belle, meanwhile, thought for a bit and added:"
+  },
+  {
+   "bolum": 851,
+   "cumle": "the thought left a bad taste in his mouth."
+  },
+  {
+   "bolum": 853,
+   "cumle": "However, just like he had thought, that turned out to be enough."
+  },
+  {
+   "bolum": 853,
+   "cumle": "they had to perceive the world through some other means, and their hearing had turned out to be the dominant one of those."
+  },
+  {
+   "bolum": 854,
+   "cumle": "Reality, however, turned out to be the exact opposite."
+  },
+  {
+   "bolum": 855,
+   "cumle": "the thought of facing one in battle made Sunny feel ill at ease."
+  },
+  {
+   "bolum": 856,
+   "cumle": "Luckily, none of them turned out to be too powerful or laid a dangerous ambush."
+  },
+  {
+   "bolum": 859,
+   "cumle": "As he thought that, Winter sent a second arrow into the sky."
+  },
+  {
+   "bolum": 861,
+   "cumle": "The good news was that his Transcendent armor turned out to be too tough to be bitten through by the damned abomination."
+  },
+  {
+   "bolum": 866,
+   "cumle": "He did have enough presence of mind to put some thought into what type of elemental damage to choose, though."
+  },
+  {
+   "bolum": 867,
+   "cumle": "it seemed that the persistent corrosion, which the Cruel Sight had learned to reflect thanks to the Wormvine’s miasma, turned out to be more powerful than Sunny had thought."
+  },
+  {
+   "bolum": 868,
+   "cumle": "They just thought that he was some kind of monster with a personal grudge against Nightmare Creatures."
+  },
+  {
+   "bolum": 868,
+   "cumle": "Before he could finish the thought, she suddenly grinned and pulled him into a very tight hug."
+  },
+  {
+   "bolum": 871,
+   "cumle": "Of course, he had no idea what it was that they thought they understood."
+  },
+  {
+   "bolum": 872,
+   "cumle": "This approach turned out to be surprisingly effective."
+  },
+  {
+   "bolum": 874,
+   "cumle": "Sunny thought for a bit, then nodded."
+  },
+  {
+   "bolum": 878,
+   "cumle": "I thought all Awakened only know how to swing a sword.\""
+  },
+  {
+   "bolum": 878,
+   "cumle": "Sunny had thought that it was some kind of strange magical construct, but it was just a mundane observatory."
+  },
+  {
+   "bolum": 878,
+   "cumle": "As it turned out, staring at the moon for too long can lead to some very, very dire consequences."
+  },
+  {
+   "bolum": 879,
+   "cumle": "In fact, the predominant school of modern thought states that the Nightmare Spell is acausal by nature, meaning that it does not even adhere to the principle of cause and effect."
+  },
+  {
+   "bolum": 879,
+   "cumle": "Instead, he thought for a bit, and then asked calmly:"
+  },
+  {
+   "bolum": 880,
+   "cumle": "Sunny thought for a bit, then simply shook his head."
+  },
+  {
+   "bolum": 880,
+   "cumle": "However, he felt that there were a few nuggets of truth in what the old man believed, even if the scientists might have come to the wrong conclusions based on those theories."
+  },
+  {
+   "bolum": 880,
+   "cumle": "In the past, he had thought that all of this hidden oppression was just the result of the ambition and lust for power consuming Asterion, Anvil of Valor, and Ki Song."
+  },
+  {
+   "bolum": 881,
+   "cumle": "The thought of going back aboard a ship did not sound very alluring..."
+  },
+  {
+   "bolum": 883,
+   "cumle": "Her help would only be needed if the enemy turned out to be more dangerous than he had judged."
+  },
+  {
+   "bolum": 885,
+   "cumle": "Who could have thought that, one day, he would be killing abominations comparable to that fearsome monstrosity?"
+  },
+  {
+   "bolum": 886,
+   "cumle": "Suppressing the whispers of the Sin of Solace and the oppressive pull of the Call, he banished every other thought away and concentrated solely on the tiny figure of the fleeing imp."
+  },
+  {
+   "bolum": 886,
+   "cumle": "’Was that an intrusive thought?’"
+  },
+  {
+   "bolum": 888,
+   "cumle": "That task turned out surprisingly hard for Sunny."
+  },
+  {
+   "bolum": 889,
+   "cumle": "He had little hope of finding anything, but the thought of an elusive, uncanny horror hiding somewhere within the confines of the fortress, waiting to snatch its next victim, prevented him from remaining idle."
+  },
+  {
+   "bolum": 892,
+   "cumle": "...Sunny silently looked at the water, deep in thought."
+  },
+  {
+   "bolum": 892,
+   "cumle": "Both you and Verne have turned out to be completely useless!"
+  },
+  {
+   "bolum": 894,
+   "cumle": "The other Master looked at him, deep in thought."
+  },
+  {
+   "bolum": 899,
+   "cumle": "Before, Sunny had not known its source, and thought that he had days to discover it."
+  },
+  {
+   "bolum": 900,
+   "cumle": "Sunny frowned, struggling to follow the line of thought, perhaps due to his exhaustion."
+  },
+  {
+   "bolum": 901,
+   "cumle": "Who could have thought.\""
+  },
+  {
+   "bolum": 905,
+   "cumle": "I thought that the First Army abandoned the southern reach of the Antarctic Center.\""
+  },
+  {
+   "bolum": 905,
+   "cumle": "Sunny thought that he understood the full picture..."
+  },
+  {
+   "bolum": 906,
+   "cumle": "Sunny might not have known what he believed in — if there even was such a thing — but he knew what he despised very well."
+  },
+  {
+   "bolum": 907,
+   "cumle": "Many of them looked like they were about to give up, but strangely, the terrible change did not end up being as crushing to their already crumbling morale as Sunny had thought it would be."
+  },
+  {
+   "bolum": 907,
+   "cumle": "If he thought about it like that, it was no surprise that the Nightmare Spell had descended during the height of the Dark Times."
+  },
+  {
+   "bolum": 907,
+   "cumle": "Sunny had thought about it in advance."
+  },
+  {
+   "bolum": 910,
+   "cumle": "I just noticed that you have not gotten your portion of the food the soldiers had cooked for us, so I thought to bring you some.\""
+  },
+  {
+   "bolum": 912,
+   "cumle": "Some believed that it was hard for a soul to form a stable core after becoming set in its ways..."
+  },
+  {
+   "bolum": 914,
+   "cumle": "The vehicles of the convoy had turned out to be in a worse state than Sunny had thought, so it took a lot of work for Kim and Samara to get them in shape with Quentin’s help."
+  },
+  {
+   "bolum": 915,
+   "cumle": "No matter how he thought about it, the convoy’s speed was appallingly slow."
+  },
+  {
+   "bolum": 920,
+   "cumle": "The creature turned out to be incredibly resilient."
+  },
+  {
+   "bolum": 920,
+   "cumle": "’...Who could have thought?’"
+  },
+  {
+   "bolum": 920,
+   "cumle": "And yet, the thought of dying on Kimmy made him especially upset, for some reason."
+  },
+  {
+   "bolum": 921,
+   "cumle": "Luckily, his guess turned out to be correct."
+  },
+  {
+   "bolum": 922,
+   "cumle": "If people did not know better, they would have thought that she was an actual statue."
+  },
+  {
+   "bolum": 922,
+   "cumle": "As it turned out, she had some medical knowledge."
+  },
+  {
+   "bolum": 924,
+   "cumle": "The process had turned out to be harder than expected, but they managed to find a solution in the end."
+  },
+  {
+   "bolum": 925,
+   "cumle": "Walking toward the broken transport, Sunny was deep in thought."
+  },
+  {
+   "bolum": 925,
+   "cumle": "Sunny did not like the thought of traveling across treacherous old roads in such hazardous conditions, but neither did he like the idea of being stationary, holed up in some cave like a blind rat, with no way to escape should things go south."
+  },
+  {
+   "bolum": 925,
+   "cumle": "Leading half a thousand crazed Sleepers through a bloody revolt and a suicidal crusade might have been a bit harder than he had thought."
+  },
+  {
+   "bolum": 925,
+   "cumle": "He thought about returning to the warm interior of the Rhino, but decided against it."
+  },
+  {
+   "bolum": 931,
+   "cumle": "Professor Obel thought for a moment, then shrugged."
+  },
+  {
+   "bolum": 932,
+   "cumle": "Things were even worse than Sunny had thought."
+  },
+  {
+   "bolum": 932,
+   "cumle": "Belle and Dorn thought for a moment."
+  },
+  {
+   "bolum": 932,
+   "cumle": "Standing near it, Sunny thought that he heard a distant hum."
+  },
+  {
+   "bolum": 937,
+   "cumle": "So, Sunny thought that he should be thankful."
+  },
+  {
+   "bolum": 939,
+   "cumle": "Just as that thought flashed through Sunny’s mind..."
+  },
+  {
+   "bolum": 940,
+   "cumle": "Sadly, it turned out to be harder than he had thought."
+  },
+  {
+   "bolum": 940,
+   "cumle": "He frowned, surprised at the sudden thought."
+  },
+  {
+   "bolum": 940,
+   "cumle": "...Was it a thought?"
+  },
+  {
+   "bolum": 942,
+   "cumle": "things might have turned out differently."
+  },
+  {
+   "bolum": 943,
+   "cumle": "...On second thought, just die."
+  },
+  {
+   "bolum": 945,
+   "cumle": "The tunnel they had escaped from might not have been endless, but as it turned out, it was actually quite long."
+  },
+  {
+   "bolum": 946,
+   "cumle": "Traveling through the mountains had turned out much more dangerous than Sunny had anticipated, despite his habit of always expecting the worst."
+  }
+ ]
+}

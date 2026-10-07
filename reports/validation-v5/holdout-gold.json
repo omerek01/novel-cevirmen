@@ -1,0 +1,286 @@
+{
+ "frozen_before_model": true,
+ "created": "2026-10-07",
+ "method": "Kaynak metin elle okundu; her aday N-1 grafik/durumuna karşı salt-okunur denetlendi (zaten bilinen dahil edilmedi); aynı-N rün planının kapsadıkları 'deterministic'. Çıkarım modeli KULLANILMADI.",
+ "holdout_sha256": "8f57363c855dec513786c3201e051191373140bbe27a2e7d6984dd23c15ef4b7",
+ "frozen_system_sha256": "9eddec367604df1454dc12db09618efb9cf15618ea1ac0a5cd11f8cac7628a8f",
+ "empty_gold_chapters": {
+  "187": "N-1'e göre yeni grafiğe değer bilgi yok (Stone Saint bağları b103-106).",
+  "542": "Mongrel ve Valor/Great Clan zaten biliniyor; Queen Bee söylentisinin nesnesi sözlükte yok ve anlatı onu reddediyor."
+ },
+ "representation_rules": {
+  "model": "doğrulayıcı kabulü YA DA aynı-N eşdeğer atlama doğru temsildir",
+  "deterministic": "aynı-N rün planı kapsar (model öğesi sayılmaz)",
+  "review": "doğru inceleme kaydı"
+ },
+ "items": [
+  {
+   "chapter": 83,
+   "subject": "Puppeteer's Shroud",
+   "knowledge_type": "other_state",
+   "relation_or_state": "memory_tier",
+   "object_or_value": "V",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "Memory Tier: V."
+  },
+  {
+   "chapter": 83,
+   "subject": "Midnight Shard",
+   "knowledge_type": "other_state",
+   "relation_or_state": "memory_tier",
+   "object_or_value": "III",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "Memory Tier: III."
+  },
+  {
+   "chapter": 83,
+   "subject": "Puppeteer's Shroud",
+   "knowledge_type": "relationship",
+   "relation_or_state": "efsunu",
+   "object_or_value": "Doubtless",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "Memory Enchantments: [Enhanced Durability], [Doubtless]."
+  },
+  {
+   "chapter": 83,
+   "subject": "Midnight Shard",
+   "knowledge_type": "relationship",
+   "relation_or_state": "efsunu",
+   "object_or_value": "Unbroken",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "Memory Enchantments: [Unbroken]."
+  },
+  {
+   "chapter": 83,
+   "subject": "Sunny",
+   "knowledge_type": "relationship",
+   "relation_or_state": "niteligi",
+   "object_or_value": "Blood Weave",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "There were five Attributes: [Fated], [Mark of Divinity], [Child of Shadows] and the new one, [Blood Weave]."
+  },
+  {
+   "chapter": 343,
+   "subject": "Nephis",
+   "knowledge_type": "kill_death",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Crimson Terror",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "Finally, Nephis blinked and looked away, staring at the corpse of the Crimson Terror. Her sword hand trembling slightly."
+  },
+  {
+   "chapter": 343,
+   "subject": "Crimson Terror",
+   "knowledge_type": "life_status",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "Now, however, the Terror was dead, and its corrupting influence was gone, turning the artificial sun back to its normal self."
+  },
+  {
+   "chapter": 343,
+   "subject": "Sunny",
+   "knowledge_type": "kill_death",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Caster",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "...I killed him.",
+   "note": "Önceki satır: 'What about Caster?' — kanıt zamir içerir."
+  },
+  {
+   "chapter": 343,
+   "subject": "Sunny",
+   "knowledge_type": "relationship",
+   "relation_or_state": "niteligi",
+   "object_or_value": "Soul Conduit",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "I did. There’s a new one there. Soul Conduit."
+  },
+  {
+   "chapter": 374,
+   "subject": "Kai",
+   "knowledge_type": "identity_title",
+   "relation_or_state": "gercek_adi",
+   "object_or_value": "Nightingale",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "Speaking of True Names. Effie I can understand, but... Nightingale? You were really named just like your band?"
+  },
+  {
+   "chapter": 374,
+   "subject": "Nephis",
+   "knowledge_type": "life_status",
+   "relation_or_state": "life_status",
+   "object_or_value": "alive",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "However, she is still alive out there, in the Dream Realm. Her vital signs and brain activity readings are all stable. It seems that Lady Nephis managed to escape the Terror, at least."
+  },
+  {
+   "chapter": 374,
+   "subject": "Rock",
+   "knowledge_type": "other_state",
+   "relation_or_state": "role",
+   "object_or_value": "instructor",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "Finally, Instructor Rock took the stage",
+   "acceptable_alternatives": [
+    {
+     "relation_or_state": "unvani",
+     "object_or_value": "Instructor"
+    }
+   ]
+  },
+  {
+   "chapter": 590,
+   "subject": "Mordret",
+   "knowledge_type": "relationship",
+   "relation_or_state": "akrabasi",
+   "object_or_value": "War God",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "well, what else did he expect from the heir of War God?",
+   "acceptable_alternatives": [
+    {
+     "representation": "capability_gap_allowed",
+     "note": "soy/varislik ayrı ilişki değil"
+    }
+   ]
+  },
+  {
+   "chapter": 681,
+   "subject": "Hope",
+   "knowledge_type": "identity_title",
+   "relation_or_state": "unvani",
+   "object_or_value": "Demon of Desire",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "Hope, the Demon of Desire... Noctis is preparing to rebel against the will of the gods"
+  },
+  {
+   "chapter": 681,
+   "subject": "Solvane",
+   "knowledge_type": "kill_death",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Elyas",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "She... she killed Elyas, tore my heart out"
+  },
+  {
+   "chapter": 681,
+   "subject": "Elyas",
+   "knowledge_type": "life_status",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "She... she killed Elyas, tore my heart out"
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "knowledge_type": "relationship",
+   "relation_or_state": "rutbesi",
+   "object_or_value": "Ascended",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "Rank: Ascended."
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "knowledge_type": "other_state",
+   "relation_or_state": "shadow_fragments",
+   "object_or_value": "744/4000",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "Shadow Fragments: [744/4000]."
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "knowledge_type": "relationship",
+   "relation_or_state": "niteligi",
+   "object_or_value": "Master of Shadows",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "[Master of Shadows] Attribute Description: \"Shadows recognize you as one of their champions.\""
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "knowledge_type": "relationship",
+   "relation_or_state": "yetenegi",
+   "object_or_value": "Shadow Manifestation",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "Aspect Ability: [Shadow Manifestation]."
+  },
+  {
+   "chapter": 744,
+   "subject": "Sunny",
+   "knowledge_type": "conflict_update",
+   "relation_or_state": "niteligi:ended",
+   "object_or_value": "Child of Shadows",
+   "epistemic": "confirmed",
+   "representation": "review",
+   "exact_evidence": "Instead... [Child of Shadows] was gone.",
+   "note": "Mevcut rün bağı (b2) — otomatik kapanış değil inceleme beklenir."
+  },
+  {
+   "chapter": 782,
+   "subject": "Nephis",
+   "knowledge_type": "life_status",
+   "relation_or_state": "life_status",
+   "object_or_value": "alive",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "Changing Star of the Immortal Flame clan, the lost hero of the Forgotten Shore, had Ascended and returned to the real world. She was alive!"
+  },
+  {
+   "chapter": 887,
+   "subject": "Sunny",
+   "knowledge_type": "kill_death",
+   "relation_or_state": "oldurdu",
+   "object_or_value": "Bone Slayer",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "[You have slain an Awakened monster, Bone Slayer.]"
+  },
+  {
+   "chapter": 887,
+   "subject": "Bone Slayer",
+   "knowledge_type": "life_status",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "epistemic": "confirmed",
+   "representation": "deterministic",
+   "exact_evidence": "[You have slain an Awakened monster, Bone Slayer.]"
+  },
+  {
+   "chapter": 887,
+   "subject": "Sunny",
+   "knowledge_type": "relationship",
+   "relation_or_state": "yetenegi",
+   "object_or_value": "Shadow Manifestation",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "exact_evidence": "using Shadow Manifestation, he commanded the shadow that had been observing the old scientist to assume a tangible form"
+  }
+ ],
+ "pre_model_revision": {
+  "previous_sha256": "32b7b9ea971adcede9ccba889bdbb609c9e99a5e40b586ef9352555c03c8f119",
+  "reason": "744 Master of Shadows öğesinin kanıt satırı yanlış kopyalanmıştı (Child of Shadows satırı). Model çağrısından ÖNCE düzeltildi; öğe, temsil ve diğer 24 öğe aynı."
+ }
+}

@@ -1,0 +1,178 @@
+{
+ "model": "vertex/gemini-3.6-flash",
+ "v1": {
+  "schema_failures": 14,
+  "model_failures": 0,
+  "raw_relationships": 48,
+  "identity_revelations": 2,
+  "epistemic_non_confirmed": 1,
+  "review_items": 0,
+  "accepted_relationships": 0,
+  "accepted_aliases": 0,
+  "accepted_state_changes": 0,
+  "evidence_failures": 14,
+  "context_dropped": 896,
+  "giris_tokeni": 124185,
+  "cikis_tokeni": 6645,
+  "dusunme_tokeni": 51693,
+  "model_retries": 0,
+  "future_knowledge_violations": 0,
+  "cost_usd_estimate": 0.31190625
+ },
+ "v3": {
+  "schema_failures": 0,
+  "model_failures": 0,
+  "raw_relationships": 4,
+  "identity_revelations": 0,
+  "already_known_proposals": 0,
+  "deterministic_same_chapter_duplicates": 0,
+  "same_chapter_existing_proposals": 1,
+  "unsupported_state_keys": 0,
+  "new_entity_candidates": 0,
+  "direction_errors": 0,
+  "high_impact_evidence_failures": 0,
+  "unsupported_review_items": 0,
+  "review_items": 2,
+  "context_dropped": 222,
+  "giris_tokeni": 49757,
+  "cikis_tokeni": 785,
+  "dusunme_tokeni": 8654,
+  "model_retries": 0,
+  "future_knowledge_violations": 0,
+  "epistemic_non_confirmed": 1,
+  "accepted_relationships": 2,
+  "accepted_aliases": 1,
+  "accepted_state_changes": 0,
+  "evidence_failures": 0,
+  "cost_usd_estimate": 0.072714
+ },
+ "price_basis": {
+  "giris": 0.75,
+  "cikis": 3.75
+ },
+ "before": {
+  "chapters": {
+   "rows": 1213,
+   "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+  },
+  "glossary": {
+   "rows": 1468,
+   "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+  },
+  "sozluk_yazim": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "varlik_bag": {
+   "rows": 1036,
+   "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+  },
+  "varlik_deger": {
+   "rows": 48,
+   "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+  },
+  "bilgi_bas": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_inceleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_isleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_oneri": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ },
+ "after": {
+  "chapters": {
+   "rows": 1213,
+   "sha256": "6046ade755fe38953dd08159b317676d1219991c641392121a91012018ac3d25"
+  },
+  "glossary": {
+   "rows": 1468,
+   "sha256": "bd9328d2f5f1d6aa8a09b75110690aa619c2dd2d39cff2840a1dcad6b46e1867"
+  },
+  "sozluk_yazim": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "varlik_bag": {
+   "rows": 1036,
+   "sha256": "8561e0f0739a5e98c9950437d2daabcbea7e571f66148c7084717208f3ff26d5"
+  },
+  "varlik_deger": {
+   "rows": 48,
+   "sha256": "1d1f2ab756e20da6921821bac94ee211b799dc4c73253f16c684631656b31200"
+  },
+  "bilgi_bas": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_inceleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_isleme": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  "bilgi_oneri": {
+   "rows": 0,
+   "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  }
+ },
+ "protected_tables_unchanged": true,
+ "chapters": [
+  412,
+  431,
+  685,
+  686
+ ],
+ "completed": 4,
+ "elapsed_seconds": 7.13,
+ "manual_sources": {
+  "412": "’Well... one mystery is solved, at least.’\n\nSunny became painfully aware of how the devil of the Reckoning was able to slaughter so many Awakened, and why no Nightmare Creature could survive on its island.\n\nIf the bastard was able to turn into a copy of any enemy while remaining as powerful as a Fallen Devil, then very few things could ever hope to escape from it alive.\n\nAnd those Awakened who had escaped despite everything mistakenly believed that their companions fell to a creature that could mess with people’s sight... what else would they think after watching a human being killed by what looked like their exact copy?\n\nWell... why had no one thought that it was an actual copy and not a trick on the eye, damn it?!\n\nIf there was one thing that landed Sunny in this dire situation, it was that people in the Sanctuary severely lacked imagination!\n\n...All these thoughts flashed through his mind as he used Shadow Step to disappear and fall awkwardly to the ground a dozen meters behind the devil, completely out of the way of the flying arrow.\n\n’Great... but now what?’\n\nJust a few moments before, Sunny had been contemplating abandoning the fight and simply running away. Unlike some humans he had met in the past, he wasn’t burdened by useless things like pride or vanity. If the situation called for a cowardly escape, he was ready and willing to do just that.\n\nBut now that the bastard had turned into Saint and was holding a bow, the idea of trying to run was not very enticing. The last thing he wanted was to be hit in the back of his head by an arrow.\n\n’Think, think...’\n\nThere was no time to think, though.\n\nThe reflection of Saint swiftly spun and lunged toward him. As Sunny teleported further away, the creature suddenly pivoted and crashed into the trunk of a tall, ancient tree.\n\nA moment later, Sunny emerged from the shadows and saw, with horror, a giant mass of heavy wood plummeting on him from above.\n\nDesperately burning through his essence, he filled his body with as much strength as possible and raised his hands, trying to catch the falling tree. As a groan escaped from his mouth, Sunny’s feet dug into the soft soil of the Reckoning Island. Somehow, he managed to stop the tree without being crushed by it.\n\nIt was at this moment that a second arrow flashed toward his heart...\n\nOnly to collide with another one in the air and fly aside.\n\nSome distance away, the real Saint dismissed the bow, raised her sword, and dashed toward the impostor.\n\n’Eat that, bastard!’\n\nSunny gritted his teeth, strained his already overtaxed muscles, and threw the massive tree at the abomination with a tremendously powerful push. When he used his essence and augmented his body with both shadows, Sunny was able to achieve bursts of truly inhuman strength.\n\nHow was the bastard going to escape this?\n\nThe creature indifferently lowered its shoulder, then simply disappeared into the shadows and appeared on the other side of the flying trunk. Then, it met attacking Saint with a devastating shoulder bash.\n\nThe onyx armor of the taciturn demon cracked, and she was thrown back, causing another tree to explode into a cloud of splinters.\n\nSunny paled.\n\n’S—shadow Step. Not good...’\n\nThe apparition turned to him and mockingly tilted its head.\n\nSomething... something was very wrong with that thing. It seemed maleficent and utterly mad, but at the same time... incomplete, somehow. Behind the evil will and terrifying killing intent that dwelled in its ruby eyes, there was a hint of some other, boundless emotion.\n\nSunny faintly recognized the feeling of it, since he had felt the same deep and indescribable emotion one time before.\n\nFar below the Hollow Mountains, in the darkness of the misty stone labyrinth between two otherworldly rivers, he had sensed the same feeling of loss, anguish, and confusion in the shadows left behind by the companions of the First Lord of the Bright Castle.\n\n’...What even is that thing?’\n\nHe had no time to ponder about its nature, though, because the creature had once again turned into a pale young man with dark eyes and was lunging at him, a vicious smile frozen on its lips.\n\nFeeling a cold shiver running down his spine, Sunny realized that he would not win this fight. Nor was he capable of escaping from the Reckoning alive.\n\nThis time, he was truly in danger.\n\nHe was really going to die on this beautiful, peaceful island... and the last thing he was going to see before falling into the embrace of death would be his own reflection staring back at him through the eyes of his killer.\n\nUnless...\n\nSunny sent Saint back into the Soul Sea and met the apparition’s attack with a block, feeling his body shudder from the force of the blow.\n\nHe had assumed that the Devil of Reckoning was a shadow, and it was indeed similar to one... but, really, it was not. It only appeared as a shadow because Sunny himself had been in the form of a shadow when they first clashed. And once he had turned into a human, the devil, too, became a human.\n\nThe young man with the cold eyes of a killer took a small step and made a high thrust with the tachi. Sunny, however, knew his own fighting style too well to be caught by that trap. Knowing that the thrust was just a feint, he threw his own blade downward, and just barely managed to deflect a vicious slash that followed. He was late by a fraction of a second, though... another tear appeared in the fabric of the Puppeteer’s Shroud, and a shallow wound on his thigh began seeping with blood.\n\nThe creature was more of a reflection than a shadow. It mirrored everything about its enemy. Their appearance, their weapons, their battle technique. Even their powers... otherwise, how would it be able to use Shadow Step? In a sense, it was a perfect adversary. But that wasn’t all...\n\nSunny grimaced as the apparition threw his sword away and delivered a powerful kick that almost turned all of his ribs into bone dust. If not for the burst of essence he had sent to his legs, Sunny would have never managed to dodge that devastating blow. But his essence was already running dry, and his enemy seemed to be even stronger now... as if the more Sunny bled, the more powerful the pale young man became.\n\nThe devil was even able to mirror the Memories its enemy wielded. Before, Sunny had experienced the soul attack of the copy of the Broken Oath. And now, the creature was obviously being fed raw power by the Blood Blossom...\n\nHe attacked with the Midnight Shard to buy himself a couple of moments to think...\n\nThe apparition had not seemed to be affected by the Broken Oath, though. Was that because it had assumed the form of Saint, who was immune to soul attacks? Did this mean that the devil was able to copy not only powers and Memories, but Attributes, too?\n\nThe creature easily deflected Sunny’s attack and leaned forward to deliver the final blow. Sunny’s only hope to escape it was to jump back...\n\nBut what else did the creature copy? Was it really a perfect reflection?\n\nThere was only one way to find out.\n\nInstead of jumping back, Sunny stepped forward and collided against the apparition, completely open, unable to escape being struck down by the enemy’s blade.\n\nBefore the deadly strike came, however, he leaned close to the devil’s ear and whispered, so softly that no one except for the two of them would ever be able to hear what he had said:\n\n\"Lost from Light, stop.\"\n\nAnd then, the devil froze, as if suddenly turned to stone.\n\nSunny smiled.\n\n...It was a perfect reflection, indeed.",
+  "431": "As Sunny and the treasure chest plunged through the skies into the boundless black abyss, pieces of the shattered island pursued them. The Crushing was slowly growing weaker, but it was still strong enough to kill most Awakened.\n\nIf not for the power of his shadows, Sunny would have been long dead. And even with it, he was much closer to becoming a corpse than he would have wished to be. His whole body was bruised, bloodied, and in pain.\n\n...Which he could see very clearly, because, in addition to being terribly banged up, Sunny was also currently completely naked.\n\n’What a... glorious sight. Damn it!’\n\nHe had dismissed the Puppeteer’s Shroud to absorb the shadow essence spent on its summoning, and had none of it left to manifest the armor again. The last drops had been spent to summon the Dark Wing.\n\nAs the result, Sunny found himself falling into the Sky Below atop a lop-sided treasure chest while wearing nothing but his pack and the strip of leather holding his broken arm in place. His only hope right now was that neither Master Roan nor Saint Tyris would suddenly appear to save the day and see him in this state.\n\nHe would rather plunge into the Tear than live through that embarrassment.\n\nWell... not really.\n\n’I take it back. Both of them can descend from the clouds and carry me away in their arms. I won’t mind! No, really!’\n\nBut no one came to his rescue. Dodging the heavy slabs of shattered stone and desperately trying to glide through the field of debris, Sunny slowly pushed the chest toward the empty expanse of the Tear and prayed that nothing would damage his fragile cloak.\n\nIt was having enough trouble obeying his commands already.\n\nThe Dark Wing wasn’t really designed to carry heavy weights. It could barely support just Sunny himself... and that was in normal conditions. Now that Sunny was refusing to let go of the dead Mimic, and with both of them being affected by the Crushing, the enchanted cloak was on the verge of breaking apart. Instead of gliding smoothly away from the falling rocks, Sunny and the treasure chest were more or less just falling between them at a slight angle.\n\nNeedless to say, dodging the debris of the destroyed island in these circumstances was not easy. But, somehow, Sunny managed to protect both himself and the Dark Wing for long enough to escape the danger zone in one piece.\n\nBy then, the Crushing had become almost bearable.\n\nSitting on the lid of the treasure chest and feeling the terrible pressure grow weaker and weaker with each second, Sunny grimaced from pain, then let out a relieved sigh. The cool breeze was softly touching his burning face, as well as his... well, everything. All things considered, the fall was not unpleasant.\n\nBut then, a sudden thought appeared in his mind.\n\n’...What are you feeling relieved about, idiot?’\n\nOh... right.\n\nLooking down, Sunny saw nothing but the swiftly approaching, boundless dark expanse of the Sky Below.\n\nThe endless abyss that stretched downward forever, and from which there was no escape. Not unless one knew how to fly.\n\nThat was where he was headed.\n\n***\n\nExcept for the golden String of Fate Sunny had seen disappearing into the depth of the Tear, he had no reason whatsoever to believe that he would survive the fall into the Sky Below, let alone ever be able to return to the Sanctuary and the real world. Most likely, he was going to go mad and either be devoured by some terrifying abyssal titan or die of hunger.\n\nHis life, almost literally, was hanging by a thread.\n\n...But right now, he didn’t care. All he cared about was the physical relief of not being pressed down upon by the Crushing. He was still wounded all over and in pain, but experiencing just the normal amount of it was almost euphoric.\n\n’It’s the small things that matter...’\n\nLike not being constantly crushed by an invisible, murderous magical force. Or resting comfortably on a wide lid of a treasure chest instead of having your limbs being crushed in its jaws.\n\n...Simple stuff like that.\n\nNow that the Crushing was almost gone, Sunny used the Dark Wing to push the dead Mimic deeper into the Tear, as well as keep it level in the air. The treasure chest was wide and long, and its lid was flat. In a sense, it was almost like a firm, narrow cot.\n\nThere were worse ways to fall into an endless abyss, really.\n\nSunny stared at the wide sweep of the Tear, trying to burn the memory of the golden string of light into his mind.\n\nThe Tear was situated in the center of the Chained Isles, and was both vast and absolutely empty. Some people believed that the Ivory Tower had once stood in its middle, and was the first island to break free of its chains. Over thousands of years, islands that had bordered it were slowly destroyed one after another, causing the Tear to grow.\n\nBy now, it was a couple of hundred kilometers across, and from what Sunny could tell, the String of Fate led to somewhere in its very center.\n\nThe question was... how deep in there was the thing on the other end of the String? The longest someone had flown down into the Sky Below before turning back was a week. Was the mysterious object hidden in an even deeper part of the abyss?\n\nAnd what was that object?\n\nSunny could not even guess. The only thing he knew was that his intuition had pushed him toward the Twisted Rock because of it.\n\nIf so... it should have been something that would allow him to survive.\n\nRight?\n\nOf course, his fate might have been to just die there. Fate didn’t really discriminate against any type of occurrence, including fatal ones. Regardless, Sunny was going to find out.\n\n...It’s not like he had a choice now.\n\nFeeling the air get colder, he shivered and watched the sky around him grow darker and darker.\n\nSoon, there was no light left in it at all.\n\nSunny had fallen into the Sky Below.",
+  "685": "When Kai was finished with his story, everyone remained silent for a while. Eventually, the young man sighed and stretched out his hands, which were covered in polished bark and looked more like those of one of the Sailor Dolls than those of a human. He moved his fingers, and then smiled lightly:\n\n\"Noctis did a wonderful job of healing my wounds. Just as he had said, some of the pain remains, but I am as strong and capable as I had been before. No, even more so... these enchanted limbs he gave me are much more sensitive to soul essence, and so, they are more durable and powerful than my own flesh had been. I also collected a few Memories during my time in the Sun Legion. Overall, my battle prowess has increased a lot since we entered the Nightmare... not to mention the experience I earned, and the lessons I was taught. Whatever comes, I am ready.\"\n\nSunny lingered for a few moments, then let out a low growl:\n\n\"What about the other Transcendent of the Ivory City? The Sun Prince? Have you met him?\"\n\nKai frowned and made a vague gesture with his hand.\n\n\"Yes... I think. The Sun Prince is supposed to be a brother of Sevirax. Among the people, it is believed that his soul resides inside the metal colossus that guards the Ivory City and sometimes leads the Sun Legion into battle. I’ve seen him once, from afar... and to be honest, I am not quite sure if that thing is sentient or not.\"\n\nHe hesitated for a bit, and then added:\n\n\"You’ve seen him, too. I think that it is his corpse that swings beneath the Shipwreck Island, tangled in the chain... although I can’t quite imagine what kind of force could have destroyed that implacable giant. He is at least ninety meters tall, with a body cast out of solid steel, and nearly invincible. He is... he is also not a living creature, really, and so can’t be killed by wounding or damaging his body.\"\n\nSunny remained silent for a bit, and then said:\n\n\"There is nothing that can’t be killed or destroyed... not even the gods. So then... three of the Chain Lords are accounted for, in the future. We’ve seen the bones of the dragon, Sevirax, on the Ivory Island, and both his brother and Solvane found their doom near the wreck of Noctis’s ship. But what... what exactly happened? How did they fall, and how did Hope escape? What happened to Noctis himself, as well as the One in the North? How was the Ivory City destroyed? How did the Tower break free of its chains?\"\n\nNo one answered, as perplexed as he was. After some time, Cassie finally spoke:\n\n\"I am not sure what happened. But I know one thing — because of our arrival, it is happening faster.\"\n\nThey turned to her, and after a moment of silence, Sunny asked:\n\n\"...Yours is the last story left. And, to be honest, it is the story I am interested in hearing the most. Because it concerns the fifth Awakened sent here by the Spell. Mordret... he found a way to enter the Seed with us, didn’t he?\n\nCassie sighed heavily and turned her head away. After a while, she said:\n\n\"Yes. Yes, he did...\"\n\nThe blind young woman remained silent for a few moments, gathering her thoughts, and then faced them again.\n\n\"Unlike what happened to the three of you, my arrival into the Nightmare was not too harrowing. At least not at the start. I was sent into the body of a young priestess whose duty was to tend to the High Priestess of the Night Temple... the One in the North. In this era, the Night Temple still belongs to the cult of the Goddess of the Black Skies — of Storm God. The deity of darkness, stars, and guidance. And so, no light is allowed on the temple’s premises.\"\n\nShe touched her blindfold briefly, then slowly lowered her hand.\n\n\"The acolytes spend long years living in the darkness, and blind themselves before becoming priestesses. For that reason, they are known as the Eyeless. Many of the Eyeless are seers, and possess powers of prophecy and divination. For most, becoming a blind priestess inside a lightless temple would have been a terrible trial. But for me... it was strangely soothing. To find myself among those similar to me, in a place where my blindness wasn’t an aberrant oddity, but instead a choice.\"\n\nA pale smile appeared on her lips.\n\n\"...However, it was my lady that I found the most comfort in. The One in the North, the Oracle of the Night... she was not unkind. She treated me well enough, and I have learned a lot from her knowledge and wisdom. However, just like the rest of the Chain Lords, she was being consumed by an insidious madness. Hers... was the madness of apathy. Over the centuries, my lady grew indifferent to most things happening in the world, or even to herself. That was why she needed attendants, and I was one of them.\"\n\nThe smile slowly disappeared from Cassie’s face.\n\n\"That didn’t mean that she was powerless or without responsibility, though. All of the northern reaches of the Kingdom of Hope were under her authority and protection. There were many villages and several towns full of mundane humans who relied on the Night Temple for safety and guidance. For that reason, the One in the North ruled not only over the blind priestesses, but also over a small, but fearsome army comprised of both mundane warriors and Awakened.\"\n\nShe sighed slightly.\n\n\"Their numbers might not have been as large as those of the armies of the Ivory City and the Red Colosseum, but due to their prowess and my lady’s prophetic gift, the north was never attacked by either. The people rarely suffered from the Nightmare Creatures, as well.\"\n\nCassie grew silent, and a scowl slowly appeared on her beautiful face.\n\n\"...But as the One in the North grew more and more indifferent, that slowly started to change. Still, when I found myself in the Night Temple, things were still more or less fine.\"\n\nHer scowl deepened, and her face grew dark and despondent. The blind young woman lingered, and then said in a grim voice: 𝘧𝑟𝑒𝑒𝘸𝘦𝘣𝑛𝑜𝘷𝑒𝓁.𝘤𝘰𝓂\n\n\"Until they weren’t.\"",
+  "686": "It was getting late, and darkness crawled into the stone room, drowning its corners in shadows. Cassie sat motionlessly, the graceful lines of her beautiful face contorted by a deep scowl. Then, a heavy sigh escaped from her lips.\n\n\"It started soon after I entered the Nightmare, but no one paid it much attention at first. There were just strange rumors that reached the temple, resembling scary stories that people like to tell each other when the sun is gone and darkness envelops the world. Rumors of a pleasant voice that came from the fog.\"\n\nShe gritted her teeth for a moment.\n\n\"Perhaps if my lady’s affliction was not as severe, we could have done something then. After all, in this world, scary stories often come true. And this one was more ominous than the rest, because it had to do with the fog. The Night Temple stands at the boundary of the Hollow Mountains, after all... and of the mist that shrouds them. But she was distant and uncaring, and so, we had grown aloof, too.\"\n\nCassie somberly shook her head, then continued, her low, deep voice enveloping the room and her three listeners:\n\n\"As time went by, the rumors started to change. They grew more menacing and dire, telling tales of people who listened to the fog and disappeared without a trace. At that point, the Eyeless grew concerned, suspecting that a corrupted creature had found its way into their land. Many of them possessed a high affinity to revelation, after all, and they could feel it... unease, threat, danger. So, a priestess was sent to investigate, escorted by a squad of experienced Awakened soldiers. And at the same time, it was decided that a divination would be performed.\"\n\nShe lingered for a moment. 𝐟𝕣𝗲𝕖𝕨𝗲𝐛𝗻𝗼𝐯𝗲𝚕.𝗰𝚘𝐦\n\n\"The divination showed no result, and the priestess... she failed to return with useful clues. In fact, she did not return at all. She and her escort disappeared without a trace, as though they had never existed. Just like the people from the rumors... only, by then, no one thought of them as mere rumors anymore.\"\n\nThe blind young woman shivered, then said in an even voice:\n\n\"Finally, we became alarmed. The army was summoned, and many hunting parties were sent out to find the creature. Mundane soldiers, Awakened warriors, Ascended champions, the Eyeless... everyone was determined to catch the abomination. But despite all our efforts, we failed... how could we catch the fog?\"\n\nCassie’s face darkened.\n\n\"And all the while, people continued to disappear. First one or two at a time, then scores of them, and then, one day... we found a whole village that stood empty, not a sign of its inhabitants in sight. Everyone there — every man, woman, and child — was taken by the fog.\"\n\nShe grew silent for a few moments, then added grimly:\n\n\"And then, hunting parties started to disappear, too. Powerful, experienced soldiers... we even lost an Ascended. The worst part, however, was that there was no pattern to the creature’s movements... at least none that we could recognize. It could attack a settlement far to the west one day, and then suddenly take someone far to the east the next. It was almost as if it could be in several places at the same time. Because of that, we couldn’t throw all our forces into one location and corner it on a single island. And so, we constructed a trap for it... all we needed was a lure, and I volunteered to become one.\"\n\nThe blind young woman shook her head.\n\n\"...Of course, back then, I didn’t know that the fiend of the fog was far more cunning and devious than any Nightmare Creature I had ever faced. But I found out... found out very soon. Because that was when I met him again. And as soon as I did, I realized that what we thought of as a trap for the fiend was, instead, a trap that the Prince of War lured us in instead.\"\n\nCassie gritted her teeth.\n\n\"Because while our forces were concentrated to form the encirclement, most of the northern reach remained unprotected. And so, left without defenders, one of the towns was taken by the fog. A thousand souls, gone. Slaughtered...\"\n\nA deep scowl appeared on Sunny’s face. He leaned forward, piercing her with an intense gaze:\n\n\"What? How? If he was engaged in a battle with the forces of the Night Temple, how did the bastard simultaneously attack the settlement?\"\n\nShe lingered for a while, then said with a hint of uncertainty:\n\n\"That... Mordret, he was not how he had been in the future. He had grown... weaker, somehow. As if he did not possess six soul cores anymore. But, instead, there were five strange creatures helping him — like the lesser versions of the one you had killed on the Reckoning island. While we fought the prince himself, the five creatures attacked the town that we had left unprotected, slaughtering every human who lived there.\"\n\nSunny leaned back, stunned.\n\n\"...What?\"\n\n’Five of them... five Reflections? Did he tear his soul apart to create them, granting each a single soul core?’\n\nSuddenly, a frightening thought entered his mind.\n\n’No... no, this can’t be!’\n\nDivine Aspect holders like Mordret and him followed a slightly different path than the rest of the Awakened. Unlike those with Aspects of a lesser Rank, they could create seven soul cores by absorbing fragments — whether of souls or shadows, didn’t matter. But there was still a limit to the number of cores they could create, and to grow more powerful after that, they had to challenge Nightmares like everyone else. So, Mordret’s slaughter did not make any sense. He had already been a Terror in the future, after all.\n\n...Creatures, however, followed a path that was different entirely, and almost reversed. By absorbing fragments, they did not create new soul cores. Instead, they rose in Rank — like Saint, for example, who had to consume shadow fragments from Memories in order to Ascend.\n\nIf Mordret’s Reflections were the same as Saint... if they only needed a certain quantity of fragments to rank up... then there was no limit to how many fragments they could devour, and no end to their growth, not until they reached the mythical Divine Rank.\n\nSo if the Prince of Nothing sacrificed five of his six soul cores to create five Awakened Beasts...\n\n...Then what was their Rank now, after consuming thousands upon thousands of souls?"
+ },
+ "epistemic_candidates": [
+  {
+   "bolum": 412,
+   "cumle": "And those Awakened who had escaped despite everything mistakenly believed that their companions fell to a creature that could mess with people’s sight..."
+  },
+  {
+   "bolum": 412,
+   "cumle": "why had no one thought that it was an actual copy and not a trick on the eye, damn it?!"
+  },
+  {
+   "bolum": 431,
+   "cumle": "But then, a sudden thought appeared in his mind."
+  },
+  {
+   "bolum": 431,
+   "cumle": "Some people believed that the Ivory Tower had once stood in its middle, and was the first island to break free of its chains."
+  },
+  {
+   "bolum": 685,
+   "cumle": "Among the people, it is believed that his soul resides inside the metal colossus that guards the Ivory City and sometimes leads the Sun Legion into battle."
+  },
+  {
+   "bolum": 686,
+   "cumle": "only, by then, no one thought of them as mere rumors anymore.\""
+  },
+  {
+   "bolum": 686,
+   "cumle": "And as soon as I did, I realized that what we thought of as a trap for the fiend was, instead, a trap that the Prince of War lured us in instead.\""
+  },
+  {
+   "bolum": 686,
+   "cumle": "Suddenly, a frightening thought entered his mind."
+  }
+ ]
+}

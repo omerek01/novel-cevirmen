@@ -1,0 +1,9 @@
+{
+  "app\\core\\bilgi_delta.py": "1f2a71b1a11d729b1cda4faab87806e70b1c548e4e9512d0ef677636854ccc8b",
+  "app\\core\\bilgi_kanit.py": "266d969fb2c8ba883ca8964acd1bc6b42e40ad1c17815c6c0af9b1fd716a109b",
+  "app\\core\\varlik_grafigi.py": "6f6dca815f47b16b57afd54a938cb7f69751a49ec27296889c2b4f5bfa5d12e8",
+  "scripts\\validation_v3.py": "b4c0c5ffb15a1736885eb5f0136ea9d64c156adf19603480030c167bf259657e",
+  "reports\\validation-v3\\expected-delta.json": "3932cd9e17eb61766f5f48d1ac7deb71cf3f6df8d7ac39cab897b999f2261f07",
+  "reports\\validation-v3\\v3.json": "a2e9f9096a9f31bd7822321da158b3bad2fb6b60bfaa31d938ce61d62a0377a8",
+  "reports\\validation-v3\\mini.json": "083cc1231a6acad1568bcf25597acab7ea098d7043c2e6ff161a259e91b9bb0a"
+}

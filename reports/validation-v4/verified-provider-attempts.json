@@ -1,0 +1,86 @@
+{
+  "360": [
+    {
+      "tur": "istek",
+      "zaman": 1791381968.804397,
+      "islem": "c4089df62700",
+      "cagri": "5ade2af5e1af",
+      "amac": "varlik_cikarim",
+      "asama": null,
+      "model": "vertex/gemini-3.6-flash",
+      "sonuc": "gecici",
+      "http_kodu": 429,
+      "sure_ms": 59525,
+      "ayrinti": null
+    },
+    {
+      "tur": "istek",
+      "zaman": 1791382017.0012598,
+      "islem": "c4089df62700",
+      "cagri": "5ade2af5e1af",
+      "amac": "varlik_cikarim",
+      "asama": null,
+      "model": "vertex/gemini-3.6-flash",
+      "sonuc": "basari",
+      "http_kodu": 200,
+      "sure_ms": 46182,
+      "ayrinti": null
+    }
+  ],
+  "431": [
+    {
+      "tur": "istek",
+      "zaman": 1791382034.3773806,
+      "islem": "c4089df62700",
+      "cagri": "a93e0dd16e74",
+      "amac": "varlik_cikarim",
+      "asama": null,
+      "model": "vertex/gemini-3.6-flash",
+      "sonuc": "basari",
+      "http_kodu": 200,
+      "sure_ms": 12911,
+      "ayrinti": null
+    }
+  ],
+  "848": [
+    {
+      "tur": "istek",
+      "zaman": 1791382126.9684758,
+      "islem": "c4089df62700",
+      "cagri": "331bf3984b1e",
+      "amac": "varlik_cikarim",
+      "asama": null,
+      "model": "vertex/gemini-3.6-flash",
+      "sonuc": "gecici",
+      "http_kodu": 504,
+      "sure_ms": 87214,
+      "ayrinti": null
+    },
+    {
+      "tur": "istek",
+      "zaman": 1791382144.1611505,
+      "islem": "c4089df62700",
+      "cagri": "331bf3984b1e",
+      "amac": "varlik_cikarim",
+      "asama": null,
+      "model": "vertex/gemini-3.6-flash",
+      "sonuc": "gecici",
+      "http_kodu": 429,
+      "sure_ms": 15182,
+      "ayrinti": null
+    },
+    {
+      "tur": "istek",
+      "zaman": 1791382157.1158917,
+      "islem": "c4089df62700",
+      "cagri": "331bf3984b1e",
+      "amac": "varlik_cikarim",
+      "asama": null,
+      "model": "vertex/gemini-3.6-flash",
+      "sonuc": "gecici",
+      "http_kodu": 429,
+      "sure_ms": 8939,
+      "ayrinti": null
+    }
+  ]
+}

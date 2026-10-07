@@ -1,0 +1,108 @@
+{
+ "items": [
+  {
+   "chapter": 45,
+   "item": "Sunny ogretmeni Nephis",
+   "candidate": true,
+   "model_found": true,
+   "converted": false,
+   "outcome": "rejected entity_not_allowed",
+   "owner": "CANDIDATE PACKET (öncül eksik: cümle ortası 'he' zamiri öncül listesine alınmadı)"
+  },
+  {
+   "chapter": 45,
+   "item": "Sunny role scout",
+   "candidate": true,
+   "model_found": true,
+   "converted": false,
+   "outcome": "rejected role_value_not_in_claim",
+   "owner": "VALIDATOR (iddia penceresi ', who' sınırında kesildi; rol yan cümlede)"
+  },
+  {
+   "chapter": 318,
+   "item": "Kai anisi Blood Arrow",
+   "candidate": true,
+   "model_found": true,
+   "converted": true,
+   "outcome": "review (sahiplik anlamsal doğrulanamadı) — doğru inceleme",
+   "owner": null
+  },
+  {
+   "chapter": 414,
+   "item": "Mirror Beast life_status dead",
+   "candidate": true,
+   "model_found": false,
+   "converted": false,
+   "outcome": "model üretmedi",
+   "owner": "MODEL CLASSIFICATION"
+  },
+  {
+   "chapter": 583,
+   "item": "Sunny dusmani Mordret",
+   "candidate": false,
+   "model_found": true,
+   "converted": true,
+   "outcome": "serbest keşif -> review (doğru inceleme)",
+   "owner": "CANDIDATE GENERATOR ('enmity' ipucu yok)"
+  },
+  {
+   "chapter": 938,
+   "item": "Luster role pilot",
+   "candidate": false,
+   "model_found": true,
+   "converted": true,
+   "outcome": "serbest keşif -> ACCEPTED",
+   "owner": "CANDIDATE GENERATOR ('pilot' rol ipucu yok)"
+  }
+ ],
+ "metrics": {
+  "gold_items": 6,
+  "deterministic_items": 0,
+  "L1_candidate_recall": "4/6=0.67",
+  "L2_model_classification_recall": "5/6=0.83 (aday varken 3/4=0.75)",
+  "L3_validator_conversion": "3/5=0.60",
+  "L4_effective_coverage": "3/6=0.50",
+  "precision_proxy": "1/1 = 1.00 (Luster role pilot)",
+  "review_correctness": "6/6 makul (Kai–Blood Arrow, Sunny–Mordret, First Lord dead, Kai grubu Dreamer Army, Mordret rutbesi Awakened [strongly_implied], Mordret–Valor soy boşluğu)",
+  "provider": {
+   "logical_calls": 10,
+   "attempts": 14,
+   "retries_429": 5,
+   "provider_blocked": [
+    707
+   ],
+   "operational_coverage": "9/10",
+   "free_gemini_calls": 0
+  },
+  "tokens": {
+   "giris_tokeni": 93817,
+   "cikis_tokeni": 1238,
+   "dusunme_tokeni": 24703
+  },
+  "cost_usd": 0.1676,
+  "candidate_counts": {
+   "45": 9,
+   "102": 13,
+   "256": 12,
+   "318": 11,
+   "414": 14,
+   "491": 17,
+   "583": 12,
+   "707": 10,
+   "816": 11,
+   "938": 14
+  },
+  "candidate_tokens": {
+   "45": 392,
+   "102": 574,
+   "256": 493,
+   "318": 451,
+   "414": 570,
+   "491": 755,
+   "583": 552,
+   "707": 396,
+   "816": 504,
+   "938": 505
+  }
+ }
+}

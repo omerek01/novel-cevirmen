@@ -1,0 +1,12 @@
+{
+  "not_model_output": true,
+  "evidence": "The name of the Soul Serpent was dim and lifeless. Sunny could not dismiss or summon the Shadow back after gifting it to Rain, at least not from a distance. He still felt a subtle connection to it, though. He knew that Serpent was alive and well.",
+  "gift": [
+    "verified",
+    "semantic_roles"
+  ],
+  "alive": [
+    true,
+    "named_prose"
+  ]
+}

@@ -1,0 +1,212 @@
+[
+ {
+  "id": 2670,
+  "zaman": 1791376812.1782749,
+  "islem": "58f14672c002",
+  "cagri": "f43e7e357fbd",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 10857
+ },
+ {
+  "id": 2671,
+  "zaman": 1791376838.9556434,
+  "islem": "58f14672c002",
+  "cagri": "78ebac1a7477",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 23954
+ },
+ {
+  "id": 2672,
+  "zaman": 1791376859.0880523,
+  "islem": "58f14672c002",
+  "cagri": "f8bc16f8f056",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 17227
+ },
+ {
+  "id": 2673,
+  "zaman": 1791376872.270787,
+  "islem": "58f14672c002",
+  "cagri": "2a5967cbbc5f",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 10072
+ },
+ {
+  "id": 2674,
+  "zaman": 1791376900.4171023,
+  "islem": "58f14672c002",
+  "cagri": "4d52595640db",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "gecici",
+  "http_kodu": 429,
+  "sure_ms": 25001
+ },
+ {
+  "id": 2675,
+  "zaman": 1791376910.3749647,
+  "islem": "58f14672c002",
+  "cagri": "4d52595640db",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "gecici",
+  "http_kodu": 429,
+  "sure_ms": 7946
+ },
+ {
+  "id": 2676,
+  "zaman": 1791376934.7687156,
+  "islem": "58f14672c002",
+  "cagri": "4d52595640db",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 20383
+ },
+ {
+  "id": 2677,
+  "zaman": 1791376949.8170893,
+  "islem": "58f14672c002",
+  "cagri": "5415bf91266d",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 11625
+ },
+ {
+  "id": 2678,
+  "zaman": 1791376971.1159813,
+  "islem": "58f14672c002",
+  "cagri": "ffe24c5108b7",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 17665
+ },
+ {
+  "id": 2679,
+  "zaman": 1791377002.298068,
+  "islem": "58f14672c002",
+  "cagri": "97291b7d2835",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 26897
+ },
+ {
+  "id": 2680,
+  "zaman": 1791377027.503079,
+  "islem": "58f14672c002",
+  "cagri": "8b3b949b188b",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 20993
+ },
+ {
+  "id": 2681,
+  "zaman": 1791377045.835936,
+  "islem": "58f14672c002",
+  "cagri": "94d8184b69b9",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 14098
+ },
+ {
+  "id": 2682,
+  "zaman": 1791377072.1772192,
+  "islem": "58f14672c002",
+  "cagri": "713bfa615d26",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 21969
+ },
+ {
+  "id": 2683,
+  "zaman": 1791377103.7274766,
+  "islem": "58f14672c002",
+  "cagri": "a2bd71c26087",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 27113
+ },
+ {
+  "id": 2684,
+  "zaman": 1791377123.8207672,
+  "islem": "58f14672c002",
+  "cagri": "b787f93f6675",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 15343
+ },
+ {
+  "id": 2685,
+  "zaman": 1791377138.639637,
+  "islem": "58f14672c002",
+  "cagri": "310020bc0789",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 9733
+ },
+ {
+  "id": 2686,
+  "zaman": 1791377158.9724288,
+  "islem": "58f14672c002",
+  "cagri": "1702d9de0af6",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 14822
+ },
+ {
+  "id": 2687,
+  "zaman": 1791377187.3846254,
+  "islem": "58f14672c002",
+  "cagri": "5ee28caea743",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 22595
+ },
+ {
+  "id": 2688,
+  "zaman": 1791377208.0104568,
+  "islem": "58f14672c002",
+  "cagri": "089171bd2bec",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 14541
+ },
+ {
+  "id": 2689,
+  "zaman": 1791377233.5563586,
+  "islem": "58f14672c002",
+  "cagri": "c34a59ed298c",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 19087
+ },
+ {
+  "id": 2690,
+  "zaman": 1791377257.9974334,
+  "islem": "58f14672c002",
+  "cagri": "fd03ea3b0cff",
+  "model": "vertex/gemini-3.6-flash",
+  "sonuc": "basari",
+  "http_kodu": 200,
+  "sure_ms": 17787
+ }
+]

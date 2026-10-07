@@ -1,0 +1,111 @@
+{
+ "frozen_before_model": true,
+ "created": "2026-10-07",
+ "method": "Kaynak, v8 sistemi dondurulduktan SONRA tam metin olarak okundu (aday süzgeci KULLANILMADI); her aday N-1 grafiğine/durumuna ve aynı-N rün planına karşı salt-okunur denetlendi; LLM kullanılmadı. Kanıt span kimlikleri ofsetlerden.",
+ "holdout_v7_sha256": "db5e06a504b1e6ae184bffa8d974503d79393740444783e19a852a6023df2730",
+ "frozen_system_sha256": "1438eafee3dbef444d469446ac66cf804c878ae224c1238a4291ff45c764b7fc",
+ "empty_gold_chapters": {
+  "102": "Adsız heykel/örümcekler; adlı yeni bilgi yok.",
+  "256": "Gunlaug unvani Bright Lord b142'den; casus adsız.",
+  "491": "Adsız Awakened/Anı; adlı yeni bilgi yok.",
+  "707": "Sun Prince rütbesi b685'ten; 'Chain Lord' yalnız örtük eşgönderim.",
+  "816": "Jet/Soul Reaper/Irregular Company bağları b501–814'ten."
+ },
+ "items": [
+  {
+   "chapter": 45,
+   "subject": "Sunny",
+   "knowledge_type": "teaching",
+   "relation_or_state": "ogretmeni",
+   "object_or_value": "Nephis",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "evidence_span_ids": [
+    "ch45:p134:s1"
+   ],
+   "exact_evidence": "Despite how good of a teacher Nephis was, he only practiced with the sword for a day.",
+   "n1_audit": "Sunny ogretmeni Nephis grafikte ilk b213; N-1=44'te yok"
+  },
+  {
+   "chapter": 45,
+   "subject": "Sunny",
+   "knowledge_type": "role",
+   "relation_or_state": "role",
+   "object_or_value": "scout",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "evidence_span_ids": [
+    "ch45:p120:s0"
+   ],
+   "exact_evidence": "Sunny, who played the role of the scout and navigator",
+   "n1_audit": "Sunny Görev değeri yok"
+  },
+  {
+   "chapter": 318,
+   "subject": "Kai",
+   "knowledge_type": "relationship",
+   "relation_or_state": "anisi",
+   "object_or_value": "Blood Arrow",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "evidence_span_ids": [
+    "ch318:p66:s1"
+   ],
+   "exact_evidence": "Kai felt the weakness that overtook him every time he summoned the morbid Memory dissipate, and called upon the Blood Arrow again.",
+   "acceptable_alternatives": [
+    {
+     "representation": "capability_gap_allowed",
+     "note": "Sunny'nin Anısının aktarımı (b204 Sunny anisi)"
+    }
+   ],
+   "n1_audit": "N-1'de yalnız Sunny anisi Blood Arrow (b204)"
+  },
+  {
+   "chapter": 414,
+   "subject": "Mirror Beast",
+   "knowledge_type": "life_status",
+   "relation_or_state": "life_status",
+   "object_or_value": "dead",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "evidence_span_ids": [
+    "ch414:p42:s0"
+   ],
+   "exact_evidence": "just like what had happened after Mirror Beast’s death",
+   "n1_audit": "b413 Sunny oldurdu Mirror Beast (rün) var; Yaşam DEĞERİ yok — tamamlayıcı bilgi"
+  },
+  {
+   "chapter": 583,
+   "subject": "Sunny",
+   "knowledge_type": "relationship",
+   "relation_or_state": "dusmani",
+   "object_or_value": "Mordret",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "evidence_span_ids": [
+    "ch583:p10:s2"
+   ],
+   "exact_evidence": "Their enmity was personal",
+   "acceptable_alternatives": [
+    {
+     "representation": "review"
+    }
+   ],
+   "n1_audit": "Mordret dusmani Sunny grafikte ilk b590; N-1=582'de yok"
+  },
+  {
+   "chapter": 938,
+   "subject": "Luster",
+   "knowledge_type": "role",
+   "relation_or_state": "role",
+   "object_or_value": "pilot",
+   "epistemic": "confirmed",
+   "representation": "model",
+   "evidence_span_ids": [
+    "ch938:p78:s1"
+   ],
+   "exact_evidence": "Luster was their best pilot, so he would have to remain with the Rhino",
+   "n1_audit": "Luster Görev değeri yok"
+  }
+ ]
+}

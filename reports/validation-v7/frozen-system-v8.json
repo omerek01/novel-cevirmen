@@ -1,0 +1,73 @@
+{
+ "frozen_before_new_holdout_source_read": true,
+ "files": {
+  "app/core/bilgi_aday.py": "2154c5ffe85d06d8c92fec7e9c77867e8d02b104912fdf915f2f82d0f262a30e",
+  "app/core/bilgi_delta.py": "8a1067d208201c3fe3803a428acd7385ae8810e47eeb349613b009f138b99a0d",
+  "app/core/bilgi_kanit.py": "2f549d5628bdcf61208e4a38d106a3e818b10af935afde40ac8be7264463963c",
+  "app/core/varlik_grafigi.py": "8de8b7d723365bace19694c63a23252f0907dd39b810b2e87f805471b848ddf3",
+  "app/core/kapsama_ipuclari.py": "211889195e07e14fcacfb31db4d2c76a1afb53cdb874054773a3ea9e573b7dc1",
+  "app/core/varlik_cikarim.py": "177ac441fd1782415725d1b1fe1a2e3aca106d51446f531f0ea6e3150906ff68",
+  "app/core/translate.py": "b5152949abc2c55b7baeeeda97f32457c04bb99aa89e8e27a7477f04d48dbe61",
+  "app/core/glossary.py": "48f14e50b86e0b8fbfdde408a10c1aef99798bfee37e9acdd288f640a4b2f90a",
+  "scripts/validation_v5.py": "4ef07a17f950eadd0a39e9daeb69ad7e9d0d19d10b022eb588ed0febd0da872f",
+  "scripts/validation_v3.py": "b4c0c5ffb15a1736885eb5f0136ea9d64c156adf19603480030c167bf259657e"
+ },
+ "prompt_sha256": "ffbbc5d91162b48ff8ac34c34cce94b3a83df91ea207c86384f9aa5e5de11cb0",
+ "schema_sha256": "eba7a878db41452da630cdbf64c362349650fb3378cb8ce3a07a60c1ba27c5c7",
+ "versions": {
+  "extractor": "8",
+  "prompt": "7",
+  "schema": "delta-4-span-evidence"
+ },
+ "risk_tiers": {
+  "high_impact": [
+   "donustu",
+   "gercek_adi",
+   "oldurdu",
+   "life_status",
+   "identity_revelation",
+   "update"
+  ],
+  "semantic_required": [
+   "akrabasi",
+   "anisi",
+   "dusmani",
+   "efsunu",
+   "golgesi",
+   "gorunusu",
+   "kendi_golgesi",
+   "kusuru",
+   "niteligi",
+   "ruya_capasi",
+   "yanki",
+   "yetenegi",
+   "yoldasi"
+  ],
+  "structural": [
+   "bicimi",
+   "bulundugu_yer",
+   "esya_turu",
+   "grubu",
+   "klani",
+   "lideri",
+   "ogretmeni",
+   "parcasi",
+   "rutbesi",
+   "sinifi",
+   "takma_adi",
+   "turu",
+   "unvani",
+   "ust_basamak"
+  ]
+ },
+ "limits": {
+  "candidates": 24,
+  "candidate_token_cap": 1600,
+  "free_discoveries": 3,
+  "evidence_spans": 3
+ },
+ "context_budget": 4000,
+ "model": "vertex/gemini-3.8-flash",
+ "default_CIKARICI_MODELI_unchanged": "vertex/gemini-3.6-flash",
+ "holdout_v7_sha256": "db5e06a504b1e6ae184bffa8d974503d79393740444783e19a852a6023df2730"
+}

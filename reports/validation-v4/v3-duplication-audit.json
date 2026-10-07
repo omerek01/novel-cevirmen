@@ -1,0 +1,57 @@
+{
+  "items": [
+    {
+      "item": {
+        "ozne": "Sunny",
+        "iliski": "anisi",
+        "nesne": "Puppeteer's Shroud"
+      },
+      "primary_category": "D",
+      "contributing_category": "B",
+      "reason": "Canonical triple was in pre-call deterministic context; output repeated it. Shroud also showed curly/straight apostrophe presentation mismatch. Internal model cause is unobservable.",
+      "A": false,
+      "C": false,
+      "E": false
+    },
+    {
+      "item": {
+        "ozne": "Sunny",
+        "iliski": "gorunusu",
+        "nesne": "Shadow Slave"
+      },
+      "primary_category": "D",
+      "contributing_category": null,
+      "reason": "Canonical triple was in pre-call deterministic context; output repeated it. Shroud also showed curly/straight apostrophe presentation mismatch. Internal model cause is unobservable.",
+      "A": false,
+      "C": false,
+      "E": false
+    },
+    {
+      "item": {
+        "ozne": "Shadow Slave",
+        "iliski": "rutbesi",
+        "nesne": "Divine"
+      },
+      "primary_category": "D",
+      "contributing_category": null,
+      "reason": "Canonical triple was in pre-call deterministic context; output repeated it. Shroud also showed curly/straight apostrophe presentation mismatch. Internal model cause is unobservable.",
+      "A": false,
+      "C": false,
+      "E": false
+    },
+    {
+      "item": {
+        "ozne": "Sunny",
+        "iliski": "yetenegi",
+        "nesne": "Shadow Bond"
+      },
+      "primary_category": "D",
+      "contributing_category": null,
+      "reason": "Canonical triple was in pre-call deterministic context; output repeated it. Shroud also showed curly/straight apostrophe presentation mismatch. Internal model cause is unobservable.",
+      "A": false,
+      "C": false,
+      "E": false
+    }
+  ],
+  "v4_fix": "shared canonical_plan/triple normalization; named-field JSON rows; internal _evrim excluded; exact-only suppression before model"
+}

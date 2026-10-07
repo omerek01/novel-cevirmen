@@ -1,0 +1,8 @@
+{
+  "app\\core\\bilgi_delta.py": "5ab7b10c37abbad6a89393611d2a5db8bf54f01bf2b2eabf9352d4be85edb3a2",
+  "app\\core\\bilgi_kanit.py": "5438b86e825f59e2d1b20a088eddef501cdd9d5b9d5dffa6945c95d29bbfd2fe",
+  "scripts\\validation_v4.py": "89cf2c5c3cb7d15a996c32398fdc2d68b9792f4391641beb68e72c80f01d3580",
+  "reports\\validation-v4\\expected-delta.json": "0d2fbead465291f1f50269f1cf026299a50daad1e79ffb39981ebb3a4426610f",
+  "reports\\validation-v4\\v4.json": "02723d77da9f35235b06b5fce6889d1b5d856480fd69035a41be58b9e1ec33b4",
+  "reports\\validation-v4\\v3-validator-replay.json": "44e0490bc368b7a41f391df8bd1a679b8b660cb1559676f03eb0c1954d7185e2"
+}

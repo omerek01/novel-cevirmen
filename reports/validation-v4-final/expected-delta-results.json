@@ -1,0 +1,112 @@
+[
+  {
+    "chapter": 360,
+    "knowledge_type": "existing_relationship_conflict",
+    "subject": "Sunny",
+    "relation_state": "yoldasi",
+    "object_value": "Cassie",
+    "epistemic_status": "confirmed",
+    "representation": "review",
+    "outcome": "ACCEPTED"
+  },
+  {
+    "chapter": 431,
+    "knowledge_type": "historical_location_belief",
+    "subject": "Ivory Tower",
+    "relation_state": "bulundugu_yer",
+    "object_value": "Tear",
+    "epistemic_status": "believed",
+    "representation": "model",
+    "outcome": "ACCEPTED"
+  },
+  {
+    "chapter": 848,
+    "knowledge_type": "transfer_or_entrustment",
+    "subject": "Rain",
+    "relation_state": "MISSING_RELATION_CAPABILITY",
+    "object_value": "Soul Serpent",
+    "epistemic_status": "confirmed",
+    "representation": "capability_gap_allowed",
+    "outcome": "ACCEPTED"
+  },
+  {
+    "chapter": 848,
+    "knowledge_type": "life_status",
+    "subject": "Soul Serpent",
+    "relation_state": "life_status",
+    "object_value": "alive",
+    "epistemic_status": "confirmed",
+    "representation": "model",
+    "outcome": "ACCEPTED"
+  },
+  {
+    "chapter": 162,
+    "knowledge_type": "explicit_system_kill",
+    "subject": "Sunny",
+    "relation_state": "oldurdu",
+    "object_value": "Harper",
+    "epistemic_status": "confirmed",
+    "representation": "deterministic",
+    "outcome": "DETERMINISTIC_COVERED"
+  },
+  {
+    "chapter": 162,
+    "knowledge_type": "explicit_system_death",
+    "subject": "Harper",
+    "relation_state": "life_status",
+    "object_value": "dead",
+    "epistemic_status": "confirmed",
+    "representation": "deterministic",
+    "outcome": "DETERMINISTIC_COVERED"
+  },
+  {
+    "chapter": 313,
+    "knowledge_type": "explicit_prose_death",
+    "subject": "Kido",
+    "relation_state": "life_status",
+    "object_value": "dead",
+    "epistemic_status": "confirmed",
+    "representation": "model",
+    "outcome": "MISSING_OR_REJECTED"
+  },
+  {
+    "chapter": 670,
+    "knowledge_type": "teacher_direction",
+    "subject": "Sunny",
+    "relation_state": "ogretmeni",
+    "object_value": "Effie",
+    "epistemic_status": "confirmed",
+    "representation": "model",
+    "outcome": "MISSING_OR_REJECTED"
+  },
+  {
+    "chapter": 691,
+    "knowledge_type": "title",
+    "subject": "Nether",
+    "relation_state": "unvani",
+    "object_value": "Demon of Destiny",
+    "epistemic_status": "confirmed",
+    "representation": "model",
+    "outcome": "ACCEPTED"
+  },
+  {
+    "chapter": 691,
+    "knowledge_type": "title",
+    "subject": "Nether",
+    "relation_state": "unvani",
+    "object_value": "Prince of the Underworld",
+    "epistemic_status": "confirmed",
+    "representation": "model",
+    "outcome": "MISSING_OR_REJECTED"
+  },
+  {
+    "chapter": 691,
+    "knowledge_type": "title",
+    "subject": "Hope",
+    "relation_state": "unvani",
+    "object_value": "Demon of Desire",
+    "epistemic_status": "confirmed",
+    "representation": "model",
+    "outcome": "MISSING_OR_REJECTED"
+  }
+]

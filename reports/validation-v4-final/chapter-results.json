@@ -1,0 +1,93 @@
+[
+  {
+    "chapter": 360,
+    "provider_status": "SUCCESS",
+    "expected_items": 1,
+    "model_found": 1,
+    "validator_accepted": 1,
+    "review_correct": 1,
+    "capability_gap": 0,
+    "wrong_items": 0,
+    "missing_items": 0,
+    "result": "PASS",
+    "deterministic_coverage": 0
+  },
+  {
+    "chapter": 431,
+    "provider_status": "CARRIED_V4_SUCCESS",
+    "expected_items": 1,
+    "model_found": 1,
+    "validator_accepted": 1,
+    "review_correct": 0,
+    "capability_gap": 0,
+    "wrong_items": 0,
+    "missing_items": 0,
+    "result": "PASS",
+    "deterministic_coverage": 0
+  },
+  {
+    "chapter": 848,
+    "provider_status": "SUCCESS",
+    "expected_items": 2,
+    "model_found": 2,
+    "validator_accepted": 2,
+    "review_correct": 0,
+    "capability_gap": 1,
+    "wrong_items": 0,
+    "missing_items": 0,
+    "result": "PASS",
+    "deterministic_coverage": 0
+  },
+  {
+    "chapter": 162,
+    "provider_status": "SUCCESS",
+    "expected_items": 2,
+    "model_found": 0,
+    "validator_accepted": 0,
+    "review_correct": 0,
+    "capability_gap": 0,
+    "wrong_items": 0,
+    "missing_items": 0,
+    "result": "PASS",
+    "deterministic_coverage": 2
+  },
+  {
+    "chapter": 313,
+    "provider_status": "SUCCESS",
+    "expected_items": 1,
+    "model_found": 0,
+    "validator_accepted": 0,
+    "review_correct": 0,
+    "capability_gap": 0,
+    "wrong_items": 2,
+    "missing_items": 1,
+    "result": "MODEL_FAIL",
+    "deterministic_coverage": 0
+  },
+  {
+    "chapter": 670,
+    "provider_status": "SUCCESS",
+    "expected_items": 1,
+    "model_found": 0,
+    "validator_accepted": 0,
+    "review_correct": 0,
+    "capability_gap": 0,
+    "wrong_items": 0,
+    "missing_items": 1,
+    "result": "MODEL_FAIL",
+    "deterministic_coverage": 0
+  },
+  {
+    "chapter": 691,
+    "provider_status": "SUCCESS",
+    "expected_items": 3,
+    "model_found": 2,
+    "validator_accepted": 1,
+    "review_correct": 0,
+    "capability_gap": 0,
+    "wrong_items": 2,
+    "missing_items": 2,
+    "result": "MODEL_FAIL",
+    "deterministic_coverage": 0
+  }
+]

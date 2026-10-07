@@ -1,0 +1,80 @@
+{
+  "decision": "REPEAT VALIDATION",
+  "stop_reason": "360 malformed/unusable review; 848 provider failure 504 -> 429 -> 429",
+  "planned_chapters": [
+    360,
+    431,
+    848,
+    162,
+    313,
+    670,
+    691
+  ],
+  "model_attempted_chapters": [
+    360,
+    431,
+    848
+  ],
+  "model_not_run_chapters": [
+    162,
+    313,
+    670,
+    691
+  ],
+  "logical_model_calls": 3,
+  "provider_attempts": 6,
+  "schema_failures": 0,
+  "model_failures": 1,
+  "future_knowledge_violations": 0,
+  "wrong_direction_accepted": 0,
+  "high_impact_unsupported_accepted": 0,
+  "unsupported_review_accepted": 0,
+  "true_name_confusions": 0,
+  "deterministic_same_chapter_duplicates_raw": 0,
+  "deterministic_duplicates_written": 0,
+  "expected_model_items": 9,
+  "expected_model_items_with_returned_output": 2,
+  "expected_model_items_provider_unmeasured": 2,
+  "expected_model_items_not_run": 5,
+  "model_found": 1,
+  "validator_accepted": 1,
+  "review_correct": 0,
+  "capability_gaps_detected": 0,
+  "missing_expected_items": 1,
+  "unmeasured_expected_items": 7,
+  "precision_proxy": 1.0,
+  "precision_proxy_denominator": 2,
+  "recall_proxy": 0.5,
+  "recall_proxy_denominator": 2,
+  "primary_end_to_end_recall_proxy": 0.25,
+  "final_seven_chapter_recall_proxy": null,
+  "cost_successful_usage_estimate_usd": 0.0453615,
+  "failed_attempt_cost_unknown": true,
+  "statuses": {
+    "confirmed": 2,
+    "believed": 1
+  },
+  "protected_tables_unchanged": true,
+  "fixture_unchanged": true,
+  "backfill_started": false,
+  "special_results": {
+    "360": {
+      "relationship_conflict_detected_raw": true,
+      "evidence_bounded": false,
+      "review_useful": false,
+      "validator_review_accepted": false
+    },
+    "431": {
+      "collective_belief_detected": true,
+      "status_believed": true,
+      "temporal_range_not_fabricated": true
+    },
+    "848": {
+      "transfer_detected": null,
+      "correct_representation_or_gap": null,
+      "alive_detected": null,
+      "rune_duplicate_written": false,
+      "reason": "no model response: provider failure"
+    }
+  }
+}

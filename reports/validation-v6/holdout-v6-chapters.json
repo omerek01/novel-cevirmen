@@ -1,0 +1,145 @@
+{
+ "frozen_before_code_changes": true,
+ "frozen_before_reading_source": true,
+ "seed": 20261007,
+ "method": "1\u2013946 aral\u0131\u011f\u0131 10 e\u015fit dilime b\u00f6l\u00fcnd\u00fc; her dilimde (kaynak var, kelime say\u0131s\u0131 1000\u20132500, \u00f6nceki do\u011frulama/holdout b\u00f6l\u00fcmleri hari\u00e7) adaylar aras\u0131ndan random.Random(seed).choice. Yaln\u0131z b\u00f6l\u00fcm numaras\u0131 ve kelime say\u0131s\u0131 kullan\u0131ld\u0131; i\u00e7erik okunmad\u0131.",
+ "excluded": [
+  2,
+  15,
+  24,
+  61,
+  83,
+  106,
+  162,
+  187,
+  273,
+  313,
+  343,
+  352,
+  360,
+  374,
+  381,
+  394,
+  412,
+  431,
+  479,
+  542,
+  555,
+  590,
+  670,
+  681,
+  685,
+  686,
+  691,
+  744,
+  782,
+  822,
+  848,
+  887,
+  923
+ ],
+ "chapters": [
+  33,
+  141,
+  199,
+  322,
+  460,
+  556,
+  659,
+  740,
+  769,
+  888
+ ],
+ "bins": [
+  {
+   "bin": [
+    1,
+    94
+   ],
+   "chapter": 33,
+   "word_count": 1383,
+   "eligible": 89
+  },
+  {
+   "bin": [
+    95,
+    189
+   ],
+   "chapter": 141,
+   "word_count": 1069,
+   "eligible": 92
+  },
+  {
+   "bin": [
+    190,
+    283
+   ],
+   "chapter": 199,
+   "word_count": 1318,
+   "eligible": 93
+  },
+  {
+   "bin": [
+    284,
+    378
+   ],
+   "chapter": 322,
+   "word_count": 1286,
+   "eligible": 90
+  },
+  {
+   "bin": [
+    379,
+    473
+   ],
+   "chapter": 460,
+   "word_count": 1824,
+   "eligible": 91
+  },
+  {
+   "bin": [
+    474,
+    567
+   ],
+   "chapter": 556,
+   "word_count": 1163,
+   "eligible": 91
+  },
+  {
+   "bin": [
+    568,
+    662
+   ],
+   "chapter": 659,
+   "word_count": 1053,
+   "eligible": 94
+  },
+  {
+   "bin": [
+    663,
+    756
+   ],
+   "chapter": 740,
+   "word_count": 1225,
+   "eligible": 88
+  },
+  {
+   "bin": [
+    757,
+    851
+   ],
+   "chapter": 769,
+   "word_count": 1129,
+   "eligible": 92
+  },
+  {
+   "bin": [
+    852,
+    946
+   ],
+   "chapter": 888,
+   "word_count": 1222,
+   "eligible": 93
+  }
+ ]
+}

@@ -1,0 +1,145 @@
+[
+ {
+  "bolum": 2,
+  "durum": "dogrulama",
+  "girdi_bilgisi": [
+   "VARLIK Abilities -> Yetenekler",
+   "VARLIK Armor -> Zırh",
+   "VARLIK Aspect -> Görünüş",
+   "VARLIK Aspect Description -> Görünüş Açıklaması",
+   "VARLIK Aspects -> Görünüşler",
+   "VARLIK Aspirant -> Aday",
+   "VARLIK Aspirants -> Adaylar",
+   "VARLIK Attribute -> Nitelik",
+   "VARLIK Attributes -> Nitelikler",
+   "VARLIK Child of Shadows -> Gölgelerin Çocuğu",
+   "VARLIK Dormant -> Uykuda",
+   "VARLIK Echo -> Yankı",
+   "VARLIK Echoes -> Yankılar",
+   "VARLIK Empire -> İmparatorluk",
+   "VARLIK Fated -> Yazgılı",
+   "VARLIK First Nightmare -> İlk Kabus",
+   "VARLIK First Nightmares -> İlk Kabuslar",
+   "VARLIK First Trial -> İlk Sınav",
+   "VARLIK Fool -> Aptal",
+   "VARLIK Hollow -> Kovan",
+   "VARLIK Imperials -> İmparatorluk askerleri",
+   "VARLIK Lost -> Kayıplar",
+   "VARLIK Mark of Divinity -> İlahiyat İşareti",
+   "VARLIK Memories -> Anılar",
+   "VARLIK Nightmare -> Kabus",
+   "VARLIK Nightmare Spell -> Kabus Büyüsü",
+   "VARLIK Nightmares -> Kabuslar",
+   "VARLIK Rank -> Rütbe",
+   "VARLIK Shadow -> Gölge",
+   "VARLIK Shadow God -> Gölge Tanrısı",
+   "VARLIK Shadows -> Gölgeler",
+   "VARLIK Skill -> Beceri",
+   "VARLIK Skills -> Beceriler",
+   "VARLIK Soul Core -> Ruh Çekirdeği",
+   "VARLIK Spell -> Büyü",
+   "VARLIK Strong -> Güçlü",
+   "VARLIK Sun -> Güneş",
+   "VARLIK Sunless -> Sunless",
+   "VARLIK Sunny -> Sunny",
+   "VARLIK Temple Slave -> Tapınak Kölesi",
+   "VARLIK Trials -> Sınavlar",
+   "VARLIK True Name -> Gerçek İsim",
+   "VARLIK War -> Savaş",
+   "VARLIK War God -> Savaş Tanrısı",
+   "VARLIK Warriors -> Savaşçılar",
+   "BAĞ Sunny --takma_adi--> Sunless (öğrenildi b1, confirmed, manual)",
+   "BAĞ Dormant --ust_basamak--> Awakened (öğrenildi b1, confirmed, manual)"
+  ],
+  "deterministik_bilgi": [
+   "BAĞ Sunny --niteligi--> Fated (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Mark of Divinity (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --niteligi--> Child of Shadows (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --gorunusu--> Temple Slave (öğrenildi b2, confirmed, sistem)",
+   "BAĞ Sunny --rutbesi--> Aspirant (öğrenildi b2, confirmed, sistem)"
+  ],
+  "hata_sinifi": null,
+  "surumler": {
+   "cikarici": "2",
+   "istem": "2",
+   "sema": "delta-2"
+  },
+  "olcum": {
+   "kaynak_tokeni": 2196,
+   "baglam_tokeni": 413,
+   "run_tokeni": 94,
+   "kesilen_satir": 0,
+   "aday_satir": 47,
+   "giren_satir": 47,
+   "sinif": {
+    "varlik": {
+     "aday": 45,
+     "giren": 45,
+     "kesilen": 0
+    },
+    "kimlik": {
+     "aday": 1,
+     "giren": 1,
+     "kesilen": 0
+    },
+    "durum": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "dogrudan_yeni": {
+     "aday": 1,
+     "giren": 1,
+     "kesilen": 0
+    },
+    "dogrudan_eski": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    },
+    "kimlik_sorusu": {
+     "aday": 0,
+     "giren": 0,
+     "kesilen": 0
+    }
+   },
+   "fiili_model": "vertex/gemini-3.6-flash",
+   "giris_tokeni": 7709,
+   "cikis_tokeni": 68,
+   "dusunme_tokeni": 1719,
+   "sure_sn": 14.78,
+   "model_attempts": 1,
+   "model_retries": 0
+  },
+  "ham_yanit": "{\n  \"new_relationships\": [],\n  \"new_aliases\": [],\n  \"relationship_updates\": [],\n  \"state_changes\": [],\n  \"identity_revelations\": [],\n  \"contradictions\": [],\n  \"new_entities\": [],\n  \"review_items\": []\n}",
+  "model_deltasi": {
+   "new_relationships": [],
+   "new_aliases": [],
+   "relationship_updates": [],
+   "state_changes": [],
+   "identity_revelations": [],
+   "contradictions": [],
+   "new_entities": [],
+   "review_items": []
+  },
+  "sema_hatalari": [],
+  "degerlendirme": {
+   "oneriler": [],
+   "inceleme": [],
+   "sayac": {
+    "already_known_proposals": 0,
+    "deterministic_same_chapter_duplicates": 0,
+    "unsupported_state_keys": 0,
+    "new_entity_candidates": 0
+   }
+  },
+  "api_cagrilari": [
+   {
+    "model": "vertex/gemini-3.6-flash",
+    "sonuc": "basari",
+    "kod": null,
+    "sure_ms": null
+   }
+  ]
+ }
+]
