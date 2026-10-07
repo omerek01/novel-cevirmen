@@ -1186,8 +1186,14 @@ def translate_chapter(
     models: tuple[str, ...] | None = None,
     prev_context: str = "",
     kosullar: dict[str, str] | None = None,
+    anlamlar: list[dict] | None = None,
+    bolum_no: int | None = None,
 ) -> dict:
     """Tüm bölümü parçalayıp çevirir; bağlamı taşır, yeni isimleri biriktirir.
+
+    ``anlamlar``: çift anlamlı ADLARIN tanımları (`varlik_grafigi.ceviri_anlamlari`);
+    verilirse her parçada geçişler sınıflanır ve talimata paragraf numaralı ipucu
+    eklenir (`anlam_ipucu`). Verilmezse talimat bayt bayt aynıdır.
 
     İşaretçi (``[[n]]``) ile paragraf-hizalı üretir: dönen ``translation`` ve ``source``
     AYNI ``\\n\\n`` paragraf sayısına sahiptir (i. Türkçe paragraf <-> i. İngilizce
@@ -1225,8 +1231,9 @@ def translate_chapter(
 
     for chunk in chunks:
         chunk_en = [p.strip() for p in chunk.split("\n\n") if p.strip()]
+        ipucu = anlam_ipucu(chunk_en, anlamlar, bolum_no)
         result = _translate_chunk(
-            client_factory, models, chunk_en, glossary, prev_tail, kosullar,
+            client_factory, models, chunk_en, glossary, prev_tail, kosullar, ipucu,
         )
         # KISALMA (özetleme) onarımı, PARÇA düzeyinde ve TEK TUR.
         #
@@ -1242,7 +1249,7 @@ def translate_chapter(
         if kisalmis_mi(oran):
             with api_durum.baglam(asama="kisalma_onarimi"):
                 yeniden = _translate_chunk(
-                    client_factory, models, chunk_en, glossary, prev_tail, kosullar,
+                    client_factory, models, chunk_en, glossary, prev_tail, kosullar, ipucu,
                 )
             yeni_oran = uzunluk_orani(
                 _strip_markers(yeniden.get("translation") or ""), chunk
@@ -2379,6 +2386,7 @@ def _translate_chunk(
     glossary: dict[str, str],
     prev_tail: str,
     kosullar: dict[str, str] | None = None,
+    anlam_ipucu_metni: str = "",
 ) -> dict:
     """Bir parçayı Gemini ile çevirir (model yedek zinciriyle).
 
@@ -2386,7 +2394,7 @@ def _translate_chunk(
     tutulur: uzun bölümde ilk parça kotayı bitirip sonraki parçalar bir alt halkaya
     düşebiliyor, tek bir "bölümün modeli" varsayımı yanlış olurdu.
     """
-    user = _build_user_prompt(en_paras, glossary, prev_tail, kosullar)
+    user = _build_user_prompt(en_paras, glossary, prev_tail, kosullar, anlam_ipucu_metni)
     # Fabrika ÇAĞRILMADAN geçirilir: Gemini istemcisi ancak gerçekten bir Gemini
     # halkasına inilirse kurulur. Peşinen kurmak, çeviri yalnız Mistral'e gitse
     # bile GEMINI_API_KEY'i zorunlu kılıyordu.
@@ -2474,11 +2482,48 @@ def _gercek_kosul(kosul: str | None) -> str:
     return _kosul_parcalari(kosul)[0]
 
 
+def anlam_ipucu(en_paras: list[str], anlamlar: list[dict] | None, bolum_no: int | None) -> str:
+    """Çift anlamlı ADLARIN bu parçadaki kesin sınıflanmış geçişleri için talimat bloğu.
+
+    Genel mekanizma (kitaba özel kod yok): tanımlar sözlükte "bu bir ad" diye
+    işaretlenmiş ek anlamlardan gelir. Yalnız KESİN sınıflanan paragraflar yazılır;
+    belirsizler ("the Saint") sözlük koşuluna ve modele kalır. Parçada kesin geçiş
+    yoksa boş döner — o zaman talimat bayt bayt aynıdır."""
+    if not anlamlar:
+        return ""
+    from . import anlam_ayirici
+
+    satirlar = []
+    for a in anlamlar:
+        isaret = anlam_ayirici.paragraf_isaretleri(en_paras, a["kayit"], bolum_no, a["ayirici"])
+        if not isaret:
+            continue
+        anlam = sorted(i + 1 for i, s in isaret.items() if "anlam" in s)
+        taban = sorted(i + 1 for i, s in isaret.items() if "taban" in s)
+        parca = []
+        if anlam:
+            parca.append(", ".join(f"[[{n}]]" for n in anlam)
+                         + f' → {a["anlam_aciklama"]}: "{a["anlam_karsilik"]}" yaz')
+        if taban:
+            parca.append(", ".join(f"[[{n}]]" for n in taban)
+                         + f' → asıl anlam: "{a["taban_karsilik"]}" yaz')
+        satirlar.append(f'- "{a["kayit"]}": ' + " | ".join(parca))
+    if not satirlar:
+        return ""
+    return (
+        "ÇİFT ANLAMLI ADLAR — aşağıdaki paragraflarda kelimenin hangi anlamda geçtiği "
+        "metinden KESİN olarak belirlendi; o paragraflarda belirtilen karşılığı kullan "
+        "(Türkçe ek gerekiyorsa getir). Listede olmayan geçişlerde sözlük koşuluna göre karar ver:\n"
+        + "\n".join(satirlar)
+    )
+
+
 def _build_user_prompt(
     en_paras: list[str],
     glossary: dict[str, str],
     prev_tail: str,
     kosullar: dict[str, str] | None = None,
+    anlam_ipucu_metni: str = "",
 ) -> str:
     """Çeviri promptunu kurar. Bölümlerin SIRASI load-bearing — bkz. SON HATIRLATMA.
 
@@ -2529,7 +2574,8 @@ def _build_user_prompt(
         f"SÖZLÜK — YALNIZ bu terimler için geçerli (kaynak -> karşılık); kaynağı "
         f"görünce karşılığını yaz, cümle gerektiriyorsa Türkçe ekini getir; "
         f"listede OLMAYAN kelimelere bu karşılıkları UYGULAMA: {glossary_str}\n\n"
-        f"ÖNCEKİ ÇEVİRİNİN SONU (sadece bağlam, tekrar çevirme): "
+        + (f"{anlam_ipucu_metni}\n\n" if anlam_ipucu_metni else "")
+        + f"ÖNCEKİ ÇEVİRİNİN SONU (sadece bağlam, tekrar çevirme): "
         f"{prev_tail or '(yok)'}\n\n"
         f"ÇEVRİLECEK METİN (her paragraf [[n]] ile numaralı; işaretleri koru):\n{numbered}"
     )

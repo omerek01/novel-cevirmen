@@ -329,6 +329,42 @@ def anlam_kurallari(book_slug: str) -> dict[str, dict]:
         conn.close()
 
 
+def rutbe_sozcukleri(book_slug: str) -> tuple[str, ...]:
+    """Kitabın RÜTBE adları, grafikten (kitaba özel liste yok): `rutbesi` bağının
+    nesneleri + profil dizileri. Geçiş sınıflayıcısı "Master, and Saint" gibi
+    sayımları bunlarla tanır."""
+    p = profil(book_slug) or {}
+    adlar = {x for dizi in p.get("diziler", {}).values() for x in dizi} | set(p.get("ek_rutbeler", ()))
+    adlar |= {b["hedef"] for b in baglar(book_slug) if b["iliski"] == "rutbesi" and not b["hedef_anlam"]}
+    return tuple(sorted(a for a in adlar if a and a[:1].isupper()))
+
+
+def ceviri_anlamlari(book_slug: str) -> list[dict]:
+    """Çeviri talimatı için çift anlamlı ADLAR (`translate.anlam_ipucu` girdisi).
+
+    Her kitapta aynı yoldan gelir: sözlükte "bu bir ad" diye işaretlenmiş ek anlamlar
+    ve (varsa) profil kuralları. Rütbe sözcükleri o kitabın grafiğinden eklenir."""
+    kurallar = anlam_kurallari(book_slug)
+    if not kurallar:
+        return []
+    satirlar = {r["kimlik"]: r for r in glossary.get_glossary_rows(book_slug)}
+    rutbeler = rutbe_sozcukleri(book_slug)
+    out = []
+    for kimlik, kural in kurallar.items():
+        r = satirlar.get(kimlik)
+        if not r:
+            continue
+        ayirici = dict(kural.get("ayirici") or {})
+        ayirici["taban_oncesi"] = tuple(dict.fromkeys(
+            (*ayirici.get("taban_oncesi", ()), *rutbeler, *(f"{x}s" for x in rutbeler))
+        ))
+        out.append({
+            "kayit": r["source"], "taban_karsilik": r["target"], "anlam_karsilik": kural["karsilik"],
+            "anlam_aciklama": kural.get("etiket", kural["anlam"]), "ayirici": ayirici,
+        })
+    return out
+
+
 def anlam_sec(book_slug: str, kaynak_kimlik: str | None, iliski: str, hedef_kimlik: str | None,
               kurallar: dict | None = None) -> tuple[str | None, str | None]:
     """Bağın uçlarını doğru ANLAM düğümüne yönelt (bkz. `anlam_dugumleri`)."""

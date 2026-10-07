@@ -41,3 +41,37 @@ def test_bicim_adi_ve_erken_bolum():
 def test_paragraf_isaretleri_belirsizi_atlar():
     paragraflar = ["He summoned Saint.", "The Saint sighed.", "She became a Saint.", "Nothing here."]
     assert aa.paragraf_isaretleri(paragraflar, "Saint", 400, KURAL) == {0: {"anlam"}, 2: {"taban"}}
+
+
+
+def test_anlam_ipucu_paragraf_numarali_ve_bos_parcada_yok():
+    from core import translate
+    anlamlar = [{"kayit": "Saint", "taban_karsilik": "Aziz", "anlam_karsilik": "Saint",
+                 "anlam_aciklama": "gölge", "ayirici": KURAL}]
+    paras = ["He summoned Saint.", "The Saint sighed.", "She became a Saint."]
+    ipucu = translate.anlam_ipucu(paras, anlamlar, 400)
+    assert '[[1]] → gölge: "Saint" yaz' in ipucu and '[[3]] → asıl anlam: "Aziz" yaz' in ipucu
+    assert "[[2]]" not in ipucu  # belirsiz paragraf yazılmaz
+    assert translate.anlam_ipucu(["Nothing here."], anlamlar, 400) == ""
+    assert translate.anlam_ipucu(paras, None, 400) == ""
+
+
+def test_ipucu_yoksa_talimat_bayt_bayt_ayni():
+    from core import translate
+    paras = ["Sunny walked."]
+    assert translate._build_user_prompt(paras, {}, "") == translate._build_user_prompt(paras, {}, "", None, "")
+    ile = translate._build_user_prompt(paras, {}, "", None, "ÇİFT ANLAMLI ADLAR — x")
+    assert "ÇİFT ANLAMLI ADLAR" in ile
+
+
+def test_ceviri_anlamlari_rutbe_sozcuklerini_grafikten_alir():
+    from core import glossary
+    for k, v in {"Saint": "Aziz", "Tyris": "Tyris", "Paragon": "Örnek"}.items():
+        glossary.set_term("shadow-slave", k, v)
+    c = vg.DugumCozucu("shadow-slave").coz
+    vg.bag_ekle("shadow-slave", c("Tyris"), "rutbesi", c("Paragon"), 10, "x", "manual", 1.0)
+    a = next(x for x in vg.ceviri_anlamlari("shadow-slave") if x["kayit"] == "Saint")
+    assert a["taban_karsilik"] == "Aziz" and a["anlam_karsilik"] == "Saint"
+    assert "Paragon" in a["ayirici"]["taban_oncesi"]  # grafikteki rütbe, kodda yok
+    assert [s for _b, s in aa.gecisleri_siniflandir("Every Paragon and Saint knelt.", "Saint", 400,
+                                                  a["ayirici"])] == ["taban"]

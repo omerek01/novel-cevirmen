@@ -75,7 +75,7 @@ class _SahteParca:
         self.ciktilar = list(ciktilar)
         self.cagri = 0
 
-    def __call__(self, factory, models, chunk_en, glossary, prev_tail, kosullar):
+    def __call__(self, factory, models, chunk_en, glossary, prev_tail, kosullar, anlam_ipucu_metni=""):
         self.cagri += 1
         metin = self.ciktilar.pop(0) if self.ciktilar else ""
         return {
