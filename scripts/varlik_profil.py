@@ -67,7 +67,7 @@ def main() -> int:
         return 0
     kategoriler = varlik_grafigi.kategori_kimlikleri(slug, cozucu)
     models = (args.model,) if args.model else None
-    gecerli, red, hata = [], [], 0
+    gecerli, red, degerler, hata = [], [], [], 0
     with api_durum.islem("varlik_cikarim"):
         for ad, cumleler in sorular:
             sonuc = None
@@ -88,7 +88,9 @@ def main() -> int:
                 g["sorulan"] = ad
             gecerli += sonuc["gecerli"]
             red += sonuc["red"]
-            print(f"  {ad:30} {len(sonuc['gecerli'])} bağ, {len(sonuc['red'])} red")
+            degerler += sonuc["degerler"]
+            print(f"  {ad:30} {len(sonuc['gecerli'])} bağ, {len(sonuc['degerler'])} değer, "
+                  f"{len(sonuc['red'])} red")
             if args.uygula:
                 conn = varlik_grafigi._connect()
                 try:
@@ -96,15 +98,18 @@ def main() -> int:
                         varlik_grafigi.bag_ekle(slug, g["ozne_kimlik"], g["iliski"], g["nesne_kimlik"],
                                                 g["bolum"], g.get("kanit"), "model",
                                                 float(g.get("guven") or 0), conn=conn)
+                    for d in sonuc["degerler"]:
+                        varlik_grafigi.deger_yaz(slug, d["kimlik"], d["anahtar"], d["deger"], d["bolum"],
+                                                 d.get("kanit"), conn=conn)
                     conn.commit()
                 finally:
                     conn.close()
-    print(f"\n{len(gecerli)} geçerli bağ, {len(red)} red, {hata} düşen soru")
+    print(f"\n{len(gecerli)} geçerli bağ, {len(degerler)} değer, {len(red)} red, {hata} düşen soru")
     print("ilişki:", dict(Counter(g["iliski"] for g in gecerli).most_common()))
     print("red:", dict(Counter(r["sebep"] for r in red).most_common()))
     if args.rapor:
-        Path(args.rapor).write_text(json.dumps({"gecerli": gecerli, "red": red}, ensure_ascii=False, indent=1),
-                                    encoding="utf-8")
+        Path(args.rapor).write_text(json.dumps({"gecerli": gecerli, "red": red, "degerler": degerler},
+                                               ensure_ascii=False, indent=1), encoding="utf-8")
     if not args.uygula:
         print("Veritabanına yazılmadı. Yazmak için: --uygula")
     return 0

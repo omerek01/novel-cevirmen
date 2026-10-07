@@ -513,4 +513,20 @@ def varlik_profili_sor(
     disarida = [g for g in gecerli if kimlik not in (g["ozne_kimlik"], g["nesne_kimlik"])]
     for g in disarida:
         g["sebep"] = "sorulan varlığa değmiyor"
-    return {"gecerli": [g for g in gecerli if g not in disarida], "red": red + disarida, "model": model}
+    # GÖREV: kişinin türü olarak önerilen, sözlükte kaydı olmayan KÜÇÜK harfli cins ad
+    # ("technician", "combat medic"). Bağ olamaz (nesne düğüm değil) ama kanıtı
+    # doğrulanmış bir özelliktir; durum değeri olarak döner. Ölçülen: altı kişilik
+    # denemede doğru üç görev "varlık sözlükte yok" diye kayboluyordu.
+    degerler = [
+        {"kimlik": kimlik, "anahtar": GOREV_ANAHTARI, "deger": r["nesne"], "bolum": r["bolum"],
+         "kanit": r.get("kanit")}
+        for r in red
+        if r.get("sebep") == "varlık sözlükte yok" and r.get("iliski") in ("turu", "sinifi")
+        and r.get("ozne_kimlik") == kimlik and r.get("nesne_kimlik") is None
+        and (r.get("nesne") or "")[:1].islower()
+    ]
+    return {"gecerli": [g for g in gecerli if g not in disarida], "red": red + disarida,
+            "degerler": degerler, "model": model}
+
+
+GOREV_ANAHTARI = "Görev"

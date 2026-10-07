@@ -161,3 +161,18 @@ def test_profil_sorusu_kanit_ve_sorulan_varlik_denetimi(monkeypatch):
     assert [(g["ozne"], g["iliski"], g["bolum"]) for g in sonuc["gecerli"]] == [("Belle", "grubu", 821)]
     sebepler = sorted(r["sebep"] for r in sonuc["red"])
     assert sebepler == ["kanıt verilen cümlelerden değil", "sorulan varlığa değmiyor"]
+    assert sonuc["degerler"] == []
+
+
+def test_profil_gorevi_deger_olarak_dondurur(monkeypatch):
+    glossary.set_term(KITAP, "Kim", "Kim")
+    cumleler = [(820, "Kim was a technician of the company.")]
+
+    def sahte(_f, models, user, system=None, max_tokens=None):
+        return _Yanit({"baglar": [
+            {"ozne": "Kim", "iliski": "turu", "nesne": "technician", "kanit": cumleler[0][1], "guven": 0.9},
+        ]}), models[0]
+
+    monkeypatch.setattr(translate, "_generate_with_fallback", sahte)
+    sonuc = varlik_cikarim.varlik_profili_sor(KITAP, "Kim", cumleler, api_key="x")
+    assert [(d["anahtar"], d["deger"], d["bolum"]) for d in sonuc["degerler"]] == [("Görev", "technician", 820)]

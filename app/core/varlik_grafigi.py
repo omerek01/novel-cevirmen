@@ -106,6 +106,18 @@ KITAP_PROFILLERI: dict[str, dict] = {
             ("Sunny", "kendi_golgesi", "gloomy shadow"),
             ("Sunny", "kendi_golgesi", "creepy shadow"),
             ("Sunny", "kendi_golgesi", "Haughty Shadow"),
+            # Sunny'nin Antarktika ekibi (kullanıcı bildirimi). Kitapta ekibin ADI yok
+            # ("cohort"); düğüm elle eklenmiş `Sunny's cohort` kaydı. Ölçülen: altı ad
+            # 822 ve 834'te birlikte sayılıyor, "cohort" ile 23 kez, bölük adıyla 3 kez
+            # geçiyor — ekip bölüğün KENDİSİ değil. Dördüncü öğe SABİT ilk bölümdür:
+            # nesne metinde hiç geçmeyebilir, kanıt o bölümde öznenin geçtiği cümledir.
+            ("Kim", "grubu", "Sunny's cohort", 822),
+            ("Belle", "grubu", "Sunny's cohort", 822),
+            ("Dorn", "grubu", "Sunny's cohort", 822),
+            ("Luster", "grubu", "Sunny's cohort", 822),
+            ("Samara", "grubu", "Sunny's cohort", 822),
+            ("Quentin", "grubu", "Sunny's cohort", 822),
+            ("Sunny's cohort", "lideri", "Sunny", 822),
         ),
         # Spell'in GENEL sistem terimleri: belirli bir varlık değil, kategori.
         # Ölçülen hata (Vertex, 15 bölüm): `Sunny -> yetenegi -> Abilities`,
@@ -916,20 +928,29 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
             # yazmak, ayrıştırma düzeltildiğinde eski bozuk satırların kalmasını önler.
             conn.execute("DELETE FROM varlik_deger WHERE book_slug = ?", (book_slug,))
         evrim_durumu: dict = {}  # bölümler arası: bekleyen evrim + görülen gölge adları
-        sabit = [
-            (cozucu.coz(o), i, cozucu.coz(n), n) for o, i, n in p.get("sabit_baglar", ())
-        ]
-        sabit_bekleyen = [s for s in sabit if s[0] and s[2]]
-        for o, i, n in p.get("sabit_baglar", ()):
-            if not (cozucu.coz(o) and cozucu.coz(n)):
-                sonuc["cozulemeyen"][n] = sonuc["cozulemeyen"].get(n, 0) + 1
+        # (özne, ilişki, nesne, aranan adlar, sabit bölüm | None). Sabit bölüm yoksa ilk
+        # bölüm NESNENİN ilk geçişidir; varsa o bölümde önce ÖZNENİN, o yoksa NESNENİN
+        # geçtiği cümle kanıttır (`Sunny's cohort -> lideri -> Sunny`: ekip adı metinde yok).
+        sabit = []
+        for o, i, n, *bolum in p.get("sabit_baglar", ()):
+            a, b = cozucu.coz(o), cozucu.coz(n)
+            if not (a and b):
+                for ad, kim in ((o, a), (n, b)):
+                    if not kim:
+                        sonuc["cozulemeyen"][ad] = sonuc["cozulemeyen"].get(ad, 0) + 1
+                continue
+            sabit.append((a, i, b, (o, n) if bolum else (n,), bolum[0] if bolum else None))
+        sabit_bekleyen = list(sabit)
         for bolum in sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0):
             bulunan = sistem_baglarini_bul(
                 bolum["source"] or "", p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())),
             )
             bulunan = evrimleri_esle(bulunan, evrim_durumu, bolum["chapter_no"])
             for s in list(sabit_bekleyen):
-                cumle = ilk_gecis_cumlesi(bolum["source"] or "", s[3])
+                if s[4] is not None and bolum["chapter_no"] != s[4]:
+                    continue
+                cumle = next((c for c in (ilk_gecis_cumlesi(bolum["source"] or "", ad) for ad in s[3])
+                              if c is not None), None)
                 if cumle is None:
                     continue
                 sabit_bekleyen.remove(s)

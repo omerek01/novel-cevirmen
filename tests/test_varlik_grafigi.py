@@ -462,3 +462,23 @@ def test_obek_kural_sirasi_olculen_hatalar():
     assert o["Flesh Reaver"] == "yaratik"     # türü bir yaratık sınıfı içeriyor
     assert o["Crimson Terror"] == "yaratik"   # adı yaratık sınıfıyla bitiyor
     assert o["Lost from Light"] == "kisi"     # sahibinin öbeği
+
+
+def test_sabit_bag_sabit_bolumle_ozne_cumlesinden_kurulur(monkeypatch):
+    for k in ("Sunny", "Kim", "Sunny's cohort"):
+        glossary.set_term(KITAP, k, k)
+    profil = dict(vg.KITAP_PROFILLERI[KITAP])
+    profil["sabit_baglar"] = (("Kim", "grubu", "Sunny's cohort", 822),
+                              ("Sunny's cohort", "lideri", "Sunny", 822))
+    monkeypatch.setitem(vg.KITAP_PROFILLERI, KITAP, profil)
+    for no, metin in ((820, "Kim fixed the engine."), (822, "Sunny counted them. Kim, Belle and the rest.")):
+        cache.save_chapter(f"https://x/k-{no}", {
+            "book_slug": KITAP, "book_title": "Shadow Slave", "title": f"K{no}", "chapter_no": no,
+            "translation": "Çeviri.", "source": metin,
+        })
+    vg.sistem_baglarini_cikar(KITAP)
+    bag = {(b["kaynak"], b["iliski"], b["hedef"]): b for b in vg.baglar(KITAP)}
+    # 820'de Kim geçse de bağ SABİT bölümde (822) kurulur; nesne metinde hiç geçmez.
+    assert bag[("Kim", "grubu", "Sunny's cohort")]["ilk_bolum"] == 822
+    assert bag[("Kim", "grubu", "Sunny's cohort")]["kanit"] == "Kim, Belle and the rest."
+    assert bag[("Sunny's cohort", "lideri", "Sunny")]["ilk_bolum"] == 822
