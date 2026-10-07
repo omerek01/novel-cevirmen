@@ -42,6 +42,10 @@ ILISKILER: dict[str, dict] = {
     "golgesi": {"etiket": "Gölgesi", "ters": "efendisi", "grup": "sahiplik"},
     "yanki": {"etiket": "Yankısı", "ters": "efendisi", "grup": "sahiplik"},
     "yetenegi": {"etiket": "yeteneği", "ters": "kimin yeteneği", "grup": "sahiplik"},
+    # Anının EFSUNU ("Memory Enchantments: [Unbroken]"); efsunun ne yaptığı bağın
+    # KANITINDA durur ("Enchantment Description" satırı). Ölçülen (2026-10-07): 13
+    # efsun satırının hiçbiri bağa dönmüyordu ve model `Doubtless`ı nitelik sanmıştı.
+    "efsunu": {"etiket": "efsunu", "ters": "hangi Anının efsunu", "grup": "sahiplik"},
     "niteligi": {"etiket": "niteliği", "ters": "kimin niteliği", "grup": "sahiplik"},
     "gorunusu": {"etiket": "Görünüşü", "ters": "kimin Görünüşü", "grup": "sahiplik"},
     "klani": {"etiket": "klanı", "ters": "üyesi", "grup": "toplum"},
@@ -59,6 +63,9 @@ ILISKILER: dict[str, dict] = {
     # Gölgeler evrimleşir (Soul Serpent: Monster -> Demon -> Devil): sınıf da değişir.
     "sinifi": {"etiket": "sınıfı", "ters": "bu sınıfta", "grup": "duzen", "tekil": True},
     "ust_basamak": {"etiket": "bir üst basamak", "ters": "bir alt basamak", "grup": "duzen"},
+    # Anının eşya türü ("Memory Type: Armor"). `sinifi` KULLANILMADI: sınıf nesneleri
+    # kalite denetiminde sınıf SÖZCÜĞÜ sayılır ve Zırh/Kılıç orada gürültü üretirdi.
+    "esya_turu": {"etiket": "eşya türü", "ters": "bu türde eşya", "grup": "duzen", "tekil": True},
     # ZAMANLA DEĞİŞEN KİMLİK (kullanıcı örneği, 2026-10-07): Sunny'nin gölgesi Saint
     # önce bir Yankıydı (Stone Saint), gölgeye çevrildi, sonra Marble Saint'e evrildi.
     # Biçimler ayrı karakter değildir; `bicimi` o dönemki adı/formu verir (tekil: konumdan
@@ -499,7 +506,7 @@ _EVRIM = re.compile(r"\[(?:\.\.\.)?(?:The )?([A-Z][^\]]*?) is evolving\.{0,3}\]"
 
 # Blok başlığı -> (öznenin kim olduğu, alt satır anahtarları -> ilişki)
 _BLOK_ALT = {
-    "Memory": {"Memory Rank": "rutbesi"},
+    "Memory": {"Memory Rank": "rutbesi", "Memory Type": "esya_turu", "Memory Enchantments": "efsunu"},
     "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi"},
     "Echo": {"Echo Type": "sinifi", "Echo Core": "rutbesi", "Echo Rank": "rutbesi"},
 }
@@ -531,6 +538,7 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
     out: list[tuple] = []
     blok_ozne: str | None = None
     blok_tur: str | None = None
+    efsun_sirasi: list[int] = []  # açıklaması henüz gelmemiş efsunların `out` sırası
     for paragraf in (p.strip() for p in metin.split("\n")):
         if not paragraf:
             continue
@@ -552,6 +560,7 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
         satir = _RUN_SATIRI.match(paragraf)
         if not satir:
             blok_ozne = blok_tur = None
+            efsun_sirasi = []
             continue
         anahtar, deger = satir.group(1).strip(), satir.group(2)
         if anahtar == "Name":
@@ -563,13 +572,23 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             ogeler = _ogeler(deger)
             if ogeler:
                 blok_ozne, blok_tur = ogeler[0], anahtar
+                efsun_sirasi = []
                 out.append((ana_karakter, _BLOK_SAHIPLIK[anahtar], ogeler[0], paragraf))
+                out.append((ogeler[0], "turu", anahtar, paragraf))
+            continue
+        if blok_tur == "Memory" and anahtar == "Enchantment Description" and efsun_sirasi:
+            # Açıklamalar efsunlarla AYNI SIRADA gelir; efsunun ne yaptığı bağın kanıtı olur.
+            i = efsun_sirasi.pop(0)
+            ozne, iliski, nesne, _k = out[i]
+            out[i] = (ozne, iliski, nesne, paragraf)
             continue
         if blok_tur == "durum" and anahtar in _DURUM_SATIRLARI and blok_ozne:
             for oge in _ogeler(deger):
                 out.append((blok_ozne, _DURUM_SATIRLARI[anahtar], oge, paragraf))
         elif blok_tur in _BLOK_ALT and anahtar in _BLOK_ALT[blok_tur] and blok_ozne:
             for oge in _ogeler(deger):
+                if _BLOK_ALT[blok_tur][anahtar] == "efsunu":
+                    efsun_sirasi.append(len(out))
                 out.append((blok_ozne, _BLOK_ALT[blok_tur][anahtar], oge, paragraf))
     return out
 
@@ -641,6 +660,29 @@ def evrimleri_esle(bulunan: list[tuple], durum: dict, bolum_no: int | None) -> l
     return out
 
 
+def sistemle_celisenleri_reddet(book_slug: str) -> int:
+    """Aynı çift için SİSTEM bağı başka bir ilişki söylüyorsa model bağını reddet.
+
+    Rün kesin bilgidir; model çıkarımı aynı kuralı yeni bağlarda zaten uygular
+    (`varlik_cikarim.yapisal_red`), bu, kural gelmeden ÖNCE yazılmış bağları temizler
+    (ölçülen: `Puppeteer's Shroud -> niteligi -> Doubtless`, rün `efsunu` diyor).
+    Elle kurulmuş bağa dokunulmaz. Döner: reddedilen sayısı."""
+    hepsi = baglar(book_slug, durumlar=("aday", "onaylandi"))
+    sistem: dict[frozenset, set[str]] = {}
+    for b in hepsi:
+        if b["origin"] == "sistem":
+            sistem.setdefault(frozenset((b["kaynak_kimlik"], b["hedef_kimlik"])), set()).add(b["iliski"])
+    n = 0
+    for b in hepsi:
+        if b["origin"] != "model":
+            continue
+        iliskiler = sistem.get(frozenset((b["kaynak_kimlik"], b["hedef_kimlik"])))
+        if iliskiler and b["iliski"] not in iliskiler:
+            bag_durumu(book_slug, b["kaynak_kimlik"], b["iliski"], b["hedef_kimlik"], "reddedildi")
+            n += 1
+    return n
+
+
 def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
     """Kitabın önbellekteki TÜM bölümlerinden sistem bağlarını çıkar (sırayla).
 
@@ -688,6 +730,8 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
     finally:
         if conn is not None:
             conn.close()
+    if yaz:
+        sonuc["reddedilen_model"] = sistemle_celisenleri_reddet(book_slug)
     return sonuc
 
 

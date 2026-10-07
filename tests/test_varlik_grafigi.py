@@ -246,3 +246,41 @@ def test_bilinmeyen_iliski_reddedilir():
 
     with pytest.raises(ValueError):
         vg.bag_ekle(KITAP, "a", "sevgilisi", "b", 1, None, "model")
+
+
+def test_ani_blogu_efsun_ve_esya_turu_baglarini_kurar():
+    # Yapay rün bloğu (roman metni değil): iki efsun, açıklamalar aynı sırada.
+    metin = (
+        "Memory: [Bitter Peak].\n\nMemory Rank: Ascended.\n\nMemory Tier: III.\n\n"
+        "Memory Type: Armor.\n\nMemory Description: [Bir zamanlar.]\n\n"
+        "Memory Enchantments: [Black Venom], [Unbroken].\n\n"
+        "Enchantment Description: [Zehir açıklaması.]\n\n"
+        "Enchantment Description: [Kırılmazlık açıklaması.]\n\n"
+        "Sunny sighed."
+    )
+    b = vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
+    uclu = {x[:3]: x[3] for x in b}
+    assert ("Sunny", "anisi", "Bitter Peak") in uclu
+    assert ("Bitter Peak", "turu", "Memory") in uclu
+    assert ("Bitter Peak", "rutbesi", "Ascended") in uclu
+    assert ("Bitter Peak", "esya_turu", "Armor") in uclu
+    # Efsunun ne yaptığı bağın kanıtıdır; sıra korunur.
+    assert "Zehir" in uclu[("Bitter Peak", "efsunu", "Black Venom")]
+    assert "Kırılmazlık" in uclu[("Bitter Peak", "efsunu", "Unbroken")]
+
+
+def test_sistemle_celisen_model_bagi_reddedilir_elle_kurulan_kalir():
+    for k in ("Bitter Peak", "Black Venom", "Sunny", "Nephis"):
+        glossary.set_term(KITAP, k, k)
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Bitter Peak"), "niteligi", k("Black Venom"), 50, "x", "model", 0.9)
+    vg.bag_ekle(KITAP, k("Bitter Peak"), "efsunu", k("Black Venom"), 40, "y", "sistem", 1.0)
+    vg.bag_ekle(KITAP, k("Sunny"), "yoldasi", k("Nephis"), 10, "z", "manual", 1.0)
+    vg.bag_ekle(KITAP, k("Sunny"), "dusmani", k("Nephis"), 11, "w", "sistem", 1.0)
+    assert vg.sistemle_celisenleri_reddet(KITAP) == 1
+    durum = {(b["kaynak"], b["iliski"], b["hedef"]): b["durum"]
+             for b in vg.baglar(KITAP, durumlar=("aday", "onaylandi", "reddedildi"))}
+    assert durum[("Bitter Peak", "niteligi", "Black Venom")] == "reddedildi"
+    assert durum[("Bitter Peak", "efsunu", "Black Venom")] == "onaylandi"
+    # Elle kurulan bağ, sistem başka ilişki söylese de reddedilmez.
+    assert [d for (a, i, b), d in durum.items() if i == "yoldasi"] == ["onaylandi"]
