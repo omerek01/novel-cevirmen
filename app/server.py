@@ -860,10 +860,16 @@ def delete_glossary_spelling(
 @app.put("/api/book/{slug}/glossary/anlamlar")
 def set_glossary_senses(slug: str, req: GlossaryAnlamlar) -> dict:
     """Kaydın EK anlamlarını (2., 3. …) tümüyle değiştir; her birinin koşulu zorunlu."""
+    # Köken: koşul/tanımla AYNI kural — elle yazılan ek anlam yazanın okuma konumunu alır
+    # (`_okuma_konumu`). Eksikti: `ilk_bolum` None kalınca spoiler süzgeci anlamı gizliyor,
+    # kullanıcı "Sunucuya kaydedildi" görüp eklediği anlamı listede bulamıyordu.
+    konum = _okuma_konumu(slug)
+    liste = [a.model_dump() for a in req.anlamlar]
+    for a in liste:
+        if a.get("ilk_bolum") is None:
+            a["ilk_bolum"] = konum
     try:
-        anlamlar = glossary.anlamlari_yaz(
-            slug, req.source, [a.model_dump() for a in req.anlamlar], taban_surum=req.taban_surum
-        )
+        anlamlar = glossary.anlamlari_yaz(slug, req.source, liste, taban_surum=req.taban_surum)
     except glossary.SurumCakismasi as exc:
         raise _surum_cakismasi(exc) from exc
     except ValueError as exc:

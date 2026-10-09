@@ -84,7 +84,7 @@ def test_ardisik_iki_kayit_kendi_kendiyle_cakismaz(sayfa):
 def test_gecmis_listelenir_onceki_hal_forma_alinir(sayfa):
     from core import glossary
 
-    tohum.kitap()
+    tohum.kitap(konum=2)  # spoiler süzgeci: terim 2. bölümde öğrenildi
     glossary.merge_terms(SLUG, {"Great": "Ulu"}, "auto", 2)
     glossary.set_term(SLUG, "Great", "Yüce")
     _sozluge_git(sayfa)

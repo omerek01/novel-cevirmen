@@ -138,11 +138,14 @@ def test_429_kaydi_bekletir_sonra_gonderir(sayfa):
 
 
 def test_silme_geri_alinir_kosul_ve_koken_korunur(sayfa):
-    tohum.kitap()
+    # Spoiler süzgeci (Faz 1): terim 2. bölümde öğrenildi, okur da 2. bölümde olmalı; koşulun
+    # kökeni bilinmezse süzülmüş görünümde gizlenir (elle yazılan koşul okuma konumunu köken alır).
+    tohum.kitap(konum=2)
     from core import glossary
 
     glossary.merge_terms(SLUG, {"Great": "Ulu"}, "auto", 2, {"Great": "Ulu yaratık."})
     glossary.set_kosul(SLUG, "Great", "rütbe")
+    glossary.alan_kokeni_yaz(SLUG, "Great", "kosul", 2)
     _sozluge_git(sayfa)
     sayfa.locator("#glossList .gloss-row").first.click()
     expect(sayfa.locator("#terimKosul")).to_have_value("rütbe")

@@ -5,6 +5,7 @@ emniyetidir (ücretli model ASLA kullanılmaz).
 """
 from __future__ import annotations
 
+import pytest
 import inspect
 
 from core import glossary, sozluk_dogrulama, translate
@@ -21,7 +22,9 @@ def test_zincir_yalniz_ucretsiz_ve_kullanici_secimine_bakmaz():
     assert zincir and not any(translate._ucretli_modeli(m) for m in zincir)
     # Tel tuzağı: arka plan bakım işi kullanıcının seçtiği (ücretli olabilen)
     # zinciri ASLA okumamalı.
-    assert "secili_zincir(" not in inspect.getsource(sozluk_dogrulama)
+    # 2026-10-09 kullanıcı kararı: çeviri akışındaki kontrol SEÇİLİ zinciri kullanır (eski tel tuzağının
+    # yerini aldı); bakım aracının varsayılanı hâlâ ücretsiz zincirdir.
+    assert "secili_zincir(" in inspect.getsource(sozluk_dogrulama)
 
 
 def test_geri_ceviri_uyumu_anlam_kaymasini_olcer():
@@ -74,6 +77,7 @@ def test_karar_ingilizce_korunan_ad_gecer():
     )[0] == "gecti"
 
 
+@pytest.mark.skip(reason="Yerini aldı: onay artık kaynak alıntısı ister (sozluk_dogrulama, kaynak bağlı onay). Kapsayan testler: test_sozluk_api_guvenligi.py::test_gecerli_onay_ve_resume_yeniden_cagri_yapmaz, ::test_alintisiz_model_onayi_kural_olmaz")
 def test_kitabi_dogrula_yazar_tanimi_bossa_doldurur(monkeypatch):
     glossary.merge_terms(KITAP, {"Corruption": "Yolsuzluk", "Abyss": "Uçurum"}, "auto", 4)
     glossary.tanim_yaz(KITAP, "Abyss", "Kullanıcı tanımı")

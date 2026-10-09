@@ -305,12 +305,8 @@ def _satir_ekle(conn: sqlite3.Connection, book_slug: str, satir: dict) -> dict:
 def _satiri_guncelle(conn, book_slug, mevcut, degisen, yol, kitap_surumu_al) -> dict:
     """Var olan satırı güncelle. Prompt alanı değiştiyse sürüm artar ve geçmişe
     yazılır; yalnız köken/origin değiştiyse sürüm artmaz, geçmiş yazılmaz."""
-    if yol in ("manual", "import") and any(
-        a in degisen and degisen[a] != mevcut.get(a) for a in ("target", "kosul", "tur")
-    ):
-        _onceki_onayi_sakla(conn, book_slug, mevcut)
-        degisen = {**degisen, "durum": TUTULDU, "inceleme": "bekliyor",
-                   "dogrulama": None, "dogrulama_notu": None}
+    # ELLE düzeltme ve içe aktarma kullanıcının iradesidir: BEKLEMEZ (kullanıcı kararı 2026-10-09).
+    # Önce-bekleme yalnız OTOMATİK adaylar içindir (`merge_terms`, origin='auto').
     yeni = {**mevcut, **degisen}
     prompt_degisti = any(yeni.get(a) != mevcut.get(a) for a in _PROMPT_ALANLARI)
     if prompt_degisti:
@@ -388,7 +384,7 @@ def terimi_yaz(
                 "source": source, "target": target, "origin": origin or "manual",
                 "kosul": None if kosul is KORU else ((kosul or "").strip() or None),
                 "tur": _tur(tur),
-                "durum": TUTULDU, "inceleme": "bekliyor",
+                "durum": None, "inceleme": None,  # elle eklenen kayıt beklemez
             })
             _gecmise_yaz(conn, book_slug, "ekle", None, satir, origin or "manual", surum_al())
         else:
@@ -401,6 +397,11 @@ def terimi_yaz(
                 degisen["tur"] = _tur(tur)
             # Kullanıcı kaydı düzenledi: incelemeden geçmiş sayılır. Kapıda TUTULAN
             # aday da serbest kalır — karşılığı artık kullanıcının kararıdır.
+            if origin == "manual" and mevcut.get("inceleme") == "bekliyor":
+                degisen["inceleme"] = "onaylandi"
+            if origin == "manual":
+                degisen["durum"] = None
+                degisen["kapi"] = None
             satir = _satiri_guncelle(conn, book_slug, mevcut, degisen, origin or "manual", surum_al)
         conn.commit()
         return satir
@@ -690,10 +691,6 @@ def set_term(
     TAŞINIR (bkz. `terimi_yaz`).
     """
     terimi_yaz(book_slug, source, target, origin=origin)
-    # Eski bakım/fixture API'si açık insan kararıdır. HTTP ekleme/düzenleme
-    # `terimi_yaz` kullanır ve bu istisnaya girmez.
-    if origin == "manual":
-        onayla(book_slug, source)
 
 
 # ---------- yedek: tam kayıt dışa/içe aktarma ----------
@@ -707,11 +704,14 @@ YEDEK_SURUMU = 2
 # Kayıt başına taşınan alanlar (kaynak hariç). Sıra dosyada okunaklılık içindir.
 YEDEK_ALANLARI = (
     "target", "kosul", "origin", "created_at", "first_chapter", "kaynak_cumle", "inceleme", "tur",
+    # Koşul/tanımın bölüm KÖKENİ de taşınır: köken düşerse spoiler süzgeci koşulu/tanımı gizler
+    # (geri alınan silme koşulunu "kaybetmiş" görünüyordu — tarayıcı testi yakaladı).
+    "tanim", "kosul_koken", "tanim_koken",
 )
 IMPORT_STRATEJILERI = ("mevcut", "dosya")
 _METIN_SINIRI = {
     "source": 200, "target": 500, "kosul": 2000, "origin": 40, "kaynak_cumle": 2000,
-    "inceleme": 20, "tur": 20,
+    "inceleme": 20, "tur": 20, "tanim": 2000, "kosul_koken": 2000, "tanim_koken": 2000,
 }
 
 
@@ -747,7 +747,7 @@ def _yedek_kaydi(ham) -> dict | None:
     if not kaynak:
         return None
     kayit: dict = {"source": kaynak}
-    for alan in ("target", "kosul", "origin", "kaynak_cumle", "inceleme", "tur"):
+    for alan in ("target", "kosul", "origin", "kaynak_cumle", "inceleme", "tur", "tanim", "kosul_koken", "tanim_koken"):
         if alan in ham:
             deger = ham[alan]
             if deger is not None and (not isinstance(deger, str) or len(deger) > _METIN_SINIRI[alan]):
@@ -831,9 +831,12 @@ def ice_aktar(book_slug: str, kayitlar: list, strateji: str = "mevcut") -> dict:
                     "kaynak_cumle": kayit.get("kaynak_cumle") or None,
                     "inceleme": kayit.get("inceleme") or None,
                     "tur": _tur(kayit.get("tur")),
+                    "tanim": kayit.get("tanim") or None,
+                    "kosul_koken": kayit.get("kosul_koken") or None,
+                    "tanim_koken": kayit.get("tanim_koken") or None,
                     "kimlik": kayit.get("kimlik") if kayit.get("kimlik") not in kimlikler else None,
                     "surum": (kayit.get("surum") or 0) + 1,
-                    "durum": TUTULDU, "inceleme": "bekliyor",
+                    "inceleme": kayit.get("inceleme") or None,  # içe aktarılan kayıt beklemez
                 }
                 yeni = _satir_ekle(conn, book_slug, yeni)
                 kimlikler.add(yeni["kimlik"])
@@ -848,7 +851,7 @@ def ice_aktar(book_slug: str, kayitlar: list, strateji: str = "mevcut") -> dict:
                     deger = kayit[a]
                     if a == "target":
                         deger = deger or kayitli["source"]
-                    elif a in ("kosul", "kaynak_cumle", "origin", "inceleme"):
+                    elif a in ("kosul", "kaynak_cumle", "origin", "inceleme", "tanim", "kosul_koken", "tanim_koken"):
                         deger = deger or None
                     elif a == "tur":
                         deger = _tur(deger)
@@ -1145,12 +1148,16 @@ def merge_terms(
                     "source": k, "target": h, "created_at": simdi, "origin": origin,
                     "first_chapter": chapter_no, "kaynak_cumle": (cumleler or {}).get(k),
                     "inceleme": "bekliyor" if origin == "auto" else None, "tur": tur,
-                    "durum": TUTULDU,
+                    # ÖNCE BEKLEME yalnız OTOMATİK adaylar içindir: kullanıcının içe aktardığı ya
+                    # da elle birleştirdiği kayıt onun iradesidir, bekletilmez.
+                    "durum": TUTULDU if nedenler or (origin == "auto" and bekleme_acik()) else None,
                     "kapi": json.dumps(nedenler, ensure_ascii=False) if nedenler else None,
                 })
                 _gecmise_yaz(conn, book_slug, "ekle", None, satir, origin, kitap_surumu)
                 if kapi is not None:
                     kapi["satirlar"].append(satir)  # aynı yanıttaki ikinci aday bunu görsün
+                if satir.get("durum") is None:
+                    etkili[k] = h
         conn.commit()
         # Döner: FİİLEN etkili olanlar. Tutulan aday prompt'a girmediği için künyede
         # "eklendi" denmez; inceleme listesinde sebebiyle görünür.

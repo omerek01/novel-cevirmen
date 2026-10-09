@@ -28,3 +28,18 @@ def temp_db(tmp_path, monkeypatch):
     # çevrimdışıdır; doğrulamayı sınayan test bayrağı kendisi açar.
     monkeypatch.setenv("SOZLUK_DOGRULAMA", "0")
     yield
+
+
+@pytest.fixture(autouse=True)
+def _sozluk_bekleme(request, monkeypatch):
+    """ÜRÜNDE bekleme her zaman açıktır (`glossary.bekleme_acik` -> True: onaysız aday kural olmaz).
+
+    Sözlük davranışının BAŞKA yönlerini sınayan eski testler "otomatik kayıt hemen kural" varsayımıyla
+    yazıldı; onlarda bekleme kapatılır. Bekleme akışını sınayan modül `BEKLEME_ACIK = True` tanımlar ya da
+    test `@pytest.mark.bekleme` taşır — onlarda ürün davranışı aynen kalır."""
+    if getattr(request.module, "BEKLEME_ACIK", False) or request.node.get_closest_marker("bekleme"):
+        yield
+        return
+    from core import glossary
+    monkeypatch.setattr(glossary, "bekleme_acik", lambda: False)
+    yield

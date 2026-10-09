@@ -1,4 +1,6 @@
 """Sözlük temizlik önerisi (bulguyu bilen) ve örneklemeli tarama: çevrimdışı, model çağrısı YOK."""
+BEKLEME_ACIK = True  # Codex sürümü bu modülde ürün davranışını (bekleme) sınar
+
 import pytest
 
 from core import glossary, sozluk_tarama, sozluk_temizlik

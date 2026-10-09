@@ -3487,7 +3487,7 @@ def _parse_response(raw: str | None) -> dict:
             for kaynak, hedef in _esleme(data.get(eski)).items():
                 terimler.setdefault(kaynak, hedef)
         return {
-            "translation": data.get("translation", ""),
+            "translation": _ceviri_metni(data.get("translation", "")),
             "detected_names": _liste(data.get("detected_names")),
             "detected_terms": terimler,
         }
@@ -3502,9 +3502,58 @@ def _parse_response(raw: str | None) -> dict:
         if '"translation"' not in text and not _ISARETCI_VAR.search(text):
             out["gecersiz"] = True
             return out
+        # DİZİ biçimi (2026-10-09, vertex/gemini-3.8-flash, shadow-slave #950): model
+        # "translation"ı metin yerine paragraf DİZİSİ döndürdü ve JSON bozuktu; eski kurtarma
+        # dizinin içinden kuyruğa kadar her şeyi aldı, detected_terms JSON'u çeviriye sızdı.
+        dizi = _dizi_cevirisi(text)
+        if dizi is not None:
+            out["translation"] = dizi
+            out["detected_names"] = _liste(_kurtar_alan(text, "detected_names", "[", "]"))
+            out["detected_terms"] = _esleme(_kurtar_alan(text, "detected_terms", "{", "}"))
+            return out
         # JSON bozuk/yarım: ham basmak yerine 'translation' alanını ayıklamayı dene.
         out["translation"] = _extract_translation(text)
         return out
+
+
+def _ceviri_metni(deger) -> str:
+    """`translation` dizi gelirse paragrafları boş satırla birleştir ([[n]] işaretçileri içeride)."""
+    if isinstance(deger, list):
+        return "\n\n".join(str(x).strip() for x in deger if isinstance(x, str) and x.strip())
+    return deger if isinstance(deger, str) else ""
+
+
+_JSON_DIZGI = re.compile(r'"((?:\\.|[^"\\])*)"')
+
+
+def _dizi_cevirisi(text: str) -> str | None:
+    """Bozuk JSON'da `"translation": [ ... ]` dizisini ayıkla; dizi yoksa None."""
+    m = re.search(r'"translation"\s*:\s*\[', text)
+    if not m:
+        return None
+    son = re.search(r'\]\s*(?:,\s*"detected_|\}\s*\Z)', text[m.end():])
+    govde = text[m.end():m.end() + son.start()] if son else text[m.end():]
+    try:
+        return _ceviri_metni(json.loads("[" + govde + "]"))
+    except (json.JSONDecodeError, TypeError):
+        parcalar = []
+        for d in _JSON_DIZGI.finditer(govde):
+            try:
+                parcalar.append(json.loads('"' + d.group(1) + '"'))
+            except json.JSONDecodeError:
+                parcalar.append(d.group(1))
+        return _ceviri_metni(parcalar)
+
+
+def _kurtar_alan(text: str, ad: str, ac: str, kapa: str):
+    m = re.search(r'"' + ad + r'"\s*:\s*' + re.escape(ac), text)
+    if not m:
+        return None
+    k = text.find(kapa, m.end())
+    try:
+        return json.loads(ac + text[m.end():k] + kapa) if k >= 0 else None
+    except json.JSONDecodeError:
+        return None
 
 
 _ISARETCI_VAR = re.compile(r"\[\[\d+\]\]")

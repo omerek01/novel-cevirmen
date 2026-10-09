@@ -103,9 +103,13 @@ def test_alternatif_yazim_ve_ek_anlam_panelden_eklenir(sayfa):
     sayfa.locator("#terimAnlamKaydet").click()
     expect(sayfa.locator("#terimEkDurum")).to_contain_text("Sunucuya kaydedildi")
     veri = js_bekle(sayfa, SOZLUK)
-    assert veri["ekler"]["Great"] == {
-        "yazimlar": ["Grate"], "anlamlar": [{"target": "Harika", "kosul": "gündelik ünlem"}],
-    }
+    ek = veri["ekler"]["Great"]
+    assert ek["yazimlar"] == ["Grate"]
+    # Ek anlam şeması sonradan genişledi (ad_mi/etiket/ilk_bolum); elle yazılan anlam yazanın
+    # okuma konumunu köken alır, yoksa spoiler süzgeci onu gizlerdi.
+    assert [(a["target"], a["kosul"], a["ilk_bolum"]) for a in ek["anlamlar"]] == [
+        ("Harika", "gündelik ünlem", veri.get("okuma_konumu", ek["anlamlar"][0]["ilk_bolum"]))]
+    assert ek["anlamlar"][0]["ilk_bolum"] is not None
     # Ek düzenlemeler sürümü artırdı; ardından yapılan karşılık düzeltmesi kendi
     # kaydıyla çakışmamalı (panel yeni tabanı yanıtlardan aldı).
     sayfa.locator("#terimKarsilik").fill("Yüce")

@@ -1,4 +1,6 @@
 """Ayrı kaynak bağlı API onayı: hatalı yanıt asla etkin kural değildir."""
+BEKLEME_ACIK = True  # ürün davranışı: onaysız aday kural olmaz
+
 import json
 from types import SimpleNamespace
 
@@ -103,22 +105,24 @@ def test_api_sirasinda_degisen_kayda_eski_onay_yazilmaz(monkeypatch):
     sahte(monkeypatch, kayit, duzenle=lambda: glossary.terimi_yaz(KITAP,'Ash Gate','Kül Geçidi'))
     dogrulama.kitabi_dogrula(KITAP, 'bekleyen', api_key='sahte')
     assert satir()['dogrulama'] != 'gecti'
-    assert 'Ash Gate' not in glossary.ceviri_sozlugu(KITAP)
+    # Kullanıcının API sırasında yaptığı elle düzeltme kazanır (elle düzeltme beklemez).
+    assert glossary.ceviri_sozlugu(KITAP)['Ash Gate'] == 'Kül Geçidi'
 
 
-def test_elle_yeni_kayit_ve_import_once_bekler():
+def test_elle_yeni_kayit_ve_import_beklemez():
+    # Kullanıcı kararı (2026-10-09): elle eklenen/düzeltilen ve içe aktarılan kayıt kullanıcının
+    # iradesidir, doğrudan kural olur; önce-bekleme yalnız OTOMATİK adaylar içindir.
     glossary.terimi_yaz(KITAP,'Ash Gate','Kül Kapısı')
     glossary.ice_aktar(KITAP,[{'source':'Iron Hall','target':'Demir Salon'}])
-    assert 'Ash Gate' not in glossary.ceviri_sozlugu(KITAP)
-    assert 'Iron Hall' not in glossary.ceviri_sozlugu(KITAP)
-
-
-def test_duzenlemede_eski_onayli_karsilik_yeni_onaya_kadar_korunur():
-    glossary.set_term(KITAP,'Ash Gate','Kül Kapısı')  # açık eski insan kararı
-    glossary.onayla(KITAP,'Ash Gate')
-    glossary.terimi_yaz(KITAP,'Ash Gate','Kül Geçidi')
-    assert satir()['durum'] == glossary.TUTULDU
     assert glossary.ceviri_sozlugu(KITAP)['Ash Gate'] == 'Kül Kapısı'
+    assert glossary.ceviri_sozlugu(KITAP)['Iron Hall'] == 'Demir Salon'
+
+
+def test_elle_duzenleme_hemen_kural_olur():
+    glossary.set_term(KITAP,'Ash Gate','Kül Kapısı')
+    glossary.terimi_yaz(KITAP,'Ash Gate','Kül Geçidi')
+    assert satir()['durum'] is None
+    assert glossary.ceviri_sozlugu(KITAP)['Ash Gate'] == 'Kül Geçidi'
 
 
 def test_rapordan_eski_baglamsiz_onay_uygulanamaz(monkeypatch):

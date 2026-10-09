@@ -242,7 +242,7 @@ def test_uclar():
     r = c.put(f"/api/book/{KITAP}/glossary/anlamlar",
               json={"source": "Orc Empire", "anlamlar": [{"target": "Ork", "kosul": "kısaltma"}],
                     "taban_surum": 3})
-    assert r.status_code == 200 and r.json()["anlamlar"] == [{"target": "Ork", "kosul": "kısaltma", "ad_mi": False, "etiket": None, "ilk_bolum": None}]
+    assert r.status_code == 200 and r.json()["anlamlar"] == [{"target": "Ork", "kosul": "kısaltma", "ad_mi": False, "etiket": None, "ilk_bolum": 0}]  # köken: okuma konumu
 
     glossary.merge_terms(KITAP, {"Great": "Ulu"}, "auto", 1)
     liste = c.get(f"/api/book/{KITAP}/glossary/review").json()
