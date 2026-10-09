@@ -396,8 +396,11 @@ def terimi_yaz(
             if tur is not None:
                 degisen["tur"] = _tur(tur)
             # Kullanıcı kaydı düzenledi: incelemeden geçmiş sayılır. Kapıda TUTULAN
-            # aday da serbest kalır — karşılığı artık kullanıcının kararıdır.
-            if origin == "manual" and mevcut.get("inceleme") == "bekliyor":
+            # aday da serbest kalır — karşılığı artık kullanıcının kararıdır. YALNIZ
+            # "bekliyor" kayıtlar onaylanıyordu: çakışma/yakın yazım/model uyarısıyla
+            # listeye düşen kayıt panelden kaydedildikten sonra da listede kalıyordu
+            # (kullanıcı bildirimi, 2026-10-09).
+            if origin == "manual":
                 degisen["inceleme"] = "onaylandi"
             if origin == "manual":
                 degisen["durum"] = None

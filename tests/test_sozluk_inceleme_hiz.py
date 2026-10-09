@@ -85,3 +85,13 @@ def test_canli_sozluk_uclari_service_worker_onbelleginden_gecmez():
     sw = (KOK / "app" / "web" / "sw.js").read_text(encoding="utf-8")
     kural = sw.index('endsWith("/glossary/review")')
     assert kural < sw.index("networkFirst(request)); // /api/books")
+
+
+def test_elle_duzenlenen_kayit_hesaplanan_nedenle_de_listeden_duser():
+    # Çakışma "bekliyor" değildir, hesaplanan bir nedendir; panelden kaydedilen kayıt
+    # yine de incelenmiş sayılmalı (kullanıcı bildirimi, 2026-10-09).
+    glossary.set_term(KITAP, "Orc Empire", "Ork İmparatorluğu")
+    glossary.set_term(KITAP, "Ore Empire", "Ork İmparatorluğu")
+    assert "Orc Empire" in {x["source"] for x in glossary.inceleme_listesi(KITAP)}
+    glossary.terimi_yaz(KITAP, "Orc Empire", "Ork İmparatorluğu")
+    assert "Orc Empire" not in {x["source"] for x in glossary.inceleme_listesi(KITAP)}

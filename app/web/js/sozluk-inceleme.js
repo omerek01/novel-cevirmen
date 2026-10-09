@@ -15,6 +15,7 @@ import {
   fetchWithTimeout,
   glossRows,
   kuyruk,
+  kuyrukDinle,
   flushGlossQueue,
   renderGlossary,
 } from "./sozluk.js";
@@ -56,9 +57,44 @@ function dugme(metin, fn, sinif = "pill") {
 // karardan sonraki tazeleme de düşüp eski listeyi bırakıyordu.
 const INCELEME_ZAMAN_ASIMI = 60000;
 
+// Panelden (Düzenle) kaydedilen ya da silinen kayıt incelenmiş sayılır: kartı hemen
+// düşür, listeyi kısa bir gecikmeyle sunucudan tazele. Panel kuyruk üzerinden yazar ve
+// listeyi hiç tazelemiyordu — kayıt kaydedildiği hâlde listede duruyordu.
+let kuyrukBagli = false;
+let tazelemeZamanlayici = null;
+
+function kuyrugaBaglan() {
+  if (kuyrukBagli) return;
+  kuyrukBagli = true;
+  kuyrukDinle((ad, veri) => {
+    if (ad !== "gonderildi" || !veri || !veri.islem) return;
+    const op = veri.islem;
+    if (op.slug !== durum.currentBookSlug) return;
+    const anahtar = anahtarla(op.source);
+    if (!incelenecekler.has(anahtar)) return;
+    const kutu = el("glossReviewList");
+    for (const kart of kutu ? kutu.querySelectorAll(".inceleme-kart") : []) {
+      if (anahtarla(kart.dataset.sozlukKaynak || "") === anahtar) {
+        kart.remove();
+        sayaciAzalt();
+      }
+    }
+    incelenecekler.delete(anahtar);
+    clearTimeout(tazelemeZamanlayici);
+    tazelemeZamanlayici = setTimeout(() => incelemeyiYukle(op.slug), 800);
+  });
+}
+
+function sayaciAzalt() {
+  const sayi = el("glossReviewSayi");
+  const m = /\((\d+)\)/.exec(sayi.textContent);
+  if (m) sayi.textContent = `İNCELENECEKLER (${Math.max(0, Number(m[1]) - 1)})`;
+}
+
 export async function incelemeyiYukle(slug) {
   const kutu = el("glossReviewBox");
   if (!kutu) return;
+  kuyrugaBaglan();
   const sayi = el("glossReviewSayi");
   if (kutu.hidden || !sayi.textContent.includes("(")) {
     kutu.hidden = false;
@@ -309,9 +345,7 @@ async function karar(slug, x, tur, kart) {
   if (kart && veri && veri.ok) {
     kart.remove();
     incelenecekler.delete(anahtarla(x.source));
-    const sayi = el("glossReviewSayi");
-    const m = /\((\d+)\)/.exec(sayi.textContent);
-    if (m) sayi.textContent = `İNCELENECEKLER (${Math.max(0, Number(m[1]) - 1)})`;
+    sayaciAzalt();
     if (tur === "onayla") bildir(`${x.source} doğru olarak işaretlendi.`);
   }
   if (tur === "reddet" && veri && veri.silinen) {
