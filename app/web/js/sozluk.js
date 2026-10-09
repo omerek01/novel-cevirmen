@@ -705,7 +705,8 @@ export function renderGlossary(terms) {
 
     const tgt = document.createElement("span");
     tgt.className = "gloss-target-metin";
-    tgt.textContent = glossIngilizceKorunan(source, target) ? "aynen" : target;
+    // "Aynen koru" kaydı: karşılık kelimenin KENDİSİDİR (eskiden "aynen" yazıyordu).
+    tgt.textContent = target;
 
     const cipler = document.createElement("span");
     cipler.className = "gloss-cipler";
