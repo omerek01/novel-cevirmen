@@ -281,24 +281,38 @@ def dogrula_parti(kayitlar, api_key='', kitap_basligi='', models=None):
             if not isinstance(x,dict) or x.get('kimlik') not in beklenen or x['kimlik'] in out:
                 raise ValueError('Yanlış veya yinelenen aday kimliği.')
             k = beklenen[x['kimlik']]
-            if x.get('source') != k['source'] or type(x.get('uygun')) is not bool or type(x.get('genel_sozcuk')) is not bool:
-                raise ValueError('Kaynak veya boolean alanları geçersiz.')
-            if x.get('karar') not in ('onay','red','inceleme','baglam_eksik'):
-                raise ValueError('Açık karar alanı geçersiz.')
-            if not all(isinstance(x.get(a),str) for a in ('tur','tanim','sorun','oneri')):
-                raise ValueError('Zorunlu açıklama alanı eksik.')
-            kanit = x.get('kanit')
-            if not isinstance(kanit,list):
-                raise ValueError('Kanıt listesi eksik.')
-            if x['karar'] == 'onay' and (not kanit or x['uygun'] is not True):
-                raise ValueError('Alıntısız veya olumlu olmayan onay.')
-            baglamlar = {b['id']:b for b in k['baglamlar']}
-            for q in kanit:
-                if not isinstance(q,dict) or q.get('baglam_id') not in baglamlar or not isinstance(q.get('alinti'),str):
-                    raise ValueError('Kanıt kimliği yanlış.')
-                if not q['alinti'].strip() or q['alinti'] not in baglamlar[q['baglam_id']]['metin'] or not translate._term_regex(k['source']).search(q['alinti']):
-                    raise ValueError('Alıntı kaynakta veya terim alıntıda yok.')
-            out[x['kimlik']] = x
+            # Kayıt DÜZEYİNDE kusur (eksik alan, alıntı kaynakta birebir yok…) yalnız o kaydı
+            # onaysız bırakır: 'inceleme' kararıyla sebebi yazılır, kural OLMAZ. Eskiden tek kayıt
+            # bütün partiyi ve sonraki çağrıları durduruyordu (2026-10-09, 439 kayıt bekledi).
+            try:
+                if x.get('source') != k['source'] or type(x.get('uygun')) is not bool or type(x.get('genel_sozcuk')) is not bool:
+                    raise ValueError('Kaynak veya boolean alanları geçersiz.')
+                if x.get('karar') not in ('onay','red','inceleme','baglam_eksik'):
+                    raise ValueError('Açık karar alanı geçersiz.')
+                # Boş açıklama `null` gelebilir (vertex 3.8, 2026-10-09: bütün partiler bu yüzden durdu);
+                # metin alanlarında null = boş metin. Karar/boolean/kimlik denetimleri katı kalır.
+                for alan in ('tur','tanim','sorun','oneri'):
+                    if x.get(alan) is None:
+                        x[alan] = ''
+                if not all(isinstance(x.get(a),str) for a in ('tur','tanim','sorun','oneri')):
+                    raise ValueError('Zorunlu açıklama alanı eksik.')
+                kanit = x.get('kanit')
+                if not isinstance(kanit,list):
+                    raise ValueError('Kanıt listesi eksik.')
+                if x['karar'] == 'onay' and (not kanit or x['uygun'] is not True):
+                    raise ValueError('Alıntısız veya olumlu olmayan onay.')
+                baglamlar = {b['id']:b for b in k['baglamlar']}
+                for q in kanit:
+                    if not isinstance(q,dict) or q.get('baglam_id') not in baglamlar or not isinstance(q.get('alinti'),str):
+                        raise ValueError('Kanıt kimliği yanlış.')
+                    if not q['alinti'].strip() or q['alinti'] not in baglamlar[q['baglam_id']]['metin'] or not translate._term_regex(k['source']).search(q['alinti']):
+                        raise ValueError('Alıntı kaynakta veya terim alıntıda yok.')
+                out[x['kimlik']] = x
+            except ValueError as kusur:
+                out[x['kimlik']] = {**{a: x.get(a) for a in ('kimlik', 'source')}, 'karar': 'inceleme',
+                                    'uygun': False, 'genel_sozcuk': bool(x.get('genel_sozcuk')) is True,
+                                    'tur': '', 'tanim': '', 'sorun': f'Doğrulanamadı: {kusur}', 'oneri': '',
+                                    'kanit': []}
         sozluk_isleri.deneme_bitir(ids,'yanit',model,ham)
         return {beklenen[id_]['source']:x for id_,x in out.items()}
     except (translate.TranslateError,ValueError,TypeError) as exc:

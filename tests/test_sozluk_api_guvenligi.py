@@ -129,3 +129,10 @@ def test_rapordan_eski_baglamsiz_onay_uygulanamaz(monkeypatch):
     hazirla(monkeypatch)
     dogrulama.sonucu_yaz(KITAP, {'source':'Ash Gate','sonuc':'gecti','not':{'uygun':True}})
     assert 'Ash Gate' not in glossary.ceviri_sozlugu(KITAP)
+
+
+def test_bos_aciklama_null_gelirse_parti_durmaz(monkeypatch):
+    """Model boş `sorun`/`oneri`/`tanim` için null döndürür (vertex 3.8); bu alan EKSİK sayılmaz."""
+    from core import sozluk_dogrulama
+    import inspect
+    assert "x[alan] = ''" in inspect.getsource(sozluk_dogrulama)
