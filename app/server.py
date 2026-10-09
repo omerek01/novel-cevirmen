@@ -855,6 +855,7 @@ def _kayit(slug: str, source: str) -> dict | None:
 @app.post("/api/book/{slug}/glossary/yazim")
 def add_glossary_spelling(slug: str, req: GlossaryYazim) -> dict:
     """Onaylı alternatif yazım ekle (aynı varlığın kaynak sitedeki öteki yazımı)."""
+    ayri = _kayit(slug, req.yazim)  # yazım ayrı bir kayıtsa ekleme onu siler
     try:
         yazimlar = glossary.yazim_ekle(slug, req.source, req.yazim, taban_surum=req.taban_surum)
     except glossary.SurumCakismasi as exc:
@@ -863,7 +864,9 @@ def add_glossary_spelling(slug: str, req: GlossaryYazim) -> dict:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     if yazimlar is None:
         raise _kayit_bulunamadi()
-    return {"yazimlar": yazimlar, "kayit": _kayit(slug, req.source)}
+    kayit = _kayit(slug, req.source)
+    silinen = ayri["source"] if ayri and kayit and ayri["kimlik"] != kayit["kimlik"] else None
+    return {"yazimlar": yazimlar, "kayit": kayit, "silinen": silinen}
 
 
 @app.delete("/api/book/{slug}/glossary/yazim")

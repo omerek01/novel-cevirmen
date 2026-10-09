@@ -1617,13 +1617,26 @@ def yazim_ekle(book_slug: str, source: str, yazim: str, taban_surum: int | None 
     def is_(conn, satir):
         if anahtar == fold_term(satir["source"]):
             raise YazimCakismasi("Bu zaten kaydın kendi yazımı.")
-        baska = next(
-            (r[0] for r in conn.execute("SELECT source FROM glossary WHERE book_slug = ?", (book_slug,))
-             if fold_term(r[0]) == anahtar),
-            None,
-        )
-        if baska:
-            raise YazimCakismasi(f"'{baska}' ayrı bir kayıt olarak sözlükte var.")
+        # Yazım AYRI bir kayıt olarak duruyorsa (incelemede sık: `Orc Empire` /
+        # `Ore Empire`) o kayıt silinir ve yazıma dönüşür — kullanıcının kararı
+        # (2026-10-09): "aynı varlığın öteki yazımı" demek, ayrı kaydın gereksiz
+        # olduğunu söylemektir. Silinen kaydın kendi yazımları da bu kayda geçer.
+        baska = _bul(conn, book_slug, yazim)
+        if baska and baska["kimlik"] != satir["kimlik"]:
+            conn.execute(
+                "DELETE FROM glossary WHERE book_slug = ? AND source = ?", (book_slug, baska["source"])
+            )
+            _varlik_baglarini_sil(conn, book_slug, baska["kimlik"])
+            conn.execute(
+                "UPDATE sozluk_yazim SET kimlik = ? WHERE book_slug = ? AND kimlik = ?",
+                (satir["kimlik"], book_slug, baska["kimlik"]),
+            )
+            for tablo in ("sozluk_anlam", "sozluk_yasak"):
+                conn.execute(
+                    f"DELETE FROM {tablo} WHERE book_slug = ? AND kimlik = ?", (book_slug, baska["kimlik"])
+                )
+            _gecmise_yaz(conn, book_slug, "sil", baska, None, "yazim_birlestir",
+                         _kitap_surumunu_artir(conn, book_slug))
         mevcut = conn.execute(
             "SELECT kimlik FROM sozluk_yazim WHERE book_slug = ? AND anahtar = ?", (book_slug, anahtar)
         ).fetchone()

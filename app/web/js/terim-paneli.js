@@ -461,6 +461,13 @@ async function ekIstegi(yontem, tur, kaynak, alanlar) {
     ek.anlamlar = veri.anlamlar;
     ekleriCiz(kaynak);
   }
+  if (veri.silinen) {
+    // Yazım ayrı bir kayıttı: sunucu onu sildi ve bu kayda bağladı. Liste tazelenir.
+    yaz("terimEkDurum", `"${veri.silinen}" ayrı kayıttı; silindi ve bu kaydın yazımı oldu.`);
+    await fetchGlossary(slug);
+    yenidenSuz();
+    return;
+  }
   yaz("terimEkDurum", "Sunucuya kaydedildi. Yeni çevrilen bölümlerde geçerli.");
 }
 

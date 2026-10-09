@@ -126,8 +126,6 @@ def test_yazim_cakismalari_reddedilir():
     glossary.set_term(KITAP, "Ore", "Cevher")
     with pytest.raises(glossary.YazimCakismasi):
         glossary.yazim_ekle(KITAP, "Orc Empire", "OrcEmpire")  # kendi yazımı
-    with pytest.raises(glossary.YazimCakismasi):
-        glossary.yazim_ekle(KITAP, "Orc Empire", "Ore")  # ayrı kayıt
     glossary.set_term(KITAP, "Saint", "Aziz")
     glossary.yazim_ekle(KITAP, "Orc Empire", "Ork Empire")
     with pytest.raises(glossary.YazimCakismasi):
@@ -284,3 +282,30 @@ def test_ek_anlam_ad_alanlari_saklanir_ve_grafik_kurali_uretir():
     # İşaretsiz ek anlam (yalnız koşullu karşılık) grafik düğümü AÇMAZ.
     glossary.anlamlari_yaz(KITAP, "Dream", [{"target": "Düş", "kosul": "mecaz"}])
     assert vg.DugumCozucu(KITAP).coz("Dream") not in vg.anlam_kurallari(KITAP)
+
+
+def test_ayri_kayit_yazim_olarak_eklenince_silinir_ve_yazimlari_tasinir():
+    # Kullanıcı kararı (2026-10-09): incelemede ayrı kayıt olan bir yazımı "öteki
+    # yazım" diye eklemek hata vermemeli; ayrı kayıt sözlükten çıkar.
+    glossary.set_term(KITAP, "Orc Empire", "Ork İmparatorluğu")
+    glossary.set_term(KITAP, "Ore Empire", "Cevher İmparatorluğu")
+    glossary.yazim_ekle(KITAP, "Ore Empire", "Oore Empire")
+    assert set(glossary.yazim_ekle(KITAP, "Orc Empire", "Ore Empire")) == {"Ore Empire", "Oore Empire"}
+    kalan = {r["source"] for r in glossary.get_glossary_rows(KITAP)}
+    assert "Ore Empire" not in kalan and "Orc Empire" in kalan
+    assert glossary.gecmis(KITAP, "Ore Empire")[0]["islem"] == "sil"
+
+
+def test_yazim_ucu_silinen_ayri_kaydi_bildirir():
+    from fastapi.testclient import TestClient
+
+    import server
+
+    glossary.set_term(KITAP, "Orc Empire", "Ork İmparatorluğu")
+    glossary.set_term(KITAP, "Ore Empire", "Cevher İmparatorluğu")
+    c = TestClient(server.app)
+    r = c.post(f"/api/book/{KITAP}/glossary/yazim", json={"source": "Orc Empire", "yazim": "Ore Empire"})
+    assert r.status_code == 200, r.text
+    assert r.json()["silinen"] == "Ore Empire"
+    r = c.post(f"/api/book/{KITAP}/glossary/yazim", json={"source": "Orc Empire", "yazim": "Ork Empire"})
+    assert r.json()["silinen"] is None
