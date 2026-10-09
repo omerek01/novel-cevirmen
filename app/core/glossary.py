@@ -2086,6 +2086,78 @@ def reddi_kaldir(book_slug: str, source: str) -> bool:
         conn.close()
 
 
+# İnceleme listesinin AĞIR iki parçası (ölçüldü, sunucu kopyası 2026-10-09: 1102 kayıt,
+# 12.9 sn'nin 9.6'sı ihlal ölçümü, 2.1'i grafik kuralları). Arayüz isteği 8 sn'de
+# vazgeçtiği için liste telefonda HİÇ açılmıyordu; her "Doğru"dan sonraki tazeleme de
+# aynı hesabı baştan yapıyordu. Sonuç girdilerin imzasıyla saklanır: sözlük satırları
+# (karşılık/koşul/durum/tür), bölüm çevirileri ve varlık bağları. İnceleme KARARI
+# imzaya girmez — onaylanan kayıt `ekle` süzgecinde canlı olarak düşer.
+# SİLME (inceleme ekranında "Reddet") kalan kayıtların sonucunu değiştirmez: saklanan
+# sözlük kümesi bugünkünü KAPSIYORSA hesap tekrarlanmaz, sonuç süzülür. İki parça AYRI
+# saklanır: silme varlık bağlarını da sildiği için yalnız (ucuz) grafik parçası yenilenir.
+_AGIR_ONBELLEK: dict[tuple[str, str], tuple[frozenset, tuple, dict]] = {}
+
+
+def _sozluk_ozeti(satir_listesi: list[dict]) -> frozenset:
+    return frozenset(
+        (r["source"], r.get("target"), r.get("kosul"), r.get("tur")) for r in satir_listesi
+    )
+
+
+def _imza_sorgusu(book_slug: str, sql: str) -> tuple | None:
+    conn = _connect()
+    try:
+        return tuple(conn.execute(sql, (book_slug,)).fetchone())
+    except sqlite3.OperationalError:  # tablo yok (boş DB, grafik kurulmamış)
+        return None
+    finally:
+        conn.close()
+
+
+def _onbellekli(book_slug: str, parca: str, ozet: frozenset, imza, kaynaklar: set[str], hesapla) -> dict:
+    saklanan = _AGIR_ONBELLEK.get((book_slug, parca))
+    if saklanan and saklanan[1] == imza and ozet <= saklanan[0]:
+        return {k: v for k, v in saklanan[2].items() if k in kaynaklar}
+    sonuc = hesapla()
+    _AGIR_ONBELLEK[(book_slug, parca)] = (ozet, imza, sonuc)
+    return sonuc
+
+
+def _agir_nedenler(book_slug: str, satir_listesi: list[dict], kaynaklar: set[str]) -> tuple[dict, dict]:
+    from . import sozluk_kapi, varlik_grafigi
+
+    def grafik_hesapla():
+        try:
+            # Grafik yoksa boş döner; grafik hatası inceleme listesini düşürmemeli.
+            return varlik_grafigi.kalite_nedenleri(book_slug)
+        except sqlite3.Error:
+            return {}
+
+    ozet = _sozluk_ozeti(satir_listesi)
+    ihlaller = _onbellekli(
+        book_slug, "ihlal", ozet,
+        _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(created_at), "
+                      "SUM(LENGTH(COALESCE(glossary_leaks, ''))) FROM chapters WHERE book_slug = ?"),
+        kaynaklar, lambda: sozluk_kapi.ihlal_supheleri(book_slug, kaynaklar),
+    )
+    grafik = _onbellekli(
+        book_slug, "grafik", ozet,
+        _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at), MAX(created_at) "
+                      "FROM varlik_bag WHERE book_slug = ?"),
+        kaynaklar, grafik_hesapla,
+    )
+    return ihlaller, grafik
+
+
+def sozluklu_kitaplar() -> list[str]:
+    """Sözlüğünde kayıt olan kitaplar (sunucu açılışındaki ısıtma için)."""
+    conn = _connect()
+    try:
+        return [r[0] for r in conn.execute("SELECT DISTINCT book_slug FROM glossary")]
+    finally:
+        conn.close()
+
+
 def inceleme_listesi(book_slug: str) -> list[dict]:
     """İncelenecek kayıtlar, NEDENLERİYLE. Onaylanmış kayıt listeye girmez.
 
@@ -2133,18 +2205,13 @@ def inceleme_listesi(book_slug: str) -> list[dict]:
             ekle(kaynak, sozluk_kapi.POLITIKA, sorun)
     for kaynak, n in sozluk_kapi.kalip_tutarsizliklari(satir_listesi).items():
         ekle(kaynak, n["tur"], n["aciklama"], n["ilgili"])
-    for kaynak, n in sozluk_kapi.ihlal_supheleri(book_slug, set(satirlar)).items():
+    ihlaller, grafik = _agir_nedenler(book_slug, satir_listesi, set(satirlar))
+    for kaynak, n in ihlaller.items():
         ekle(kaynak, n["tur"], n["aciklama"], (), bolumler=n.get("bolumler"))
     # VARLIK GRAFİĞİ kuralları (sınıf sözcüğü karışması, aynı kişinin adları).
-    # Grafik yoksa boş döner; grafik hatası inceleme listesini düşürmemeli.
-    from . import varlik_grafigi
-
-    try:
-        for kaynak, liste in varlik_grafigi.kalite_nedenleri(book_slug).items():
-            for n in liste:
-                ekle(kaynak, n["tur"], n["aciklama"], n.get("ilgili") or ())
-    except sqlite3.Error:
-        pass
+    for kaynak, liste in grafik.items():
+        for n in liste:
+            ekle(kaynak, n["tur"], n["aciklama"], n.get("ilgili") or ())
     for a, b in yakin_terimler(book_slug):
         ekle(a, "yakin_yazim", f"'{b}' ile tek harf farklı — biri yazım hatası olabilir.", [b])
         ekle(b, "yakin_yazim", f"'{a}' ile tek harf farklı — biri yazım hatası olabilir.", [a])

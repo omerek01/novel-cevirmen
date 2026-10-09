@@ -224,9 +224,18 @@ def _kapi_notu(kayit: dict) -> str:
 def baglamlari_kur(kayit, bolumler, adet=5):
     """Öbeği değiştirmemek için gerçek paragraflar kesilmeden seçilir."""
     desen = translate._term_regex(kayit['source'])
+    # ÖN ELEME (çıktı aynı): desen terimin BÜTÜN parçalarını metinde arar; parçalardan biri
+    # küçük harfli metinde hiç geçmiyorsa düzenli ifade çalıştırılmaz. Ölçüldü (sunucu kopyası
+    # 2026-10-09): kayıt başına 949 bölümde arama, kaydın 0.15 sn'sinin ~%95'iydi.
+    parcalar = [p.lower() for p in translate._term_parts(kayit['source'])]
     bulunan = []
     for b in bolumler:
         kaynak = b.get('source') or ''
+        kucuk = b.get('_kucuk')
+        if kucuk is None:
+            kucuk = b['_kucuk'] = kaynak.lower()
+        if not all(p in kucuk for p in parcalar):
+            continue
         # HIZ (cikti ayni): terimin gecmedigi bolum paragraf paragraf taranmaz; bolum ozeti bolum
         # basina BIR kez hesaplanir (e2-micro'da 439 kayit x 949 bolum saatler suruyordu).
         if not desen.search(kaynak):
@@ -337,7 +346,7 @@ def _sonuc(k,sonuc,not_,yanit=None):
         'not':not_, 'tur':glossary._tur(yanit.get('tur')), 'tanim':(yanit.get('tanim') or '')[:300] or None}
 
 
-def kitabi_dogrula(book_slug,kapsam='yeni',api_key='',parti=PARTI,sinir=None,yaz=True,ilerleme=None,models=None):
+def kitabi_dogrula(book_slug,kapsam='yeni',api_key='',parti=PARTI,sinir=None,yaz=True,ilerleme=None,models=None,durdur=None):
     if kapsam not in ('hepsi','yeni','eksik','bekleyen') or parti<1:
         raise ValueError('Geçersiz kapsam/parti.')
     api_key = api_key or os.getenv('GEMINI_API_KEY','')
@@ -353,7 +362,12 @@ def kitabi_dogrula(book_slug,kapsam='yeni',api_key='',parti=PARTI,sinir=None,yaz
     bolumler = cache.kaynak_bolumleri(book_slug)
     baslik = (library.get_book(book_slug) or {}).get('title') or book_slug
     sonuclar, hazir = [], []
-    for r in secilen:
+    for sira, r in enumerate(secilen, 1):
+        # Hazırlık (bağlam taraması) uzun sürer: ilerleme görünür, kullanıcı durdurabilir.
+        if durdur and durdur():
+            return sonuclar
+        if ilerleme and (sira == 1 or sira % 20 == 0):
+            ilerleme(f'Bağlam hazırlanıyor: {sira}/{len(secilen)} kayıt.')
         k = _hazirla(book_slug,r,bolumler,satirlar)
         job, calis = sozluk_isleri.hazirla(book_slug,k)
         if not calis:
@@ -373,6 +387,8 @@ def kitabi_dogrula(book_slug,kapsam='yeni',api_key='',parti=PARTI,sinir=None,yaz
         else:
             hazir.append(k)
     for i in range(0,len(hazir),min(parti,12)):
+        if durdur and durdur():
+            break
         grup = hazir[i:i+min(parti,12)]
         try:
             yanitlar = dogrula_parti(grup,api_key,baslik,models)
@@ -431,6 +447,8 @@ def sonucu_yaz(book_slug,kayit):
 
 # ---------- arka plan ----------
 _CALISAN: set[str] = set()
+_DURDUR: set[str] = set()
+ILERLEME: dict[str, dict] = {}
 _KILIT = threading.Lock()
 SON_DURUM: dict[str, dict] = {}
 
@@ -460,20 +478,38 @@ def arka_planda_dogrula(book_slug: str, kapsam: str = "yeni", bekle: float | Non
             # `threading.Thread` bağlamı KOPYALAMAZ: API kaydı amacı burada kurulur. Senkron yolla
             # aynı kitap kilidi: ikisi aynı kaydı iki kez sormaz.
             with _kitap_kilidi(book_slug), api_durum.islem("sozluk_dogrulama"):
-                sonuc = kitabi_dogrula(book_slug, kapsam, models=cevirinin_zinciri())
+                sonuc = kitabi_dogrula(
+                    book_slug, kapsam, models=cevirinin_zinciri(),
+                    ilerleme=lambda m: ILERLEME.__setitem__(book_slug, {"mesaj": m, "zaman": time.time()}),
+                    durdur=lambda: book_slug in _DURDUR,
+                )
             SON_DURUM[book_slug] = {
                 "zaman": time.time(), "islenen": len(sonuc),
                 "sorunlu": sum(1 for x in sonuc if x["sonuc"] == "sorunlu"),
+                "durduruldu": book_slug in _DURDUR,
             }
         except Exception as hata:  # noqa: BLE001 — arka plan işi çeviriyi asla düşürmez
             SON_DURUM[book_slug] = {"zaman": time.time(), "hata": str(hata)[:300]}
         finally:
             with _KILIT:
                 _CALISAN.discard(book_slug)
+                _DURDUR.discard(book_slug)
+                ILERLEME.pop(book_slug, None)
 
     threading.Thread(target=is_, name=f"sozluk-dogrulama-{book_slug}", daemon=True).start()
     return True
 
 
+def durdur(book_slug: str) -> bool:
+    """Süren doğrulamayı bir sonraki kayıtta / partide durdur. Çalışan iş yoksa False.
+    O ana kadar alınan sonuçlar yazılmış kalır."""
+    with _KILIT:
+        if book_slug not in _CALISAN:
+            return False
+        _DURDUR.add(book_slug)
+        return True
+
+
 def durum(book_slug: str) -> dict:
-    return {"calisiyor": book_slug in _CALISAN, "son": SON_DURUM.get(book_slug), "acik": acik_mi()}
+    return {"calisiyor": book_slug in _CALISAN, "son": SON_DURUM.get(book_slug), "acik": acik_mi(),
+            "ilerleme": ILERLEME.get(book_slug), "durduruluyor": book_slug in _DURDUR}

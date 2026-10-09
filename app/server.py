@@ -14,6 +14,7 @@ APP_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(APP_DIR))  # 'core' paketini CWD'den bağımsız import et
 
 import json  # noqa: E402
+import time  # noqa: E402
 import mimetypes  # noqa: E402
 import os  # noqa: E402
 
@@ -62,6 +63,26 @@ library.backfill_from_cache()
 def resume_bulk_jobs() -> None:
     """Sunucu açılırken yarım kalan toplu işleri checkpoint'lerinden sürdür."""
     jobs.resume_running(API_KEY)
+
+
+@app.on_event("startup")
+def warm_glossary_review() -> None:
+    """İnceleme listesinin ağır parçalarını arka planda önceden hesapla.
+
+    İlk hesap e2-micro'da on saniyeleri bulur; sözlük ekranı açıldığında beklenmesin.
+    Sözlük doğrulaması kapalıysa (testler) ısıtma da yapılmaz."""
+    if not sozluk_dogrulama.acik_mi():
+        return
+
+    def isit():
+        time.sleep(20)  # açılış (toplu işlerin sürdürülmesi) önce bitsin
+        for slug in glossary.sozluklu_kitaplar():
+            try:
+                glossary.inceleme_listesi(slug)
+            except Exception:  # noqa: BLE001 — ısıtma en iyi çabadır, sunucuyu düşürmez
+                pass
+
+    threading.Thread(target=isit, name="sozluk-inceleme-isitma", daemon=True).start()
 
 
 def _pipeline_http_error(exc: BaseException) -> HTTPException:
@@ -899,6 +920,9 @@ def glossary_review(slug: str) -> dict:
 def glossary_review_decision(slug: str, req: GlossaryKarar) -> dict:
     """Onayla: kayıt doğru (prompt değişmez). Reddet: kayıt silinir ve aday bir daha
     otomatik eklenmez. Reddin yanıtı `silinen`i taşır (geri alma için)."""
+    # Takma adla açılan kitap (`solo-leveling` -> kanonik) kaydı kanonik adla bulur;
+    # okuma ucu kanoniği kullanırken karar ucu kullanmıyordu: liste görünür, karar 404.
+    slug = library.resolve_slug(slug)
     if req.karar == "onayla":
         if not glossary.onayla(slug, req.source):
             raise _kayit_bulunamadi()
@@ -968,6 +992,13 @@ def start_glossary_verification(slug: str, req: GlossaryDogrula) -> dict:
 @app.get("/api/book/{slug}/glossary/verify")
 def glossary_verification_status(slug: str) -> dict:
     return sozluk_dogrulama.durum(library.resolve_slug(slug))
+
+
+@app.delete("/api/book/{slug}/glossary/verify")
+def stop_glossary_verification(slug: str) -> dict:
+    """Süren doğrulamayı durdur (o ana kadar alınan sonuçlar kalır)."""
+    canonical = library.resolve_slug(slug)
+    return {"durduruluyor": sozluk_dogrulama.durdur(canonical), **sozluk_dogrulama.durum(canonical)}
 
 
 @app.get("/api/book/{slug}/graph")
