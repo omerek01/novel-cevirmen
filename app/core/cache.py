@@ -87,6 +87,12 @@ def _connect() -> sqlite3.Connection:
     # sürümdeydi (`glossary.kitap_surumu`). `first_chapter` bunu söyleyemiyordu —
     # eski bir bölüm sonradan yeniden çevrilmiş olabilir. NULL = bilinmiyor.
     db.ensure_column(conn, "chapters", "sozluk_surumu", "sozluk_surumu INTEGER")
+    # ÖNERİLEN TERİMLER (2026-10-09): modelin bu bölümde önerdiği BÜTÜN Türkçe
+    # karşılıklı terimler (`detected_terms`, sözlük kapısından ÖNCE). `added_terms`
+    # yalnız YENİ eklenenleri tuttuğu için "terim kaç geçişte geçti, model kaçında
+    # önerdi" oranı hesaplanamıyordu (MP-CoVe'nin çıkarılma oranı; bkz.
+    # reports/sozluk-kalite-arastirma). NULL = kaydedilmedi (eski bölüm).
+    db.ensure_column(conn, "chapters", "onerilen_terimler", "onerilen_terimler TEXT")
     # ÇEVİRİ ARŞİVİ: yeniden çeviri (sözlük düzeltmesi sonrası) eski çeviriyi
     # sessizce eziyordu; yeni çeviri daha kötü çıkarsa (hizalama kaybı, kalıntı)
     # geri dönüş yoktu. Metin değişen HER yazımda eski hâl buraya düşer, url
@@ -662,8 +668,9 @@ def save_chapter(url: str, data: dict) -> None:
                 (url, book_slug, book_title, title, chapter_no,
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text, content_type, engine, added_terms, model,
-                 glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu, anlam_denetimi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu, anlam_denetimi,
+                 onerilen_terimler)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -680,7 +687,8 @@ def save_chapter(url: str, data: dict) -> None:
                     excluded.ingilizce_kalinti, ingilizce_kalinti),
                 uzunluk_orani = COALESCE(excluded.uzunluk_orani, uzunluk_orani),
                 sozluk_surumu = COALESCE(excluded.sozluk_surumu, sozluk_surumu),
-                anlam_denetimi = COALESCE(excluded.anlam_denetimi, anlam_denetimi)
+                anlam_denetimi = COALESCE(excluded.anlam_denetimi, anlam_denetimi),
+                onerilen_terimler = COALESCE(excluded.onerilen_terimler, onerilen_terimler)
             """,
             (
                 url,
@@ -720,6 +728,11 @@ def save_chapter(url: str, data: dict) -> None:
                 data.get("sozluk_surumu"),
                 json.dumps(data["anlam_denetimi"], ensure_ascii=False)
                 if data.get("anlam_denetimi") is not None
+                else None,
+                # Aynı None-vs-değer kuralı: terim önerisi taşımayan yol (görsel
+                # sayfa) eski kaydı ezmesin.
+                json.dumps(data["onerilen_terimler"], ensure_ascii=False)
+                if data.get("onerilen_terimler") is not None
                 else None,
             ),
         )

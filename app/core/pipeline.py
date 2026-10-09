@@ -404,6 +404,9 @@ def _do_fetch_translate_save(
         if merged and merged.get("title"):
             book_title = merged["title"]
 
+    # ÖNCE BEKLEME: önceki bölümlerde bulunup bekleyen terimler bu bölümün sözlüğü OKUNMADAN
+    # seçili modelle doğrulanır; onaylanan bu bölümün prompt'una girer.
+    sozluk_dogrulama.bekleyenleri_dogrula(book_slug, api_key)
     book_glossary = glossary.ceviri_sozlugu(book_slug)
     # KOŞULLU karşılıklar: aynı İngilizce sözcüğün bağlama göre farklı çevrildiği
     # kayıtlar. Ayrı çekilir çünkü `get_glossary` sade eşlemeyi döndürmeye devam
@@ -462,6 +465,9 @@ def _do_fetch_translate_save(
         # "gemini" der; kalite sorularının cevabı bu alanda.
         "model": result.get("model"),
         "added_terms": eklenen,
+        # Modelin bu bölümde önerdiği BÜTÜN terimler (kapıdan önce); çıkarılma oranı
+        # için saklanır. İki metin yolunda da AYNI alan (künye kuralı).
+        "onerilen_terimler": result.get("detected_terms"),
         # Sözlük uyum bayrağı: karşılığı KAYITLI olduğu hâlde İngilizce kalan terimler.
         "glossary_leaks": ihlaller,
         # İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş
@@ -569,6 +575,9 @@ def fetch_into_book(
     host_slug = chapter.get("book_slug")
     if host_slug and host_slug != target_slug:
         library.set_alias(host_slug, target_slug)
+    # ÖNCE BEKLEME: önceki bölümlerde bulunup bekleyen terimler bu bölümün sözlüğü OKUNMADAN
+    # seçili modelle doğrulanır; onaylanan bu bölümün prompt'una girer.
+    sozluk_dogrulama.bekleyenleri_dogrula(target_slug, api_key)
     book_glossary = glossary.ceviri_sozlugu(target_slug)
     # Koşullar `_fetch_translate_save` ile AYNI: sözlüğü okuyan her yol koşulları
     # da okumalı, yoksa "web'den devam" ile eklenen bölüm kuralın dışında kalır —
@@ -637,6 +646,9 @@ def fetch_into_book(
         # "GEMINI ile çevrildi" der, hangi halka olduğunu söylemezdi).
         "model": result.get("model"),
         "added_terms": eklenen,
+        # Modelin bu bölümde önerdiği BÜTÜN terimler (kapıdan önce); çıkarılma oranı
+        # için saklanır. İki metin yolunda da AYNI alan (künye kuralı).
+        "onerilen_terimler": result.get("detected_terms"),
         # Uyum bayrağı da `_fetch_translate_save` ile AYNI: künyeyi üreten dört
         # noktadan biri eksik kalırsa o yoldan gelen bölüm sessizce denetimsiz olur
         # — `model` alanında tam bu hata yaşandı.

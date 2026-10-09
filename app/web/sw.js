@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v107"; // sözlük inceleme: kapı nedenleri, TUTULDU, doğrulama
+const SHELL_CACHE = "novellink-shell-v108"; // Okuyucu: sözlük uyarısı (önce-bekleme)
 const DATA_CACHE = "novellink-data";
 const SHELL = [
   "/",
@@ -171,6 +171,8 @@ self.addEventListener("fetch", (event) => {
   // yanıtı zamanıyla tutup "bayat" diye işaretliyor. Kural genel /api/ dalından
   // ÖNCE durmalı (tests/test_api_durum_uclar.py tutar).
   if (url.pathname.startsWith("/api/settings/api-")) return;
+  // Sözlük uyarısı da canlıdır: çevrimdışı bayat sayı yanlış bilgidir.
+  if (url.pathname.endsWith("/glossary/uyari")) return;
 
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(request)); // /api/books, /chapters, /glossary (GET)

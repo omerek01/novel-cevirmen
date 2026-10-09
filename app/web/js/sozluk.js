@@ -463,7 +463,7 @@ export function refreshGlossPendingUi() {
   }
 }
 
-export async function openGlossary(slug) {
+export async function openGlossary(slug, filtre = null) {
   durum.currentBookSlug = slug;
   // Süzgeç kitapla birlikte sıfırlanır: başka kitaptan kalan bir süzgeç, bu kitabın
   // listesini sebepsiz boş gösterirdi.
@@ -473,6 +473,8 @@ export async function openGlossary(slug) {
   if (el("glossTurSuz")) el("glossTurSuz").value = "";
   if (el("glossSearch")) el("glossSearch").value = "";
   markSegment("glossFilter", "all", "data-gloss-filter");
+  // Okuyucudaki sözlük uyarısından gelindiyse süzgeç doğrudan o listeyi açar.
+  if (filtre) setTimeout(() => document.querySelector(`[data-gloss-filter="${filtre}"]`)?.click(), 0);
   refreshGlossExportLink(slug);
   setGlossIoState("");
   // fetchBooks() sunucuya ulaşamazsa null döner — sözlük çevrimdışı da açılmalı,

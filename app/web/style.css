@@ -2221,3 +2221,10 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 /* Sözlük spoiler süzgeci (Faz 1A) */
 .gloss-spoiler-note { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .gloss-cip-gizli { opacity: 0.75; border-style: dashed; }
+
+/* Okuyucu: elle karar bekleyen sözlük kayıtları (önce-bekleme politikası) */
+.sozluk-uyari {
+  display: block; width: 100%; margin: 12px 0 4px; padding: 10px 12px; text-align: left;
+  border: 1px solid var(--warn, #b7791f); border-radius: 10px; background: transparent;
+  color: var(--warn, #b7791f); font: inherit; font-size: 0.9em; cursor: pointer;
+}

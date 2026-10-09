@@ -61,7 +61,7 @@ export function applyNavState(state) {
       openBook(state.slug);
       break;
     case "glossary":
-      openGlossary(state.slug);
+      openGlossary(state.slug, state.filtre);
       break;
     case "apidurum":
       apiDurumGoster();

@@ -1404,6 +1404,23 @@ yoktu ve model ne önerirse KURAL oluyordu (`Weaver -> Weaver’s`, `Seven -> Ye
   ekranı hızlı kipi (bayraklı bölümler), bakım aracı `tam=True` kullanır (eski
   bölümlerde bayrak NULL: `Fool` ancak tam taramada görünür).
 
+**ÖNCE BEKLEME** (2026-10-09, kullanıcı kararı; yukarıdaki "kapıdan geçen aday kural olur"
+kaydının yerini alır): otomatik algılanan HER yeni kayıt (`merge_terms`/`merge_names`, origin
+`auto`) önce `durum='tutuldu'` + `inceleme='bekliyor'` yazılır, prompt'a GİRMEZ, künye "eklendi"
+demez. Arka plandaki doğrulama BAĞLAMLA sorar (ilk/orta/son geçişten 3 İngilizce cümle, Türkçe
+cümle, kapı notu, aynı karşılığı kullanan kayıtlar) ve `dogrulama_yaz` model "uygun" der VE kapı
+bulgusu yoksa kaydı KURAL yapar (sürüm artar, geçmişe yazılır); aksi hâlde insan incelemesi
+bekler. `glossary.bekleme_acik()`: `SOZLUK_DOGRULAMA=0` ise bekleme de kapalıdır (yoksa hiçbir
+kayıt aktifleşmezdi — testler bu yüzden eski davranışta koşar); `SOZLUK_BEKLEME=0` acil çıkış.
+Bedeli: bölüm N'de bulunan terim doğrulama bitene kadar (≤ ~5 dk biriktirme) sonraki bölümlerin
+prompt'una girmez. Eski bekleyen kayıtlar: `scripts/sozluk_dogrula.py --kapsam bekleyen`
+(`--uygula` → `glossary.bekleme_karari`: geçen işaretten kurtulur, sorunlu OTOMATİK kayıt
+beklemeye alınır, elle yazılmış kayıt prompt'tan ASLA çıkarılmaz). Önerilen terimler bölüm
+künyesinde saklanır (`chapters.onerilen_terimler`, çıkarılma oranı için). Temizlik
+(`scripts/sozluk_temizle.py`, bulguyu bilen vaka istekleri) ve örneklemeli tarama
+(`scripts/sozluk_tara.py`, TranslateBooksWithLLMs uyarlaması) yalnız ÖNERİ üretir; onaylı kayıt
+yazma kapısından geçer. Ölçüm: `reports/sozluk-kalite-arastirma/`.
+
 Bakım: `scripts/sozluk_denetle.py --kitap X` (API'siz tam denetim; `--isaretle`
 bulguları yazar ama kaydı KURAL bırakır — prompt'tan sessizce terim çekmek
 kullanıcının bilmediği bir davranış değişikliği olurdu) ve `scripts/sozluk_dogrula.py

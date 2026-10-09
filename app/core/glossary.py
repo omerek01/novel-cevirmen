@@ -7,6 +7,7 @@ chapters.db ile aynı dosyada ayrı bir tabloda tutulur.
 from __future__ import annotations
 
 import json
+import os
 import re
 import sqlite3
 import time
@@ -140,6 +141,8 @@ def _connect() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS sozluk_surumu "
         "(book_slug TEXT PRIMARY KEY, surum INTEGER NOT NULL)"
     )
+    conn.execute("CREATE TABLE IF NOT EXISTS sozluk_onceki_onay "
+                 "(book_slug TEXT, kimlik TEXT, veri TEXT NOT NULL, PRIMARY KEY(book_slug,kimlik))")
     # RET: kullanıcının reddettiği otomatik aday. Aynı aday her bölümde yeniden
     # önerilmesin diye `merge_terms` bu anahtarları atlar.
     conn.execute(
@@ -195,6 +198,11 @@ _SATIR_SUTUNLARI = ", ".join(_SATIR_ALANLARI)
 # `durum` da girer: "tutuldu"dan kurala geçen kayıt prompt'a girmeye BAŞLAR.
 _PROMPT_ALANLARI = ("target", "kosul", "durum")
 TUTULDU = "tutuldu"
+
+
+def bekleme_acik() -> bool:
+    """Doğrulama kapalı olsa da yeni aday etkinleşmez; onay şartı bayrakla kalkmaz."""
+    return True
 # `terimi_yaz`da "koşul verilmedi" işareti (None "temizle" ile karışmasın diye ayrı).
 KORU = object()
 GECMIS_MAX = 100  # geçmiş ucu kayıt başına en çok bu kadar döndürür
@@ -297,6 +305,12 @@ def _satir_ekle(conn: sqlite3.Connection, book_slug: str, satir: dict) -> dict:
 def _satiri_guncelle(conn, book_slug, mevcut, degisen, yol, kitap_surumu_al) -> dict:
     """Var olan satırı güncelle. Prompt alanı değiştiyse sürüm artar ve geçmişe
     yazılır; yalnız köken/origin değiştiyse sürüm artmaz, geçmiş yazılmaz."""
+    if yol in ("manual", "import") and any(
+        a in degisen and degisen[a] != mevcut.get(a) for a in ("target", "kosul", "tur")
+    ):
+        _onceki_onayi_sakla(conn, book_slug, mevcut)
+        degisen = {**degisen, "durum": TUTULDU, "inceleme": "bekliyor",
+                   "dogrulama": None, "dogrulama_notu": None}
     yeni = {**mevcut, **degisen}
     prompt_degisti = any(yeni.get(a) != mevcut.get(a) for a in _PROMPT_ALANLARI)
     if prompt_degisti:
@@ -312,6 +326,25 @@ def _satiri_guncelle(conn, book_slug, mevcut, degisen, yol, kitap_surumu_al) -> 
     if prompt_degisti:
         _gecmise_yaz(conn, book_slug, "guncelle", mevcut, yeni, yol, kitap_surumu_al())
     return yeni
+
+
+def _onceki_onayi_sakla(conn, book_slug, satir):
+    """Düzenlenen aday onaylanana kadar önceki etkin kuralı koru."""
+    if satir.get("durum") == TUTULDU:
+        return
+    veri = {**satir, "yazimlar": _yazimlar(conn, book_slug, satir["kimlik"]),
+            "anlamlar": _anlamlar(conn, book_slug, satir["kimlik"])}
+    conn.execute("INSERT OR REPLACE INTO sozluk_onceki_onay VALUES(?,?,?)",
+                 (book_slug, satir["kimlik"], json.dumps(veri, ensure_ascii=False)))
+
+
+def onceki_onaylar(book_slug):
+    conn = _connect()
+    try:
+        return {r[0]: json.loads(r[1]) for r in conn.execute(
+            "SELECT kimlik,veri FROM sozluk_onceki_onay WHERE book_slug=?", (book_slug,))}
+    finally:
+        conn.close()
 
 
 def terimi_yaz(
@@ -355,6 +388,7 @@ def terimi_yaz(
                 "source": source, "target": target, "origin": origin or "manual",
                 "kosul": None if kosul is KORU else ((kosul or "").strip() or None),
                 "tur": _tur(tur),
+                "durum": TUTULDU, "inceleme": "bekliyor",
             })
             _gecmise_yaz(conn, book_slug, "ekle", None, satir, origin or "manual", surum_al())
         else:
@@ -367,11 +401,6 @@ def terimi_yaz(
                 degisen["tur"] = _tur(tur)
             # Kullanıcı kaydı düzenledi: incelemeden geçmiş sayılır. Kapıda TUTULAN
             # aday da serbest kalır — karşılığı artık kullanıcının kararıdır.
-            if origin == "manual" and mevcut.get("inceleme") == "bekliyor":
-                degisen["inceleme"] = "onaylandi"
-            if origin == "manual":
-                degisen["durum"] = None
-                degisen["kapi"] = None
             satir = _satiri_guncelle(conn, book_slug, mevcut, degisen, origin or "manual", surum_al)
         conn.commit()
         return satir
@@ -661,6 +690,10 @@ def set_term(
     TAŞINIR (bkz. `terimi_yaz`).
     """
     terimi_yaz(book_slug, source, target, origin=origin)
+    # Eski bakım/fixture API'si açık insan kararıdır. HTTP ekleme/düzenleme
+    # `terimi_yaz` kullanır ve bu istisnaya girmez.
+    if origin == "manual":
+        onayla(book_slug, source)
 
 
 # ---------- yedek: tam kayıt dışa/içe aktarma ----------
@@ -800,6 +833,7 @@ def ice_aktar(book_slug: str, kayitlar: list, strateji: str = "mevcut") -> dict:
                     "tur": _tur(kayit.get("tur")),
                     "kimlik": kayit.get("kimlik") if kayit.get("kimlik") not in kimlikler else None,
                     "surum": (kayit.get("surum") or 0) + 1,
+                    "durum": TUTULDU, "inceleme": "bekliyor",
                 }
                 yeni = _satir_ekle(conn, book_slug, yeni)
                 kimlikler.add(yeni["kimlik"])
@@ -1111,14 +1145,12 @@ def merge_terms(
                     "source": k, "target": h, "created_at": simdi, "origin": origin,
                     "first_chapter": chapter_no, "kaynak_cumle": (cumleler or {}).get(k),
                     "inceleme": "bekliyor" if origin == "auto" else None, "tur": tur,
-                    "durum": TUTULDU if nedenler else None,
+                    "durum": TUTULDU,
                     "kapi": json.dumps(nedenler, ensure_ascii=False) if nedenler else None,
                 })
                 _gecmise_yaz(conn, book_slug, "ekle", None, satir, origin, kitap_surumu)
                 if kapi is not None:
                     kapi["satirlar"].append(satir)  # aynı yanıttaki ikinci aday bunu görsün
-                if not nedenler:
-                    etkili[k] = h
         conn.commit()
         # Döner: FİİLEN etkili olanlar. Tutulan aday prompt'a girmediği için künyede
         # "eklendi" denmez; inceleme listesinde sebebiyle görünür.
@@ -1612,6 +1644,13 @@ def ceviri_sozlugu(book_slug: str) -> dict[str, str]:
             continue
         for yazim in ek["yazimlar"]:
             sozluk.setdefault(yazim, sozluk[kaynak])
+    onceki = onceki_onaylar(book_slug)
+    for r in get_glossary_rows(book_slug):
+        eski = onceki.get(r["kimlik"]) if r.get("durum") == TUTULDU else None
+        if eski:
+            sozluk[eski["source"]] = eski["target"]
+            for yazim in eski.get("yazimlar", []):
+                sozluk.setdefault(yazim, eski["target"])
     return sozluk
 
 
@@ -1664,6 +1703,18 @@ def ceviri_kosullari(book_slug: str) -> dict[str, str]:
         for yazim in ek["yazimlar"]:
             if kaynak in kosullar and yazim not in sozluk:
                 kosullar.setdefault(yazim, kosullar[kaynak])
+    onceki = onceki_onaylar(book_slug)
+    for r in get_glossary_rows(book_slug):
+        eski = onceki.get(r["kimlik"]) if r.get("durum") == TUTULDU else None
+        if eski:
+            parcalar = [eski.get("kosul") or ""]
+            parcalar += [f'{EK_ANLAM_ISARETI} "{a["target"]}" — {a["kosul"]}'
+                         for a in eski.get("anlamlar", [])]
+            metin = " ; ".join(p for p in parcalar if p)
+            if metin:
+                kosullar[eski["source"]] = metin
+                for yazim in eski.get("yazimlar", []):
+                    kosullar[yazim] = metin
     return kosullar
 
 
@@ -1708,6 +1759,8 @@ def onayla(book_slug: str, source: str) -> bool:
                 "UPDATE glossary SET inceleme = 'onaylandi' WHERE book_slug = ? AND source = ?",
                 (book_slug, satir["source"]),
             )
+        conn.execute("DELETE FROM sozluk_onceki_onay WHERE book_slug=? AND kimlik=?",
+                     (book_slug, satir["kimlik"]))
         conn.commit()
         return True
     except BaseException:
@@ -1848,7 +1901,9 @@ def tanim_yaz(book_slug: str, source: str, tanim: str | None, tur: str | None = 
         conn.close()
 
 
-def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict) -> bool:
+def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict,
+                  *, beklenen_surum: int | None = None, kimlik: str | None = None,
+                  tanim: str | None = None, tur: str | None = None) -> bool:
     """Model doğrulamasının sonucunu yaz ("gecti" / "sorunlu"). Prompt'a girmez.
 
     Sorunlu sonuç kaydı DEĞİŞTİRMEZ; yalnız incelemeye düşürür (`inceleme =
@@ -1856,12 +1911,49 @@ def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict) -> bool:
     önce ONAYLADIĞI kayıt yeniden incelemeye düşmez."""
     conn = _connect()
     try:
+        conn.execute("BEGIN IMMEDIATE")
         satir = _bul(conn, book_slug, normalize_source(source) or source)
         if satir is None:
+            return False
+        if (beklenen_surum is not None and satir.get("surum") != beklenen_surum
+                or kimlik is not None and satir.get("kimlik") != kimlik):
+            conn.rollback()
             return False
         inceleme = satir.get("inceleme")
         if sonuc == "sorunlu" and inceleme != "onaylandi":
             inceleme = "bekliyor"
+        # ÖNCE BEKLEME: bekleyen OTOMATİK kayıt, model bağlamıyla onaylarsa ve yazma kapısının
+        # bulgusu yoksa KURAL olur (prompt değişikliği: sürüm artar, geçmişe yazılır). Kapı
+        # bulgusu varsa ya da model sorun gördüyse bekler; karar insanındır.
+        # Model onayı yalnız kaynak bağlı yeni sözleşme ve güncel kapı geçerse etkinleşir.
+        guvenilir = (not_.get("sozlesme") == "baglam-v2" and not_.get("uygun") is True
+                     and bool(not_.get("kanit")) and bool(not_.get("baglam_hash")))
+        kapibaglam = _kapi_baglami(conn, book_slug)
+        kapibulgu = kapibaglam["modul"].kapi_denetle(
+            satir["source"], satir.get("target") or satir["source"],
+            [r for r in kapibaglam["satirlar"] if r["source"] != satir["source"]],
+            kapibaglam["yasaklar"], kapibaglam["politikalar"], satir.get("tur") or tur,
+        )["nedenler"]
+        if (sonuc in ("sorunlu", "inceleme", "baglam_eksik") and satir.get("origin") == "auto"
+                and satir.get("inceleme") != "onaylandi" and satir.get("durum") != TUTULDU):
+            _satiri_guncelle(conn, book_slug, satir, {"durum": TUTULDU, "inceleme": "bekliyor"},
+                             "dogrulama", lambda: _kitap_surumunu_artir(conn, book_slug))
+            satir = _bul(conn, book_slug, satir["source"])
+            inceleme = "bekliyor"
+        if (sonuc == "gecti" and guvenilir and satir.get("durum") == TUTULDU
+                and not kapibulgu and not json.loads(satir.get("kapi") or "[]")):
+            _satiri_guncelle(conn, book_slug, satir, {"durum": None, "inceleme": None}, "dogrulama",
+                             lambda: _kitap_surumunu_artir(conn, book_slug))
+            satir = _bul(conn, book_slug, satir["source"])
+            inceleme = None
+            conn.execute("DELETE FROM sozluk_onceki_onay WHERE book_slug=? AND kimlik=?",
+                         (book_slug, satir["kimlik"]))
+        if guvenilir and tanim and not satir.get("tanim"):
+            conn.execute("UPDATE glossary SET tanim=? WHERE book_slug=? AND source=?",
+                         (tanim, book_slug, satir["source"]))
+        if guvenilir and tur and not satir.get("tur"):
+            conn.execute("UPDATE glossary SET tur=? WHERE book_slug=? AND source=?",
+                         (_tur(tur), book_slug, satir["source"]))
         conn.execute(
             "UPDATE glossary SET dogrulama = ?, dogrulama_notu = ?, inceleme = ? "
             "WHERE book_slug = ? AND source = ?",
@@ -1871,6 +1963,66 @@ def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict) -> bool:
         return True
     finally:
         conn.close()
+
+
+def bekleme_karari(book_slug: str, source: str, sonuc: str) -> str | None:
+    """Bekleme listesindeki ESKİ bir kaydın bağlamlı kontrol sonucunu uygula (önce-bekleme politikası).
+
+    * gecti + kapı bulgusu yok: inceleme işareti kalkar; tutulan otomatik kayıt KURAL olur.
+    * sorunlu + OTOMATİK + bugün kural: beklemeye alınır (prompt'tan çıkar; sürüm artar, geçmişe yazılır).
+    * Elle yazılmış kayıt ASLA prompt'tan çıkarılmaz; yalnız incelemede kalır.
+    Döner: yapılan işlem ("etkin" | "beklemeye_alindi" | "isaret_kalkti" | "dokunulmadi") ya da None."""
+    conn = _connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        satir = _bul(conn, book_slug, normalize_source(source) or source)
+        if satir is None:
+            conn.rollback()
+            return None
+        kapi = json.loads(satir.get("kapi") or "[]")
+        surum = lambda: _kitap_surumunu_artir(conn, book_slug)  # noqa: E731
+        if sonuc == "gecti" and not kapi:
+            if satir.get("durum") == TUTULDU and satir.get("origin") == "auto":
+                _satiri_guncelle(conn, book_slug, satir, {"durum": None, "inceleme": None}, "dogrulama", surum)
+                islem = "etkin"
+            elif satir.get("durum") is None and satir.get("inceleme") == "bekliyor":
+                conn.execute("UPDATE glossary SET inceleme = NULL WHERE book_slug = ? AND source = ?",
+                             (book_slug, satir["source"]))
+                islem = "isaret_kalkti"
+            else:
+                islem = "dokunulmadi"
+        elif sonuc == "sorunlu" and satir.get("origin") == "auto" and satir.get("durum") is None \
+                and satir.get("inceleme") != "onaylandi":
+            _satiri_guncelle(conn, book_slug, satir, {"durum": TUTULDU, "inceleme": "bekliyor"}, "dogrulama", surum)
+            islem = "beklemeye_alindi"
+        else:
+            islem = "dokunulmadi"
+        conn.commit()
+        return islem
+    finally:
+        conn.close()
+
+
+def uyari_listesi(book_slug: str) -> list[dict]:
+    """ELLE karar gereken kayıtlar (okuyucu uyarısı): model doğrulaması bitmiş ama kayıt onaylanmamış.
+
+    Doğrulanmamış bekleyen otomatik kayıt uyarı DEĞİLDİR (sırada; bir sonraki bölümden önce
+    doğrulanır). Neden: modelin sorunu, yoksa kapının ilk açıklaması."""
+    out = []
+    for r in get_glossary_rows(book_slug):
+        if r.get("inceleme") != "bekliyor" or not r.get("dogrulama"):
+            continue
+        if not (r.get("durum") == TUTULDU or r.get("dogrulama") == "sorunlu"):
+            continue
+        try:
+            not_ = json.loads(r.get("dogrulama_notu") or "{}")
+            kapi = json.loads(r.get("kapi") or "[]")
+        except (TypeError, ValueError):
+            not_, kapi = {}, []
+        neden = (not_ or {}).get("sorun") or (kapi[0].get("aciklama") if kapi else None)
+        out.append({"source": r["source"], "target": r.get("target"), "neden": neden,
+                    "oneri": (not_ or {}).get("oneri"), "prompt_disi": r.get("durum") == TUTULDU})
+    return out
 
 
 def kapi_isaretle(book_slug: str, nedenler: dict[str, list[dict]]) -> int:

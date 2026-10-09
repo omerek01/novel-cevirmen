@@ -685,6 +685,48 @@ export function renderParagraphs(entry, query) {
 export function appendKunye(entry, art) {
   const kart = kunyeKarti(entry);
   if (kart) art.appendChild(kart);
+  sozlukUyarisiEkle(art);
+}
+
+/* Sözlük uyarısı (önce-bekleme politikası): model doğrulamasından geçemeyen ya da kapıya takılan
+   kayıtlar ELLE karar ister. Kitap düzeyindedir, bölüm künyesi değil: her bölüm sonunda güncel sayı
+   gösterilir, dokununca sözlüğün "İncelenecek" süzgeci açılır. Sonsuz kaydırmada aynı kitap için
+   kısa süreli tek istek. */
+const UYARI_ONBELLEK_MS = 60000;
+let uyariSon = { slug: null, zaman: 0, veri: null, ucus: null };
+
+async function sozlukUyarisi(slug) {
+  if (uyariSon.slug === slug && Date.now() - uyariSon.zaman < UYARI_ONBELLEK_MS) return uyariSon.veri;
+  if (uyariSon.slug === slug && uyariSon.ucus) return uyariSon.ucus;
+  const ucus = fetch(`/api/book/${encodeURIComponent(slug)}/glossary/uyari`, { cache: "no-store" })
+    .then((r) => (r.ok ? r.json() : null))
+    .catch(() => null)
+    .then((veri) => {
+      uyariSon = { slug, zaman: Date.now(), veri, ucus: null };
+      return veri;
+    });
+  uyariSon = { ...uyariSon, slug, ucus };
+  return ucus;
+}
+
+export function sozlukUyariMetni(veri) {
+  if (!veri || !veri.sayi) return null;
+  const adlar = (veri.terimler || []).map((t) => t.source).slice(0, 3).join(", ");
+  return `⚠ Sözlükte incelemeni bekleyen ${veri.sayi} terim` + (adlar ? `: ${adlar}` : "") +
+    (veri.sayi > 3 ? "…" : "");
+}
+
+async function sozlukUyarisiEkle(art) {
+  const slug = durum.currentBookSlug;
+  if (!slug || !navigator.onLine) return;
+  const metin = sozlukUyariMetni(await sozlukUyarisi(slug));
+  if (!metin || art.querySelector(".sozluk-uyari")) return;
+  const btn = document.createElement("button");
+  btn.className = "sozluk-uyari";
+  btn.type = "button";
+  btn.textContent = metin + " → İncele";
+  btn.addEventListener("click", () => navigate({ view: "glossary", slug, filtre: "incelenecek" }));
+  art.appendChild(btn);
 }
 
 export function kunyeKarti(entry) {

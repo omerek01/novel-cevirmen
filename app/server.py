@@ -873,6 +873,15 @@ def set_glossary_senses(slug: str, req: GlossaryAnlamlar) -> dict:
     return {"anlamlar": anlamlar, "kayit": _kayit(slug, req.source)}
 
 
+@app.get("/api/book/{slug}/glossary/uyari")
+def glossary_uyari(slug: str, response: Response) -> dict:
+    """Okuyucu uyarısı: elle karar bekleyen sözlük kayıtları (sayı + ilk birkaçı). Önbelleğe ALINMAZ:
+    bayat bir "0" incelenmesi gereken kaydı gizlerdi."""
+    response.headers["Cache-Control"] = "no-store"
+    liste = glossary.uyari_listesi(library.resolve_slug(slug))
+    return {"sayi": len(liste), "terimler": liste[:5]}
+
+
 @app.get("/api/book/{slug}/glossary/review")
 def glossary_review(slug: str) -> dict:
     """İnceleme listesi (nedenleriyle) + reddedilen adaylar."""
@@ -943,8 +952,8 @@ def start_glossary_verification(slug: str, req: GlossaryDogrula) -> dict:
 
     Sonuç kayıtları değiştirmez; sorunlu bulunanlar inceleme listesine düşer.
     Bekleme yok: kullanıcı açıkça istedi, biriktirmeye gerek yok."""
-    if req.kapsam not in ("yeni", "hepsi"):
-        raise HTTPException(status_code=400, detail="kapsam: yeni | hepsi")
+    if req.kapsam not in ("yeni", "hepsi", "bekleyen", "eksik"):
+        raise HTTPException(status_code=400, detail="kapsam: yeni | hepsi | bekleyen | eksik")
     canonical = library.resolve_slug(slug)
     basladi = sozluk_dogrulama.arka_planda_dogrula(canonical, req.kapsam, bekle=0)
     return {"basladi": basladi, **sozluk_dogrulama.durum(canonical)}

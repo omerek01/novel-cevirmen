@@ -52,7 +52,7 @@ def ozet(sonuclar: list[dict]) -> None:
 def main() -> int:
     ayristirici = argparse.ArgumentParser(description=__doc__)
     ayristirici.add_argument("--kitap", required=True)
-    ayristirici.add_argument("--kapsam", choices=("hepsi", "yeni", "eksik"), default="hepsi",
+    ayristirici.add_argument("--kapsam", choices=("hepsi", "yeni", "eksik", "bekleyen"), default="hepsi",
                              help="eksik: hiç doğrulanmamış bütün kayıtlar (yarıda kalan koşuyu tamamlar)")
     ayristirici.add_argument("--model", help="tek model (ör. vertex/gemini-3.6-flash — ÜCRETLİ); yoksa ücretsiz zincir")
     ayristirici.add_argument("--calistir", action="store_true", help="modele sor (KOTA HARCAR)")
@@ -80,6 +80,8 @@ def main() -> int:
             satirlar = [r for r in satirlar if not r.get("dogrulama") and r.get("origin") == "auto"]
         elif args.kapsam == "eksik":
             satirlar = [r for r in satirlar if not r.get("dogrulama")]
+        elif args.kapsam == "bekleyen":
+            satirlar = [r for r in satirlar if r.get("inceleme") == "bekliyor" or r.get("durum") == glossary.TUTULDU]
         adet = min(len(satirlar), args.sinir or len(satirlar))
         print(f"{slug}: {adet} kayıt doğrulanacak, ~{-(-adet // args.parti)} istek "
               f"(zincir: {', '.join(sozluk_dogrulama.ucretsiz_zincir())}).")
@@ -91,9 +93,18 @@ def main() -> int:
         Path(args.cikti).write_text(json.dumps(sonuclar, ensure_ascii=False, indent=2), encoding="utf-8")
         print(f"\nRapor: {args.cikti}")
     if args.uygula:
+        islemler: dict[str, int] = {}
         for x in sonuclar:
-            sozluk_dogrulama.sonucu_yaz(slug, x)
-        print(f"\n{len(sonuclar)} sonuç işlendi (sorunlular inceleme listesinde; karşılıklar değişmedi).")
+            uygulandi = sozluk_dogrulama.sonucu_yaz(slug, x)
+            if not uygulandi:
+                islemler["uygulanmadi"] = islemler.get("uygulanmadi", 0) + 1
+                continue
+            if args.kapsam == "bekleyen" and x["sonuc"] != "gecti":
+                # Önce-bekleme politikası: onaylanmayan OTOMATİK kayıt kural olarak kalmaz
+                # (glossary.bekleme_karari; elle yazılmış kayda dokunmaz).
+                i = glossary.bekleme_karari(slug, x["source"], x["sonuc"]) or "kayit_yok"
+                islemler[i] = islemler.get(i, 0) + 1
+        print(f"\n{len(sonuclar)} sonuç işlendi. Bekleme kararları: {islemler or '-'}")
     else:
         print("\nVeritabanına yazılmadı. İşlemek için: --uygula")
     return 0
