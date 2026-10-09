@@ -458,8 +458,23 @@ def kalip_tutarsizliklari(satirlar: list[dict]) -> dict[str, dict]:
     for r in turkce:
         for s in r["target"].split():
             biçimler[s.casefold().strip("'’")].append(r["source"])
+    # Her biçim çiftini denemek (n²) sunucuda 3 sn sürüyordu. Yumuşama çifti tek bir
+    # yumuşayan harfte ayrışır: o harf maskelenince iki biçim aynı anahtara düşer.
+    # Yalnız aynı anahtarı paylaşanlar, eski taramanın sırasıyla denenir.
+    harfler = {x for x, _ in _YUMUSAMA}
+    sira = {w: i for i, w in enumerate(biçimler)}
+    maskeler: dict[str, list[str]] = defaultdict(list)
+    for w in biçimler:
+        for i, ch in enumerate(w):
+            if ch in harfler:
+                maskeler[w[:i] + "*" + w[i + 1:]].append(w)
+    komsular: dict[str, set[str]] = defaultdict(set)
+    for kova in maskeler.values():
+        for w in kova:
+            komsular[w].update(kova)
     for a, kaynaklar_a in biçimler.items():
-        for b, kaynaklar_b in biçimler.items():
+        for b in sorted(komsular.get(a, ()), key=sira.__getitem__):
+            kaynaklar_b = biçimler[b]
             if a >= b or not _yumusama_cifti(a, b):
                 continue
             azinlik, cogunluk = (a, b) if len(kaynaklar_a) < len(kaynaklar_b) else (b, a)

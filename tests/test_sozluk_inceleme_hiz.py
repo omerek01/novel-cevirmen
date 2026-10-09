@@ -95,3 +95,55 @@ def test_elle_duzenlenen_kayit_hesaplanan_nedenle_de_listeden_duser():
     assert "Orc Empire" in {x["source"] for x in glossary.inceleme_listesi(KITAP)}
     glossary.terimi_yaz(KITAP, "Orc Empire", "Ork İmparatorluğu")
     assert "Orc Empire" not in {x["source"] for x in glossary.inceleme_listesi(KITAP)}
+
+
+def test_yakin_ve_kalip_taramasi_her_cifti_denemekle_ayni_sonucu_verir(monkeypatch):
+    # Aday elemesi (n² yerine) sunucuda 10 sn'yi kesti; sonuç ve SIRA eski tam
+    # taramayla birebir aynı kalmalı.
+    import random
+
+    rnd = random.Random(7)
+    harf = "aeiokğtdpbçcsr"
+    kelimeler = ["".join(rnd.choice(harf) for _ in range(rnd.randint(2, 5))) for _ in range(160)]
+    kaynaklar = list(dict.fromkeys(kelimeler))
+
+    def eski_yakin(liste):
+        satirlar = [(s, glossary.fold_term(s)) for s in liste]
+        out = []
+        for i, (a, fa) in enumerate(satirlar):
+            for b, fb in satirlar[i + 1:]:
+                yer = glossary._fark_yeri(fa, fb)
+                if not yer or glossary._cogul_cifti(fa, fb):
+                    continue
+                if fa[yer[0]:yer[0] + 1].isdigit() or fb[yer[0]:yer[0] + 1].isdigit():
+                    continue
+                out.append((a, b))
+        return out
+
+    monkeypatch.setattr(glossary, "get_glossary", lambda _slug: {k: k for k in kaynaklar})
+    assert glossary.yakin_terimler(KITAP) == eski_yakin(kaynaklar)
+    assert glossary.yakin_terimler(KITAP)  # test gerçekten çift içeriyor
+
+    satirlar = [{"source": f"Src{i}", "target": " ".join(rnd.sample(kelimeler, 2))} for i in range(120)]
+    monkeypatch.setattr(sozluk_kapi, "ingilizce_korunan", lambda _k, _h: False)
+    yeni = sozluk_kapi.kalip_tutarsizliklari(satirlar)
+
+    # Eski davranış: komşuluk filtresi olmadan, tüm biçim çiftleri aday.
+    biçimler = {}
+    for r in satirlar:
+        for s in r["target"].split():
+            biçimler.setdefault(s.casefold().strip("'’"), []).append(r["source"])
+    beklenen_ciftler = {
+        (a, b) for a in biçimler for b in biçimler if a < b and sozluk_kapi._yumusama_cifti(a, b)
+    }
+    bulunan = {k for k, n in yeni.items() if "aynı sözcüğün iki yazımı" in n["aciklama"]}
+    beklenen = set()
+    for a, b in beklenen_ciftler:
+        ka, kb = biçimler[a], biçimler[b]
+        if len(ka) < len(kb):
+            beklenen.update(ka)
+        elif len(kb) < len(ka):
+            beklenen.update(kb)
+        else:
+            beklenen.update(ka + kb)
+    assert beklenen and bulunan == beklenen

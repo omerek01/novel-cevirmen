@@ -12,6 +12,8 @@ import re
 import sqlite3
 import time
 import uuid
+from collections import defaultdict
+from itertools import combinations
 
 from . import db
 
@@ -1345,16 +1347,26 @@ def yakin_terimler(book_slug: str) -> list[tuple[str, str]]:
     `merge_terms`/`set_term` onu ayrı satır açtırmaz; buraya düşmemeli.
     """
     satirlar = [(s, fold_term(s)) for s in get_glossary(book_slug)]
+    # Her çifti denemek (n²) sunucuda (e2-micro, 855 kayıt) 7 sn sürüyor ve inceleme
+    # listesini arayüzün 8 sn'lik sınırının üstüne itiyordu. Tek karakter farklı iki
+    # dizi, bir karakteri silinmiş hâllerinden birini PAYLAŞIR (değişimde aynı indis
+    # silinir; eklemede kısa olan, uzunun silinmiş hâlidir). Yalnız bu adaylar denenir;
+    # sıra eski taramayla aynıdır.
+    kovalar: dict[str, list[int]] = defaultdict(list)
+    for i, (_kaynak, f) in enumerate(satirlar):
+        for anahtar in {f} | {f[:k] + f[k + 1:] for k in range(len(f))}:
+            kovalar[anahtar].append(i)
+    adaylar = {cift for kova in kovalar.values() for cift in combinations(kova, 2)}
     ciftler: list[tuple[str, str]] = []
-    for i, (kaynak_a, fa) in enumerate(satirlar):
-        for kaynak_b, fb in satirlar[i + 1:]:
-            yer = _fark_yeri(fa, fb)
-            if not yer or _cogul_cifti(fa, fb):
-                continue
-            idx = yer[0]
-            if fa[idx:idx + 1].isdigit() or fb[idx:idx + 1].isdigit():
-                continue  # "Tier 2" / "Tier 3" — meşru ayrı kayıtlar
-            ciftler.append((kaynak_a, kaynak_b))
+    for i, j in sorted(adaylar):
+        (kaynak_a, fa), (kaynak_b, fb) = satirlar[i], satirlar[j]
+        yer = _fark_yeri(fa, fb)
+        if not yer or _cogul_cifti(fa, fb):
+            continue
+        idx = yer[0]
+        if fa[idx:idx + 1].isdigit() or fb[idx:idx + 1].isdigit():
+            continue  # "Tier 2" / "Tier 3" — meşru ayrı kayıtlar
+        ciftler.append((kaynak_a, kaynak_b))
     return ciftler
 
 
