@@ -98,7 +98,7 @@ def test_alternatif_yazim_ve_ek_anlam_panelden_eklenir(sayfa):
     satir = sayfa.locator("#terimAnlamlar .terim-anlam").last
     satir.locator(".terim-anlam-hedef").fill("Harika")
     sayfa.locator("#terimAnlamKaydet").click()
-    expect(sayfa.locator("#terimEkDurum")).to_contain_text("koşulu olmalı")
+    expect(sayfa.locator("#terimEkDurum")).to_contain_text("alanı boş")
     satir.locator(".terim-anlam-kosul").fill("gündelik ünlem")
     sayfa.locator("#terimAnlamKaydet").click()
     expect(sayfa.locator("#terimEkDurum")).to_contain_text("Sunucuya kaydedildi")

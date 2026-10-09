@@ -51,18 +51,43 @@ function dugme(metin, fn, sinif = "pill") {
   return b;
 }
 
+// Liste sunucuda HESAPLANIR; ilk hesap sunucuda on saniyeleri bulabiliyor (sonra
+// önbellekten gelir). 8 sn'lik sınır listeyi telefonda hiç açtırmıyordu ve her
+// karardan sonraki tazeleme de düşüp eski listeyi bırakıyordu.
+const INCELEME_ZAMAN_ASIMI = 60000;
+
 export async function incelemeyiYukle(slug) {
   const kutu = el("glossReviewBox");
   if (!kutu) return;
+  const sayi = el("glossReviewSayi");
+  if (kutu.hidden || !sayi.textContent.includes("(")) {
+    kutu.hidden = false;
+    sayi.textContent = "İNCELENECEKLER (hesaplanıyor…)";
+  }
   let veri;
   try {
-    const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/glossary/review`, {}, 8000);
+    const res = await fetchWithTimeout(
+      `/api/book/${encodeURIComponent(slug)}/glossary/review`, {}, INCELEME_ZAMAN_ASIMI
+    );
     if (!res.ok) throw new Error("sunucu " + res.status);
     veri = await res.json();
-  } catch {
-    // Çevrimdışı: kutu gizlenir (inceleme sunucu hesabıdır), liste çalışmaya devam eder.
-    incelenecekler = new Set();
-    kutu.hidden = true;
+  } catch (err) {
+    if (slug !== durum.currentBookSlug) return;
+    if (!navigator.onLine) {
+      // Çevrimdışı: kutu gizlenir (inceleme sunucu hesabıdır), liste çalışmaya devam eder.
+      incelenecekler = new Set();
+      kutu.hidden = true;
+      return;
+    }
+    // Sessizce gizlemek "kararım kaydedilmedi" gibi görünüyordu: hata görünür, yeniden denenir.
+    kutu.hidden = false;
+    sayi.textContent = "İNCELENECEKLER (yüklenemedi)";
+    const govde = el("glossReviewList");
+    const p = document.createElement("p");
+    p.className = "gloss-hint";
+    p.textContent = `Liste yüklenemedi (${err.name === "AbortError" ? "zaman aşımı" : err.message}). `;
+    p.appendChild(dugme("Tekrar dene", () => incelemeyiYukle(slug)));
+    govde.replaceChildren(p);
     return;
   }
   if (slug !== durum.currentBookSlug) return;
@@ -152,57 +177,112 @@ function satir(slug, x) {
   const eylem = document.createElement("div");
   eylem.className = "inceleme-eylem";
   eylem.append(
-    dugme("Doğru", () => karar(slug, x, "onayla"), "pill"),
-    dugme("Reddet", () => karar(slug, x, "reddet"), "pill terim-sil"),
+    dugme("Doğru", () => karar(slug, x, "onayla", kart), "pill"),
+    dugme("Reddet", () => karar(slug, x, "reddet", kart), "pill terim-sil"),
     dugme("Düzenle", () => terimPaneliAc({ slug, source: x.source }), "pill")
   );
   kart.appendChild(eylem);
   return kart;
 }
 
-// MODEL DOĞRULAMASI: sözlüğün tamamını ücretsiz zincire sordurur (arka planda,
-// sunucuda). Sonuç kayıtları DEĞİŞTİRMEZ; sorunlu bulunanlar bu listeye düşer.
+// MODEL DOĞRULAMASI: İNCELENECEK kayıtları ücretsiz zincire sordurur (arka planda,
+// sunucuda). Eskiden sözlüğün TAMAMINI (1100+ kayıt) sorduruyordu; sunucu yalnız bağlam
+// hazırlığında saatler harcıyor, ekran da ilerleme göstermediği için "takıldı" sanılıyordu.
+// Şimdi ilerleme 4 sn'de bir okunur, iş durdurulabilir, bitince liste kendiliğinden tazelenir.
+const DOGRULAMA_ARALIK = 4000;
+let dogrulamaZamanlayici = null;
+
+function dogrulamaUcu(slug) {
+  return `/api/book/${encodeURIComponent(slug)}/glossary/verify`;
+}
+
 function dogrulamaSatiri(slug) {
   const d = document.createElement("div");
   d.className = "inceleme-eylem inceleme-dogrula";
   const durumMetni = document.createElement("span");
   durumMetni.className = "gloss-hint";
-  d.append(
-    dugme("Sözlüğü doğrula", async () => {
-      try {
-        const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/glossary/verify`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ kapsam: "hepsi" }),
-        });
-        const veri = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error((veri && veri.detail) || "sunucu " + res.status);
-        if (veri.basladi) bildir("Doğrulama başladı (arka planda, birkaç dakika). Sonra listeyi tazele.");
-        else if (veri.calisiyor) bildir("Doğrulama zaten sürüyor.");
-        else bildir("Doğrulama başlatılamadı (sunucuda kapalı ya da anahtar yok).");
-      } catch (err) {
-        bildir("Doğrulama başlatılamadı (" + err.message + ").");
-      }
-    }),
-    durumMetni
-  );
-  fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/glossary/verify`, {}, 8000)
-    .then((r) => (r.ok ? r.json() : null))
-    .then((v) => {
-      if (!v) return;
-      if (v.calisiyor) durumMetni.textContent = "doğrulama sürüyor…";
-      else if (v.son && v.son.hata) durumMetni.textContent = "son doğrulama hata verdi";
-      else if (v.son) durumMetni.textContent = `son doğrulama: ${v.son.islenen} kayıt, ${v.son.sorunlu} sorunlu`;
-    })
-    .catch(() => {});
+  const baslat = dugme("İncelenecekleri doğrula", async () => {
+    try {
+      const res = await fetchWithTimeout(dogrulamaUcu(slug), {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kapsam: "bekleyen" }),
+      });
+      const veri = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((veri && veri.detail) || "sunucu " + res.status);
+      if (veri.basladi) bildir("Doğrulama başladı. İlerleme bu satırda görünür; bitince liste tazelenir.");
+      else if (veri.calisiyor) bildir("Doğrulama zaten sürüyor.");
+      else bildir("Doğrulama başlatılamadı (sunucuda kapalı ya da anahtar yok).");
+      izle(slug, d, durumMetni, baslat, durdur);
+    } catch (err) {
+      bildir("Doğrulama başlatılamadı (" + err.message + ").");
+    }
+  });
+  baslat.title = "İnceleme listesindeki kayıtları ücretsiz modele, kitaptaki cümleleriyle sordurur. "
+    + "Uygun bulunan otomatik kayıtlar kural olur; sorunlu olanlar burada kalır.";
+  const durdur = dugme("Durdur", async () => {
+    try {
+      await fetchWithTimeout(dogrulamaUcu(slug), { method: "DELETE" });
+      durumMetni.textContent = "durduruluyor…";
+    } catch {
+      bildir("Durdurulamadı (sunucuya ulaşılamadı).");
+    }
+  }, "pill terim-sil");
+  durdur.hidden = true;
+  d.append(baslat, durdur, durumMetni);
+  izle(slug, d, durumMetni, baslat, durdur);
   return d;
 }
 
-async function karar(slug, x, tur) {
+function izle(slug, satir, durumMetni, baslat, durdur) {
+  clearTimeout(dogrulamaZamanlayici);
+  let sonCalisiyor = null;
+  const tur = async () => {
+    if (!satir.isConnected || slug !== durum.currentBookSlug) return;
+    let v = null;
+    try {
+      const r = await fetchWithTimeout(dogrulamaUcu(slug), {}, 8000);
+      v = r.ok ? await r.json() : null;
+    } catch {
+      v = null;
+    }
+    if (v) {
+      baslat.disabled = v.calisiyor;
+      durdur.hidden = !v.calisiyor;
+      if (v.calisiyor) {
+        durumMetni.textContent = v.durduruluyor
+          ? "durduruluyor…"
+          : "doğrulama sürüyor" + (v.ilerleme ? " — " + v.ilerleme.mesaj : "…");
+      } else if (v.son && v.son.hata) {
+        durumMetni.textContent = "son doğrulama hata verdi: " + v.son.hata;
+      } else if (v.son) {
+        durumMetni.textContent = `son doğrulama${v.son.durduruldu ? " (durduruldu)" : ""}: `
+          + `${v.son.islenen} kayıt, ${v.son.sorunlu} sorunlu`;
+      } else {
+        durumMetni.textContent = "";
+      }
+      // Bitti: sonuçlar listeyi değiştirdi, kendiliğinden tazele.
+      if (sonCalisiyor === true && !v.calisiyor) {
+        await incelemeyiYukle(slug);
+        return;
+      }
+      sonCalisiyor = v.calisiyor;
+      if (!v.calisiyor) return;
+    }
+    dogrulamaZamanlayici = setTimeout(tur, DOGRULAMA_ARALIK);
+  };
+  tur();
+}
+
+async function karar(slug, x, tur, kart) {
   const govde = { source: x.source, karar: tur };
-  const satirBilgisi = glossRows[x.source];
-  if (tur === "reddet" && satirBilgisi && Number.isFinite(satirBilgisi.surum)) {
-    govde.taban_surum = satirBilgisi.surum;
+  // Taban sürüm İNCELEME satırının kendi sürümüdür: sözlük ekranının satırı (glossRows)
+  // tazelenmemiş olabiliyordu ve her denemede 409 dönüyordu.
+  const surum = Number.isFinite(x.surum) ? x.surum : (glossRows[x.source] || {}).surum;
+  if (tur === "reddet" && Number.isFinite(surum)) govde.taban_surum = surum;
+  if (kart) {
+    kart.classList.add("inceleme-isleniyor");
+    kart.querySelectorAll("button").forEach((b) => (b.disabled = true));
   }
   let veri;
   try {
@@ -213,13 +293,26 @@ async function karar(slug, x, tur) {
     });
     veri = await res.json().catch(() => ({}));
     if (res.status === 409) {
-      bildir(`${x.source} başka bir cihazda değişti — liste tazelendi, tekrar bak.`);
+      bildir(`${x.source} bu arada değişti (arka plan doğrulaması ya da başka cihaz) — liste tazelendi, tekrar bak.`);
     } else if (!res.ok) {
       throw new Error((veri && veri.detail) || "sunucu " + res.status);
     }
   } catch (err) {
+    if (kart) {
+      kart.classList.remove("inceleme-isleniyor");
+      kart.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    }
     bildir("Karar kaydedilemedi (" + err.message + "). İnceleme çevrimiçi yapılır.");
     return;
+  }
+  // Karar kaydedildi: kart HEMEN düşer (liste tazelenmesi sürse bile kabul edildiği görünür).
+  if (kart && veri && veri.ok) {
+    kart.remove();
+    incelenecekler.delete(anahtarla(x.source));
+    const sayi = el("glossReviewSayi");
+    const m = /\((\d+)\)/.exec(sayi.textContent);
+    if (m) sayi.textContent = `İNCELENECEKLER (${Math.max(0, Number(m[1]) - 1)})`;
+    if (tur === "onayla") bildir(`${x.source} doğru olarak işaretlendi.`);
   }
   if (tur === "reddet" && veri && veri.silinen) {
     const silinen = veri.silinen;

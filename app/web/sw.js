@@ -173,6 +173,10 @@ self.addEventListener("fetch", (event) => {
   if (url.pathname.startsWith("/api/settings/api-")) return;
   // Sözlük uyarısı da canlıdır: çevrimdışı bayat sayı yanlış bilgidir.
   if (url.pathname.endsWith("/glossary/uyari")) return;
+  // İnceleme listesi ve doğrulama durumu da canlı HESAPTIR ve ilk hesap 4 sn'yi aşabiliyor:
+  // networkFirst 4 sn'de önbelleğe düşüyor, önbellekte de olmadığı için istek ERR_FAILED
+  // oluyordu (liste telefonda açılmıyor, "Doğru"dan sonraki tazeleme düşüyordu).
+  if (url.pathname.endsWith("/glossary/review") || url.pathname.endsWith("/glossary/verify")) return;
 
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(request)); // /api/books, /chapters, /glossary (GET)

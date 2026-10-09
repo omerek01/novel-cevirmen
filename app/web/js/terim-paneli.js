@@ -464,21 +464,34 @@ async function ekIstegi(yontem, tur, kaynak, alanlar) {
 
 function anlamlariKaydet() {
   if (!panel || !panel.kayitli) return;
-  const anlamlar = [...el("terimAnlamlar").querySelectorAll(".terim-anlam")]
-    .map((s) => {
-      const adMi = s.querySelector(".terim-anlam-ad-mi").checked;
-      const ilk = s.querySelector(".terim-anlam-ilk").value.trim();
-      return {
-        target: s.querySelector(".terim-anlam-hedef").value.trim(),
-        kosul: s.querySelector(".terim-anlam-kosul").value.trim(),
-        ad_mi: adMi,
-        etiket: adMi ? s.querySelector(".terim-anlam-etiket").value.trim() || null : null,
-        ilk_bolum: adMi && ilk ? Number(ilk) : null,
-      };
-    })
-    .filter((a) => a.target);
-  if (anlamlar.some((a) => !a.kosul)) {
-    yaz("terimEkDurum", "Her ek anlamın koşulu olmalı: model hangisini ne zaman yazacağını ancak böyle bilir.");
+  const satirlar = [...el("terimAnlamlar").querySelectorAll(".terim-anlam")];
+  let eksik = null;
+  const anlamlar = [];
+  for (const s of satirlar) {
+    const adMi = s.querySelector(".terim-anlam-ad-mi").checked;
+    const ilk = s.querySelector(".terim-anlam-ilk").value.trim();
+    const etiket = adMi ? s.querySelector(".terim-anlam-etiket").value.trim() || null : null;
+    const kosulAlani = s.querySelector(".terim-anlam-kosul");
+    // "Bu bir ad" + kısa ad yazıldıysa koşul ondan kurulur (Saint: "gölge adı olarak geçtiğinde").
+    if (adMi && etiket && !kosulAlani.value.trim()) kosulAlani.value = `${etiket} adı olarak geçtiğinde`;
+    const a = {
+      target: s.querySelector(".terim-anlam-hedef").value.trim(),
+      kosul: kosulAlani.value.trim(),
+      ad_mi: adMi,
+      etiket,
+      ilk_bolum: adMi && ilk ? Number(ilk) : null,
+    };
+    kosulAlani.classList.toggle("alan-hatali", !!a.target && !a.kosul);
+    if (!a.target) continue;
+    if (!a.kosul && !eksik) eksik = kosulAlani;
+    anlamlar.push(a);
+  }
+  if (eksik) {
+    // Eskiden yalnız panelin dibindeki küçük satıra yazılıyordu; kayıt yapılmadığı fark edilmiyordu.
+    const mesaj = "Kaydedilmedi: ek anlamın \"Hangi bağlamda\" alanı boş. Model iki anlamdan hangisini ne zaman yazacağını bu cümleden anlar.";
+    yaz("terimEkDurum", mesaj);
+    bildir(mesaj);
+    eksik.focus();
     return;
   }
   ekIstegi("PUT", "anlamlar", panel.kayitli, { anlamlar });
