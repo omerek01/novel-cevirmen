@@ -7,6 +7,7 @@ import { fetchBooks } from "./kutuphane.js";
 import { chapterListFor, ensureChapterList } from "./okuyucu.js";
 import { anahtarla, kuyrukOlustur } from "./sozluk-kuyruk.js";
 import { incelemeyiYukle, incelenecekler } from "./sozluk-inceleme.js";
+import { turleriAyarla } from "./sozluk-turler.js";
 import { terimPaneliAc } from "./terim-paneli.js";
 import { el, markSegment } from "./temel.js";
 
@@ -341,6 +342,7 @@ export async function fetchGlossary(slug) {
     glossWarnPairs = data.warnings || [];
     glossSurum = Number.isFinite(data.surum) ? data.surum : null;
     glossEkler = data.ekler || {};
+    turleriAyarla(data.turler);
   } catch {
     terms = {}; // çevrimdışı + hiç önbellek yok: yalnız bekleyen kayıtlar görünsün
   }

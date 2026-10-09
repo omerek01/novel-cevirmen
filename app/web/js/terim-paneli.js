@@ -36,6 +36,7 @@ import {
   kokeneGit,
   kuyrukDinle,
   overlayGloss,
+  renderGlossary,
   saveTerm,
   terimDurumu,
   terimiSilGeriAlinabilir,
@@ -44,6 +45,7 @@ import {
 import { anahtarla } from "./sozluk-kuyruk.js";
 import { adayTerimler, cumleBul, sonucEtiketi, trimSecim } from "./terim-yardimci.js";
 import { el } from "./temel.js";
+import { turYoneticisiniBagla } from "./sozluk-turler.js";
 
 const PANEL = "terimPaneli";
 const IS_YOKLAMA_MS = 3000;
@@ -871,6 +873,12 @@ export function kur() {
     satir.querySelector("input").focus();
   });
   el("terimAnlamKaydet").addEventListener("click", anlamlariKaydet);
+  turYoneticisiniBagla();
+  // Tür silinince o türdeki kayıtların türü sunucuda boşaldı: satırları tazele.
+  document.addEventListener("sozluk-turler-degisti", async () => {
+    const slug = durum.currentBookSlug;
+    if (slug && !views.glossary.hidden) renderGlossary(await fetchGlossary(slug));
+  });
   // Ayarlar → "Önceki çeviri — Geri dön": açık bölümün en son arşivlenen çevirisi.
   el("arsivGeri")?.addEventListener("click", async () => {
     const e = activeEntry();

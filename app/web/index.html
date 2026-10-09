@@ -481,6 +481,20 @@
           <option value="diger">Diğer</option>
         </select>
       </label>
+      <!-- Türler KİTABA özeldir: yeni tür eklenir, hazır türler dahil hepsi yeniden
+           adlandırılır ya da silinir (silinen türün kayıtları silinmez, türü boşalır). -->
+      <details id="terimTurYonet" class="terim-ekler">
+        <summary class="style-summary">TÜRLERİ YÖNET</summary>
+        <p class="modal-hint">Türler yalnız bu kitapta geçerlidir ve çeviriyi etkilemez; sözlüğü
+          düzenlemek ve süzmek içindir.</p>
+        <div class="terim-tur-satir">
+          <input id="terimTurYeni" type="text" maxlength="30" autocomplete="off"
+                 placeholder="Yeni tür adı (örn. Klan)" aria-label="Yeni tür adı" />
+          <button id="terimTurEkle" type="button" class="pill">Tür ekle</button>
+        </div>
+        <div id="terimTurListe" class="terim-tur-liste"></div>
+        <p id="terimTurDurum" class="modal-hint" role="status" aria-live="polite"></p>
+      </details>
       <label class="terim-alan">
         <span class="terim-etiket">KOŞUL (isteğe bağlı)</span>
         <textarea id="terimKosul" rows="2" autocomplete="off"

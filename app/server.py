@@ -771,6 +771,8 @@ def get_book_glossary(
         # Yasak karşılıklar ve kategori politikası (`sozluk_kapi`).
         "yasaklar": g["yasaklar"],
         "politikalar": glossary.politikalar(slug),
+        # Tür listesi: hazır türler + bu kitaba özel türler (panel ve süzgeç buradan çizer).
+        "turler": glossary.turler(slug),
         "spoiler_suzgeci": {"bolum": etkin, "gizlenen_kayit": g["gizlenen_kayit"]},
     }
     if bolum is not None:
@@ -963,7 +965,53 @@ def set_glossary_definition(slug: str, req: GlossaryTanim) -> dict:
 
 @app.get("/api/book/{slug}/glossary/politika")
 def get_glossary_policy(slug: str) -> dict:
-    return {"politikalar": glossary.politikalar(library.resolve_slug(slug)), "turler": glossary.TURLER}
+    canonical = library.resolve_slug(slug)
+    return {"politikalar": glossary.politikalar(canonical),
+            "turler": [t["kod"] for t in glossary.turler(canonical)]}
+
+
+class GlossaryTurEkle(BaseModel):
+    ad: str
+
+
+@app.post("/api/book/{slug}/glossary/turler")
+def add_glossary_type(slug: str, req: GlossaryTurEkle) -> dict:
+    """Kitaba özel terim türü ekle (yalnız bu kitabın sözlüğünde geçerli)."""
+    canonical = library.resolve_slug(slug)
+    try:
+        kod = glossary.tur_ekle(canonical, req.ad)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"kod": kod, "turler": glossary.turler(canonical)}
+
+
+class GlossaryTurAd(BaseModel):
+    kod: str
+    ad: str
+
+
+@app.put("/api/book/{slug}/glossary/turler")
+def rename_glossary_type(slug: str, req: GlossaryTurAd) -> dict:
+    """Türün görünen adını değiştir (hazır türler dahil; yalnız bu kitapta)."""
+    canonical = library.resolve_slug(slug)
+    try:
+        bulundu = glossary.tur_adlandir(canonical, req.kod, req.ad)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not bulundu:
+        raise HTTPException(status_code=404, detail="Tür bulunamadı.")
+    return {"turler": glossary.turler(canonical)}
+
+
+@app.delete("/api/book/{slug}/glossary/turler")
+def delete_glossary_type(slug: str, kod: str = Query(...)) -> dict:
+    """Türü bu kitapta sil (hazır türler dahil): o türdeki kayıtların türü boşalır,
+    kayıtlar silinmez."""
+    canonical = library.resolve_slug(slug)
+    bosalan = glossary.tur_sil(canonical, kod)
+    if bosalan is None:
+        raise HTTPException(status_code=404, detail="Tür bulunamadı.")
+    return {"bosalan": bosalan, "turler": glossary.turler(canonical)}
 
 
 @app.put("/api/book/{slug}/glossary/politika")

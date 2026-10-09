@@ -2238,3 +2238,19 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 .alan-hatali {
   outline: 2px solid var(--danger, #c0392b);
 }
+
+/* TÜRLERİ YÖNET satırı: ad kutusu + düğmeler. */
+.terim-tur-satir {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+  margin: 0.3rem 0;
+}
+.terim-tur-satir input {
+  flex: 1;
+  min-width: 0;
+}
+.terim-tur-satir input,
+.terim-tur-satir button {
+  min-height: 44px;
+}

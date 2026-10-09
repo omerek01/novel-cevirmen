@@ -114,6 +114,14 @@ def _connect() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS sozluk_politika (book_slug TEXT NOT NULL, tur TEXT NOT NULL, "
         "kural TEXT NOT NULL, PRIMARY KEY (book_slug, tur))"
     )
+    # KİTABA ÖZEL tür listesi (2026-10-09, kullanıcı kararı: yalnız o kitapta geçerli; hazır
+    # türler de yeniden adlandırılabilir/silinebilir). Satır yoksa hazır tür varsayılan adıyla
+    # görünür. Hazır türün satırı yalnız ad değişikliğini ya da gizlenmesini (`gizli=1`) taşır;
+    # KOD sabittir — politika, grafik öbekleri ve model doğrulaması koda bakar.
+    conn.execute(
+        "CREATE TABLE IF NOT EXISTS sozluk_tur (book_slug TEXT NOT NULL, kod TEXT NOT NULL, "
+        "ad TEXT, gizli INTEGER NOT NULL DEFAULT 0, created_at REAL, PRIMARY KEY (book_slug, kod))"
+    )
     conn.execute(
         """
         CREATE TABLE IF NOT EXISTS sozluk_gecmis (
@@ -383,7 +391,7 @@ def terimi_yaz(
             satir = _satir_ekle(conn, book_slug, {
                 "source": source, "target": target, "origin": origin or "manual",
                 "kosul": None if kosul is KORU else ((kosul or "").strip() or None),
-                "tur": _tur(tur),
+                "tur": _tur(tur, book_slug),
                 "durum": None, "inceleme": None,  # elle eklenen kayıt beklemez
             })
             _gecmise_yaz(conn, book_slug, "ekle", None, satir, origin or "manual", surum_al())
@@ -394,7 +402,7 @@ def terimi_yaz(
             if kosul is not KORU:
                 degisen["kosul"] = (kosul or "").strip() or None
             if tur is not None:
-                degisen["tur"] = _tur(tur)
+                degisen["tur"] = _tur(tur, book_slug)
             # Kullanıcı kaydı düzenledi: incelemeden geçmiş sayılır. Kapıda TUTULAN
             # aday da serbest kalır — karşılığı artık kullanıcının kararıdır. YALNIZ
             # "bekliyor" kayıtlar onaylanıyordu: çakışma/yakın yazım/model uyarısıyla
@@ -833,7 +841,7 @@ def ice_aktar(book_slug: str, kayitlar: list, strateji: str = "mevcut") -> dict:
                     "kosul": kayit.get("kosul") or None,
                     "kaynak_cumle": kayit.get("kaynak_cumle") or None,
                     "inceleme": kayit.get("inceleme") or None,
-                    "tur": _tur(kayit.get("tur")),
+                    "tur": _tur(kayit.get("tur"), book_slug),
                     "tanim": kayit.get("tanim") or None,
                     "kosul_koken": kayit.get("kosul_koken") or None,
                     "tanim_koken": kayit.get("tanim_koken") or None,
@@ -857,7 +865,7 @@ def ice_aktar(book_slug: str, kayitlar: list, strateji: str = "mevcut") -> dict:
                     elif a in ("kosul", "kaynak_cumle", "origin", "inceleme", "tanim", "kosul_koken", "tanim_koken"):
                         deger = deger or None
                     elif a == "tur":
-                        deger = _tur(deger)
+                        deger = _tur(deger, book_slug)
                     degisen[a] = deger
                 if degisen:
                     _satiri_guncelle(conn, book_slug, kayitli, degisen, "import", surum_al)
@@ -1434,10 +1442,119 @@ EK_ANLAM_ISARETI = "BAŞKA ANLAM:"
 YASAK_ISARETI = "YASAK KARŞILIK:"
 
 
-def _tur(tur: str | None) -> str | None:
-    """Tanınmayan tür sessizce None olur (serbest metin prompt'a girmese de listeyi kirletmesin)."""
+TUR_ADLARI = {"kisi": "Kişi", "yer": "Yer", "orgut": "Örgüt", "rutbe": "Rütbe",
+              "yetenek": "Yetenek", "nesne": "Nesne", "diger": "Diğer"}
+OZEL_TUR_MAX = 30
+
+
+def _tur(tur: str | None, book_slug: str | None = None) -> str | None:
+    """Tanınmayan tür sessizce None olur (serbest metin prompt'a girmese de listeyi kirletmesin).
+
+    `book_slug` verilirse kitabın tür listesi esas alınır: özel türler tanınır, o kitapta
+    SİLİNMİŞ hazır tür tanınmaz. Model doğrulaması kitabı vermez ve yalnız hazır kod önerir;
+    o yolun sonucu da `tanim_yaz` içinde kitabın listesinden geçer."""
     tur = (tur or "").strip()
-    return tur if tur in TURLER else None
+    if not tur:
+        return None
+    if book_slug is None:
+        return tur if tur in TURLER else None
+    return tur if tur in {t["kod"] for t in turler(book_slug)} else None
+
+
+def turler(book_slug: str) -> list[dict]:
+    """Kitabın tür listesi: [{kod, ad, ozel}] — gizlenen hazır türler hariç."""
+    conn = _connect()
+    try:
+        satirlar = {r[0]: (r[1], r[2]) for r in conn.execute(
+            "SELECT kod, ad, gizli FROM sozluk_tur WHERE book_slug = ? ORDER BY created_at, kod", (book_slug,)
+        )}
+    finally:
+        conn.close()
+    out = []
+    for kod in TURLER:
+        ad, gizli = satirlar.get(kod, (None, 0))
+        if not gizli:
+            out.append({"kod": kod, "ad": ad or TUR_ADLARI[kod], "ozel": False})
+    for kod, (ad, gizli) in satirlar.items():
+        if kod not in TURLER and not gizli:
+            out.append({"kod": kod, "ad": ad or kod, "ozel": True})
+    return out
+
+
+def _ad_temizle(ad: str) -> str:
+    ad = " ".join((ad or "").split())
+    if not ad:
+        raise ValueError("Tür adı boş olamaz.")
+    if len(ad) > OZEL_TUR_MAX:
+        raise ValueError(f"Tür adı en fazla {OZEL_TUR_MAX} karakter olabilir.")
+    return ad
+
+
+def tur_ekle(book_slug: str, ad: str) -> str:
+    """Kitaba tür ekle; kodunu döndürür. Görünen bir türle aynı adı taşıyorsa o tür döner
+    (iki "Klan" oluşmaz). Silinmiş hazır türün adı yazılırsa o tür GERİ GELİR."""
+    ad = _ad_temizle(ad)
+    katla = ad.casefold()
+    for t in turler(book_slug):
+        if t["ad"].casefold() == katla:
+            return t["kod"]
+    conn = _connect()
+    try:
+        for kod, varsayilan in TUR_ADLARI.items():  # silinmiş hazır tür: geri getir
+            if katla in (kod, varsayilan.casefold()):
+                conn.execute(
+                    "INSERT INTO sozluk_tur (book_slug, kod, ad, gizli, created_at) VALUES (?, ?, ?, 0, ?) "
+                    "ON CONFLICT(book_slug, kod) DO UPDATE SET gizli = 0", (book_slug, kod, ad, time.time()))
+                conn.commit()
+                return kod
+        kod = ad
+        while conn.execute("SELECT 1 FROM sozluk_tur WHERE book_slug = ? AND kod = ?", (book_slug, kod)).fetchone():
+            kod += "_"  # eski, gizlenmiş bir özel türün kodu: yeni türe çakışmasın
+        conn.execute("INSERT INTO sozluk_tur (book_slug, kod, ad, gizli, created_at) VALUES (?, ?, ?, 0, ?)",
+                     (book_slug, kod, ad, time.time()))
+        conn.commit()
+        return kod
+    finally:
+        conn.close()
+
+
+def tur_adlandir(book_slug: str, kod: str, ad: str) -> bool:
+    """Türün görünen adını değiştir (kod ve kayıtların türü aynı kalır). Tür yoksa False."""
+    ad = _ad_temizle(ad)
+    mevcut = {t["kod"]: t for t in turler(book_slug)}
+    if kod not in mevcut:
+        return False
+    if any(t["ad"].casefold() == ad.casefold() and k != kod for k, t in mevcut.items()):
+        raise ValueError(f"'{ad}' adında başka bir tür var.")
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO sozluk_tur (book_slug, kod, ad, gizli, created_at) VALUES (?, ?, ?, 0, ?) "
+            "ON CONFLICT(book_slug, kod) DO UPDATE SET ad = excluded.ad", (book_slug, kod, ad, time.time()))
+        conn.commit()
+        return True
+    finally:
+        conn.close()
+
+
+def tur_sil(book_slug: str, kod: str) -> int | None:
+    """Türü bu kitapta sil; o türdeki kayıtların türü boşalır (kayıtlar SİLİNMEZ). Kaç kaydın
+    türünün boşaldığını döndürür; tür yoksa None. Hazır tür gizlenir (aynı adla yeniden
+    eklenebilir). Tür prompt'a girmez: sürüm artmaz, geçmişe yazılmaz."""
+    if kod not in {t["kod"] for t in turler(book_slug)}:
+        return None
+    conn = _connect()
+    try:
+        conn.execute(
+            "INSERT INTO sozluk_tur (book_slug, kod, ad, gizli, created_at) VALUES (?, ?, NULL, 1, ?) "
+            "ON CONFLICT(book_slug, kod) DO UPDATE SET gizli = 1", (book_slug, kod, time.time()))
+        n = conn.execute("UPDATE glossary SET tur = NULL WHERE book_slug = ? AND tur = ?",
+                         (book_slug, kod)).rowcount
+        conn.execute("DELETE FROM sozluk_politika WHERE book_slug = ? AND tur = ?", (book_slug, kod))
+        conn.commit()
+        return n
+    finally:
+        conn.close()
 
 
 def _kayit_degisti(conn, book_slug: str, satir: dict, islem: str, ayrinti: dict,
@@ -1863,7 +1980,7 @@ def politikalari_yaz(book_slug: str, yeni: dict[str, str | None]) -> dict[str, s
     conn = _connect()
     try:
         for tur, kural in (yeni or {}).items():
-            if tur not in TURLER:
+            if _tur(tur, book_slug) is None:
                 raise ValueError(f"Bilinmeyen tür: {tur!r}")
             if kural in (None, ""):
                 conn.execute("DELETE FROM sozluk_politika WHERE book_slug = ? AND tur = ?", (book_slug, tur))
@@ -1893,7 +2010,8 @@ def tanim_yaz(book_slug: str, source: str, tanim: str | None, tur: str | None = 
         if satir is None:
             return False
         tanim = (tanim or "").strip()[:300] or None
-        tur = _tur(tur)
+        # Kitabın tür listesinden geçer: model, kullanıcının sildiği hazır türü geri getiremez.
+        tur = _tur(tur, book_slug)
         degisen = {}
         if not (yalniz_bossa and satir.get("tanim")):
             degisen["tanim"] = tanim
@@ -1963,7 +2081,7 @@ def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict,
                          (tanim, book_slug, satir["source"]))
         if guvenilir and tur and not satir.get("tur"):
             conn.execute("UPDATE glossary SET tur=? WHERE book_slug=? AND source=?",
-                         (_tur(tur), book_slug, satir["source"]))
+                         (_tur(tur, book_slug), book_slug, satir["source"]))
         conn.execute(
             "UPDATE glossary SET dogrulama = ?, dogrulama_notu = ?, inceleme = ? "
             "WHERE book_slug = ? AND source = ?",
