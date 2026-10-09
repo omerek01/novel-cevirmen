@@ -227,11 +227,17 @@ def baglamlari_kur(kayit, bolumler, adet=5):
     bulunan = []
     for b in bolumler:
         kaynak = b.get('source') or ''
+        # HIZ (cikti ayni): terimin gecmedigi bolum paragraf paragraf taranmaz; bolum ozeti bolum
+        # basina BIR kez hesaplanir (e2-micro'da 439 kayit x 949 bolum saatler suruyordu).
+        if not desen.search(kaynak):
+            continue
+        kaynak_hash = None
         for no, m in enumerate(re.finditer(r'[^\r\n]+(?:\n(?!\s*\n)[^\r\n]+)*', kaynak)):
             if desen.search(m.group()):
+                kaynak_hash = kaynak_hash or sozluk_isleri.ozet(kaynak)
                 bulunan.append({'id': f'{b.get("chapter_no")}:{no}:{sozluk_isleri.ozet(m.group())[:12]}',
                     'bolum': b.get('chapter_no'), 'baslangic': m.start(), 'bitis': m.end(),
-                    'kaynak_hash': sozluk_isleri.ozet(kaynak), 'metin': m.group()})
+                    'kaynak_hash': kaynak_hash, 'metin': m.group()})
     if not bulunan:
         return []
     indices = {0, len(bulunan)//2, len(bulunan)-1}
