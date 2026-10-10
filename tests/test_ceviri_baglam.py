@@ -1,110 +1,118 @@
-"""Çeviri kalitesi eklentisi: bölümler arası bağlam taşıma.
+"""Özet kaynak bağları ve analiz adaylarının güvenli yerel kullanımı."""
+import json
+from types import SimpleNamespace
 
-Kitap başına ÜSLUP NOTU 2026-09-02'de kaldırıldı (kullanıcı kararı): hiçbir kitapta
-yazılı değildi, yani her istekte prompt'a "(yok)" diye 36 token boşuna gidiyordu ve
-okuyucudaki kutu ölü bir özellikti.
-
-Ağa/Gemini'ye çıkmaz — bağlamın prompt'a KADAR taşındığını
-(pipeline -> translate_chapter) ve kaynaklarının (cache/library) doğru satırı
-bulduğunu sabitler. Çevirinin kalitesi ölçülmez; taşımanın kopmadığı ölçülür.
-"""
 import pytest
-
-from core import cache, library, pipeline, translate
-
-
-def _bolum(url, slug, no, ceviri, content_type=None, prev_url=None):
-    cache.save_chapter(url, {
-        "book_slug": slug, "book_title": "K", "title": f"B{no}", "chapter_no": no,
-        "translation": ceviri, "next_url": None, "prev_url": prev_url,
-        "detected_names": [], "chunk_count": 1, "content_type": content_type,
-    })
+from core import cache
 
 
-# ---------- cache.prev_translation ----------
-
-def test_prev_translation_prev_url_ile_bulur():
-    _bolum("u1", "k", 1, "Birinci bölümün sonu.")
-    _bolum("u2", "k", 2, "İkinci.", prev_url="u1")
-    assert cache.prev_translation("k", "u1", 2) == "Birinci bölümün sonu."
+def modul():
+    from core import ceviri_baglam
+    return ceviri_baglam
 
 
-def test_prev_translation_zincir_kopukken_bolum_no_ile_duser():
-    """prev_url yok (elle eklenmiş bölüm) → aynı kitapta bir küçük numaraya düşer."""
-    _bolum("u1", "k", 7, "Yedinci.")
-    _bolum("u2", "k", 9, "Dokuzuncu.")
-    assert cache.prev_translation("k", None, 9) == "Yedinci."
+KAYNAK = "Sunny crossed the Ash Bridge. He joined the army campaign."
 
 
-def test_prev_translation_gorsel_bolumu_atlar():
-    """PDF/EPUB/manga bölümü HTML tutar; çeviri bağlamı olarak kullanılamaz."""
-    _bolum("u1", "k", 1, "Metin bölümü.")
-    _bolum("u2", "k", 2, "<img src='/media/x.png'>", content_type="html")
-    assert cache.prev_translation("k", "u2", 3) == "Metin bölümü."
+def veri():
+    return {"ozet": [{"metin": "Sunny köprüyü geçti.", "paragraf": 0,
+                       "alinti": "Sunny crossed the Ash Bridge."}],
+            "terimler": [{"kaynak": "Ash Bridge", "hedef": "Kül Köprüsü", "tur": "yer",
+                          "paragraf": 0, "alinti": "Sunny crossed the Ash Bridge."}]}
 
 
-def test_prev_translation_yoksa_bos_doner():
-    assert cache.prev_translation("k", None, 1) == ""
-    assert cache.prev_translation("", None, None) == ""
+def yanit(v, bitis="STOP"):
+    return SimpleNamespace(text=json.dumps(v, ensure_ascii=False),
+                           candidates=[SimpleNamespace(finish_reason=bitis)])
 
 
-def test_prev_translation_baska_kitaba_sizmaz():
-    _bolum("a1", "kitap-a", 5, "A kitabının metni.")
-    _bolum("b1", "kitap-b", 9, "B kitabının metni.")
-    assert cache.prev_translation("kitap-b", None, 9) == ""
+def test_analiz_kaynak_kanitini_ve_ayri_gorevi_korur():
+    m = modul(); cagrilar = []
+    def uret(user, system, asama):
+        cagrilar.append((json.loads(user), system, asama)); return yanit(veri()), "model"
+    r = m.analiz(KAYNAK, {}, {}, {"ozet": []}, uret)
+    assert r["ozet"][0]["alinti"] in KAYNAK
+    assert r["terimler"][0]["kaynak"] == "Ash Bridge"
+    assert cagrilar[0][2] == "bolum_analizi"
+    assert cagrilar[0][0]["onceki_ozet"] == {"ozet": []}
 
 
-# ---------- translate._tail_words ----------
-
-def test_tail_words_son_kelimeleri_alir():
-    assert translate._tail_words("bir iki üç dört beş", 2) == "dört beş"
-
-
-def test_tail_words_metin_kisaysa_tamamini_verir():
-    assert translate._tail_words("tek", 10) == "tek"
-    assert translate._tail_words("", 5) == ""
-    assert translate._tail_words(None, 5) == ""
-
-
-# ---------- uçtan uca: pipeline bağlamı translate'e geçirir ----------
-
-def test_pipeline_baglami_translate_e_gecirir(monkeypatch):
-    yakalanan = {}
-
-    def sahte_translate(text, api_key=None, glossary=None, **kw):
-        yakalanan.update(kw)
-        return {"translation": "ç", "source": None, "detected_names": [], "chunk_count": 1}
-
-    def sahte_fetch(url, priority="interactive", ticket=None, **kw):
-        return {
-            "book_slug": "k", "book_title": "Kitap", "title": "B2", "chapter_no": 2,
-            "text": "English text.", "next_url": None, "prev_url": "u1",
-        }
-
-    _bolum("u1", "k", 1, "Önceki bölümün Türkçe sonu.")
-    library.upsert_book("k", "Kitap", "u1", "B1", 1)
-    monkeypatch.setattr(pipeline, "fetch_chapter", sahte_fetch)
-    monkeypatch.setattr(pipeline, "translate_chapter", sahte_translate)
-
-    pipeline.get_or_translate("u2", "anahtar")
-
-    assert yakalanan["prev_context"] == "Önceki bölümün Türkçe sonu."
+@pytest.mark.parametrize("degistir", [
+    lambda v: v["ozet"][0].update(alinti="gelecekteki olay"),
+    lambda v: v["ozet"][0].update(paragraf=True),
+    lambda v: v["terimler"][0].update(kaynak="Future Castle"),
+    lambda v: v.update(ozet=v["ozet"] * 7),
+    lambda v: v["terimler"][0].update(hedef=""),
+])
+def test_sahte_ve_sinir_disi_analiz_reddedilir(degistir):
+    m = modul(); v = veri(); degistir(v)
+    with pytest.raises(m.AnalizHatasi):
+        m.analiz(KAYNAK, {}, {}, None, lambda *a: (yanit(v), "model"))
 
 
-def test_pipeline_onceki_bolum_yokken_bos_gecer(monkeypatch):
-    """İlk bölümde prompt'a boş string gider — None sızıp patlamaz."""
-    yakalanan = {}
+def test_kesik_yanit_ve_bos_ozet_kabul_edilmez():
+    m = modul()
+    for v, bitis in [(veri(), "MAX_TOKENS"), ({"ozet": [], "terimler": []}, "STOP")]:
+        with pytest.raises(m.AnalizHatasi):
+            m.analiz(KAYNAK, {}, {}, None, lambda *a: (yanit(v, bitis), "model"))
 
-    def sahte_translate(text, api_key=None, glossary=None, **kw):
-        yakalanan.update(kw)
-        return {"translation": "ç", "source": None, "detected_names": [], "chunk_count": 1}
 
-    monkeypatch.setattr(pipeline, "fetch_chapter", lambda url, **kw: {
-        "book_slug": "yeni", "book_title": "Y", "title": "B1", "chapter_no": 1,
-        "text": "t", "next_url": None, "prev_url": None,
-    })
-    monkeypatch.setattr(pipeline, "translate_chapter", sahte_translate)
+def test_yerel_aday_aktif_sozlugu_ezmez():
+    m = modul(); v = veri()
+    r = m.analiz(KAYNAK, {"Ash Bridge": "Kül Köprüsü"}, {}, None,
+                lambda *a: (yanit(v), "model"))
+    assert m.yerel_sozluk({"ash bridge": "Köz Köprüsü"}, r)["ash bridge"] == "Köz Köprüsü"
+    assert len(m.yerel_sozluk({"ash bridge": "Köz Köprüsü"}, r)) == 1
 
-    pipeline.get_or_translate("y1", "anahtar")
 
-    assert yakalanan["prev_context"] == ""
+def test_uretim_sadece_ceviri_ister_ozeti_metin_yerine_koymaz():
+    m = modul(); r = m.analiz(KAYNAK, {}, {}, None, lambda *a: (yanit(veri()), "model"))
+    user = m.baglam_metni(r, None)
+    assert "Sunny köprüyü geçti" in user
+    assert "kaynak" in m.STIL_TALIMATI.lower()
+    assert "detected_terms" not in m.CEVIRI_CIKTI_TALIMATI
+    assert '"translation"' in m.CEVIRI_CIKTI_TALIMATI
+
+
+def kaydet(url, kitap, no, kaynak=KAYNAK):
+    cache.save_chapter(url, {"book_slug": kitap, "chapter_no": no,
+                             "source": kaynak, "translation": "Örnek çeviri."})
+
+
+def test_onceki_kaynak_yanlis_kitap_ve_gelecegi_kullanmaz():
+    kaydet("test://diger/2", "diger", 2)
+    kaydet("test://kitap/4", "kitap", 4)
+    kaydet("test://kitap/1", "kitap", 1)
+    assert cache.onceki_kaynak("kitap", "test://diger/2", 3) is None
+    assert cache.onceki_kaynak("kitap", "test://kitap/4", 3) is None
+    kaydet("test://kitap/2", "kitap", 2)
+    assert cache.onceki_kaynak("kitap", "test://diger/2", 3)["url"] == "test://kitap/2"
+    assert cache.onceki_kaynak("kitap", None, None) is None
+
+
+def test_ozet_kaynak_degisince_bayat_olarak_kullanilmaz():
+    from core import ceviri_izleri as iz
+    r = modul().dogrula(veri(), KAYNAK)
+    iz.ozet_yaz("test://k/2", "kitap", 2, KAYNAK, r)
+    assert iz.ozet_oku("test://k/2", "kitap", 2, KAYNAK)["ozet"] == r["ozet"]
+    assert iz.ozet_oku("test://k/2", "kitap", 2, "Yeni kaynak.") is None
+    assert iz.ozet_oku("test://k/2", "baska", 2, KAYNAK) is None
+    assert iz.ozet_oku("test://k/2", "kitap", 3, KAYNAK) is None
+
+
+def test_iz_son_bes_deneme_ve_hata_durumu_korunur():
+    from core import ceviri_izleri as iz
+    for i in range(7):
+        iz.iz_kaydet(str(i), "test://k/3", {"durum": "basarisiz", "ham_ceviri": str(i)})
+    r = iz.iz_oku("test://k/3")
+    assert len(r) == 5
+    assert {x["id"] for x in r} == {"2", "3", "4", "5", "6"}
+    iz.iz_kaydet("6", "test://k/3", {"durum": "tamamlandi", "ham_ceviri": "6"})
+    assert iz.iz_oku("test://k/3")[0]["veri"]["durum"] == "tamamlandi"
+
+
+def test_hatalı_ozet_depolanamaz():
+    from core import ceviri_izleri as iz
+    r = modul().dogrula(veri(), KAYNAK); r["kaynak_sha256"] = "yanlis"
+    with pytest.raises(modul().AnalizHatasi):
+        iz.ozet_yaz("test://k/2", "kitap", 2, KAYNAK, r)

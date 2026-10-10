@@ -345,6 +345,27 @@ def list_chapters(book_slug: str) -> list[dict]:
     ]
 
 
+def onceki_kaynak(book_slug: str, prev_url: str | None, chapter_no: int | None) -> dict | None:
+    """Özet için yalnız aynı kitabın gerçek N-1 kaynağı; boşluk atlamaz."""
+    if not book_slug or type(chapter_no) is not int or chapter_no <= 1:
+        return None
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT url, book_slug, chapter_no, COALESCE(raw_source, source_text) "
+            "FROM chapters WHERE book_slug = ? AND chapter_no = ? "
+            "AND IFNULL(content_type, 'text') != 'html' "
+            "ORDER BY CASE WHEN url = ? THEN 0 ELSE 1 END, created_at DESC",
+            (book_slug, chapter_no - 1, prev_url),
+        ).fetchall()
+    finally:
+        conn.close()
+    for r in rows:
+        if (r[3] or "").strip():
+            return {"url": r[0], "book_slug": r[1], "chapter_no": r[2], "source": r[3]}
+    return None
+
+
 def prev_translation(
     book_slug: str, prev_url: str | None, chapter_no: int | None
 ) -> str:
