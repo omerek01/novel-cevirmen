@@ -77,7 +77,7 @@ with tempfile.TemporaryDirectory(prefix='roman-baglam-') as tmp:
     finally:t._CEVIRI_IZ.reset(qt)
     row.update(onarim_izi=quality_trace,onarim_cagrilari=quality_calls['cagrilar'],onarim_sonrasi='\n\n'.join(tr))
   except Exception as e:
-   row.update(hata_turu=type(e).__name__,kod=getattr(e,'code',None))
+   row.update(hata_turu=type(e).__name__,hata_mesaji=str(e)[:300],kod=getattr(e,'code',None))
    traces=iz.iz_oku(x['url'])
    if arm['analiz'] and traces:row['iz']=traces[0]['veri']
   finally:

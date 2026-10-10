@@ -40,9 +40,7 @@ def test_analiz_kaynak_kanitini_ve_ayri_gorevi_korur():
 @pytest.mark.parametrize("degistir", [
     lambda v: v["ozet"][0].update(alinti="gelecekteki olay"),
     lambda v: v["ozet"][0].update(paragraf=True),
-    lambda v: v["terimler"][0].update(kaynak="Future Castle"),
     lambda v: v.update(ozet=v["ozet"] * 7),
-    lambda v: v["terimler"][0].update(hedef=""),
 ])
 def test_sahte_ve_sinir_disi_analiz_reddedilir(degistir):
     m = modul(); v = veri(); degistir(v)
@@ -134,3 +132,43 @@ def test_kullanilan_aday_baska_paragraf_ve_kelime_icinden_turemez():
     assert m.kullanilan_adaylar(r, [KAYNAK, "Another."], ["Sunny köprüden geçti.", "Kül yayıldı."]) == []
     assert m.kullanilan_adaylar(r, [KAYNAK], ["Sunny Külliye'ye geldi."]) == []
     assert m.kullanilan_adaylar(r, [KAYNAK], ["Sunny Kül'den geçti."]) == r["terimler"]
+
+
+@pytest.mark.parametrize("degistir", [
+    lambda v: v["terimler"][0].update(kaynak="Future Castle"),
+    lambda v: v["terimler"][0].update(hedef=""),
+    lambda v: v["terimler"][0].update(tur="sehir"),
+])
+def test_kanitsiz_terim_yalniz_kendisi_atilir(degistir):
+    m = modul(); v = veri(); degistir(v)
+    r = m.analiz(KAYNAK, {}, {}, None, lambda *a: (yanit(v), "model"))
+    assert r["ozet"] == veri()["ozet"]
+    assert r["terimler"] == []
+    assert r["reddedilen_adaylar"][0]["neden"]
+
+
+def test_kanitsiz_ozet_maddesi_atilir_digerleri_kullanilir():
+    m = modul(); v = veri()
+    v["ozet"].append({"metin": "Uydurma olay.", "paragraf": 0, "alinti": "never happened"})
+    r = m.analiz(KAYNAK, {}, {}, None, lambda *a: (yanit(v), "model"))
+    assert r["ozet"] == veri()["ozet"]
+    assert r["reddedilen_ozet"][0]["metin"] == "Uydurma olay."
+    assert r["terimler"][0]["kaynak"] == "Ash Bridge"
+
+
+def test_onceki_ozet_terim_getirirse_terimler_yok_sayilir():
+    m = modul()
+    r = m.ozetle(KAYNAK, lambda *a: (yanit(veri()), "model"))
+    assert r["ozet"] == veri()["ozet"]
+    assert r["terimler"] == [] and r["reddedilen_adaylar"] == []
+
+
+def test_onceki_ozet_terim_kurallarini_degil_ozet_talimatini_kullanir():
+    m = modul(); sistemler = []
+    def uret(user, system, asama):
+        sistemler.append((system, asama)); return yanit(veri()), "model"
+    m.ozetle(KAYNAK, uret)
+    sistem, asama = sistemler[0]
+    assert asama == "onceki_bolum_ozeti"
+    assert "HİYERARŞİ" not in sistem and "30" not in sistem
+    assert "BİREBİR" in sistem
