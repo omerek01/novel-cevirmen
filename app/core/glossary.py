@@ -159,6 +159,7 @@ def _connect() -> sqlite3.Connection:
         "CREATE TABLE IF NOT EXISTS sozluk_red (book_slug TEXT NOT NULL, anahtar TEXT NOT NULL, "
         "source TEXT NOT NULL, target TEXT, zaman REAL NOT NULL, PRIMARY KEY (book_slug, anahtar))"
     )
+    db.ensure_column(conn, "sozluk_red", "grup", "grup TEXT")
     # ALTERNATİF YAZIM: aynı varlığın kullanıcı ONAYLI ikinci yazımı (`Orc Empire`
     # kayıtlıyken kaynak sitenin `Ore Empire` yazımı). Otomatik birleştirme YOK —
     # `Orc`/`Ore` farklı anlam da taşıyabilir. Anahtar kitapta tekildir.
@@ -933,7 +934,8 @@ def kitaba_tasi(conn: sqlite3.Connection, kaynak_slug: str, hedef_slug: str) -> 
                 )
         conn.execute(f"DELETE FROM {tablo} WHERE book_slug = ?", (kaynak_slug,))
     conn.execute(
-        "INSERT OR IGNORE INTO sozluk_red SELECT ?, anahtar, source, target, zaman "
+        "INSERT OR IGNORE INTO sozluk_red (book_slug, anahtar, source, target, zaman, grup) "
+        "SELECT ?, anahtar, source, target, zaman, grup "
         "FROM sozluk_red WHERE book_slug = ?", (hedef_slug, kaynak_slug),
     )
     conn.execute("DELETE FROM sozluk_red WHERE book_slug = ?", (kaynak_slug,))
@@ -982,6 +984,7 @@ def delete_term(
     source: str,
     taban_surum: int | None = None,
     yol: str = "manual",
+    *, reddi_kaydet: bool = False,
 ) -> dict | None:
     """Terimi sil; silinen satırı TAM hâliyle döndür (yoksa None).
 
@@ -1004,6 +1007,17 @@ def delete_term(
         if bulunan is None:
             conn.rollback()
             return None
+        if reddi_kaydet:
+            # Silme ve kalıcı ret AYNI kilit/işlemde: aradaki boşlukta çeviri
+            # adayı yeniden ekleyemez. Alternatif yazımlar da reddedilir.
+            red_zamani = time.time()
+            red_grubu = uuid.uuid4().hex  # aynı ret işlemi, saat çözünürlüğünden bağımsız
+            for ad in [bulunan["source"], *_yazimlar(conn, book_slug, bulunan["kimlik"])]:
+                conn.execute(
+                    "INSERT OR REPLACE INTO sozluk_red (book_slug, anahtar, source, target, zaman, grup) "
+                    "VALUES (?, ?, ?, ?, ?, ?)",
+                    (book_slug, fold_term(ad), ad, bulunan["target"], red_zamani, red_grubu),
+                )
         conn.execute(
             "DELETE FROM glossary WHERE book_slug = ? AND source = ?",
             (book_slug, bulunan["source"]),
@@ -1139,17 +1153,19 @@ def merge_terms(
         etkili: dict[str, str] = {}
         if eklenecek:
             simdi = time.time()
-            kitap_surumu = _kitap_surumunu_artir(conn, book_slug)
+            kitap_surumu = None  # elenen birleşimler sözlük sürümünü değiştirmez
             # YAZMA KAPISI yalnız OTOMATİK adaylara uygulanır: elle ve içe aktarma
             # yolu kullanıcının iradesidir (bkz. `sozluk_kapi`).
             kapi = _kapi_baglami(conn, book_slug) if origin == "auto" else None
             for k, h in eklenecek.items():
                 nedenler: list[dict] = []
                 if kapi is not None:
+                    if kapi["modul"].rutbe_sinif_birlesimi(k, h, kapi["satirlar"], book_slug, tur):
+                        continue
                     sonuc = kapi["modul"].kapi_denetle(
                         k, h, kapi["satirlar"], kapi["yasaklar"], kapi["politikalar"], tur,
                     )
-                    if sonuc["yazim_of"]:
+                    if sonuc["yazim_of"] and not sonuc["nedenler"]:
                         # Mevcut kaydın yazım varyantı: ayrı satır AÇILMAZ, kayda
                         # alternatif yazım olarak bağlanır ve onun karşılığını alır.
                         _yazim_bagla(conn, book_slug, sonuc["yazim_of"], k, origin)
@@ -1157,6 +1173,8 @@ def merge_terms(
                     nedenler = sonuc["nedenler"]
                 # Köken cümlesi ILK görülen hâlinde kalır — "ilk nerede geçti"
                 # sorusunun cevabı sonraki bölümlerde değişmemeli.
+                if kitap_surumu is None:
+                    kitap_surumu = _kitap_surumunu_artir(conn, book_slug)
                 satir = _satir_ekle(conn, book_slug, {
                     "source": k, "target": h, "created_at": simdi, "origin": origin,
                     "first_chapter": chapter_no, "kaynak_cumle": (cumleler or {}).get(k),
@@ -1872,20 +1890,7 @@ def ceviri_kosullari(book_slug: str) -> dict[str, str]:
 
 def reddet(book_slug: str, source: str, taban_surum: int | None = None) -> dict | None:
     """İnceleme kararı: kaydı sil ve adayı RET listesine yaz (bir daha otomatik eklenmez)."""
-    silinen = delete_term(book_slug, source, taban_surum=taban_surum, yol="inceleme")
-    if silinen is None:
-        return None
-    conn = _connect()
-    try:
-        conn.execute(
-            "INSERT OR REPLACE INTO sozluk_red (book_slug, anahtar, source, target, zaman) "
-            "VALUES (?, ?, ?, ?, ?)",
-            (book_slug, fold_term(silinen["source"]), silinen["source"], silinen["target"], time.time()),
-        )
-        conn.commit()
-    finally:
-        conn.close()
-    return silinen
+    return delete_term(book_slug, source, taban_surum=taban_surum, yol="inceleme", reddi_kaydet=True)
 
 
 def onayla(book_slug: str, source: str) -> bool:
@@ -2081,12 +2086,17 @@ def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict,
         # Model onayı yalnız kaynak bağlı yeni sözleşme ve güncel kapı geçerse etkinleşir.
         guvenilir = (not_.get("sozlesme") == "baglam-v2" and not_.get("uygun") is True
                      and bool(not_.get("kanit")) and bool(not_.get("baglam_hash")))
+        cogul_ozel_ad = guvenilir and not_.get("cogul_ozel_ad") is True
         kapibaglam = _kapi_baglami(conn, book_slug)
         kapibulgu = kapibaglam["modul"].kapi_denetle(
             satir["source"], satir.get("target") or satir["source"],
             [r for r in kapibaglam["satirlar"] if r["source"] != satir["source"]],
             kapibaglam["yasaklar"], kapibaglam["politikalar"], satir.get("tur") or tur,
+            cogul_ozel_ad=cogul_ozel_ad,
         )["nedenler"]
+        sakli_bulgular = json.loads(satir.get("kapi") or "[]")
+        if cogul_ozel_ad:
+            sakli_bulgular = [n for n in sakli_bulgular if n.get("tur") != "cogul_bicim"]
         if (sonuc in ("sorunlu", "inceleme", "baglam_eksik") and satir.get("origin") == "auto"
                 and satir.get("inceleme") != "onaylandi" and satir.get("durum") != TUTULDU):
             _satiri_guncelle(conn, book_slug, satir, {"durum": TUTULDU, "inceleme": "bekliyor"},
@@ -2094,8 +2104,8 @@ def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict,
             satir = _bul(conn, book_slug, satir["source"])
             inceleme = "bekliyor"
         if (sonuc == "gecti" and guvenilir and satir.get("durum") == TUTULDU
-                and not kapibulgu and not json.loads(satir.get("kapi") or "[]")):
-            _satiri_guncelle(conn, book_slug, satir, {"durum": None, "inceleme": None}, "dogrulama",
+                and not kapibulgu and not sakli_bulgular):
+            _satiri_guncelle(conn, book_slug, satir, {"durum": None, "inceleme": None, "kapi": None}, "dogrulama",
                              lambda: _kitap_surumunu_artir(conn, book_slug))
             satir = _bul(conn, book_slug, satir["source"])
             inceleme = None
@@ -2222,10 +2232,20 @@ def red_listesi(book_slug: str) -> list[dict]:
 def reddi_kaldir(book_slug: str, source: str) -> bool:
     conn = _connect()
     try:
-        n = conn.execute(
-            "DELETE FROM sozluk_red WHERE book_slug = ? AND anahtar = ?",
-            (book_slug, fold_term(normalize_source(source) or source)),
-        ).rowcount
+        conn.execute("BEGIN IMMEDIATE")
+        anahtar = fold_term(normalize_source(source) or source)
+        kayit = conn.execute(
+            "SELECT grup FROM sozluk_red WHERE book_slug=? AND anahtar=?",
+            (book_slug, anahtar),
+        ).fetchone()
+        if kayit is None:
+            n = 0
+        elif kayit[0]:
+            n = conn.execute("DELETE FROM sozluk_red WHERE book_slug=? AND grup=?",
+                             (book_slug, kayit[0])).rowcount
+        else:  # eski, grup bilgisi olmayan ret yalnız kendisini kaldırır
+            n = conn.execute("DELETE FROM sozluk_red WHERE book_slug=? AND anahtar=?",
+                             (book_slug, anahtar)).rowcount
         conn.commit()
         return n > 0
     finally:

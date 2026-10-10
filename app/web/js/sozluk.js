@@ -25,8 +25,8 @@ function sirala(terms) {
   );
 }
 
-/* Yazma istekleri service worker'dan GEÇMEZ (yalnız GET yakalanır) → oradaki zaman
-   aşımı korumasından yararlanamazlar. Tailscale kapalıyken ts.net adresi hata
+/* Yazma yanıtları önbelleğe GİRMEZ; SW yalnız eski sözlük GET'lerini geçersiz
+   kılar, yazmaya zaman aşımı koymaz. Tailscale kapalıyken ts.net adresi hata
    vermek yerine dakikalarca askıda kalır (kara delik); kendi süremizi koyuyoruz. */
 export const GLOSS_WRITE_TIMEOUT = 8000;
 
@@ -118,6 +118,25 @@ export function kuyrukDinle(fn) {
   return () => dinleyiciler.delete(fn);
 }
 
+// İnceleme reddi kuyruğa girmez; aynı GET yarış korumasına ve yerel silmeye katılır.
+export async function sunucudaSilindi(slug, source) {
+  kuyrukOlayi("gonderildi", { islem: { slug, source, tur: "sil" } });
+  yenidenSuz();
+  // Ağ kopunca SW eski sözlüğü geri vermesin. Bölüm önbelleği ve öteki kitaplar korunur.
+  try {
+    if (!("caches" in window)) return;
+    const yol = `/api/book/${encodeURIComponent(slug)}/glossary`;
+    for (const ad of await caches.keys()) {
+      const c = await caches.open(ad);
+      for (const istek of await c.keys()) {
+        if (new URL(istek.url).pathname === yol) await c.delete(istek);
+      }
+    }
+  } catch {
+    // Ret sunucuda tamamlandı; taze GET SW'yi atlayarak yerel hâli korur.
+  }
+}
+
 function islemiUygula(terms, kosullar, op) {
   const kayitli = Object.keys(terms).find((s) => anahtarla(s) === anahtarla(op.source));
   const ad = kayitli === undefined ? op.source : kayitli;
@@ -141,7 +160,7 @@ function kuyrukOlayi(ad, veri) {
   if (ad === "gonderildi") {
     const op = veri.islem;
     gonderimSirasi += 1;
-    sonGonderimler.push({ sira: gonderimSirasi, islem: op });
+    sonGonderimler.push({ sira: gonderimSirasi, islem: op, kayit: veri.govde?.kayit });
     if (sonGonderimler.length > SON_GONDERIM_MAX) sonGonderimler.shift();
     sonKaydedilen.set(op.slug + "\u0000" + anahtarla(op.source), Date.now());
     setTimeout(refreshGlossPendingUi, KAYDEDILDI_MS + 50);
@@ -325,30 +344,41 @@ async function bolumdeGecenleriYukle() {
   }
 }
 
-export async function fetchGlossary(slug) {
-  let terms = {};
-  let kosullar = {};
-  glossRows = {};
+export async function fetchGlossary(slug, { taze = false } = {}) {
+  let terms = taze ? { ...glossTermsSonHal } : {};
+  let kosullar = taze ? { ...glossKosullarSonHal } : {};
+  if (!taze) glossRows = {};
   glossWarnPairs = [];
   const istekSirasi = gonderimSirasi;
   try {
     const sp = spoilerParam() ? `?${spoilerParam()}` : "";
-    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary${sp}`);
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary${sp}`,
+      taze ? { cache: "no-store" } : {});
+    if (!res.ok) throw new Error("sunucu " + res.status);
     const data = await res.json();
     glossGizlenen = (data.spoiler_suzgeci && data.spoiler_suzgeci.gizlenen_kayit) || 0;
     terms = data.terms || {};
     kosullar = data.kosullar || {};
+    glossRows = {};
     for (const satir of data.rows || []) glossRows[satir.source] = satir;
     glossWarnPairs = data.warnings || [];
     glossSurum = Number.isFinite(data.surum) ? data.surum : null;
     glossEkler = data.ekler || {};
     turleriAyarla(data.turler);
   } catch {
-    terms = {}; // çevrimdışı + hiç önbellek yok: yalnız bekleyen kayıtlar görünsün
+    // Taze istek başarısızsa az önce onaylanan yerel hâl korunur. İlk açılışta
+    // çevrimdışı ve önbelleksizse yalnız bekleyen kayıtlar görünür.
   }
   // İstek yoldayken tamamlanan gönderimler bu yanıtta OLMAYABİLİR: üstüne uygula.
   for (const g of sonGonderimler) {
-    if (g.sira > istekSirasi && g.islem.slug === slug) islemiUygula(terms, kosullar, g.islem);
+    if (g.sira > istekSirasi && g.islem.slug === slug) {
+      islemiUygula(terms, kosullar, g.islem);
+      if (g.kayit) glossRows[g.kayit.source] = g.kayit;
+      if (g.islem.tur === "sil") {
+        const ad = Object.keys(glossRows).find((s) => anahtarla(s) === anahtarla(g.islem.source));
+        if (ad !== undefined) delete glossRows[ad];
+      }
+    }
   }
   // Süzgeç yeniden çizerken sunucuya GİTMEZ; ham liste burada saklanır.
   glossTermsSonHal = terms;

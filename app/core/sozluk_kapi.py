@@ -47,6 +47,7 @@ POLITIKA = "politika"
 KALIP = "kalip_tutarsizligi"
 IHLAL_SUPHESI = "ihlal_suphesi"
 DOGRULAMA = "dogrulama"
+COGUL_BICIM = "cogul_bicim"
 
 # ---------- normalizasyon ----------
 _BASTAKI_BELIRTEC = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
@@ -109,6 +110,7 @@ def tekil_anahtari(kaynak: str) -> tuple[str, ...]:
 # `Doubtless` (-ss), `Tenacious`/`Sonorous` (-ous), `Erebus` (-us), `Nephis` (-is),
 # `Northern Quadrant Corps` (corps tekildir).
 _COGUL_DEGIL_SONLAR = ("ss", "us", "is", "ous", "ics", "sis", "news", "corps", "series", "species")
+_DUZENSIZ_COGULLAR = frozenset("children women men people feet teeth mice geese oxen".split())
 # Ad öbeğinde başı sağdan ayıran edatlar: `Raised by Wolves` başı `Raised`,
 # `One in the North` başı `One`.
 _EDAT = r"of|by|in|from|with|for|to|on|at|under|beyond"
@@ -133,9 +135,38 @@ def _bas_sozcuk(kaynak: str) -> str:
 @lru_cache(maxsize=16384)
 def kaynak_cogul_mu(kaynak: str) -> bool:
     bas = _bas_sozcuk(kaynak).casefold().strip("'’")
+    if bas in _DUZENSIZ_COGULLAR:
+        return True
     if len(bas) <= 3 or not bas.endswith("s"):
         return False
     return not bas.endswith(_COGUL_DEGIL_SONLAR)
+
+
+def rutbe_sinif_birlesimi(kaynak: str, hedef: str, mevcut: list[dict], book_slug: str,
+                         tur: str | None = None) -> bool:
+    """Kayıtlı rütbe + sınıfın düz birleşimi; gerçek adları parçalamaz.
+
+    Düzen adları kitabın mevcut profilinden gelir; başka kitaba liste taşınmaz.
+    İki bileşen de kayıtlı ve karşılık düz birleşim olmalı. Açık özel ad türü
+    veya farklı karşılık varsa sessizce eleme yapılmaz.
+    """
+    if tur and tur not in ("rutbe", "diger"):
+        return False
+    from .varlik_grafigi import KITAP_PROFILLERI
+    diziler = KITAP_PROFILLERI.get(book_slug, {}).get("diziler", {})
+    rutbeler = {glossary.fold_term(x) for ad, dizi in diziler.items() if "rutbe" in ad for x in dizi}
+    siniflar = {glossary.fold_term(x) for ad, dizi in diziler.items() if "sinif" in ad for x in dizi}
+    parcalar = kaynak.split()
+    if len(parcalar) != 2:
+        return False
+    a, b = map(glossary.fold_term, parcalar)
+    if a not in rutbeler or b not in siniflar:
+        return False
+    kayitlar = {glossary.fold_term(r["source"]): r for r in mevcut}
+    if a not in kayitlar or b not in kayitlar:
+        return False
+    return glossary.fold_term(hedef) == glossary.fold_term(
+        kayitlar[a]["target"] + " " + kayitlar[b]["target"])
 
 
 @lru_cache(maxsize=16384)
@@ -270,6 +301,7 @@ def kapi_denetle(
     politikalar: dict[str, str] | None = None,
     tur: str | None = None,
     geriye_donuk: bool = False,
+    cogul_ozel_ad: bool = False,
 ) -> dict:
     """Yeni (ya da denetlenen) bir kaydı kapıdan geçir.
 
@@ -288,6 +320,11 @@ def kapi_denetle(
       * ``nedenler``: takılma sebepleri. Boşsa kayıt kapıdan geçer.
     """
     nedenler: list[dict] = []
+    if kaynak_cogul_mu(kaynak) and not cogul_ozel_ad:
+        nedenler.append({"tur": COGUL_BICIM, "aciklama":
+            "Sıradan çoğul ayrı sözlük kuralı olmaz. Tekil biçimi kullan; bu ifade "
+            "gerçek bir canavar, topluluk, nitelik veya efsun adıysa kaynak kanıtıyla "
+            "özel ad olarak doğrula ya da inceleyip onayla.", "ilgili": []})
     korunan = ingilizce_korunan(kaynak, hedef)
     hedef_anahtari = glossary.fold_term(hedef)
 
@@ -303,7 +340,7 @@ def kapi_denetle(
             continue  # aşağıda "farklı karşılık" olarak raporlanır
         if iliski == ZARARSIZ or (iliski in (DIZILIS, TEKIL_VARYANT) and ayni_karsilik):
             if not geriye_donuk:
-                return {"yazim_of": r["source"], "nedenler": []}
+                return {"yazim_of": r["source"], "nedenler": nedenler}
             birlesecek.append(r["source"])
     if birlesecek:
         nedenler.append({

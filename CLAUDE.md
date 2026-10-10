@@ -1372,8 +1372,13 @@ yoktu ve model ne önerirse KURAL oluyordu (`Weaver -> Weaver’s`, `Seven -> Ye
   (`ceviri_sozlugu`/`ceviri_kosullari` süzer), inceleme bekler, künye "eklendi"
   demez, bir daha eklenmez. Onay ya da elle düzeltme onu kurala çevirir (prompt
   değişikliği: sürüm artar, geçmişe yazılır). Zararsız varyant (`the`, `of the`,
-  iç iyelik) ve AYNI karşılıklı sözcük sırası / tekil-çoğul yazım varyantı ayrı satır
+  iç iyelik) ve AYNI karşılıklı sözcük sırası yazım varyantı ayrı satır
   AÇMAZ, mevcut kayda alternatif yazım olarak bağlanır.
+  **2026-10-10 çoğul ve birleşik kayıt politikası:** sıradan çoğul aday KURAL olmaz;
+  `cogul_bicim` nedeniyle incelemede bekler. Gerçek özel ad olarak kullanılan çoğul,
+  kaynak bağlı onayda `cogul_ozel_ad=true` ile veya insan onayıyla etkinleşebilir.
+  Profilde tanımlı rütbe + sınıfın düz birleşimi, bileşenleri ayrı kayıtlıysa ve
+  karşılıkları da düz birleşimse yeni otomatik kayıt açmaz; gerçek ad türleri korunur.
   **Kalibrasyon ölçüldü** (sunucu kopyası): tek harf yakınlığı yalnız 7+ harfte
   (`YAKIN_MIN_UZUNLUK`) — kısa adlarda uyarıların TAMAMI meşru ayrı adlardı
   (Abel/Obel, Dale/Gale, Fool/Tool). Kalıp denetimi yalnız ortak kökü olan

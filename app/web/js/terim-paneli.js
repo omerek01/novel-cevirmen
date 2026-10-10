@@ -62,7 +62,8 @@ function yaz(id, metin) {
 
 function kayitliAnahtar(terms, source) {
   const k = anahtarla(source);
-  return Object.keys(terms).find((s) => anahtarla(s) === k);
+  return Object.keys(terms).find((s) => anahtarla(s) === k) ??
+    Object.keys(terms).find((s) => (glossEkler[s]?.yazimlar || []).some((y) => anahtarla(y) === k));
 }
 
 function gorunenSozluk(slug) {
@@ -165,11 +166,22 @@ function adaylariCiz() {
 
 /* Kaynak terim belirlendi: kayıtlıysa kaydı yükle, değilse (isteğe bağlı) öner. */
 function kaynagiSec(kaynak, { oner = false } = {}) {
+  if (!panel) return;
   kaynak = trimSecim(kaynak);
   el("terimKaynak").value = kaynak;
-  if (!kaynak) return;
   const { terms, kosullar } = gorunenSozluk(panel.slug);
-  const kayitli = kayitliAnahtar(terms, kaynak);
+  const kayitli = kaynak ? kayitliAnahtar(terms, kaynak) : undefined;
+  // Aynı kaydı yeniden seçmek yazılan karşılığı ve koşulu sıfırlamamalı.
+  if (kayitli && panel.kayitli === kayitli) {
+    el("terimKaynak").value = kayitli;
+    return;
+  }
+  if (!kayitli && kaynak && panel.kaynak === kaynak && !panel.kayitli) return;
+  panel.kaynak = kaynak;
+  durumuBirak();
+  panel.kaydetti = false;
+  el("terimEtki").hidden = true;
+  el("terimGecmis").hidden = true;
   panel.kayitli = kayitli || null;
   const s = panel.secim;
   panel.ornek =
@@ -193,13 +205,19 @@ function kaynagiSec(kaynak, { oner = false } = {}) {
   } else {
     panel.eskiKosul = "";
     panel.eskiTur = "";
+    el("terimKarsilik").value = "";
+    el("terimKarsilik").disabled = false;
+    el("terimAynen").checked = false;
+    el("terimKosul").value = "";
+    el("terimTur").value = "";
+    el("terimEkler").open = false;
     el("terimEkler").hidden = true;
     el("terimSil").hidden = true;
     el("terimSonrasi").hidden = true;
     yaz("terimPaneli-baslik", "YENİ TERİM");
     kokeniCiz(null);
-    yaz("terimDurum", "Sözlükte yok — kaydedince eklenir.");
-    if (oner) oneriIste();
+    yaz("terimDurum", kaynak ? "Sözlükte yok — kaydedince eklenir." : "Kaynak terim gerekli.");
+    if (oner && kaynak) oneriIste();
   }
   bolumDugmesiniAyarla();
 }

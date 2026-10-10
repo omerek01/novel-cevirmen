@@ -18,6 +18,7 @@ import {
   kuyrukDinle,
   flushGlossQueue,
   renderGlossary,
+  sunucudaSilindi,
 } from "./sozluk.js";
 import { anahtarla } from "./sozluk-kuyruk.js";
 import { terimPaneliAc } from "./terim-paneli.js";
@@ -41,6 +42,7 @@ const NEDEN_ETIKETI = {
   dogrulama: "DOĞRULAMA",
   sozcuk_karismasi: "SINIF SÖZCÜĞÜ",
   ad_tutarliligi: "AD POLİTİKASI",
+  cogul_bicim: "ÇOĞUL BİÇİM",
 };
 
 function dugme(metin, fn, sinif = "pill") {
@@ -329,7 +331,26 @@ async function karar(slug, x, tur, kart) {
     });
     veri = await res.json().catch(() => ({}));
     if (res.status === 409) {
-      bildir(`${x.source} bu arada değişti (arka plan doğrulaması ya da başka cihaz) — liste tazelendi, tekrar bak.`);
+      // Listeyi yeniden hesaplatırken düğmeler kilitli kalmasın. Güncel kaydı
+      // kartta göster; ikinci ret yeni sürüme karşı kullanıcının açık kararıdır.
+      const guncel = veri.detail?.guncel;
+      if (guncel && kart) {
+        Object.assign(x, guncel);
+        kart.querySelector(".inceleme-ust").textContent = `${x.source} → ${x.target}`;
+        const not = document.createElement("p");
+        not.className = "inceleme-aciklama";
+        not.textContent = `Kayıt bu arada değişti. Güncel karşılık: ${x.target}` +
+          (x.kosul ? `; koşul: ${x.kosul}` : "") + ". Silinmedi; güncel kaydı inceleyip tekrar Reddet'e basabilirsin.";
+        kart.querySelector(".inceleme-cakisma")?.remove();
+        not.classList.add("inceleme-cakisma");
+        kart.appendChild(not);
+      }
+      if (kart) {
+        kart.classList.remove("inceleme-isleniyor");
+        kart.querySelectorAll("button").forEach((b) => (b.disabled = false));
+      }
+      bildir(`${x.source} bu arada değişti — silinmedi, güncel kayıt kartta gösteriliyor.`);
+      return;
     } else if (!res.ok) {
       throw new Error((veri && veri.detail) || "sunucu " + res.status);
     }
@@ -350,6 +371,7 @@ async function karar(slug, x, tur, kart) {
   }
   if (tur === "reddet" && veri && veri.silinen) {
     const silinen = veri.silinen;
+    await sunucudaSilindi(slug, silinen.source);
     bildir(`${x.source} reddedildi; bir daha otomatik eklenmeyecek.`, {
       eylem: {
         etiket: "GERİ AL",
@@ -381,7 +403,7 @@ async function reddiKaldir(slug, source, tazeleSonra = true) {
 
 async function tazele(slug) {
   if (slug === durum.currentBookSlug && !views.glossary.hidden) {
-    renderGlossary(await fetchGlossary(slug));
+    renderGlossary(await fetchGlossary(slug, { taze: true }));
   }
   await incelemeyiYukle(slug);
 }

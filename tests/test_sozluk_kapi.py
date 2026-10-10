@@ -85,9 +85,12 @@ def test_dizilis_varyanti_yalniz_ayni_karsilikta_baglanir():
     assert sozluk_kapi.YAKIN_YAZIM in [n["tur"] for n in sonuc["nedenler"]]
 
 
-def test_tekil_cogul_cifti_mesrudur():
+def test_tekil_cogul_cifti_ozel_ad_onayi_olmadan_bekler():
     sonuc = sozluk_kapi.kapi_denetle("Seeds of Nightmare", "Kabus Tohumları", [_m("Seed of Nightmare", "Kabus Tohumu")])
-    assert sonuc == {"yazim_of": None, "nedenler": []}
+    assert sonuc["yazim_of"] is None
+    assert [n["tur"] for n in sonuc["nedenler"]] == [sozluk_kapi.COGUL_BICIM]
+    assert sozluk_kapi.kapi_denetle("Seeds of Nightmare", "Kabus Tohumları",
+        [_m("Seed of Nightmare", "Kabus Tohumu")], cogul_ozel_ad=True)["nedenler"] == []
 
 
 def test_tek_harf_yakinligi_kisa_adlarda_susar():

@@ -1160,7 +1160,12 @@ SYSTEM_INSTRUCTION = (
     "'rank of', 'above/below the ...') basamaktır ve girer; düzene bağlanmadan, "
     "tek başına geçen sıradan cins isim girmez.\n"
     "- detected_terms'te çeviride ne yazdıysan burada AYNISINI ver; ikisi tutmazsa "
-    "sözlük bozulur. Böyle bir ad yoksa boş bırak."
+    "sözlük bozulur. Sıradan çoğul biçimi ayrıca kaydetme; kaynak ve karşılığı "
+    "tekil yalın biçimde ver. Gerçek bir topluluk, canavar, nitelik veya efsunun "
+    "özgün özel adı çoğulsa o adı bozma. Zaten ayrı kayıtlı rütbe ve sınıfın "
+    "birleşimini (Awakened Terror gibi) yeni bir özel ad olarak önerme; gerçek "
+    "özel adları ise bütün olarak koru. "
+    "Böyle bir ad yoksa boş bırak."
 )
 
 # Paragraf hizalama işaretçisi: [[1]], [[ 2 ]] gibi. Çeviride korunur → her Türkçe

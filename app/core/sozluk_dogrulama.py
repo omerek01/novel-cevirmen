@@ -57,8 +57,12 @@ lakaplar İngilizce korunur; diğer özel adlarda Türkçe politika uygulanır. 
 diyalog veya sıradan sözcük olmak tek başına red nedeni değil. Birden fazla anlam global kuralı
 bozuyorsa inceleme ve koşul önerisi ver. Yakın yazımları veya kişi/klan kimliğini birleştirme.
 Mevcut karşılığı değiştirme; düzeltme yalnız öneri olsun. Türkçe mevcut çeviri doğruluk kanıtı değil.
+Sıradan çoğul biçimi ayrı terim olarak onaylama; tekil kaydı öner. Çoğul biçim kaynakta gerçekten
+adlandırılmış bir canavarın, topluluğun, niteliğin, efsunun veya başka özel adın özgün adıysa
+cogul_ozel_ad=true ver ve bunu gösteren kaynak cümlesini kanıt olarak alıntıla. Yalnız büyük
+harfli olmak veya canavar türü belirtmek özel ad kanıtı değildir. Belirsizse inceleme kararı ver.
 Yalnız JSON: {"terms":[{"kimlik":"verilen kimlik","source":"kaynak aynen",
-"karar":"onay|red|inceleme|baglam_eksik","uygun":true,"genel_sozcuk":false,
+"karar":"onay|red|inceleme|baglam_eksik","uygun":true,"genel_sozcuk":false,"cogul_ozel_ad":false,
 "tur":"kisi|yer|orgut|rutbe|yetenek|nesne|diger","tanim":"bağlamdaki kısa anlam",
 "sorun":"gerekçe","oneri":"varsa öneri","kanit":[{"baglam_id":"verilen id",
 "alinti":"kaynak paragrafından aynen alınmış, terimi ve anlamını içeren tam cümle"}]}]}.
@@ -140,6 +144,7 @@ def karar_ver(kayit: dict, yanit: dict) -> tuple[str, dict]:
     korunan = sozluk_kapi.ingilizce_korunan(kayit["source"], kayit.get("target") or "")
     uyum = None if korunan else geri_ceviri_uyumu(kayit["source"], yanit.get("geri_ceviri") or "")
     not_ = {
+        "cogul_ozel_ad": yanit.get("cogul_ozel_ad") is True and bool(yanit.get("kanit")),
         "geri_ceviri": (yanit.get("geri_ceviri") or "").strip()[:200] or None,
         "uyum": None if uyum is None else round(uyum, 2),
         "sorun": (yanit.get("sorun") or "").strip()[:300] or None,
@@ -149,6 +154,10 @@ def karar_ver(kayit: dict, yanit: dict) -> tuple[str, dict]:
         "zaman": time.time(),
     }
     sorunlu = False
+    if (sozluk_kapi.kaynak_cogul_mu(kayit["source"]) and not not_["cogul_ozel_ad"]
+            and yanit.get("uygun") is True):
+        not_["sorun"] = "Çoğul biçimin gerçek özel ad olduğu kaynakla doğrulanmadı; sıradan çoğul yerine tekil kaydı kullan."
+        return "inceleme", not_
     if yanit.get("uygun") is False:
         sorunlu = True
     # "Sıradan sözcük" TEK BAŞINA sorun değildir. Ölçüm (1050 kayıt): model 38 kaydı

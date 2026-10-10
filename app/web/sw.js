@@ -1,8 +1,27 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v110"; // Sözlük: ayrı kayıt yazım olarak eklenince birleşir
+const SHELL_CACHE = "novellink-shell-v111"; // Sözlük: kaynak değişimi paneli kapatmaz, ret görünürdür
 const DATA_CACHE = "novellink-data";
+const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
+
+function sozlukYolu(url) {
+  return new URL(url).pathname.match(/^\/api\/book\/[^/]+\/glossary(?=\/|$)/)?.[0] || null;
+}
+
+async function sozlukYazmasi(request, yol) {
+  const res = await fetch(request);
+  if (res.ok) {
+    sozlukNesilleri.set(yol, (sozlukNesilleri.get(yol) || 0) + 1);
+    try {
+      const cache = await caches.open(DATA_CACHE);
+      for (const key of await cache.keys()) {
+        if (new URL(key.url).pathname === yol) await cache.delete(key);
+      }
+    } catch {} // depolama hatası sunucuda tamamlanan yazmayı başarısız göstermez
+  }
+  return res; // yazma yanıtı önbelleğe ALINMAZ
+}
 const SHELL = [
   "/",
   "/index.html",
@@ -128,10 +147,15 @@ async function chapterFirst(request, cacheKey, forceNetwork) {
 // Liste/sözlük (GET): çevrimiçiyken taze, sunucuya ulaşılamıyorsa (hata VEYA 4 sn
 // yanıtsızlık) son kayıt.
 async function networkFirst(request) {
+  const yol = sozlukYolu(request.url);
+  const nesil = sozlukNesilleri.get(yol) || 0;
   const cache = await caches.open(DATA_CACHE);
   try {
     const res = await fetchWithTimeout(request, 4000);
-    if (res.ok) cache.put(request, res.clone());
+    if (res.ok && (!yol || nesil === (sozlukNesilleri.get(yol) || 0))) {
+      await cache.put(request, res.clone());
+      if (yol && nesil !== (sozlukNesilleri.get(yol) || 0)) await cache.delete(request);
+    }
     return res;
   } catch (err) {
     const hit = await cache.match(request);
@@ -148,8 +172,16 @@ async function cacheFirst(request) {
 
 self.addEventListener("fetch", (event) => {
   const { request } = event;
-  // POST/DELETE (sözlük yazma) → asla önbelleğe alma, doğrudan ağa.
-  if (request.method !== "GET") return;
+  // Yazma yanıtı doğrudan ağdan gelir; yalnız eski sözlük GET'lerinin nesli değişir.
+  if (request.method !== "GET") {
+    const yol = sozlukYolu(request.url);
+    if (yol && !new URL(request.url).pathname.match(/\/(suggest|verify)$/)) {
+      event.respondWith(sozlukYazmasi(request, yol));
+    }
+    return;
+  }
+  // Mutasyon sonrası sözlük tazelemesi: bayat telefon kopyasına düşülmez.
+  if (request.cache === "no-store") return;
 
   const url = new URL(request.url);
   if (url.origin !== self.location.origin) return;
