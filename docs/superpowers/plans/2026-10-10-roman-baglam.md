@@ -48,11 +48,11 @@ Interface: mevcut translate_chapter + book_slug/bolum_url/onceki_bolum keyword-o
 Files: ceviri_kalite.py, tests/test_ceviri_kalite.py, docs/CEVIRI-KALITE.md.
 - [x] Ayrı anlam/akıcılık, üslup otomatik dışlama ve rejected repair izi testleri RED→GREEN.
 - [x] v2 boyutlar/kanıt; okuyucu payload'ında yalnız küçük rapor.
-- [ ] Dokümantasyon ve tamamlanmış çalışma commit'i.
+- [x] Dokümantasyon ve tamamlanmış çalışma commit'i.
 
 ### Task 5: Ölçüm ve son doğrulama
 Files: scripts/roman_baglam_kiyas.py, tests/test_roman_baglam_kiyas.py, reports/roman-baglam-uygulama/RAPOR.md.
 - [x] Sabit kaynak/model/sözlük snapshotı ve yedeksiz deney testleri RED→GREEN.
-- [ ] 961/957/ikinci kitap: analiz açık-kapalı; aynı taslak üzerinde onarım öncesi-sonrası; kalite/süre/token sınırlamalarını raporla.
-- [ ] Tam pytest tests -q; NOVEL_TARAYICI_TEST=1 pytest tests/tarayici.
+- [x] 961/957/ikinci kitap: analiz açık-kapalı; aynı taslak üzerinde onarım öncesi-sonrası; kalite/süre/token sınırlamalarını raporla.
+- [x] Tam pytest tests -q; NOVEL_TARAYICI_TEST=1 pytest tests/tarayici.
 - [ ] Bağımsız son inceleme ve bulguları giderme; yerel commit. Push/dağıtım ayrı onay bekler.
