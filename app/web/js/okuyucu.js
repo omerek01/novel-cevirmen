@@ -545,6 +545,7 @@ export function buildChapterEntry(url, data) {
     // "bu paragrafı hiç çevirmedin" der; ikisini tek sayaçta toplamak, okuyucunun
     // hangisine baktığını belirsizleştirirdi.
     ingilizceKalinti: data.ingilizce_kalinti || null,
+    ceviriKalitesi: data.ceviri_kalitesi || null,
     // KISALMA: model çevirmek yerine ÖZETLEDİ mi. Kararı SUNUCU veriyor (eşik
     // orada); okuyucuda ikinci bir eşik tutmak, model listesinde kaçınılan
     // ayrışmanın aynısını doğururdu. Oran da gelir — rozette sayı gösterilir,
@@ -741,6 +742,7 @@ export function kunyeKarti(entry) {
   const kalinti = entry.ingilizceKalinti || {};
   const kalintiIndeksleri = Object.keys(kalinti);
   const denetlenmeyen = entry.kosulluDenetlenmeyen || [];
+  const supheler = entry.ceviriKalitesi?.supheli || [];
   // Kısalma bir UYARIDIR ve tek başına da rozeti açtırır: özetlenmiş bir bölümde
   // sözlük/kalıntı bayrakları çoğu zaman TEMİZ döner (atılan metinde ihlal de
   // olmaz), yani öteki koşullara bağlansaydı en bozuk bölüm sessiz kalırdı.
@@ -752,12 +754,12 @@ export function kunyeKarti(entry) {
     ihlalAdlari.length === 0 &&
     kalintiIndeksleri.length === 0 &&
     denetlenmeyen.length === 0 &&
-    !kisalmis
+    !kisalmis && supheler.length === 0
   )
     return null;
 
   const uyariVar =
-    ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0 || kisalmis;
+    ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0 || kisalmis || supheler.length > 0;
   const kutu = document.createElement("details");
   kutu.className = "kunye" + (uyariVar ? " kunye-uyarili" : "");
   const ozet = document.createElement("summary");
@@ -766,6 +768,7 @@ export function kunyeKarti(entry) {
   // işi zaten sessiz kalan bir bozukluğu görünür kılmak. İki arıza sınıfı AYRI
   // sayılır: biri "terim yanlış", öteki "paragraf hiç çevrilmemiş".
   const uyarilar = [];
+  if (supheler.length) uyarilar.push(`${supheler.length} çeviri şüphesi — inceleme gerekiyor`);
   // Kısalma ÖNCE yazılır: ötekiler "bir terim/paragraf bozuk" der, bu "metnin bir
   // kısmı hiç YOK" der — okurun önce görmesi gereken bu.
   if (kisalmis) {
@@ -786,6 +789,12 @@ export function kunyeKarti(entry) {
 
   const govde = document.createElement("div");
   govde.className = "kunye-govde";
+  for (const bulgu of supheler) {
+    const satir = document.createElement("p");
+    satir.className = "gloss-hint kunye-satir";
+    satir.textContent = `Paragraf ${bulgu.paragraf + 1}: ${bulgu.aciklama} (otomatik değiştirilmedi)`;
+    govde.appendChild(satir);
+  }
   if (motor) {
     const rozet = document.createElement("span");
     rozet.className = "style-badge";  // mevcut pill rozet dili

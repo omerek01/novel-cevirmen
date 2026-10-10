@@ -1177,6 +1177,11 @@ class TranslateError(Exception):
     """Çeviri kalıcı olarak başarısız olduğunda fırlatılır (model meşgul, kota vb.)."""
 
 
+class KaliteKontrolHatasi(TranslateError):
+    """Kalite kapısı başarısız; tüm bölümün otomatik yeniden üretimi yapılmaz."""
+    tekrar_denebilir = False
+
+
 class _Retryable(Exception):
     """İç sinyal: bu anahtar/model denemesi başarısız — çağıran nereye düşeceğine karar verir.
 
@@ -1342,6 +1347,47 @@ def translate_chapter(
             kosullar, used_models,
         )
 
+    kalite_metrik = None
+    if os.getenv("CEVIRI_KALITE", "1") != "0" and tr_paras:
+        from . import ceviri_kalite
+        if not aligned:
+            raise KaliteKontrolHatasi("Kalite kontrolü için paragraf hizalaması kurulamadı; yeni çeviri kaydedilmedi.")
+        # Denetim bütün bölümü görür; onarım yalnız kanıtlı hatalı paragrafları.
+        # Aynı seçilmiş zincir kullanılır: ücretsiz seçim ücretli modele geçmez.
+        ilgili = _relevant_glossary(glossary, text)
+        def kalite_uret(user, system, asama):
+            from contextlib import nullcontext
+            sema_baglami = yanit_semasi(None) if "_YANIT_SEMASI" in globals() else nullcontext()
+            with api_durum.baglam(asama=asama), sema_baglami:
+                return _generate_with_fallback(client_factory, models, user, system=system,
+                                               max_tokens=MAX_OUTPUT_TOKENS)
+        def kabul_kontrolu(yeni):
+            # Kabul edilen her onarım, kendi paragrafındaki bütün eski
+            # kontrollerden geçmeli; başka paragraftaki ihlal onu maskelemez.
+            degisen = {i for i, t in enumerate(yeni) if t != tr_paras[i]}
+            ihlal = sozluk_ihlali_paragraflari(glossary, yeni, en_paras, kosullar)
+            kalan = ingilizce_kalinti(yeni, en_paras, glossary)
+            if degisen.intersection(ihlal) or degisen.intersection(kalan):
+                return False
+            if anlam_denetimi:
+                from . import anlam_ayirici
+                son = anlam_ayirici.anlam_ihlalleri(en_paras, yeni, anlam_denetimi, bolum_no)
+                if any(x["paragraf"] in degisen for liste in son.values() for x in liste):
+                    return False
+            return True
+        try:
+            kalite_metrik = ceviri_kalite.denetle_ve_onar(
+                tr_paras, en_paras, ilgili,
+                {k: v for k, v in (kosullar or {}).items() if k in ilgili},
+                kalite_uret, kabul_kontrolu,
+            )
+        except ceviri_kalite.KaliteHatasi as exc:
+            raise KaliteKontrolHatasi(str(exc)) from exc
+        # Yalnız kabul edilen onarımların modelleri çeviri künyesine girer.
+        if kalite_metrik["onarilan"] and kalite_metrik["onarim_modeli"]:
+            used_models[kalite_metrik["onarim_modeli"]] = None
+        kalinti = ingilizce_kalinti(tr_paras, en_paras, glossary)
+
     new_terms = ayikla_terim_anahtarlari(new_terms, text)
     translation = "\n\n".join(tr_paras)
     return {
@@ -1383,6 +1429,7 @@ def translate_chapter(
         # Çift anlamlı ad denetiminin sayaçları (künyeye yazılır, okura GÖSTERİLMEZ).
         # None = denetlenmedi (tanım yok ya da hizalama tutmadı).
         "anlam_denetimi": anlam_metrik,
+        "ceviri_kalitesi": kalite_metrik,
         "chunk_count": len(chunks),
         # MOTOR fiilen çeviren model(ler)den türetilir. Sabit "gemini" yazmak,
         # Mistral zincirin ilk halkası olduğundan doğrudan yanlış bilgiydi:
@@ -2764,10 +2811,11 @@ class _MetinYanit:
     `_parse_response` sağlayıcıyı bilmez ve bilmemeli.
     """
 
-    __slots__ = ("text",)
+    __slots__ = ("text", "finish_reason")
 
-    def __init__(self, text: str) -> None:
+    def __init__(self, text: str, finish_reason: str | None = None) -> None:
         self.text = text
+        self.finish_reason = finish_reason
 
 
 def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinYanit:
@@ -2828,7 +2876,8 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
         getattr(yanit.usage, "output_tokens", 0) or 0,
     )
     metin = "".join(b.text for b in yanit.content if getattr(b, "type", "") == "text")
-    return _MetinYanit(metin)
+    bitis = getattr(yanit, "stop_reason", None)
+    return _MetinYanit(metin, "STOP" if bitis == "end_turn" else bitis)
 
 
 def _gemini_yapilandirmasi(system: str, max_tokens: int) -> types.GenerateContentConfig:
@@ -2951,6 +3000,7 @@ def _nvidia_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
         govde["reasoning_effort"] = dusunme
 
     parcalar: list[str] = []
+    bitis = None
     son_tarih = time.monotonic() + NVIDIA_TOPLAM_SURE_SN
     try:
         with httpx.stream(
@@ -2983,12 +3033,15 @@ def _nvidia_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
                     parca = json.loads(veri)
                 except ValueError:
                     continue
-                delta = ((parca.get("choices") or [{}])[0].get("delta")) or {}
+                secim = (parca.get("choices") or [{}])[0]
+                if secim.get("finish_reason"):
+                    bitis = secim["finish_reason"]
+                delta = secim.get("delta") or {}
                 if delta.get("content"):
                     parcalar.append(delta["content"])
     except httpx.HTTPError as exc:
         raise _KodluHata(503, f"nvidia ağ: {type(exc).__name__}") from exc
-    return _MetinYanit("".join(parcalar))
+    return _MetinYanit("".join(parcalar), "STOP" if bitis == "stop" else bitis)
 
 
 def _generate_with_fallback(

@@ -474,6 +474,7 @@ def _do_fetch_translate_save(
         # paragraflar. Boş = temiz.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
         "anlam_denetimi": result.get("anlam_denetimi"),
+        "ceviri_kalitesi": result.get("ceviri_kalitesi"),
         # KISALMA ölçümü: Türkçe/İngilizce karakter oranı. Modelin çevirmek yerine
         # ÖZETLEDİĞİNİ gören TEK ölçüt (gerçek vaka: shadow-slave #787) ve
         # ötekilerden farklı olarak hizalamaya İHTİYAÇ DUYMAZ — özetleme
@@ -658,6 +659,7 @@ def fetch_into_book(
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
         "anlam_denetimi": result.get("anlam_denetimi"),
+        "ceviri_kalitesi": result.get("ceviri_kalitesi"),
         # Kısalma ölçümü de `_fetch_translate_save` ile AYNI: bayrağı üreten
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # ölçümsüz olur — `model` alanında tam bu hata yaşandı.

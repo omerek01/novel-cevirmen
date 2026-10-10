@@ -75,6 +75,7 @@ def _connect() -> sqlite3.Connection:
     # Çift anlamlı ad denetiminin sayaçları (Faz 1H): JSON. NULL = denetlenmedi.
     # Okura GÖSTERİLMEZ; `scripts/anlam_denetle.py --metrik` toplar.
     db.ensure_column(conn, "chapters", "anlam_denetimi", "anlam_denetimi TEXT")
+    db.ensure_column(conn, "chapters", "ceviri_kalitesi", "ceviri_kalitesi TEXT")
     # KISALMA ÖLÇÜMÜ (2026-09-28): Türkçe çıktı / İngilizce kaynak KARAKTER oranı.
     # Model çevirmek yerine ÖZETLEDİĞİNDE (gerçek vaka: shadow-slave #787) bunu
     # gören başka hiçbir denetim yok — hizalama yalnız YAPIYI, glossary_leaks
@@ -131,13 +132,14 @@ def _connect() -> sqlite3.Connection:
     # + `ensure_column` (mevcut kurulum). `tests/test_cache_migration.py` eski
     # şemalı bir DB kurup bunu tel tuzağıyla tutar.
     db.ensure_column(conn, "ceviri_arsivi", "uzunluk_orani", "uzunluk_orani REAL")
+    db.ensure_column(conn, "ceviri_arsivi", "ceviri_kalitesi", "ceviri_kalitesi TEXT")
     return conn
 
 
 ARSIV_MAX = 3
 _ARSIV_SUTUNLARI = (
     "translation", "source_text", "engine", "model", "glossary_leaks", "ingilizce_kalinti",
-    "uzunluk_orani", "sozluk_surumu",
+    "uzunluk_orani", "sozluk_surumu", "ceviri_kalitesi",
 )
 
 
@@ -245,7 +247,7 @@ def get_chapter(url: str) -> dict | None:
             "SELECT book_slug, book_title, title, chapter_no, translation, "
             "next_url, detected_names, chunk_count, prev_url, source_text, content_type, "
             "engine, added_terms, model, glossary_leaks, ingilizce_kalinti, sozluk_surumu, "
-            "created_at, uzunluk_orani "
+            "created_at, uzunluk_orani, ceviri_kalitesi "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -280,6 +282,7 @@ def get_chapter(url: str) -> dict | None:
         # NULL = hiç ölçülmedi (eski satır / kaynaksız bölüm). Okuyucu eşiği
         # `translate.KISALMA_ORANI` ile karşılaştırır; karar TEK yerde durur.
         "uzunluk_orani": row[18],
+        "ceviri_kalitesi": json.loads(row[19]) if row[19] else None,
         "cached": True,
     }
 
@@ -542,8 +545,9 @@ def set_translation(
     verilmediğinde rozet, paragrafı fiilen onaran halkayı gizler: bu projede
     künyenin sabit yazılması bir kez doğrudan yanlış bilgiye dönüşmüştü (Mistral'in
     çevirdiği bölüm "GEMINI ile çevrildi" diyordu). Satır yoksa False."""
-    alanlar = ["translation = ?"]
-    degerler: list = [translation]
+    alanlar = ["ceviri_kalitesi = CASE WHEN translation = ? THEN ceviri_kalitesi ELSE NULL END",
+               "translation = ?"]
+    degerler: list = [translation, translation]
     if model:
         alanlar.append("model = ?")
         degerler.append(model)
@@ -669,8 +673,8 @@ def save_chapter(url: str, data: dict) -> None:
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text, content_type, engine, added_terms, model,
                  glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu, anlam_denetimi,
-                 onerilen_terimler)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 onerilen_terimler, ceviri_kalitesi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -688,7 +692,11 @@ def save_chapter(url: str, data: dict) -> None:
                 uzunluk_orani = COALESCE(excluded.uzunluk_orani, uzunluk_orani),
                 sozluk_surumu = COALESCE(excluded.sozluk_surumu, sozluk_surumu),
                 anlam_denetimi = COALESCE(excluded.anlam_denetimi, anlam_denetimi),
-                onerilen_terimler = COALESCE(excluded.onerilen_terimler, onerilen_terimler)
+                onerilen_terimler = COALESCE(excluded.onerilen_terimler, onerilen_terimler),
+                ceviri_kalitesi = CASE
+                    WHEN excluded.ceviri_kalitesi IS NOT NULL THEN excluded.ceviri_kalitesi
+                    WHEN excluded.translation IS translation AND excluded.source_text IS source_text
+                    THEN ceviri_kalitesi ELSE NULL END
             """,
             (
                 url,
@@ -734,6 +742,8 @@ def save_chapter(url: str, data: dict) -> None:
                 json.dumps(data["onerilen_terimler"], ensure_ascii=False)
                 if data.get("onerilen_terimler") is not None
                 else None,
+                json.dumps(data["ceviri_kalitesi"], ensure_ascii=False)
+                if data.get("ceviri_kalitesi") is not None else None,
             ),
         )
         conn.commit()

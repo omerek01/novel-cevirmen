@@ -445,7 +445,7 @@ def _run_bulk(job_id: str, api_key: str | None) -> None:
                     data = pipeline.get_or_translate(url, api_key, background=True)
             except TranslateError as exc:
                 deneme += 1
-                if deneme >= BULK_GECICI_DENEME:
+                if getattr(exc, "tekrar_denebilir", True) is False or deneme >= BULK_GECICI_DENEME:
                     _set(
                         job_id, state="error", message=f"Durdu: {exc}", done=done,
                         translated=translated, updated_at=time.time(),
@@ -598,7 +598,7 @@ def _run_retranslate(job_id: str, api_key: str | None) -> None:
                     )
             except TranslateError as exc:
                 deneme += 1
-                if deneme >= BULK_GECICI_DENEME:
+                if getattr(exc, "tekrar_denebilir", True) is False or deneme >= BULK_GECICI_DENEME:
                     sonuclar[url] = {"durum": "hata", "mesaj": str(exc)}
                     break
                 bekleme = BULK_GECICI_BEKLEME[min(deneme - 1, len(BULK_GECICI_BEKLEME) - 1)]

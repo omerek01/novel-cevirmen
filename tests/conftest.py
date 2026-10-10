@@ -27,6 +27,8 @@ def temp_db(tmp_path, monkeypatch):
     # `server` importu `.env`i yüklediği için testte anahtar bulunabilir. Testler
     # çevrimdışıdır; doğrulamayı sınayan test bayrağı kendisi açar.
     monkeypatch.setenv("SOZLUK_DOGRULAMA", "0")
+    # Kalite denetimi gerçek model çağırır; kendi testleri açıkça etkinleştirir.
+    monkeypatch.setenv("CEVIRI_KALITE", "0")
     yield
 
 

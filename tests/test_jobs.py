@@ -61,6 +61,22 @@ def test_start_bulk_follows_chain_until_done(monkeypatch):
     assert status["total"] == 5
 
 
+@pytest.mark.parametrize("yeniden", [False, True])
+def test_kalite_hatasinda_tum_bolum_tekrar_cevrilmez(monkeypatch, yeniden):
+    from core.translate import KaliteKontrolHatasi
+    calls = []
+    def fake(url, api_key, **kwargs):
+        calls.append(url)
+        raise KaliteKontrolHatasi("Onarımdan sonra hata kaldı.")
+    monkeypatch.setattr(jobs.pipeline, "get_or_translate", fake)
+    monkeypatch.setattr(jobs, "_bekle", lambda *args: True)
+    job_id = jobs.start_retranslate("kalite-kitap", ["u1"], None) if yeniden else jobs.start_bulk("kalite-kitap", "u1", 1, None)
+    status = _wait(job_id, {"done", "error"})
+    assert calls == ["u1"]
+    assert status["translated"] == 0
+    assert "meşgul" not in status["message"]
+
+
 def test_start_bulk_records_error(monkeypatch):
     def fake(url, api_key, **kwargs):
         raise RuntimeError("bozuk bölüm")
