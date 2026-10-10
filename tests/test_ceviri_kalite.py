@@ -87,6 +87,43 @@ def test_onarim_sonrasi_denetim_ve_komsunun_korunmasi():
     assert len(cagrilar[1][0]["hedefler"]) == 1
 
 
+def test_anlam_ve_akicilik_ayri_raporlanir_onarim_kaniti_saklanir():
+    q = kalite(); x = hata(); iz = {}
+    yanitlar = [cevap({"denetlenen": [0], "hatalar": [x]}),
+                cevap({"duzeltmeler": [{"paragraf": 0, "ceviri": "Ucubenin altında kıpırdandı."}]}),
+                cevap(temiz())]
+    tr = ["Ucubin altında kıpırdandı."]
+    r = q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
+                         lambda *a: (yanitlar.pop(0), "model"), iz=iz)
+    assert r["surum"] == 2
+    assert r["boyutlar"]["akicilik"]["bulgu_sayisi"] == 1
+    assert r["boyutlar"]["sadakat"]["bulgu_sayisi"] == 0
+    assert r["onarim_kaniti"][0]["once"] == "Ucubin altında kıpırdandı."
+    assert r["onarim_kaniti"][0]["sonra"] == tr[0]
+    assert iz["bulgular"][0]["ceviri"] == "Ucubin"
+
+
+def test_uslup_onerisi_yuksek_guvende_bile_otomatik_uygulanmaz():
+    q = kalite(); x = hata(); x.update(tur="uslup", aciklama="Alternatif anlatım tercihi.")
+    tr = ["Ucubin altında kıpırdandı."]
+    r = q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
+                         lambda *a: (cevap({"denetlenen": [0], "hatalar": [x]}), "model"))
+    assert r["onarilan"] == []
+    assert r["supheli"][0]["tur"] == "uslup"
+
+
+def test_reddedilen_onarimin_once_sonrasi_izden_incelenebilir():
+    q = kalite(); iz = {}; tr = ["Ucubin altında kıpırdandı."]
+    yanitlar = [cevap({"denetlenen": [0], "hatalar": [hata()]}),
+                cevap({"duzeltmeler": [{"paragraf": 0, "ceviri": "Ucubenin altında kıpırdandı."}]}),
+                cevap({"denetlenen": [0], "hatalar": [hata("kıpırdandı", "shifted")]})]
+    with pytest.raises(q.KaliteHatasi):
+        q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
+                         lambda *a: (yanitlar.pop(0), "model"), iz=iz)
+    assert iz["onarim_kaniti"][0]["sonra"] == "Ucubenin altında kıpırdandı."
+    assert tr == ["Ucubin altında kıpırdandı."]
+
+
 @pytest.mark.parametrize("bozuk", ["Ucubin altında kıpırdandı.", "Ucubenin altında едва kıpırdandı."])
 def test_basarisiz_onarim_asli_degistirmez(bozuk):
     q = kalite(); tr = ["Ucubin altında kıpırdandı."]

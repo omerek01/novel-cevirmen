@@ -352,7 +352,7 @@ def onceki_kaynak(book_slug: str, prev_url: str | None, chapter_no: int | None) 
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT url, book_slug, chapter_no, COALESCE(raw_source, source_text) "
+            "SELECT url, book_slug, chapter_no, COALESCE(NULLIF(raw_source, ''), source_text), translation "
             "FROM chapters WHERE book_slug = ? AND chapter_no = ? "
             "AND IFNULL(content_type, 'text') != 'html' "
             "ORDER BY CASE WHEN url = ? THEN 0 ELSE 1 END, created_at DESC",
@@ -362,7 +362,8 @@ def onceki_kaynak(book_slug: str, prev_url: str | None, chapter_no: int | None) 
         conn.close()
     for r in rows:
         if (r[3] or "").strip():
-            return {"url": r[0], "book_slug": r[1], "chapter_no": r[2], "source": r[3]}
+            return {"url": r[0], "book_slug": r[1], "chapter_no": r[2], "source": r[3],
+                    "translation": r[4] or ""}
     return None
 
 

@@ -319,6 +319,23 @@ def _fetch_translate_save(
         flight.event.set()
 
 
+def _roman_baglami(slug, url, prev_url, no):
+    import os
+    if os.getenv("CEVIRI_ANALIZ", "1") == "0" and os.getenv("CEVIRI_KALITE", "1") == "0":
+        return {}
+    return {"book_slug": slug, "bolum_url": url,
+            "onceki_bolum": cache.onceki_kaynak(slug, prev_url, no)
+            if os.getenv("CEVIRI_ANALIZ", "1") != "0" else None}
+
+
+def _onceki_ceviri_baglami(slug, prev_url, no):
+    import os
+    if os.getenv("CEVIRI_ANALIZ", "1") == "0":
+        return cache.prev_translation(slug, prev_url, no)
+    onceki = cache.onceki_kaynak(slug, prev_url, no)
+    return onceki["translation"] if onceki else ""
+
+
 def _onbellek_kaynagi(url: str) -> dict | None:
     """Önbellekte hizalı İngilizce kaynak varsa ondan çevrilebilir bir bölüm kur.
 
@@ -418,7 +435,7 @@ def _do_fetch_translate_save(
     book = library.get_book(book_slug)
     # Bölüm sınırında bağlam sıfırlanmasın: önceki bölümün son Türkçe satırları
     # ilk parçaya bağlam olur (sahne ortasında biten bölümün devamı için).
-    prev_context = cache.prev_translation(
+    prev_context = _onceki_ceviri_baglami(
         book_slug, chapter.get("prev_url"), chapter.get("chapter_no")
     )
     # Model zinciri TEK ve kalite öncelikli (`translate.DEFAULT_MODELS`): okuma,
@@ -433,12 +450,14 @@ def _do_fetch_translate_save(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
                 prev_context=prev_context, kosullar=book_kosullar,
                 anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
+                **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
             )
     else:
         result = translate_chapter(
             chapter["text"], api_key=api_key, glossary=book_glossary,
             prev_context=prev_context, kosullar=book_kosullar,
             anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
+            **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
         )
 
     # Sözlüğe işleme uçuşun İÇİNDE: eklenen terimler künyenin parçası ve bölümle
@@ -624,9 +643,10 @@ def fetch_into_book(
     with api_durum.baglam(url=url):
         result = translate_chapter(
             chapter["text"], api_key=api_key, glossary=book_glossary,
-            prev_context=cache.prev_translation(target_slug, prev_url, no),
+            prev_context=_onceki_ceviri_baglami(target_slug, prev_url, no),
             kosullar=book_kosullar,
             anlam_denetimi=_anlam_tanimlari(target_slug), bolum_no=no,
+            **_roman_baglami(target_slug, url, prev_url, no),
         )
     book_title = (book and book.get("title")) or chapter["book_title"]
     eklenen = _sozluge_isle(target_slug, result, no, chapter["text"])  # künyeye girecek, kayıttan ÖNCE

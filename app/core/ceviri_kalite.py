@@ -27,7 +27,10 @@ Belirsiz şüpheye düşük güven ver. Her paragrafın yerel numarasını denet
 Yalnız JSON döndür: {"denetlenen":[0,1],"hatalar":[{"paragraf":0,
 "tur":"dilbilgisi","kaynak":"exact source quote","ceviri":"birebir çeviri alıntısı",
 "aciklama":"Somut hata ve neden", "guven":0.98}]}.
-tur yalnız dilbilgisi veya anlam olabilir. Hata yoksa hatalar:[]; numara atlama.
+İki boyutu AYRI denetle: anlam = kaynak sadakati (eylem/özne/olumsuzluk/sayı/
+kesinlik/eksik içerik); dilbilgisi = Türkçe akıcılığı (bozuk ek/cümle/deyim).
+Sırf başka bir anlatımı tercih etmek hata değil, uslup önerisidir ve onarılmaz.
+tur dilbilgisi, anlam veya uslup olabilir. Hata yoksa hatalar:[]; numara atlama.
 Örnek: abomination -> Ucubin: tamlayan eki bozuk, ucubenin olmalı.
 last straw -> bardakları taşıran son damla: deyim bardağı taşıran son damla.
 got a reaction -> tepki verdi: eylem bir tepki almayı sağladı, tepki veren eylem değil.
@@ -97,7 +100,7 @@ def denetim_coz(veri: dict, en: list[str], tr: list[str]) -> list[dict]:
             raise KaliteHatasi("Kalite bulgusunun biçimi geçersiz.")
         i = x.get("paragraf"); guven = x.get("guven")
         if (type(i) is not int or not 0 <= i < len(en)
-                or x.get("tur") not in {"anlam", "dilbilgisi"}
+                or x.get("tur") not in {"anlam", "dilbilgisi", "uslup"}
                 or type(guven) not in (float, int) or not math.isfinite(guven) or not 0 <= guven <= 1
                 or not isinstance(x.get("aciklama"), str) or not x["aciklama"].strip()):
             raise KaliteHatasi("Kalite bulgusunun alanları geçersiz.")
@@ -105,7 +108,7 @@ def denetim_coz(veri: dict, en: list[str], tr: list[str]) -> list[dict]:
             alinti = x.get(alan)
             if not isinstance(alinti, str) or not alinti.strip() or alinti not in metin:
                 raise KaliteHatasi("Kalite bulgusu gerçek kaynak/çeviri alıntısıyla doğrulanamadı.")
-        if guven >= MIN_GUVEN:
+        if guven >= MIN_GUVEN and x["tur"] != "uslup":
             kabul.append(x)
     return kabul
 
@@ -127,7 +130,7 @@ def _veri(en, tr, sozluk, kosullar):
 
 
 def denetle_ve_onar(tr: list[str], en: list[str], sozluk: dict, kosullar: dict, uret,
-                   ek_kontrol=None) -> dict:
+                   ek_kontrol=None, *, iz=None) -> dict:
     """Tüm kapsam denetlenir; yalnız hatalı paragraflar tek tur onarılıp doğrulanır.
 
 uret(user, system, asama) -> (yanit, model). Hata durumunda giriş listesi
@@ -136,6 +139,8 @@ değişmez; tüm kabul kapıları geçtikten sonra bir defada güncellenir.
     if len(tr) != len(en) or not en:
         raise KaliteHatasi("Kalite kontrolü için kaynak ve çeviri hizalanmalı.")
     modeller = []; cagrilar = 0; son_model = None; supheler = []
+    iz = iz if iz is not None else {}
+    iz.update(bulgular=[], onarim_kaniti=[], dogrulama=[])
     def sor(veri, talimat, asama):
         nonlocal cagrilar, son_model
         cagrilar += 1
@@ -152,8 +157,11 @@ değişmez; tüm kabul kapıları geçtikten sonra bir defada güncellenir.
         for bas, son in paketler(kaynak, ceviri):
             veri = sor(_veri(kaynak[bas:son], ceviri[bas:son], sozluk, kosullar), DENETIM_TALIMATI, asama)
             dogrulanmis = denetim_coz(veri, kaynak[bas:son], ceviri[bas:son])
+            iz["dogrulama" if asama == "kalite_dogrulama" else "bulgular"].extend(
+                dict(x, paragraf=(esleme[x["paragraf"] + bas] if esleme
+                                 else x["paragraf"] + bas)) for x in veri["hatalar"])
             for x in veri["hatalar"]:
-                if x["guven"] < MIN_GUVEN:
+                if x["guven"] < MIN_GUVEN or x["tur"] == "uslup":
                     i = x["paragraf"] + bas
                     supheler.append({"paragraf": esleme[i] if esleme else i,
                                      "tur": x["tur"], "aciklama": x["aciklama"], "guven": x["guven"]})
@@ -180,6 +188,8 @@ değişmez; tüm kabul kapıları geçtikten sonra bir defada güncellenir.
             raise KaliteHatasi("Onarım yanıtı hedef paragraflarla eşleşmedi.")
         for x in cevap:
             i = x["paragraf"]; t = x.get("ceviri")
+            iz["onarim_kaniti"].append({"paragraf": i, "kaynak": en[i],
+                                         "once": tr[i], "sonra": t, "kabul": False})
             if (not isinstance(t, str) or not t.strip() or "\n\n" in t or re.search(r"\[\[\d+\]\]", t)
                     or len(t) < len(en[i]) * .70
                     or difflib.SequenceMatcher(None, tr[i], t, autojunk=False).ratio() < .65):
@@ -194,7 +204,13 @@ değişmez; tüm kabul kapıları geçtikten sonra bir defada güncellenir.
         if denetle(sec_en, sec_tr, "kalite_dogrulama", hedefler):
             raise KaliteHatasi("Onarım sonrasında dilbilgisi veya anlam hatası kaldı.")
     tr[:] = yeni
-    return {"surum": 1, "denetlenen": len(en), "onarilan": hedefler,
+    for x in iz["onarim_kaniti"]:
+        x["kabul"] = True
+    return {"surum": 2, "denetlenen": len(en), "onarilan": hedefler,
+            "bulgular": iz["bulgular"], "onarim_kaniti": iz["onarim_kaniti"],
+            "boyutlar": {"sadakat": {"bulgu_sayisi": sum(x["tur"] == "anlam" for x in iz["bulgular"])},
+                         "akicilik": {"bulgu_sayisi": sum(x["tur"] == "dilbilgisi" for x in iz["bulgular"])},
+                         "uslup": {"bulgu_sayisi": sum(x["tur"] == "uslup" for x in iz["bulgular"])}},
             "durum": "supheli" if supheler else "denetlendi", "supheli": supheler,
             "bulgu_sayisi": len(bulgular), "alfabe_paragraflari": sorted(alfabe),
             "cagri_sayisi": cagrilar, "denetim_modelleri": modeller,

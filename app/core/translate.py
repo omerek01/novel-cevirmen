@@ -17,6 +17,8 @@ import time
 import unicodedata
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
+from contextvars import ContextVar
+import uuid
 
 try:
     from zoneinfo import ZoneInfo
@@ -1196,7 +1198,72 @@ class _Retryable(Exception):
     """
 
 
-def translate_chapter(
+_ROMAN_URETIM = ContextVar("roman_uretim", default=None)
+_CEVIRI_IZ = ContextVar("ceviri_iz", default=None)
+
+
+def _izli_uret(*args, **kwargs):
+    """Model çağrısı kanıtı; anahtar/fabrika nesnesi kaydedilmez."""
+    iz = _CEVIRI_IZ.get()
+    if iz is None:
+        return _generate_with_fallback(*args, **kwargs)
+    cagri = {"istem": args[2], "sistem": kwargs.get("system", SYSTEM_INSTRUCTION),
+             "zincir": list(args[1]), "durum": "basladi",
+             "asama": api_durum.mevcut_baglam().get("asama") or "ceviri"}
+    iz["cagrilar"].append(cagri)
+    try:
+        response, model = _generate_with_fallback(*args, **kwargs)
+        giris, cikis = _token_sayilari(response)
+        adaylar = getattr(response, "candidates", None)
+        bitis = ([getattr(a, "finish_reason", None) for a in adaylar] if adaylar
+                 else [getattr(response, "finish_reason", None)])
+        cagri.update(model=model, durum="yanit", giris_token=giris, cikis_token=cikis,
+                     finish_reason=[str(x).split(".")[-1] if x is not None else None for x in bitis],
+                     yanit=getattr(response, "text", ""))
+        meta = getattr(response, "usage_metadata", None)
+        cagri.update(token_olculdu=meta is not None,
+                     gorunur_cikis_token=getattr(meta, "candidates_token_count", None),
+                     dusunme_token=getattr(meta, "thoughts_token_count", None),
+                     model_surumu=getattr(response, "model_version", None))
+        return response, model
+    except Exception as exc:
+        cagri.update(durum="basarisiz", hata_turu=type(exc).__name__)
+        raise
+
+
+def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_context="",
+                      kosullar=None, anlamlar=None, bolum_no=None, anlam_denetimi=None,
+                      *, book_slug=None, bolum_url=None, onceki_bolum=None) -> dict:
+    """Çeviri denemesini izler; başarısız deneme eski chapter kaydını değiştirmez."""
+    from . import ceviri_baglam, ceviri_izleri
+    acik = os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
+    iz = ({"id": uuid.uuid4().hex, "book_slug": book_slug, "chapter_no": bolum_no,
+           "kaynak": text, "kaynak_sha256": ceviri_baglam.kaynak_hash(text),
+           "durum": "basladi", "cagrilar": [], "asamalar": []} if acik else None)
+    iz_token = _CEVIRI_IZ.set(iz)
+    roman_token = _ROMAN_URETIM.set(None)
+    try:
+        sonuc = _translate_chapter_impl(text, api_key, glossary, models, prev_context,
+                    kosullar, anlamlar, bolum_no, anlam_denetimi,
+                    book_slug=book_slug, bolum_url=bolum_url, onceki_bolum=onceki_bolum)
+        if iz is not None:
+            iz.update(durum="tamamlandi", son_ceviri=sonuc["translation"])
+            iz.setdefault("kalite", sonuc.get("ceviri_kalitesi"))
+        return sonuc
+    except Exception as exc:
+        if iz is not None:
+            iz.update(durum="basarisiz", hata_turu=type(exc).__name__)
+        if isinstance(exc, ceviri_baglam.AnalizHatasi):
+            raise KaliteKontrolHatasi(str(exc)) from exc
+        raise
+    finally:
+        _ROMAN_URETIM.reset(roman_token)
+        _CEVIRI_IZ.reset(iz_token)
+        if iz is not None:
+            ceviri_izleri.iz_kaydet(iz["id"], bolum_url or "kaynak://" + iz["kaynak_sha256"], iz)
+
+
+def _translate_chapter_impl(
     text: str,
     api_key: str,
     glossary: dict[str, str] | None = None,
@@ -1206,6 +1273,7 @@ def translate_chapter(
     anlamlar: list[dict] | None = None,
     bolum_no: int | None = None,
     anlam_denetimi: list[dict] | None = None,
+    *, book_slug=None, bolum_url=None, onceki_bolum=None,
 ) -> dict:
     """Tüm bölümü parçalayıp çevirir; bağlamı taşır, yeni isimleri biriktirir.
 
@@ -1240,6 +1308,39 @@ def translate_chapter(
     chunks = _split_paragraphs(text)
 
     client_factory = _gemini_fabrikasi(api_key)
+
+    iz = _CEVIRI_IZ.get()
+    analiz = None
+    if os.getenv("CEVIRI_ANALIZ", "1") != "0" and text.strip():
+        from . import ceviri_baglam, ceviri_izleri
+        ilgili = _relevant_glossary(glossary, text)
+        def analiz_uret(user, system, asama):
+            with api_durum.baglam(asama=asama):
+                return _izli_uret(client_factory, models, user, system=system,
+                                  max_tokens=MAX_OUTPUT_TOKENS)
+        onceki = None
+        # Çağıran aday getirir; kitap/numara sınırı burada da doğrulanır.
+        if (onceki_bolum and book_slug and type(bolum_no) is int
+                and onceki_bolum.get("book_slug") == book_slug
+                and onceki_bolum.get("chapter_no") == bolum_no - 1
+                and (onceki_bolum.get("source") or "").strip()):
+            p = onceki_bolum
+            onceki = ceviri_izleri.ozet_oku(p["url"], book_slug, p["chapter_no"], p["source"])
+            if onceki is None:
+                onceki = ceviri_baglam.ozetle(p["source"], analiz_uret)
+                ceviri_izleri.ozet_yaz(p["url"], book_slug, p["chapter_no"], p["source"], onceki)
+            if iz is not None:
+                iz["onceki_bolum"] = {"url": p["url"], "chapter_no": p["chapter_no"],
+                                       "kaynak_sha256": onceki["kaynak_sha256"], "ozet": onceki["ozet"]}
+        try:
+            analiz = ceviri_baglam.analiz(text, ilgili,
+                {s: v for s, v in (kosullar or {}).items() if s in ilgili}, onceki, analiz_uret)
+        except ceviri_baglam.AnalizHatasi as exc:
+            raise KaliteKontrolHatasi(str(exc)) from exc
+        if iz is not None:
+            iz.update(analiz=analiz, sozluk=ilgili, kosullar=kosullar or {})
+        glossary = ceviri_baglam.yerel_sozluk(glossary, analiz)
+        _ROMAN_URETIM.set(ceviri_baglam.baglam_metni(analiz, onceki))
 
     tr_paras: list[str] = []
     en_paras: list[str] = []
@@ -1309,6 +1410,9 @@ def translate_chapter(
             aligned = False
             prev_tail = _last_sentences(clean, 2)
 
+    if iz is not None:
+        iz["ham_ceviri"] = "\n\n".join(tr_paras)
+        iz["asamalar"].append({"asama": "ham_ceviri", "metin": list(tr_paras)})
     # Kaynakta hiç geçmeyen anahtarlar (model uydurması) sözlüğe girmemeli. Terimler
     # ÖNCE süzülür: `ayikla_karakter_adlari` 1. elemesinde bu listeyi kullanıyor,
     # elenmiş bir anahtarın karakter adını sessizce kurtarması istenmez.
@@ -1347,6 +1451,8 @@ def translate_chapter(
             kosullar, used_models,
         )
 
+    if iz is not None:
+        iz["asamalar"].append({"asama": "eski_onarimlar_sonrasi", "metin": list(tr_paras)})
     kalite_metrik = None
     if os.getenv("CEVIRI_KALITE", "1") != "0" and tr_paras:
         from . import ceviri_kalite
@@ -1359,7 +1465,7 @@ def translate_chapter(
             from contextlib import nullcontext
             sema_baglami = yanit_semasi(None) if "_YANIT_SEMASI" in globals() else nullcontext()
             with api_durum.baglam(asama=asama), sema_baglami:
-                return _generate_with_fallback(client_factory, models, user, system=system,
+                return _izli_uret(client_factory, models, user, system=system,
                                                max_tokens=MAX_OUTPUT_TOKENS)
         def kabul_kontrolu(yeni):
             # Kabul edilen her onarım, kendi paragrafındaki bütün eski
@@ -1380,6 +1486,7 @@ def translate_chapter(
                 tr_paras, en_paras, ilgili,
                 {k: v for k, v in (kosullar or {}).items() if k in ilgili},
                 kalite_uret, kabul_kontrolu,
+                iz=iz.setdefault("kalite_deneyi", {}) if iz is not None else None,
             )
         except ceviri_kalite.KaliteHatasi as exc:
             raise KaliteKontrolHatasi(str(exc)) from exc
@@ -1387,9 +1494,26 @@ def translate_chapter(
         if kalite_metrik["onarilan"] and kalite_metrik["onarim_modeli"]:
             used_models[kalite_metrik["onarim_modeli"]] = None
         kalinti = ingilizce_kalinti(tr_paras, en_paras, glossary)
+        # Ayrıntılı kaynak/önce/sonra izleri teknik kayıtta kalır; okuyucuya
+        # yalnız sayaç/şüphe özeti taşınır, bölüm yanıtı iki kez şişirilmez.
+        if iz is not None:
+            iz["kalite"] = kalite_metrik
+        kalite_metrik = {k: v for k, v in kalite_metrik.items()
+                         if k not in {"bulgular", "onarim_kaniti"}}
 
     new_terms = ayikla_terim_anahtarlari(new_terms, text)
     translation = "\n\n".join(tr_paras)
+    if analiz is not None:
+        # Ayrı analizde önerilen karşılık ancak gerçekten kullanıldıysa bekleme
+        # kapısına aday gider. Kullanılmayan öneri kalıcı sözlük kuralı olamaz.
+        new_names.clear(); new_terms.clear()
+        for x in ceviri_baglam.kullanilan_adaylar(analiz, en_paras, tr_paras):
+            if x["tur"] == "kisi":
+                new_names.add(x["kaynak"])
+            else:
+                new_terms[x["kaynak"]] = x["hedef"]
+        if book_slug and bolum_url and type(bolum_no) is int:
+            ceviri_izleri.ozet_yaz(bolum_url, book_slug, bolum_no, text, analiz)
     return {
         "translation": translation,
         "source": "\n\n".join(en_paras) if aligned else None,
@@ -1569,7 +1693,7 @@ def suggest_term(
         f"ÖZEL AD: {source}\n\n"
         f"GEÇTİĞİ CÜMLE (bağlam): {(context or '').strip()[:600] or '(yok)'}"
     )
-    response, _model = _generate_with_fallback(
+    response, _model = _izli_uret(
         _gemini_fabrikasi(api_key), models or secili_zincir(), user,
         system=SUGGEST_INSTRUCTION, max_tokens=512,
     )
@@ -1638,7 +1762,7 @@ def classify_terms(
         (f"KİTAP: {book_title}\n\n" if book_title else "")
         + "ADLAR:\n" + "\n".join(f"- {t}" for t in temiz)
     )
-    response, _model = _generate_with_fallback(
+    response, _model = _izli_uret(
         _gemini_fabrikasi(api_key), models or secili_zincir(), user,
         system=CLASSIFY_INSTRUCTION, max_tokens=MAX_OUTPUT_TOKENS,
     )
@@ -2473,7 +2597,7 @@ def _anlam_denetle_ve_onar(
             istem = _anlam_onarim_istemi(tanim, (kosullar or {}).get(kayit), en_paras, tr_paras[i], i)
             try:
                 with api_durum.baglam(asama="anlam_onarimi"):
-                    yanit, model = _generate_with_fallback(
+                    yanit, model = _izli_uret(
                         client_factory, models, istem, system=ANLAM_ONARIM_INSTRUCTION,
                         max_tokens=MAX_OUTPUT_TOKENS,
                     )
@@ -2580,11 +2704,21 @@ def _translate_chunk(
     # Fabrika ÇAĞRILMADAN geçirilir: Gemini istemcisi ancak gerçekten bir Gemini
     # halkasına inilirse kurulur. Peşinen kurmak, çeviri yalnız Mistral'e gitse
     # bile GEMINI_API_KEY'i zorunlu kılıyordu.
-    response, model = _generate_with_fallback(client_factory, models, user)
+    baglam = _ROMAN_URETIM.get()
+    system = None
+    if baglam is not None:
+        from . import ceviri_baglam
+        system = (SYSTEM_INSTRUCTION.split('- Yanıtı SADECE şu JSON ile ver:', 1)[0]
+                  .replace(" ve detected_terms'te sözlükteki yazımı kullan", "")
+                  + ceviri_baglam.CEVIRI_CIKTI_TALIMATI)
+        user = baglam + "\n\n" + user
+    response, model = (_izli_uret(client_factory, models, user, system=system)
+                       if system else _izli_uret(client_factory, models, user))
     out = _parse_response(response.text)
     if out.get("gecersiz"):
         ret = api_durum.ret_kaydet(model) or _ret_denemesi(model)
-        out, model = _reti_asarak_uret(client_factory, models, model, user, [ret])
+        out, model = (_reti_asarak_uret(client_factory, models, model, user, [ret], system=system)
+                      if system else _reti_asarak_uret(client_factory, models, model, user, [ret]))
     out["model"] = model
     return out
 
@@ -2597,6 +2731,7 @@ def _ret_denemesi(model: str) -> dict:
 def _reti_asarak_uret(
     client_factory, models: tuple[str, ...], reddeden: str, user: str,
     retler: list[dict] | None = None,
+    *, system: str | None = None,
 ) -> tuple[dict, str]:
     """Ret alan parçayı önce AYNI modelde, sonra zincirin kalanında yeniden çevirir.
 
@@ -2621,7 +2756,8 @@ def _reti_asarak_uret(
     for model in (reddeden, *kalan):
         try:
             with api_durum.baglam(asama="ret_onarimi"):
-                response, uretilen = _generate_with_fallback(client_factory, (model,), user)
+                response, uretilen = (_izli_uret(client_factory, (model,), user, system=system)
+                                     if system else _izli_uret(client_factory, (model,), user))
         except TranslateError as exc:
             son_hata = exc
             continue

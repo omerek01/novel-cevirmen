@@ -29,6 +29,7 @@ def temp_db(tmp_path, monkeypatch):
     monkeypatch.setenv("SOZLUK_DOGRULAMA", "0")
     # Kalite denetimi gerçek model çağırır; kendi testleri açıkça etkinleştirir.
     monkeypatch.setenv("CEVIRI_KALITE", "0")
+    monkeypatch.setenv("CEVIRI_ANALIZ", "0")
     yield
 
 
