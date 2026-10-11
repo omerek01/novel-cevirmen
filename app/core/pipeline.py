@@ -118,6 +118,9 @@ def get_or_translate(
                 sonuc["kosullu_denetlenmeyen"] = kosullu_denetlenmeyen(
                     sonuc["book_slug"], sonuc.get("source")
                 )
+                sonuc["yeni_kayitlar"] = bolumde_bulunan_kayitlar(
+                    sonuc["book_slug"], sonuc.get("chapter_no")
+                )
                 return sonuc
 
     if not _translate_mod.ceviri_anahtari_var_mi(api_key):
@@ -138,7 +141,30 @@ def get_or_translate(
     payload["kosullu_denetlenmeyen"] = kosullu_denetlenmeyen(
         payload["book_slug"], payload.get("source")
     )
+    payload["yeni_kayitlar"] = bolumde_bulunan_kayitlar(
+        payload["book_slug"], payload.get("chapter_no")
+    )
     return payload
+
+
+def bolumde_bulunan_kayitlar(book_slug: str | None, chapter_no) -> list[dict]:
+    """Bu bölümde İLK KEZ bulunan otomatik sözlük kayıtları, güncel durumlarıyla.
+
+    Önce-bekleme kuralından beri otomatik kayıt çeviri anında "eklendi" sayılmaz
+    (`added_terms` boş kalır); arka plandaki doğrulamadan geçip kurala dönen ad
+    hiçbir yerde görünmüyordu (shadow-slave 965, Carin). Durum saklanmaz, okuma
+    anında sözlükten hesaplanır: doğrulama bitince künye kendiliğinden güncellenir.
+    Elle yazılan kayıt ve başka bölümde bulunan kayıt girmez.
+    """
+    if not book_slug or type(chapter_no) is not int:
+        return []
+    return [
+        {"kaynak": r["source"], "karsilik": r["target"], "tur": r.get("tur"),
+         "durum": ("bekliyor" if r.get("inceleme") == "bekliyor"
+                   or r.get("durum") == glossary.TUTULDU else "kural")}
+        for r in glossary.get_glossary_rows(book_slug)
+        if r.get("origin") == "auto" and r.get("first_chapter") == chapter_no
+    ]
 
 
 def kosullu_denetlenmeyen(book_slug: str | None, kaynak: str | None) -> list[str]:

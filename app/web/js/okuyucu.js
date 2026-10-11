@@ -536,6 +536,10 @@ export function buildChapterEntry(url, data) {
     engine: data.engine || null,
     model: data.model || null, // zincirin fiilen çeviren halkası (eski bölümlerde yok)
     addedTerms: data.added_terms || null,
+    // Bu bölümde ilk kez bulunan OTOMATİK kayıtlar, sunucunun okuma anındaki
+    // durumuyla ("bekliyor" | "kural"). Önce-bekleme kuralından beri `added_terms`
+    // otomatik kayıtlar için hep boş; doğrulamadan geçen ad görünmeden kural oluyordu.
+    yeniKayitlar: Array.isArray(data.yeni_kayitlar) ? data.yeni_kayitlar : [],
     // Sözlük uyum bayrağı: karşılığı KAYITLI olduğu hâlde İngilizce kalan terimler.
     // Zincirin alt halkaları sözlük kuralına eşit uymuyor (ölçüm: flash-lite %24,
     // 3.6-flash %0,7) ve çeviri kalıcı önbelleğe yazıldığı için sessizce kalıyordu.
@@ -730,6 +734,15 @@ async function sozlukUyarisiEkle(art) {
   art.appendChild(btn);
 }
 
+export function kunyeYeniKayitOzeti(kayitlar) {
+  const bekleyen = kayitlar.filter((x) => x.durum === "bekliyor").length;
+  const dogrulanan = kayitlar.length - bekleyen;
+  const parcalar = [];
+  if (dogrulanan) parcalar.push(`${dogrulanan} doğrulandı`);
+  if (bekleyen) parcalar.push(`${bekleyen} bekliyor`);
+  return `${kayitlar.length} yeni kayıt bulundu (${parcalar.join(", ")})`;
+}
+
 export function kunyeKarti(entry) {
   const motor = entry.engine;
   const terimler = entry.addedTerms || {};
@@ -743,6 +756,9 @@ export function kunyeKarti(entry) {
   const kalintiIndeksleri = Object.keys(kalinti);
   const denetlenmeyen = entry.kosulluDenetlenmeyen || [];
   const supheler = entry.ceviriKalitesi?.supheli || [];
+  // Çeviri anında kural olarak eklenenler (`adlar`) zaten listeleniyor; aynı ad
+  // iki kez görünmesin.
+  const yeniKayitlar = (entry.yeniKayitlar || []).filter((x) => !(x.kaynak in terimler));
   // Kısalma bir UYARIDIR ve tek başına da rozeti açtırır: özetlenmiş bir bölümde
   // sözlük/kalıntı bayrakları çoğu zaman TEMİZ döner (atılan metinde ihlal de
   // olmaz), yani öteki koşullara bağlansaydı en bozuk bölüm sessiz kalırdı.
@@ -754,6 +770,7 @@ export function kunyeKarti(entry) {
     ihlalAdlari.length === 0 &&
     kalintiIndeksleri.length === 0 &&
     denetlenmeyen.length === 0 &&
+    yeniKayitlar.length === 0 &&
     !kisalmis && supheler.length === 0
   )
     return null;
@@ -782,9 +799,9 @@ export function kunyeKarti(entry) {
     uyarilar.push(`${ihlalAdlari.length} terim sözlüğe uymadı`);
   ozet.textContent = uyarilar.length
     ? `⚠ ${uyarilar.join(" · ")}`
-    : adlar.length
-      ? `Sözlüğe ${adlar.length} terim eklendi`
-      : "Çeviri bilgisi";
+    : [adlar.length ? `Sözlüğe ${adlar.length} terim eklendi` : "",
+       yeniKayitlar.length ? kunyeYeniKayitOzeti(yeniKayitlar) : ""]
+        .filter(Boolean).join(" · ") || "Çeviri bilgisi";
   kutu.appendChild(ozet);
 
   const govde = document.createElement("div");
@@ -885,6 +902,37 @@ export function kunyeKarti(entry) {
       liste.appendChild(li);
     }
     govde.appendChild(liste);
+  }
+  if (yeniKayitlar.length) {
+    const bilgi = document.createElement("p");
+    bilgi.className = "gloss-hint kunye-satir";
+    bilgi.textContent =
+      "Bu bölümde bulunan yeni kayıtlar. Bekleyenler doğrulama ya da senin onayın " +
+      "gelene kadar çeviriye girmez; doğrulanan kayıt sonraki bölümlerde kuraldır.";
+    govde.appendChild(bilgi);
+    const liste = document.createElement("ul");
+    liste.className = "kunye-liste kunye-yeni-liste";
+    const sirali = [...yeniKayitlar].sort((a, b) => a.kaynak.localeCompare(b.kaynak));
+    for (const kayit of sirali) {
+      const li = kunyeTerimSatiri(entry, kayit.kaynak, kayit.karsilik);
+      const etiket = document.createElement("span");
+      etiket.className = "kunye-yeni-durum kunye-yeni-" + kayit.durum;
+      etiket.textContent = kayit.durum === "bekliyor" ? "bekliyor" : "doğrulandı";
+      li.appendChild(etiket);
+      liste.appendChild(li);
+    }
+    govde.appendChild(liste);
+    if (sirali.some((x) => x.durum === "bekliyor")) {
+      const slug = entry.bookSlug || durum.currentBookSlug;
+      if (slug) {
+        const btn = document.createElement("button");
+        btn.className = "sozluk-uyari";
+        btn.type = "button";
+        btn.textContent = "Bekleyenleri incele →";
+        btn.addEventListener("click", () => navigate({ view: "glossary", slug, filtre: "incelenecek" }));
+        govde.appendChild(btn);
+      }
+    }
   }
   if (adlar.length) {
     const liste = document.createElement("ul");

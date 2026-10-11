@@ -1522,6 +1522,16 @@ body.reading .bildirim { bottom: calc(env(safe-area-inset-bottom) + var(--s-base
   border-bottom: 1px solid color-mix(in oklab, var(--ink) 12%, transparent);
 }
 .kunye-terim .gloss-target { font-size: 0.84rem; padding: 0.35rem 0.45rem; }
+/* Bölümde bulunan otomatik kaydın güncel durumu: bekliyor (çeviriye girmez) / doğrulandı. */
+.kunye-yeni-durum {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+  padding: 0.1rem 0.45rem;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.kunye-yeni-bekliyor { color: var(--warn); background: var(--accent-soft); }
+.kunye-yeni-kural { color: var(--ink); background: color-mix(in oklab, var(--ink) 8%, transparent); }
 .kunye-terim.gloss-row-pending {
   box-shadow: inset 3px 0 0 var(--accent);
   padding-left: 0.5rem;
