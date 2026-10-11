@@ -125,11 +125,20 @@ def maddeler(a: dict, b: dict, tohum: int, esik: float = 0.9) -> list[dict]:
     return sonuc
 
 
+def _tek_sarmali_ac(yanit):
+    """`[{...}]` -> `{...}`: hakem nesneyi tek elemanlı listeye sarabiliyor."""
+    if isinstance(yanit, list) and len(yanit) == 1 and isinstance(yanit[0], dict):
+        return yanit[0]
+    return yanit
+
+
 def kararlari_coz(yanit: dict, madde_listesi: list[dict]) -> list[dict]:
     """Hakemin X/Y kararını kola çevirir; eksik/fazla/geçersiz yanıt ValueError.
 
-    Hakem listeyi kimi zaman çıplak ya da başka adlı TEK anahtarla döndürüyor (aynı
-    bölüm üç turda üç kez reddedildi); içerik yine madde madde doğrulanır."""
+    Hakem yanıtı kimi zaman TEK elemanlı listeye sarılı (`[{"kararlar": [...]}]`,
+    reddedilen ham yanıtta görüldü; 600. bölüm üç turda üç kez bu yüzden düştü), kimi
+    zaman çıplak liste ya da başka adlı TEK anahtar; içerik yine madde madde doğrulanır."""
+    yanit = _tek_sarmali_ac(yanit)
     if isinstance(yanit, list):
         yanit = {"kararlar": yanit}
     elif isinstance(yanit, dict) and not isinstance(yanit.get("kararlar"), list):
@@ -178,6 +187,7 @@ def bolum_isleri(a: dict, b: dict) -> list[dict]:
 
 def bolum_karari_coz(yanit: dict, x_kol: str, paragraf_sayisi: int) -> dict:
     """Bölüm hakeminin X/Y kararını kola çevirir; biçimsiz yanıt ValueError."""
+    yanit = _tek_sarmali_ac(yanit)
     if not isinstance(yanit, dict) or any(yanit.get(b) not in ("X", "Y", "esit") for b in ("akis", "anlam")):
         raise ValueError("Bölüm hakemi kararı geçersiz.")
     kop = yanit.get("kopukluklar")

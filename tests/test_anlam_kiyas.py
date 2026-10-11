@@ -50,6 +50,7 @@ def test_hakem_karari_kola_cevrilir():
 @pytest.mark.parametrize("sarmal", [
     lambda liste: liste,                    # çıplak liste
     lambda liste: {"decisions": liste},     # başka adlı tek anahtar
+    lambda liste: [{"kararlar": liste}],    # tek elemanlı listeye sarılı (gerçek red, 600. bölüm)
 ])
 def test_hakem_listesi_baska_sarmalda_gelse_de_cozulur(sarmal):
     maddeler = [{"p": 0, "x_kol": "a"}, {"p": 1, "x_kol": "b"}]
@@ -135,3 +136,9 @@ def test_uzak_kodlarda_yer_tutucu_kalmaz():
     for kod in (ak._HAZIRLA, ak._CALISTIR, ak._YARGILA):
         sabit = ak._sabitle(kod)
         assert "UZAK_APP" not in sabit and "CANLI_DB" not in sabit
+
+
+def test_bolum_karari_tek_elemanli_listeye_sarili_gelse_de_cozulur():
+    yanit = [{"akis": "X", "anlam": "esit", "kopukluklar": {"X": [], "Y": [{"p": 1, "not": "n"}]}}]
+    karar = ak.bolum_karari_coz(yanit, "b", 3)
+    assert karar["akis"] == "b" and karar["kopukluk"]["a"] == [{"p": 1, "not": "n"}]
