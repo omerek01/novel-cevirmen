@@ -177,23 +177,34 @@ def _ssh(komut: str, girdi: bytes | None = None, zaman_asimi: int = 120):
         input=girdi, capture_output=True, timeout=zaman_asimi)
 
 
-def _uzak(kod: str, yuk: dict, satir_isle=None) -> list[dict]:
-    """İşi sunucuya dosya olarak yükleyip oturumdan BAĞIMSIZ başlatır, çıktısını yoklar.
+def _uzak_baslat(kod: str, yuk: dict) -> str:
+    """İşi sunucuya dosya olarak yükler ve oturumdan BAĞIMSIZ başlatır; iş adını döner.
 
-    Tek uzun SSH oturumu ağ kesintisinde (2026-10-11, "Connection reset by peer") işi
-    de öldürüyordu: uzak süreç oturumla birlikte sonlanır. Ayrık iş kesintiden
-    etkilenmez; yoklama kaldığı bayttan sürer. Bitiş işareti çıkış kodunu taşır."""
+    Tek uzun SSH oturumu ağ kesintisinde ya da yerel bilgisayar uyuyunca (2026-10-11,
+    "Connection reset by peer") uzaktaki işi de öldürüyordu. `cd X && setsid ... &`
+    biçimi ise bütün zinciri arka plana atıp oturumu iş bitene dek açık tutuyordu
+    (başlatıcı zaman aşımına düştü); `;` ile yalnız iş arka plana gider, oturum kapanır."""
     ad = "is-" + uuid.uuid4().hex[:12]
     yol = f"{UZAK_DIZIN}/{ad}"
     betik = ("YUK=" + repr(json.dumps(yuk, ensure_ascii=True)) + "\n" + kod).encode()
     r = _ssh(f"mkdir -p {UZAK_DIZIN} && cat > {yol}.py", girdi=betik, zaman_asimi=600)
     if r.returncode:
         raise RuntimeError("Uzak iş yüklenemedi: " + r.stderr.decode("utf-8", "replace")[-500:])
-    r = _ssh(f"cd {UZAK_DIZIN} && setsid nohup bash -c '{UZAK_PYTHON} {ad}.py > {ad}.out 2> {ad}.err; "
-             f"echo \"### BITTI $? ###\" >> {ad}.out' > /dev/null 2>&1 < /dev/null &")
+    r = _ssh(f"cd {UZAK_DIZIN}; setsid nohup bash -c '{UZAK_PYTHON} {ad}.py > {ad}.out 2> {ad}.err; "
+             f"echo \"### BITTI $? ###\" >> {ad}.out' > /dev/null 2>&1 < /dev/null &", zaman_asimi=60)
     if r.returncode:
         raise RuntimeError("Uzak iş başlatılamadı: " + r.stderr.decode("utf-8", "replace")[-500:])
-    print(f"uzak iş {ad} başladı", flush=True)
+    print(f"uzak iş {ad} başladı (izlemek için: --izle {ad})", flush=True)
+    return ad
+
+
+def _uzak(kod: str, yuk: dict, satir_isle=None) -> list[dict]:
+    return _uzak_izle(_uzak_baslat(kod, yuk), satir_isle)
+
+
+def _uzak_izle(ad: str, satir_isle=None) -> list[dict]:
+    """Ayrık işin çıktısını baştan, kaldığı bayttan yoklar; bitişte uzak dosyaları siler."""
+    yol = f"{UZAK_DIZIN}/{ad}"
     ofset, tampon, sonuclar, bekleme, sessiz = 0, b"", [], 3, 0
     while True:
         time.sleep(bekleme)
@@ -371,13 +382,17 @@ def calistir(a):
     if not isler:
         print("Eksik iş yok."); return
     print("Koşacak:", isler, flush=True)
-    yuk = {"ornekler": ornekler, "kollar": [k for k in kollar if k in isler], "isler": isler,
-           "bayraklar": {k: KOLLAR[k] for k in isler}, "model": a.model, "es": a.es,
-           "kod": {n: (KOK / "app/core" / (n + ".py")).read_text(encoding="utf-8") for n in ENJEKTE}}
     with open(a.cikti, "a", encoding="utf-8") as f:
         def yaz(satir):
             f.write(json.dumps(satir, ensure_ascii=False) + "\n"); f.flush()
             print(json.dumps({k: satir.get(k) for k in ("kol", "bolum", "saniye", "hata_turu")}), flush=True)
+        if a.izle:
+            # Zaten koşan işe bağlan (yerel yoklayıcı düştüyse): iş yeniden başlatılmaz.
+            _uzak_izle(a.izle, yaz)
+            return
+        yuk = {"ornekler": ornekler, "kollar": [k for k in kollar if k in isler], "isler": isler,
+               "bayraklar": {k: KOLLAR[k] for k in isler}, "model": a.model, "es": a.es,
+               "kod": {n: (KOK / "app/core" / (n + ".py")).read_text(encoding="utf-8") for n in ENJEKTE}}
         _uzak(_sabitle(_CALISTIR), yuk, yaz)
 
 
@@ -478,7 +493,9 @@ def main():
     h.add_argument("--cikti", required=True); h.set_defaults(f=hazirla)
     c = alt.add_parser("calistir"); c.add_argument("--veri", required=True)
     c.add_argument("--kollar", default="A,A2,B,C,D,E"); c.add_argument("--model", default="vertex/gemini-3.6-flash")
-    c.add_argument("--es", type=int, default=1); c.add_argument("--cikti", required=True); c.set_defaults(f=calistir)
+    c.add_argument("--es", type=int, default=1); c.add_argument("--cikti", required=True)
+    c.add_argument("--izle", help="Sunucuda zaten koşan işin adı (is-...): yeniden başlatmadan bağlan.")
+    c.set_defaults(f=calistir)
     y = alt.add_parser("yargila"); y.add_argument("--veri", required=True); y.add_argument("--sonuc", required=True)
     y.add_argument("--ciftler", default="B:A,C:A,D:B,E:C,A2:A"); y.add_argument("--hakem", default="gemini-2.5-pro")
     y.add_argument("--es", type=int, default=4); y.add_argument("--tohum", type=int, default=11)
