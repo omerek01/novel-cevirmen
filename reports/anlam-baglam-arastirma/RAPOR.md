@@ -443,3 +443,70 @@ anlam_kiyas.py ozet --yargi <çıktı>;  anlam_kiyas.py ozet-bolum --yargi <çı
 
 Deney koşuları canlı okumayla aynı Vertex kotasını paylaşır. Eşzamanlılık düşük tutulmalı
 ve kullanıcı okurken koşturulmamalı.
+
+## 11. Ek ölçüm: bölüm özeti zinciri (AI Novel Translation yöntemi)
+
+2026-10-11 akşamı, kullanıcı isteğiyle. Yöntem `darkautism/ai-novel-translation`'dan
+alındı (kaynak kodu okundu: `config.yml`, `src/main.rs`). Her bölümde çeviriden önce tek
+bir özet çağrısı yapılır. Girdisi önceki bölümün kayıtlı özeti, ilgili sözlük ve bölümün
+kendisidir; çıktısı bu bölümün kısa Türkçe özetidir (en çok ~1000 karakter). Özet
+saklanır ve sonraki bölümün özet çağrısına gider. Çeviriye yalnız bu bölümün özeti girer.
+Bilinçli fark: yeni adlar sözlüğe otomatik yazılmaz. Kod: `core/ozet_zinciri.py`,
+`CEVIRI_OZET=1` (`a1e7887`, varsayılan kapalı).
+
+**Neden ayrı ölçüm:** 5. bölümdeki analiz kolları da özetleri bölümden bölüme
+aktarabiliyordu. Ama ölçülen bölümler ardışık olmadığı için zincir hiç kurulmadı; hep
+tek adımlı hâli ölçüldü.
+
+**Deney:**
+
+- Bölümler: 600–603, 840–843 ve 966–969 (üç blok, her blokta dört ardışık bölüm).
+  Her bloğun ilk bölümünde zincir boş başlar, sonraki üçü önceki özeti alır.
+- Kollar:
+  - H: canlıya en yakın yol (analiz kapalı, işaret açık, kalite kapalı).
+  - I: H + özet zinciri.
+- Model ve koşu: 3.6 Flash; her kolda bölümler sırayla çevrildi.
+- Yeniden çevrilenler:
+  - H-600: ilk koşuda modelin reddiyle düştü, yeniden çevrildi.
+  - I-969: özet çağrısı geçici hatayla düştü (çeviri özetsiz kaydedilmişti). 968'in özetiyle
+    tohumlanıp yeniden çevrildi (`19f5d38`).
+- Sonuç: 12 bölümün tamamında zincir kesintisiz kuruldu. Özet bloğu hiçbir çeviriye
+  sızmadı; bütün çeviriler hizalı.
+
+**Sonuç: ölçülebilir kazanç yok.**
+
+| Ölçü (I:H) | I | H | eşit | p |
+|---|---:|---:|---:|---:|
+| Paragraf: anlam | 71 | 88 | 129 | 0,20 |
+| Paragraf: akıcılık | 51 | 68 | 169 | 0,14 |
+| Paragraf: tutarlılık | 12 | 16 | 260 | 0,57 |
+| Bölüm: akış (iki yön aynı) | 2 | 0 | 10 | 0,50 |
+
+Bölüm başına akış kopukluğu, zincirin konumuna göre:
+
+| | I | H |
+|---|---:|---:|
+| Önceki özeti olan 9 bölüm | 1,33 | 1,72 |
+| Blok başındaki 3 bölüm | 1,83 | 1,50 |
+| Hepsi | 1,46 | 1,67 |
+
+- **Akışta küçük olumlu eğilim var.** Önceki özeti olan bölümlerde I, 4 bölümde daha az
+  kopuk, H 1 bölümde (4 eşit; p 0,38).
+- **Paragraf düzeyinde hafif olumsuz eğilim var.** Anlamda 49'a 59, akıcılıkta 31'e 40.
+- **İkisi de gürültü düzeyinde.** Aynı ayarın iki koşusu anlamda 50'ye 62 ayrışıyordu
+  (5.1).
+- **Bedel:** bölüm başına bir ek çağrı, ~10–40 sn.
+
+**Öneri:** `CEVIRI_OZET` kapalı kalsın. Bu yöntem de 5. bölümdeki analiz kolları gibi
+ölçülebilir kazanç getirmedi. Akıştaki eğilimi doğrulamak istenirse daha geniş bir ölçüm
+gerekir: daha çok blok ve H'nin kendi tekrarıyla gürültü tabanı. Ölçülen tek anlamlı
+kaldıraç yine model (6.1).
+
+Tekrar üretme (`D=reports/anlam-kiyas-2026-10-11-zincir`, takip dışı):
+
+```
+anlam_kiyas.py hazirla  --bolumler 600,601,602,603,840,841,842,843,966,967,968,969 --cikti $D/ornekler.json
+anlam_kiyas.py calistir --veri $D/ornekler.json --kollar H,I --es 1 --cikti $D/ceviriler.jsonl
+anlam_kiyas.py yargila       --veri $D/ornekler.json --sonuc $D/ceviriler.jsonl --ciftler I:H --es 2 --cikti $D/yargi-paragraf.jsonl
+anlam_kiyas.py yargila-bolum --sonuc $D/ceviriler.jsonl --ciftler I:H --es 2 --cikti $D/yargi-bolum.jsonl
+```
