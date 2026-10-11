@@ -117,3 +117,9 @@ def test_iki_yon_uyusmazsa_esit_sayilir():
     birlesik = ak.yonleri_birlestir([k1, k2])
     assert birlesik["akis"] == "esit" and birlesik["anlam"] == "a"
     assert birlesik["kopukluk_sayisi"] == {"a": 0.5, "b": 1.5}
+
+
+def test_uzak_kodlarda_yer_tutucu_kalmaz():
+    for kod in (ak._HAZIRLA, ak._CALISTIR, ak._YARGILA):
+        sabit = ak._sabitle(kod)
+        assert "UZAK_APP" not in sabit and "CANLI_DB" not in sabit

@@ -250,7 +250,8 @@ def _uzak_baslat(kod: str, yuk: dict) -> str:
     (başlatıcı zaman aşımına düştü); `;` ile yalnız iş arka plana gider, oturum kapanır."""
     ad = "is-" + uuid.uuid4().hex[:12]
     yol = f"{UZAK_DIZIN}/{ad}"
-    betik = ("YUK=" + repr(json.dumps(yuk, ensure_ascii=True)) + "\n" + kod).encode()
+    # Yer tutucular burada çözülür: çağıran unutamaz (yargila unutmuştu, 2026-10-11).
+    betik = ("YUK=" + repr(json.dumps(yuk, ensure_ascii=True)) + "\n" + _sabitle(kod)).encode()
     r = _ssh(f"mkdir -p {UZAK_DIZIN} && cat > {yol}.py", girdi=betik, zaman_asimi=600)
     if r.returncode:
         raise RuntimeError("Uzak iş yüklenemedi: " + r.stderr.decode("utf-8", "replace")[-500:])
