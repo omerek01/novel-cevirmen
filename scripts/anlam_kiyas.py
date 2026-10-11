@@ -43,14 +43,22 @@ CANLI_DB = "/home/OMEREK/novel-cevirmen/cache/chapters.db"
 UZAK_APP = "/home/OMEREK/novel-cevirmen-sozluk/app"
 ENJEKTE = ["ceviri_kalite", "ceviri_baglam", "ceviri_bellek", "ceviri_izleri", "translate"]
 
-# Kol = bayrak kümesi. Kalite denetimi bütün kollarda KAPALI: onarım farkları örterdi.
+# Kol = bayrak kümesi. Kalite denetimi G dışındaki kollarda KAPALI: onarım farkları
+# örterdi. Her kol her bayrağı açıkça verir: kollar aynı süreçte sırayla koştuğu için
+# bir kolun açtığı bayrak (G'nin kalitesi, H'nin işareti) sonraki kola sızmasın.
 KOLLAR = {
-    "A": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0"},   # canlı yol
-    "A2": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0"},  # gürültü tabanı
-    "B": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0"},   # eski yol
-    "C": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "0"},   # özet, üslupsuz
-    "D": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "1"},   # bellek, analizsiz
-    "E": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "1"},   # özet + bellek
+    "A": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # canlı yol
+    "A2": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},  # gürültü tabanı
+    "B": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # eski yol
+    "C": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # özet, üslupsuz
+    "D": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # bellek, analizsiz
+    "E": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # özet + bellek
+    # Faz 2: F eski yolu --model ile verilen BAŞKA modelle çevirir; G eski yola
+    # canlıdaki kalite katmanını ekler (katmanın anlama katkısı ölçülür); H eski yola
+    # sözlüğün sıradan kelime işaretini ekler (`translate.SIRADAN_ISARETI`).
+    "F": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},
+    "G": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "1", "SOZLUK_SIRADAN": "0"},
+    "H": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1"},
 }
 BOYUTLAR = ("anlam", "akicilik", "tutarlilik")
 
