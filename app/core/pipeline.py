@@ -347,11 +347,15 @@ def _fetch_translate_save(
 
 def _roman_baglami(slug, url, prev_url, no):
     import os
-    if os.getenv("CEVIRI_ANALIZ", "1") == "0" and os.getenv("CEVIRI_KALITE", "1") == "0":
+    analiz = os.getenv("CEVIRI_ANALIZ", "1") != "0"
+    bellek = os.getenv("CEVIRI_BELLEK", "0") == "1"
+    if not analiz and not bellek and os.getenv("CEVIRI_KALITE", "1") == "0":
         return {}
-    return {"book_slug": slug, "bolum_url": url,
-            "onceki_bolum": cache.onceki_kaynak(slug, prev_url, no)
-            if os.getenv("CEVIRI_ANALIZ", "1") != "0" else None}
+    ek = {"book_slug": slug, "bolum_url": url,
+          "onceki_bolum": cache.onceki_kaynak(slug, prev_url, no) if analiz or bellek else None}
+    if bellek:
+        ek["bellek_havuzu"] = cache.bellek_havuzu(slug, no)
+    return ek
 
 
 def _onceki_ceviri_baglami(slug, prev_url, no):

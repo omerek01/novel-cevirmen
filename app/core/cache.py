@@ -352,7 +352,8 @@ def onceki_kaynak(book_slug: str, prev_url: str | None, chapter_no: int | None) 
     conn = _connect()
     try:
         rows = conn.execute(
-            "SELECT url, book_slug, chapter_no, COALESCE(NULLIF(raw_source, ''), source_text), translation "
+            "SELECT url, book_slug, chapter_no, COALESCE(NULLIF(raw_source, ''), source_text), translation, "
+            "source_text "
             "FROM chapters WHERE book_slug = ? AND chapter_no = ? "
             "AND IFNULL(content_type, 'text') != 'html' "
             "ORDER BY CASE WHEN url = ? THEN 0 ELSE 1 END, created_at DESC",
@@ -362,9 +363,33 @@ def onceki_kaynak(book_slug: str, prev_url: str | None, chapter_no: int | None) 
         conn.close()
     for r in rows:
         if (r[3] or "").strip():
+            # `source` özet içindir (ham kaynak tam metindir); `hizali_kaynak` çeviriyle
+            # paragraf paragraf eşlenen biçimdir, bellek çiftleri ondan kurulur.
             return {"url": r[0], "book_slug": r[1], "chapter_no": r[2], "source": r[3],
-                    "translation": r[4] or ""}
+                    "translation": r[4] or "", "hizali_kaynak": r[5] or ""}
     return None
+
+
+def bellek_havuzu(book_slug: str | None, chapter_no: int | None, bolum_sayisi: int = 30) -> list[dict]:
+    """Tutarlılık belleği havuzu: aynı kitabın ÖNCEKİ son `bolum_sayisi` bölümünün çiftleri.
+
+    Yalnız hizalı (paragraf sayısı tutan) bölümler girer; gelecek bölüm ve görsel
+    bölüm hiçbir koşulda girmez (`ceviri_bellek` modül notu)."""
+    if not book_slug or type(chapter_no) is not int:
+        return []
+    from . import ceviri_bellek
+    conn = _connect()
+    try:
+        rows = conn.execute(
+            "SELECT chapter_no, source_text, translation FROM chapters "
+            "WHERE book_slug = ? AND chapter_no < ? AND chapter_no >= ? "
+            "AND IFNULL(content_type, 'text') != 'html' AND source_text IS NOT NULL "
+            "ORDER BY chapter_no DESC",
+            (book_slug, chapter_no, chapter_no - bolum_sayisi),
+        ).fetchall()
+    finally:
+        conn.close()
+    return ceviri_bellek.havuz_kur(rows)
 
 
 def prev_translation(

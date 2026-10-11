@@ -1200,6 +1200,8 @@ class _Retryable(Exception):
 
 _ROMAN_URETIM = ContextVar("roman_uretim", default=None)
 _CEVIRI_IZ = ContextVar("ceviri_iz", default=None)
+# Tutarlılık belleği bloğu (`ceviri_bellek`); boş/None ise çeviri istemi değişmez.
+_BELLEK_METNI = ContextVar("bellek_metni", default=None)
 
 
 def _izli_uret(*args, **kwargs):
@@ -1233,7 +1235,8 @@ def _izli_uret(*args, **kwargs):
 
 def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_context="",
                       kosullar=None, anlamlar=None, bolum_no=None, anlam_denetimi=None,
-                      *, book_slug=None, bolum_url=None, onceki_bolum=None) -> dict:
+                      *, book_slug=None, bolum_url=None, onceki_bolum=None,
+                      bellek_havuzu=None) -> dict:
     """Çeviri denemesini izler; başarısız deneme eski chapter kaydını değiştirmez."""
     from . import ceviri_baglam, ceviri_izleri
     acik = os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
@@ -1242,10 +1245,12 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
            "durum": "basladi", "cagrilar": [], "asamalar": []} if acik else None)
     iz_token = _CEVIRI_IZ.set(iz)
     roman_token = _ROMAN_URETIM.set(None)
+    bellek_token = _BELLEK_METNI.set(None)
     try:
         sonuc = _translate_chapter_impl(text, api_key, glossary, models, prev_context,
                     kosullar, anlamlar, bolum_no, anlam_denetimi,
-                    book_slug=book_slug, bolum_url=bolum_url, onceki_bolum=onceki_bolum)
+                    book_slug=book_slug, bolum_url=bolum_url, onceki_bolum=onceki_bolum,
+                    bellek_havuzu=bellek_havuzu)
         if iz is not None:
             iz.update(durum="tamamlandi", son_ceviri=sonuc["translation"])
             iz.setdefault("kalite", sonuc.get("ceviri_kalitesi"))
@@ -1257,6 +1262,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
             raise KaliteKontrolHatasi(str(exc)) from exc
         raise
     finally:
+        _BELLEK_METNI.reset(bellek_token)
         _ROMAN_URETIM.reset(roman_token)
         _CEVIRI_IZ.reset(iz_token)
         if iz is not None:
@@ -1273,7 +1279,7 @@ def _translate_chapter_impl(
     anlamlar: list[dict] | None = None,
     bolum_no: int | None = None,
     anlam_denetimi: list[dict] | None = None,
-    *, book_slug=None, bolum_url=None, onceki_bolum=None,
+    *, book_slug=None, bolum_url=None, onceki_bolum=None, bellek_havuzu=None,
 ) -> dict:
     """Tüm bölümü parçalayıp çevirir; bağlamı taşır, yeni isimleri biriktirir.
 
@@ -1341,6 +1347,26 @@ def _translate_chapter_impl(
             iz.update(analiz=analiz, sozluk=ilgili, kosullar=kosullar or {})
         glossary = ceviri_baglam.yerel_sozluk(glossary, analiz)
         _ROMAN_URETIM.set(ceviri_baglam.baglam_metni(analiz, onceki))
+
+    # TUTARLILIK BELLEĞİ (CEVIRI_BELLEK=1): önceki bölümlerden ilgili kaynak→çeviri
+    # çiftleri + önceki bölümün son paragrafları. Ek model çağrısı yok. Gelecek
+    # bölüm ve başka kitap giremez; bölüm numarası bilinmiyorsa uzun bellek kullanılmaz.
+    if os.getenv("CEVIRI_BELLEK", "0") == "1" and text.strip():
+        from . import ceviri_bellek
+        uzun = (ceviri_bellek.sec(bellek_havuzu or [],
+                                  [p.strip() for p in text.split("\n\n") if p.strip()],
+                                  bolum_no=bolum_no)
+                if type(bolum_no) is int else [])
+        kisa = []
+        if (onceki_bolum and book_slug and type(bolum_no) is int
+                and onceki_bolum.get("book_slug") == book_slug
+                and onceki_bolum.get("chapter_no") == bolum_no - 1):
+            kisa = ceviri_bellek.son_ciftler(
+                onceki_bolum.get("hizali_kaynak") or onceki_bolum.get("source") or "",
+                onceki_bolum.get("translation") or "")
+        _BELLEK_METNI.set(ceviri_bellek.metin(uzun, kisa) or None)
+        if iz is not None:
+            iz["bellek"] = {"bolumler": [x["bolum"] for x in uzun], "kisa": len(kisa)}
 
     tr_paras: list[str] = []
     en_paras: list[str] = []
@@ -2705,7 +2731,10 @@ def _translate_chunk(
     # halkasına inilirse kurulur. Peşinen kurmak, çeviri yalnız Mistral'e gitse
     # bile GEMINI_API_KEY'i zorunlu kılıyordu.
     baglam = _ROMAN_URETIM.get()
+    bellek = _BELLEK_METNI.get()
     system = None
+    if bellek:
+        user = bellek + "\n\n" + user
     if baglam is not None:
         from . import ceviri_baglam
         system = (SYSTEM_INSTRUCTION.split('- Yanıtı SADECE şu JSON ile ver:', 1)[0]
