@@ -96,13 +96,19 @@ def test_dusuk_guven_ve_uslup_otomatik_onarima_gitmez():
 
 
 def test_dusuk_guven_temiz_diye_kaydedilmez():
+    # Düşük güvenli bulgu da onarıma gider (2026-10-11); onarılamazsa son çare
+    # olarak işaretlenir, bölüm "temiz" sayılmaz. Onarım metni değiştirmeye gerek
+    # görmediyse zorla değişiklik istenmez: tek deneme yapılır.
     q = kalite(); x = hata(); x["guven"] = .88
     tr = ["Ucubin altında kıpırdandı."]
-    rapor = q.denetle_ve_onar(tr, ["beneath the abomination"], {}, {},
-                            lambda *args: (cevap({"denetlenen": [0], "hatalar": [x]}), "model"))
+    uret = asamali(kalite_denetimi=[{"denetlenen": [0], "hatalar": [x]}],
+                   kalite_onarimi=[{"duzeltmeler": [{"paragraf": 0, "ceviri": tr[0]}]}])
+    rapor = q.denetle_ve_onar(tr, ["beneath the abomination"], {}, {}, uret)
     assert rapor["durum"] == "supheli"
     assert rapor["supheli"][0]["paragraf"] == 0
+    assert "otomatik onarılamadı" in rapor["supheli"][0]["aciklama"]
     assert rapor["onarilan"] == []
+    assert [a for a, _ in uret.cagrilar] == ["kalite_denetimi", "kalite_onarimi"]
 
 
 def test_gemini_disinda_da_bitmemis_yanit_kabul_edilmez():
@@ -144,13 +150,40 @@ def test_anlam_ve_akicilik_ayri_raporlanir_onarim_kaniti_saklanir():
     assert iz["bulgular"][0]["ceviri"] == "Ucubin"
 
 
-def test_uslup_onerisi_yuksek_guvende_bile_otomatik_uygulanmaz():
-    q = kalite(); x = hata(); x.update(tur="uslup", aciklama="Alternatif anlatım tercihi.")
-    tr = ["Ucubin altında kıpırdandı."]
-    r = q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
-                         lambda *a: (cevap({"denetlenen": [0], "hatalar": [x]}), "model"))
-    assert r["onarilan"] == []
-    assert r["supheli"][0]["tur"] == "uslup"
+def test_dusuk_guvenli_uslup_notu_da_onarilir():
+    # Canlı tekrar (shadow-slave 969, 2026-10-11): kaynaktaki iki ayrı sıfat çeviride
+    # aynı sözcüğün art arda tekrarı olmuştu. Denetim bunu "uslup" ve 0,88 güvenle
+    # verdiği için onarıma hiç gitmiyor, okura yalnız uyarı gidiyordu. Kullanıcı
+    # kararı: düşük güvenli ve üslup notları da onarılsın.
+    q = kalite()
+    en = ["A huge, enormous wave rose over the deck."]
+    tr = ["Devasa, devasa bir dalga güvertenin üstüne yükseldi."]
+    tekrar = {"paragraf": 0, "tur": "uslup", "kaynak": "A huge, enormous wave",
+              "ceviri": "Devasa, devasa bir dalga", "aciklama": "Aynı sıfat art arda tekrarlanmış.",
+              "guven": 0.88}
+    duzgun = "Kocaman, devasa bir dalga güvertenin üstüne yükseldi."
+    uret = asamali(kalite_denetimi=[{"denetlenen": [0], "hatalar": [tekrar]}],
+                   kalite_onarimi=[{"duzeltmeler": [{"paragraf": 0, "ceviri": duzgun}]}],
+                   kalite_dogrulama=[temiz()])
+    r = q.denetle_ve_onar(tr, en, {}, {}, uret)
+    assert tr == [duzgun]
+    assert r["onarilan"] == [0] and r["supheli"] == [] and r["durum"] == "denetlendi"
+    hedef = [v for a, v in uret.cagrilar if a == "kalite_onarimi"][0]["hedefler"][0]
+    assert hedef["hatalar"][0]["tur"] == "uslup"
+
+
+def test_dogrulamanin_dusuk_guvenli_notu_da_sonraki_turda_onarilir():
+    # Kabul edilen adayın doğrulamasında çıkan düşük güvenli not kabulü engellemez,
+    # ama okura uyarı olarak da gitmez: sonraki turun hedefi olur.
+    q = kalite(); tr = [ZARAFET_TR]
+    uret = asamali(kalite_denetimi=[{"denetlenen": [0], "hatalar": [ZARAFET_ILK]}],
+                   kalite_onarimi=[{"duzeltmeler": [{"paragraf": 0, "ceviri": ZARAFET_ARA}]},
+                                   {"duzeltmeler": [{"paragraf": 0, "ceviri": ZARAFET_SON}]}],
+                   kalite_dogrulama=[{"denetlenen": [0], "hatalar": [dict(ZARAFET_KALAN, guven=0.85)]},
+                                     temiz()])
+    r = q.denetle_ve_onar(tr, ZARAFET_EN, {}, {}, uret)
+    assert tr == [ZARAFET_SON]
+    assert r["supheli"] == [] and r["onarim_turu"] == 2
 
 
 def test_yeni_hata_getiren_onarim_hicbir_turda_kabul_edilmez_izden_incelenebilir():

@@ -13,8 +13,9 @@ prefetch, toplu ve yeniden çeviri aynı `translate_chapter` yolunu kullanır.
   birebir bulunmalı; tür, numara, güven ve bitiş nedeni doğrulanmalıdır.
   Kanıtı doğrulanamayan ya da biçimi bozuk bulgu onarılmaz; paragraf şüpheli
   işaretlenir ve rapor "denetlendi" sayılmaz.
-- Yüksek güvenli dilbilgisi/anlam hataları ve alfabe kalıntıları yalnız ilgili
-  paragraflarda onarılır: en çok `MAX_ONARIM_TURU` (3) tur, her istekte en çok
+- Kanıtı doğrulanan bütün bulgular (yüksek ve düşük güvenli dilbilgisi/anlam
+  hataları, üslup kusurları) ve alfabe kalıntıları yalnız ilgili paragraflarda
+  onarılır: en çok `MAX_ONARIM_TURU` (3) tur, her istekte en çok
   `MAX_ONARIM_PARAGRAF` (8) hedef; fazlası ayrı isteklere bölünür.
 - Onarım hedefleri değişemez, boş/işaretçili/birleştirilmiş/kısaltılmış veya
   aşırı yeniden yazılmış (özgün çeviriye göre ölçülür) ya da metni değiştirmeyen
@@ -32,8 +33,14 @@ prefetch, toplu ve yeniden çeviri aynı `translate_chapter` yolunu kullanır.
   da düzeltilmiş hatalarla birlikte özgün paragraf okura gitti. Turlar biter de
   hata kalırsa paragraf son kabul edilen hâliyle kalır; künyede yalnız metinde
   hâlâ duran hata "otomatik onarılamadı" notuyla gösterilir.
-- Düşük güvenli şüpheler otomatik düzeltilmez. `ceviri_kalitesi.supheli` içinde
-  tutulur ve okuyucunun bölüm künyesinde gösterilir. Bu, kesin hata kararı değildir.
+- Düşük güvenli ve üslup bulguları da onarılır (2026-10-11, kullanıcı kararı;
+  canlı tekrarında 969'da aynı sıfatın art arda tekrarı 0,88 güvenli "uslup"
+  bulgusuydu ve onarıma hiç gitmiyordu). Doğrulamada bunlar adayın kabulünü
+  engellemez, kabul edilen adayda sonraki turun hedefi olur. Yalnız böyle notlar
+  taşıyan paragrafı onarım değiştirmeye gerek görmezse zorla değişiklik istenmez;
+  not `ceviri_kalitesi.supheli` içinde kalır ve künyede gösterilir. Denetim
+  talimatı salt anlatım tercihini bildirmemesini, üslupta yalnız somut kusuru
+  (gereksiz tekrar, doğal olmayan kuruluş) vermesini ister.
 - KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi
   düşürmez. Denetim hiç tamamlanamazsa (erişim, biçim, kapsam, hizalama) çeviri
   `durum: denetlenemedi` ve nedeniyle kaydedilir; künye bunu açıkça söyler.
