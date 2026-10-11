@@ -1522,9 +1522,10 @@ def _translate_chapter_impl(
                 )
             except ceviri_kalite.KaliteHatasi as exc:
                 kalite_metrik = denetlenemedi(str(exc))
-        # Yalnız kabul edilen onarımların modelleri çeviri künyesine girer.
-        if kalite_metrik["onarilan"] and kalite_metrik["onarim_modeli"]:
-            used_models[kalite_metrik["onarim_modeli"]] = None
+        # Yalnız kabul edilen onarımların modelleri çeviri künyesine girer. Onarım
+        # birden çok tur sürebilir ve turlar zincirin farklı halkalarına düşebilir.
+        for model in kalite_metrik.get("onarim_modelleri") or []:
+            used_models[model] = None
         kalinti = ingilizce_kalinti(tr_paras, en_paras, glossary)
         # Ayrıntılı kaynak/önce/sonra izleri teknik kayıtta kalır; okuyucuya
         # yalnız sayaç/şüphe özeti taşınır, bölüm yanıtı iki kez şişirilmez.

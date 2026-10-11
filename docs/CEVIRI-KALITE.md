@@ -14,14 +14,24 @@ prefetch, toplu ve yeniden çeviri aynı `translate_chapter` yolunu kullanır.
   Kanıtı doğrulanamayan ya da biçimi bozuk bulgu onarılmaz; paragraf şüpheli
   işaretlenir ve rapor "denetlendi" sayılmaz.
 - Yüksek güvenli dilbilgisi/anlam hataları ve alfabe kalıntıları yalnız ilgili
-  paragraflarda tek tur onarılır. Sekizden fazla hedef varsa onarım denenmez,
-  hepsi şüpheli işaretlenir.
+  paragraflarda onarılır: en çok `MAX_ONARIM_TURU` (3) tur, her istekte en çok
+  `MAX_ONARIM_PARAGRAF` (8) hedef; fazlası ayrı isteklere bölünür.
 - Onarım hedefleri değişemez, boş/işaretçili/birleştirilmiş/kısaltılmış veya
-  aşırı yeniden yazılmış yanıt kabul edilmez. Onarılan paragraflar kaynakla
-  tekrar denetlenir; sözlük, İngilizce kalıntı ve çift anlam kontrolleri de
-  uygulanır. Onarım PARAGRAF PARAGRAF kabul edilir: bir kapıya takılan paragraf
-  özgün hâliyle kalır ve "otomatik onarılamadı" notuyla şüpheli işaretlenir;
-  kapılardan geçen onarımlar uygulanır.
+  aşırı yeniden yazılmış (özgün çeviriye göre ölçülür) ya da metni değiştirmeyen
+  yanıt kabul edilmez. Sözlük, İngilizce kalıntı ve çift anlam kontrolleri de
+  uygulanır. Geçen aday kaynakla tekrar denetlenir. Onarım PARAGRAF PARAGRAF
+  kabul edilir.
+- ÖNCE ONAR, SON ÇARE İŞARETLE (2026-10-11, kullanıcı: "altta uyarı vermesinin
+  ne anlamı var, doğru düzgün çevirmesi gerekiyor"). Doğrulamada bulunan hata
+  onarımın DEĞİŞTİRDİĞİ yerdeyse aday reddedilir ve gerekçesiyle
+  (`reddedilen_onarim`) sonraki tura geri verilir. Hata yalnız dokunulmamış yerde,
+  yani ilk çeviride de duruyorsa aday KABUL edilir ve o hata sonraki turun hedefi
+  olur. Eskiden bu durumda da onarım atılıyordu: canlıda (shadow-slave 961-971)
+  onarım sonrası doğrulama 16 izin 6'sında hata buldu, hiçbiri onarımın getirdiği
+  hata değildi (4'ü ilk çeviride vardı, 2'si aynı hatanın süreniydi) ve altısında
+  da düzeltilmiş hatalarla birlikte özgün paragraf okura gitti. Turlar biter de
+  hata kalırsa paragraf son kabul edilen hâliyle kalır; künyede yalnız metinde
+  hâlâ duran hata "otomatik onarılamadı" notuyla gösterilir.
 - Düşük güvenli şüpheler otomatik düzeltilmez. `ceviri_kalitesi.supheli` içinde
   tutulur ve okuyucunun bölüm künyesinde gösterilir. Bu, kesin hata kararı değildir.
 - KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi
@@ -40,8 +50,9 @@ prefetch, toplu ve yeniden çeviri aynı `translate_chapter` yolunu kullanır.
 Bu denetim kusursuzluk garantisi değildir. Model hatayı kaçırabilir veya yanlış
 şüphe üretebilir; kaynak kanıtı, güven eşiği ve tekrar doğrulama zararı sınırlar.
 Her yeni çeviride ek denetim çağrısı, hatalı çeviride onarım/doğrulama çağrıları
-zaman ve kota tüketir. Uzun metinler denetim paketlerine bölünür; onarım turu
-sayısı bir olarak kalır.
+zaman ve kota tüketir. Uzun metinler denetim paketlerine bölünür. Her ek onarım
+turu bir onarım ve bir doğrulama çağrısıdır; yalnız hata kalan paragraflar için
+koşar.
 
 ## Ölçüm ve dağıtım
 
