@@ -1638,6 +1638,18 @@ grafik bağlamının çeviriye girmesi) Faz 1 ÖLÇÜLMEDEN başlamaz.
 | `FETCH_CDP_URL` | Hayır | Örn. `http://127.0.0.1:9222` → sert CF için gerçek Chrome'a bağlan. Bulut sunucuda BOŞ (gerçek Chrome yok) |
 | `FETCH_HEADLESS` | Hayır | `0` → görünür pencere (CF'i bir kez elle çözmek için) |
 | `NOVEL_DB_PATH` | Hayır | Test/CI'da DB'yi geçici dosyaya yönlendirir |
+| `CEVIRI_ANALIZ` | Hayır | `0` → çeviriden önceki ayrı analiz/özet çağrısını kapatır (eski yol). Kodda varsayılan açık, **canlıda kapalı** (2026-10-11): 8 bölümlük kör kıyasta anlama/akışa ölçülebilir katkısı çıkmadı, süreyi ~%70 uzatıyor (`reports/anlam-baglam-arastirma/RAPOR.md`) |
+| `CEVIRI_STIL` | Hayır | `0` → analiz bağlamındaki kısa üslup talimatını kaldırır. Analiz kapalıyken etkisiz |
+| `CEVIRI_BELLEK` | Hayır | `1` → tutarlılık belleği (`core/ceviri_bellek.py`): önceki 30 bölümün hizalı paragraflarından bu bölümdeki adları/hitapları taşıyan en fazla 10 kısa çift istemin başına konur. Varsayılan kapalı; kıyasta kazanç ölçülmedi |
+| `CEVIRI_KALITE` | Hayır | `0` → kalite katmanını (bölüm denetimi + kanıtlı paragraf onarımı) kapatır. Varsayılan açık. "Kaydet, işaretle": katman çeviriyi asla düşürmez, onaramadığını işaretler (`docs/CEVIRI-KALITE.md`) |
+| `SOZLUK_SIRADAN` | Hayır | `1` → büyük harfli sözlük kaydı parçada cümle ortasında hiç büyük harfle geçmiyorsa satırına `translate.SIRADAN_ISARETI` konur; model sıradan kelimeye büyük harfli terim basmaz ("armor" → "Zırhları" sınıfı). Varsayılan kapalı; bayrak kapalıyken prompt bayt bayt aynıdır |
+
+Sunucuda bu bayraklar `.env` yerine systemd ek dosyasıyla verilir
+(`/etc/systemd/system/novel-cevirmen.service.d/*.conf`, `Environment=AD=değer`):
+uygulama `.env`'i `load_dotenv(override=False)` ile yükler, systemd'nin verdiği değer kazanır.
+Bayrağı değiştirmek `.env`e dokunmayı gerektirmez; `daemon-reload` + servis yeniden başlatma yeter.
+Kollar arası kör kıyas: `scripts/anlam_kiyas.py` (`hazirla` → `calistir` → `yargila` /
+`yargila-bolum` → `ozet` / `ozet-bolum`); kollar `KOLLAR` sözlüğündeki bayrak kümeleridir.
 
 `OPENROUTER_API_KEY` · `MISTRAL_API_KEY` · `GROQ_API_KEY` · `CEREBRAS_API_KEY` 2026-09-02'de
 ARTIK OKUNMUYOR (Gemini dışı sağlayıcılar kaldırıldı). `.env`'de kalmaları zararsızdır ama
