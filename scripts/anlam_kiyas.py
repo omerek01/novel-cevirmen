@@ -73,6 +73,21 @@ kelimeyle somut nedeni yaz.
 Yalnız JSON: {"kararlar":[{"id":0,"anlam":"X","akicilik":"esit","tutarlilik":"esit",
 "not":"Y 'last straw' deyimini kelimesi kelimesine çevirmiş"}]}. Her id tam bir kez."""
 
+# Paragraf hakemi paragraflar ARASI kopukluğu göremez (2026-10-11 kullanıcı şikâyeti:
+# "akış kopuk"); bölüm hakemi iki çeviriyi baştan sona bütün olarak okur.
+BOLUM_HAKEM_TALIMATI = """Sen İngilizceden Türkçeye roman çevirisinde deneyimli bir editörsün.
+Aynı İngilizce bölümün (kaynak, paragraf numaralı) iki Türkçe çevirisini (X ve Y) BÜTÜN
+olarak, baştan sona oku. Çevirilerin hangi sistemden geldiğini bilmiyorsun; sıraya göre
+taraf tutma. İki boyutu değerlendir:
+- akis: Türkçe metin kesintisiz ve tutarlı bir anlatı olarak okunuyor mu? Paragraflar arası
+  geçişler, kim kimdir (gönderge, zamir), zaman ve kişi tutarlılığı, sahne mantığı, aynı
+  kişi/nesne/hitabın bölüm boyunca aynı adlandırılması, bir paragrafın öncekiyle çelişmemesi.
+- anlam: bölümün bütününde kaynağa sadakat (yanlış, eksik ya da eklenmiş bilgi).
+Her boyut için "X", "Y" ya da "esit" ver; fark belirgin değilse "esit".
+Ayrıca her çeviri için en fazla 3 somut akış kopukluğu yaz: paragraf numarası ("p") ve en
+fazla 12 kelimelik açıklama ("not"). Alıntı yapma. Kopukluk yoksa boş liste.
+Yalnız JSON: {"akis":"X","anlam":"esit","kopukluklar":{"X":[],"Y":[{"p":3,"not":"..."}]}}"""
+
 _NOKTALAMA = re.compile(r"[^\w\s]", re.UNICODE)
 
 
@@ -124,6 +139,55 @@ def kararlari_coz(yanit: dict, madde_listesi: list[dict]) -> list[dict]:
         sonuc.append({"p": m["p"], **{b: cevir[k[b]] for b in BOYUTLAR},
                       "not": str(k.get("not") or "")[:200]})
     return sonuc
+
+
+def bolum_isleri(a: dict, b: dict) -> list[dict]:
+    """Bölüm hakemi işleri: aynı karşılaştırma X/Y yer değiştirerek İKİ kez sorulur."""
+    if not a.get("source") or a.get("source") != b.get("source"):
+        return []
+    en = a["source"].split("\n\n")
+    ta, tb = (a.get("translation") or "").split("\n\n"), (b.get("translation") or "").split("\n\n")
+    if not (len(en) == len(ta) == len(tb)):
+        return []
+    kaynak = [{"p": i, "metin": e} for i, e in enumerate(en)]
+    isler = []
+    for x_kol in ("a", "b"):
+        x, y = (ta, tb) if x_kol == "a" else (tb, ta)
+        isler.append({"x_kol": x_kol, "istem": {
+            "kaynak": kaynak, "X": [{"p": i, "metin": t} for i, t in enumerate(x)],
+            "Y": [{"p": i, "metin": t} for i, t in enumerate(y)]}})
+    return isler
+
+
+def bolum_karari_coz(yanit: dict, x_kol: str, paragraf_sayisi: int) -> dict:
+    """Bölüm hakeminin X/Y kararını kola çevirir; biçimsiz yanıt ValueError."""
+    if not isinstance(yanit, dict) or any(yanit.get(b) not in ("X", "Y", "esit") for b in ("akis", "anlam")):
+        raise ValueError("Bölüm hakemi kararı geçersiz.")
+    kop = yanit.get("kopukluklar")
+    if not isinstance(kop, dict) or any(not isinstance(kop.get(t), list) for t in ("X", "Y")):
+        raise ValueError("Bölüm hakeminin kopukluk listesi yok.")
+    diger = "b" if x_kol == "a" else "a"
+    cevir = {"X": x_kol, "Y": diger, "esit": "esit"}
+    sonuc = {"akis": cevir[yanit["akis"]], "anlam": cevir[yanit["anlam"]], "kopukluk": {}}
+    for taraf, kol in (("X", x_kol), ("Y", diger)):
+        liste = []
+        for k in kop[taraf][:5]:
+            if not isinstance(k, dict) or type(k.get("p")) is not int or not 0 <= k["p"] < paragraf_sayisi:
+                raise ValueError("Bölüm hakeminin kopukluk kaydı geçersiz.")
+            liste.append({"p": k["p"], "not": str(k.get("not") or "")[:200]})
+        sonuc["kopukluk"][kol] = liste
+    return sonuc
+
+
+def yonleri_birlestir(kararlar: list[dict]) -> dict:
+    """İki yönün kararı uyuşursa o kol, uyuşmazsa eşit; kopukluk sayısı yön ortalaması."""
+    birlesik = {}
+    for boyut in ("akis", "anlam"):
+        degerler = {k[boyut] for k in kararlar}
+        birlesik[boyut] = degerler.pop() if len(degerler) == 1 else "esit"
+    birlesik["kopukluk_sayisi"] = {kol: sum(len(k["kopukluk"][kol]) for k in kararlar) / len(kararlar)
+                                   for kol in ("a", "b")}
+    return birlesik
 
 
 def eksik_isler(satirlar: list[dict], kollar: list[str], bolumler: list[int]) -> dict[str, list[int]]:
@@ -451,6 +515,62 @@ def yargila(a):
         print("Karara bağlanamayan işler:", [i["anahtar"] for i in bekleyen])
 
 
+def yargila_bolum(a):
+    if Path(a.cikti).exists():
+        raise SystemExit("Çıktı var; başka hedef kullanın.")
+    sonuclar = [json.loads(s) for s in Path(a.sonuc).read_text(encoding="utf-8").splitlines() if s.strip()]
+    kol = {(r["kol"], r["bolum"]): r for r in sonuclar if r.get("translation")}
+    bolumler = sorted({r["bolum"] for r in sonuclar})
+    bekleyen = []
+    for cift in a.ciftler.split(","):
+        k1, k2 = cift.split(":")
+        for no in bolumler:
+            if (k1, no) in kol and (k2, no) in kol:
+                for is_ in bolum_isleri(kol[(k1, no)], kol[(k2, no)]):
+                    n = len(kol[(k1, no)]["source"].split("\n\n"))
+                    bekleyen.append(dict(is_, anahtar=f"{cift}|{no}|{is_['x_kol']}", cift=cift, bolum=no, n=n))
+    print(f"{len(bekleyen)} bölüm hakemi işi", flush=True)
+    toplanan: dict[tuple, list] = {}
+    for tur in range(3):
+        if not bekleyen:
+            break
+        yuk = {"hakem": a.hakem, "talimat": BOLUM_HAKEM_TALIMATI, "es": a.es,
+               "isler": [{"anahtar": i["anahtar"], "istem": i["istem"]} for i in bekleyen]}
+        yanitlar = {y["anahtar"]: y for y in _uzak(_YARGILA, yuk)}
+        kalan = []
+        for is_ in bekleyen:
+            y = yanitlar.get(is_["anahtar"], {})
+            try:
+                karar = bolum_karari_coz(json.loads(y.get("yanit") or ""), is_["x_kol"], is_["n"])
+            except (ValueError, json.JSONDecodeError) as exc:
+                print(f"  {is_['anahtar']}: geçersiz ({y.get('hata') or exc}); tur {tur + 1}", flush=True)
+                kalan.append(is_)
+                continue
+            toplanan.setdefault((is_["cift"], is_["bolum"]), []).append(dict(karar, x_kol=is_["x_kol"]))
+        bekleyen = kalan
+    with open(a.cikti, "x", encoding="utf-8") as f:
+        for (cift, no), kararlar in sorted(toplanan.items()):
+            f.write(json.dumps({"cift": cift, "bolum": no, "hakem": a.hakem, "yonler": kararlar,
+                                "karar": yonleri_birlestir(kararlar)}, ensure_ascii=False) + "\n")
+    if bekleyen:
+        print("Karara bağlanamayan işler:", [i["anahtar"] for i in bekleyen])
+
+
+def ozet_bolum(a):
+    satirlar = [json.loads(s) for s in Path(a.yargi).read_text(encoding="utf-8").splitlines() if s.strip()]
+    ciftler: dict[str, list] = {}
+    for s in satirlar:
+        ciftler.setdefault(s["cift"], []).append(s["karar"])
+    print("| Çift (a:b) | Boyut | a | b | eşit | p | kopukluk/bölüm a | kopukluk/bölüm b |")
+    print("|---|---|---:|---:|---:|---:|---:|---:|")
+    for cift, kararlar in ciftler.items():
+        ka = sum(k["kopukluk_sayisi"]["a"] for k in kararlar) / len(kararlar)
+        kb = sum(k["kopukluk_sayisi"]["b"] for k in kararlar) / len(kararlar)
+        for boyut in ("akis", "anlam"):
+            o = boyut_ozeti(kararlar, boyut)
+            print(f"| {cift} | {boyut} | {o['a']} | {o['b']} | {o['esit']} | {o['p']:.3f} | {ka:.2f} | {kb:.2f} |")
+
+
 def ozet(a):
     satirlar = [json.loads(s) for s in Path(a.yargi).read_text(encoding="utf-8").splitlines() if s.strip()]
     ciftler: dict[str, list] = {}
@@ -501,6 +621,11 @@ def main():
     y.add_argument("--es", type=int, default=4); y.add_argument("--tohum", type=int, default=11)
     y.add_argument("--cikti", required=True); y.set_defaults(f=yargila)
     o = alt.add_parser("ozet"); o.add_argument("--yargi", required=True); o.set_defaults(f=ozet)
+    yb = alt.add_parser("yargila-bolum"); yb.add_argument("--sonuc", required=True)
+    yb.add_argument("--ciftler", default="B:A,C:A,D:B,E:C,A2:A"); yb.add_argument("--hakem", default="gemini-2.5-pro")
+    yb.add_argument("--es", type=int, default=2); yb.add_argument("--cikti", required=True)
+    yb.set_defaults(f=yargila_bolum)
+    ob = alt.add_parser("ozet-bolum"); ob.add_argument("--yargi", required=True); ob.set_defaults(f=ozet_bolum)
     r = alt.add_parser("ornek"); r.add_argument("--sonuc", required=True); r.add_argument("--yargi", required=True)
     r.add_argument("--cift", required=True); r.add_argument("--boyut", default="anlam")
     r.add_argument("--adet", type=int, default=10); r.add_argument("--tohum", type=int, default=3)

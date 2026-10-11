@@ -88,3 +88,32 @@ def test_uzak_cikti_akisi_parcali_gelse_de_satir_satir_ayrisir():
 def test_uzak_is_hata_koduyla_biterse_kod_doner():
     satirlar, kalan, kod = ak.akisi_ayir(b"### BITTI 137 ###\n")
     assert satirlar == [] and kod == 137
+
+
+# ---------- bölüm düzeyi akış hakemi ----------
+
+def test_bolum_isi_iki_yonlu_ve_hizasizda_yok():
+    a = kol("Bir.\n\nİki.\n\nÜç."); b = kol("Bir!\n\nİki!\n\nÜç!")
+    isler = ak.bolum_isleri(a, b)
+    assert [i["x_kol"] for i in isler] == ["a", "b"]
+    assert isler[0]["istem"]["X"][0]["metin"] == "Bir." and isler[1]["istem"]["X"][0]["metin"] == "Bir!"
+    assert isler[0]["istem"]["kaynak"][2] == {"p": 2, "metin": "C three."}
+    assert ak.bolum_isleri(a, kol("Tek blok.")) == []
+
+
+def test_bolum_karari_kola_cevrilir_ve_dogrulanir():
+    y = {"akis": "X", "anlam": "esit", "kopukluklar": {"X": [], "Y": [{"p": 1, "not": "geçiş kopuk"}]}}
+    k = ak.bolum_karari_coz(y, "b", 3)
+    assert k == {"akis": "b", "anlam": "esit", "kopukluk": {"b": [], "a": [{"p": 1, "not": "geçiş kopuk"}]}}
+    with pytest.raises(ValueError):
+        ak.bolum_karari_coz({"akis": "Z", "anlam": "X", "kopukluklar": {"X": [], "Y": []}}, "a", 3)
+    with pytest.raises(ValueError):
+        ak.bolum_karari_coz({"akis": "X", "anlam": "X", "kopukluklar": {"X": [{"p": 9}], "Y": []}}, "a", 3)
+
+
+def test_iki_yon_uyusmazsa_esit_sayilir():
+    k1 = {"akis": "a", "anlam": "a", "kopukluk": {"a": [], "b": [{"p": 0}]}}
+    k2 = {"akis": "b", "anlam": "a", "kopukluk": {"a": [{"p": 2}], "b": [{"p": 0}, {"p": 1}]}}
+    birlesik = ak.yonleri_birlestir([k1, k2])
+    assert birlesik["akis"] == "esit" and birlesik["anlam"] == "a"
+    assert birlesik["kopukluk_sayisi"] == {"a": 0.5, "b": 1.5}
