@@ -126,7 +126,16 @@ def maddeler(a: dict, b: dict, tohum: int, esik: float = 0.9) -> list[dict]:
 
 
 def kararlari_coz(yanit: dict, madde_listesi: list[dict]) -> list[dict]:
-    """Hakemin X/Y kararını kola çevirir; eksik/fazla/geçersiz yanıt ValueError."""
+    """Hakemin X/Y kararını kola çevirir; eksik/fazla/geçersiz yanıt ValueError.
+
+    Hakem listeyi kimi zaman çıplak ya da başka adlı TEK anahtarla döndürüyor (aynı
+    bölüm üç turda üç kez reddedildi); içerik yine madde madde doğrulanır."""
+    if isinstance(yanit, list):
+        yanit = {"kararlar": yanit}
+    elif isinstance(yanit, dict) and not isinstance(yanit.get("kararlar"), list):
+        listeler = [v for v in yanit.values() if isinstance(v, list)]
+        if len(listeler) == 1:
+            yanit = {"kararlar": listeler[0]}
     if not isinstance(yanit, dict) or not isinstance(yanit.get("kararlar"), list):
         raise ValueError("Hakem yanıtında kararlar listesi yok.")
     gorulen: dict[int, dict] = {}
@@ -493,12 +502,27 @@ def _isler(sonuclar, ornekler, ciftler, tohum):
     return isler
 
 
+def _reddi_yaz(cikti: str, y: dict, tur: int) -> None:
+    """Geçersiz hakem yanıtını teşhis için `<çıktı>.red.jsonl`e ekler (çıktı yerelde, takip dışı)."""
+    with open(cikti + ".red.jsonl", "a", encoding="utf-8") as f:
+        f.write(json.dumps({"anahtar": y.get("anahtar"), "tur": tur + 1, "bitis": y.get("bitis"),
+                            "hata": y.get("hata"), "yanit": (y.get("yanit") or "")[:4000]},
+                           ensure_ascii=False) + "\n")
+
+
+def _bolum_suzgeci(a) -> set[int] | None:
+    return {int(x) for x in a.bolumler.split(",")} if getattr(a, "bolumler", None) else None
+
+
 def yargila(a):
     if Path(a.cikti).exists():
         raise SystemExit("Çıktı var; başka hedef kullanın.")
     sonuclar = [json.loads(s) for s in Path(a.sonuc).read_text(encoding="utf-8").splitlines() if s.strip()]
     ornekler = json.loads(Path(a.veri).read_text(encoding="utf-8"))
     bekleyen = _isler(sonuclar, ornekler, a.ciftler.split(","), a.tohum)
+    suzgec = _bolum_suzgeci(a)
+    if suzgec:
+        bekleyen = [i for i in bekleyen if i["bolum"] in suzgec]
     print(f"{len(bekleyen)} hakem işi, {sum(len(i['maddeler']) for i in bekleyen)} madde", flush=True)
     with open(a.cikti, "x", encoding="utf-8") as f:
         for tur in range(3):
@@ -513,7 +537,9 @@ def yargila(a):
                 try:
                     kararlar = kararlari_coz(json.loads(y.get("yanit") or ""), is_["maddeler"])
                 except (ValueError, json.JSONDecodeError) as exc:
-                    print(f"  {is_['anahtar']}: geçersiz ({y.get('hata') or exc}); tur {tur + 1}", flush=True)
+                    _reddi_yaz(a.cikti, dict(y, anahtar=is_["anahtar"]), tur)
+                    print(f"  {is_['anahtar']}: geçersiz ({y.get('hata') or exc}; bitiş={y.get('bitis')}); tur {tur + 1}",
+                          flush=True)
                     kalan.append(is_)
                     continue
                 f.write(json.dumps({"cift": is_["cift"], "bolum": is_["bolum"], "hakem": a.hakem,
@@ -529,7 +555,7 @@ def yargila_bolum(a):
         raise SystemExit("Çıktı var; başka hedef kullanın.")
     sonuclar = [json.loads(s) for s in Path(a.sonuc).read_text(encoding="utf-8").splitlines() if s.strip()]
     kol = {(r["kol"], r["bolum"]): r for r in sonuclar if r.get("translation")}
-    bolumler = sorted({r["bolum"] for r in sonuclar})
+    bolumler = sorted({r["bolum"] for r in sonuclar} & (_bolum_suzgeci(a) or {r["bolum"] for r in sonuclar}))
     bekleyen = []
     for cift in a.ciftler.split(","):
         k1, k2 = cift.split(":")
@@ -552,7 +578,9 @@ def yargila_bolum(a):
             try:
                 karar = bolum_karari_coz(json.loads(y.get("yanit") or ""), is_["x_kol"], is_["n"])
             except (ValueError, json.JSONDecodeError) as exc:
-                print(f"  {is_['anahtar']}: geçersiz ({y.get('hata') or exc}); tur {tur + 1}", flush=True)
+                _reddi_yaz(a.cikti, dict(y, anahtar=is_["anahtar"]), tur)
+                print(f"  {is_['anahtar']}: geçersiz ({y.get('hata') or exc}; bitiş={y.get('bitis')}); tur {tur + 1}",
+                      flush=True)
                 kalan.append(is_)
                 continue
             toplanan.setdefault((is_["cift"], is_["bolum"]), []).append(dict(karar, x_kol=is_["x_kol"]))
@@ -628,11 +656,13 @@ def main():
     y = alt.add_parser("yargila"); y.add_argument("--veri", required=True); y.add_argument("--sonuc", required=True)
     y.add_argument("--ciftler", default="B:A,C:A,D:B,E:C,A2:A"); y.add_argument("--hakem", default="gemini-2.5-pro")
     y.add_argument("--es", type=int, default=4); y.add_argument("--tohum", type=int, default=11)
+    y.add_argument("--bolumler", help="Yalnız bu bölümler (virgüllü); eksik kalanı ayrı çıktıya tamamlamak için")
     y.add_argument("--cikti", required=True); y.set_defaults(f=yargila)
     o = alt.add_parser("ozet"); o.add_argument("--yargi", required=True); o.set_defaults(f=ozet)
     yb = alt.add_parser("yargila-bolum"); yb.add_argument("--sonuc", required=True)
     yb.add_argument("--ciftler", default="B:A,C:A,D:B,E:C,A2:A"); yb.add_argument("--hakem", default="gemini-2.5-pro")
     yb.add_argument("--es", type=int, default=2); yb.add_argument("--cikti", required=True)
+    yb.add_argument("--bolumler", help="Yalnız bu bölümler (virgüllü)")
     yb.set_defaults(f=yargila_bolum)
     ob = alt.add_parser("ozet-bolum"); ob.add_argument("--yargi", required=True); ob.set_defaults(f=ozet_bolum)
     r = alt.add_parser("ornek"); r.add_argument("--sonuc", required=True); r.add_argument("--yargi", required=True)

@@ -47,6 +47,18 @@ def test_hakem_karari_kola_cevrilir():
     assert kararlar[1] == {"p": 1, "anlam": "b", "akicilik": "a", "tutarlilik": "esit", "not": "n2"}
 
 
+@pytest.mark.parametrize("sarmal", [
+    lambda liste: liste,                    # çıplak liste
+    lambda liste: {"decisions": liste},     # başka adlı tek anahtar
+])
+def test_hakem_listesi_baska_sarmalda_gelse_de_cozulur(sarmal):
+    maddeler = [{"p": 0, "x_kol": "a"}, {"p": 1, "x_kol": "b"}]
+    liste = [{"id": 0, "anlam": "X", "akicilik": "esit", "tutarlilik": "esit"},
+             {"id": 1, "anlam": "Y", "akicilik": "esit", "tutarlilik": "esit"}]
+    kararlar = ak.kararlari_coz(sarmal(liste), maddeler)
+    assert [k["anlam"] for k in kararlar] == ["a", "a"]
+
+
 @pytest.mark.parametrize("bozuk", [
     {"kararlar": [{"id": 0, "anlam": "X", "akicilik": "esit", "tutarlilik": "esit"}]},  # eksik madde
     {"kararlar": [{"id": 0, "anlam": "Z", "akicilik": "esit", "tutarlilik": "esit"},
