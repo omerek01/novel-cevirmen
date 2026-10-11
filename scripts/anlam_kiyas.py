@@ -28,6 +28,8 @@ import random
 import re
 import subprocess
 import sys
+import time
+import uuid
 from pathlib import Path
 
 KOK = Path(__file__).resolve().parents[1]
@@ -35,7 +37,8 @@ if str(KOK / "app") not in sys.path:
     sys.path.insert(0, str(KOK / "app"))
 
 SUNUCU = "OMEREK@100.75.105.102"
-UZAK_PYTHON = "/home/OMEREK/novel-cevirmen/.venv/bin/python -u -"
+UZAK_PYTHON = "/home/OMEREK/novel-cevirmen/.venv/bin/python -u"
+UZAK_DIZIN = "/home/OMEREK/anlam-kiyas-isler"
 CANLI_DB = "/home/OMEREK/novel-cevirmen/cache/chapters.db"
 UZAK_APP = "/home/OMEREK/novel-cevirmen-sozluk/app"
 ENJEKTE = ["ceviri_kalite", "ceviri_baglam", "ceviri_bellek", "ceviri_izleri", "translate"]
@@ -148,23 +151,82 @@ def boyut_ozeti(kararlar: list[dict], boyut: str) -> dict:
 
 # ---------------------------------------------------------------- uzak çalıştırma
 
-def _uzak(kod: str, yuk: dict, satir_isle=None, zaman_asimi=None) -> list[dict]:
-    """Kodu sunucuda çalıştırır; stdout'un her satırı bir JSON nesnesidir."""
-    uzak = "YUK=" + repr(json.dumps(yuk, ensure_ascii=True)) + "\n" + kod
-    proc = subprocess.Popen(
-        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-i",
-         str(Path.home() / ".ssh/google_compute_engine"), SUNUCU, UZAK_PYTHON],
-        stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    proc.stdin.write(uzak.encode()); proc.stdin.close()
-    satirlar = []
-    for satir in proc.stdout:
-        veri = json.loads(satir)
-        satirlar.append(veri)
-        if satir_isle:
-            satir_isle(veri)
-    if proc.wait(timeout=zaman_asimi):
-        raise RuntimeError(proc.stderr.read().decode("utf-8", "replace")[-3000:])
-    return satirlar
+_BITIS = re.compile(rb"^### BITTI (\d+) ###$")
+
+
+def akisi_ayir(tampon: bytes):
+    """Uzak işin çıktı akışı: (JSON satırları, yarım kalan bayt, bitiş kodu ya da None)."""
+    *tam, kalan = tampon.split(b"\n")
+    satirlar, kod = [], None
+    for satir in tam:
+        satir = satir.strip()
+        if not satir:
+            continue
+        m = _BITIS.match(satir)
+        if m:
+            kod = int(m.group(1))
+            continue
+        satirlar.append(json.loads(satir))
+    return satirlar, kalan, kod
+
+
+def _ssh(komut: str, girdi: bytes | None = None, zaman_asimi: int = 120):
+    return subprocess.run(
+        ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=15", "-o", "ServerAliveInterval=20",
+         "-i", str(Path.home() / ".ssh/google_compute_engine"), SUNUCU, komut],
+        input=girdi, capture_output=True, timeout=zaman_asimi)
+
+
+def _uzak(kod: str, yuk: dict, satir_isle=None) -> list[dict]:
+    """İşi sunucuya dosya olarak yükleyip oturumdan BAĞIMSIZ başlatır, çıktısını yoklar.
+
+    Tek uzun SSH oturumu ağ kesintisinde (2026-10-11, "Connection reset by peer") işi
+    de öldürüyordu: uzak süreç oturumla birlikte sonlanır. Ayrık iş kesintiden
+    etkilenmez; yoklama kaldığı bayttan sürer. Bitiş işareti çıkış kodunu taşır."""
+    ad = "is-" + uuid.uuid4().hex[:12]
+    yol = f"{UZAK_DIZIN}/{ad}"
+    betik = ("YUK=" + repr(json.dumps(yuk, ensure_ascii=True)) + "\n" + kod).encode()
+    r = _ssh(f"mkdir -p {UZAK_DIZIN} && cat > {yol}.py", girdi=betik, zaman_asimi=600)
+    if r.returncode:
+        raise RuntimeError("Uzak iş yüklenemedi: " + r.stderr.decode("utf-8", "replace")[-500:])
+    r = _ssh(f"cd {UZAK_DIZIN} && setsid nohup bash -c '{UZAK_PYTHON} {ad}.py > {ad}.out 2> {ad}.err; "
+             f"echo \"### BITTI $? ###\" >> {ad}.out' > /dev/null 2>&1 < /dev/null &")
+    if r.returncode:
+        raise RuntimeError("Uzak iş başlatılamadı: " + r.stderr.decode("utf-8", "replace")[-500:])
+    print(f"uzak iş {ad} başladı", flush=True)
+    ofset, tampon, sonuclar, bekleme, sessiz = 0, b"", [], 3, 0
+    while True:
+        time.sleep(bekleme)
+        try:
+            r = _ssh(f"tail -c +{ofset + 1} {yol}.out 2>/dev/null")
+        except subprocess.TimeoutExpired:
+            continue
+        if r.returncode not in (0, 1):      # bağlantı hatası: sonraki turda yeniden dene
+            bekleme = min(30, bekleme * 2)
+            continue
+        ofset += len(r.stdout)
+        satirlar, tampon, bitis = akisi_ayir(tampon + r.stdout)
+        for satir in satirlar:
+            sonuclar.append(satir)
+            if satir_isle:
+                satir_isle(satir)
+        if bitis is not None:
+            if bitis != 0:
+                hata = _ssh(f"tail -c 3000 {yol}.err").stdout.decode("utf-8", "replace")
+                raise RuntimeError(f"Uzak iş {bitis} koduyla bitti: {hata}")
+            _ssh(f"rm -f {yol}.py {yol}.out {yol}.err")   # çıktı yerelde; romandan metin sunucuda kalmasın
+            return sonuclar
+        if r.stdout:
+            sessiz, bekleme = 0, 3
+            continue
+        sessiz, bekleme = sessiz + 1, min(20, bekleme + 3)
+        if sessiz % 15 == 0:
+            # Denetleyen komutun kendi satırı da iş adını içerir; "grep" içerdiği için elenir.
+            say = _ssh(f"ps -eo args | grep -F '{ad}.py' | grep -vc grep").stdout.decode().strip()
+            if say == "0":
+                son = _ssh(f"tail -c 200 {yol}.out").stdout
+                if not _BITIS.search(son.strip().split(b"\n")[-1] if son.strip() else b""):
+                    raise RuntimeError(f"Uzak iş {ad} bitiş işareti bırakmadan sonlandı.")
 
 
 _HAZIRLA = r'''

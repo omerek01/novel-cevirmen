@@ -76,3 +76,15 @@ def test_devam_yalniz_eksik_ve_hatali_isleri_doner():
     ]
     assert ak.eksik_isler(satirlar, ["A", "B"], [1, 2]) == {"A": [2], "B": [2]}
     assert ak.eksik_isler(satirlar + [{"kol": "A", "bolum": 2, "translation": "z"}], ["A"], [1, 2]) == {}
+
+
+def test_uzak_cikti_akisi_parcali_gelse_de_satir_satir_ayrisir():
+    satirlar, kalan, kod = ak.akisi_ayir(b'{"a": 1}\n{"b"')
+    assert satirlar == [{"a": 1}] and kalan == b'{"b"' and kod is None
+    satirlar, kalan, kod = ak.akisi_ayir(kalan + b': 2}\n### BITTI 0 ###\n')
+    assert satirlar == [{"b": 2}] and kalan == b"" and kod == 0
+
+
+def test_uzak_is_hata_koduyla_biterse_kod_doner():
+    satirlar, kalan, kod = ak.akisi_ayir(b"### BITTI 137 ###\n")
+    assert satirlar == [] and kod == 137
