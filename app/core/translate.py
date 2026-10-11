@@ -3785,10 +3785,16 @@ def _extract_translation(text: str) -> str:
     """Bozuk/yarım JSON'dan çeviri metnini kurtar; olmazsa ham metni döndür."""
     match = re.search(
         r'"translation"\s*:\s*"(.*?)"\s*,\s*"detected_names"', text, re.DOTALL
-    ) or re.search(r'"translation"\s*:\s*"(.*)$', text, re.DOTALL)
-    if not match:
-        return text
-    captured = match.group(1)
+    )
+    if match:
+        captured = match.group(1)
+    else:
+        match = re.search(r'"translation"\s*:\s*"(.*)$', text, re.DOTALL)
+        if not match:
+            return text
+        # Yalnız-çeviri biçiminde (roman bağlamı) arkadan gelen anahtar yok: metni
+        # sona kadar almak nesnenin kapanışını (`"}`) son paragrafa yapıştırıyordu.
+        captured = re.sub(r'"\s*\}\s*$', "", match.group(1))
     try:
         return json.loads('"' + captured + '"')  # \n, \" gibi kaçışları çöz
     except json.JSONDecodeError:
