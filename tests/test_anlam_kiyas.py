@@ -66,3 +66,13 @@ def test_isaret_testi_ve_ozet():
     o = ak.boyut_ozeti(kararlar, "anlam")
     assert (o["a"], o["b"], o["esit"]) == (2, 1, 1)
     assert 0 < o["p"] <= 1
+
+
+def test_devam_yalniz_eksik_ve_hatali_isleri_doner():
+    satirlar = [
+        {"kol": "A", "bolum": 1, "translation": "x"},
+        {"kol": "A", "bolum": 2, "hata_turu": "TranslateError"},
+        {"kol": "B", "bolum": 1, "translation": "y"},
+    ]
+    assert ak.eksik_isler(satirlar, ["A", "B"], [1, 2]) == {"A": [2], "B": [2]}
+    assert ak.eksik_isler(satirlar + [{"kol": "A", "bolum": 2, "translation": "z"}], ["A"], [1, 2]) == {}

@@ -123,6 +123,13 @@ def kararlari_coz(yanit: dict, madde_listesi: list[dict]) -> list[dict]:
     return sonuc
 
 
+def eksik_isler(satirlar: list[dict], kollar: list[str], bolumler: list[int]) -> dict[str, list[int]]:
+    """Kaldığı yerden devam: çevirisi olmayan (hiç koşmamış ya da hata vermiş) kol/bölümler."""
+    tamam = {(r.get("kol"), r.get("bolum")) for r in satirlar if r.get("translation")}
+    sonuc = {k: sorted(b for b in bolumler if (k, b) not in tamam) for k in kollar}
+    return {k: v for k, v in sonuc.items() if v}
+
+
 def isaret_testi(a: int, b: int) -> float:
     """İki yönlü kesin işaret testi (beraberlikler hariç)."""
     n = a + b
@@ -209,26 +216,36 @@ kilit = threading.Lock()
 def cevir(kol, x):
     s = time.monotonic()
     satir = {'kol': kol, 'kitap': x['book_slug'], 'bolum': x['chapter_no']}
-    try:
-        r = t.translate_chapter(x['source'], '', glossary=x['glossary'], kosullar=x.get('conditions') or {},
-            models=(p['model'],), prev_context=x.get('prev_context') or '', bolum_no=x['chapter_no'],
-            book_slug=x['book_slug'], bolum_url=x['url'] + '#' + kol, onceki_bolum=x.get('previous'),
-            bellek_havuzu=x.get('bellek_havuzu') or [])
-        satir.update(translation=r['translation'], source=r['source'], model=r.get('model'))
-        izler = iz.iz_oku(x['url'] + '#' + kol)
-        if izler:
-            v = izler[0]['veri']
-            satir['iz'] = {'bellek': v.get('bellek'), 'ozet': len((v.get('analiz') or {}).get('ozet') or []),
-                           'terim': len((v.get('analiz') or {}).get('terimler') or [])}
-    except Exception as e:
-        satir.update(hata_turu=type(e).__name__, hata_mesaji=str(e)[:300])
+    # Vertex 429 "meşgul" geçicidir: deney canlı okumayla aynı kotayı paylaşır,
+    # bu yüzden bir dakika beklenip en fazla iki kez yeniden denenir.
+    for deneme in range(3):
+        try:
+            r = t.translate_chapter(x['source'], '', glossary=x['glossary'], kosullar=x.get('conditions') or {},
+                models=(p['model'],), prev_context=x.get('prev_context') or '', bolum_no=x['chapter_no'],
+                book_slug=x['book_slug'], bolum_url=x['url'] + '#' + kol, onceki_bolum=x.get('previous'),
+                bellek_havuzu=x.get('bellek_havuzu') or [])
+            satir.update(translation=r['translation'], source=r['source'], model=r.get('model'), deneme=deneme + 1)
+            satir.pop('hata_turu', None); satir.pop('hata_mesaji', None)
+            izler = iz.iz_oku(x['url'] + '#' + kol)
+            if izler:
+                v = izler[0]['veri']
+                satir['iz'] = {'bellek': v.get('bellek'), 'ozet': len((v.get('analiz') or {}).get('ozet') or []),
+                               'terim': len((v.get('analiz') or {}).get('terimler') or [])}
+            break
+        except Exception as e:
+            satir.update(hata_turu=type(e).__name__, hata_mesaji=str(e)[:300])
+            if deneme < 2 and ('429' in str(e) or 'meşgul' in str(e)):
+                time.sleep(60)
+                continue
+            break
     satir['saniye'] = round(time.monotonic() - s, 1)
     with kilit:
         print(json.dumps(satir, ensure_ascii=True), flush=True)
 for kol in p['kollar']:
+    hedef = [x for x in p['ornekler'] if x['chapter_no'] in set(p['isler'][kol])]
     os.environ.update(p['bayraklar'][kol])
     with ThreadPoolExecutor(p['es']) as ex:
-        list(ex.map(lambda x: cevir(kol, x), p['ornekler']))
+        list(ex.map(lambda x: cevir(kol, x), hedef))
 '''
 
 _YARGILA = r'''
@@ -283,14 +300,19 @@ def hazirla(a):
 
 
 def calistir(a):
-    if Path(a.cikti).exists():
-        raise SystemExit("Çıktı var; başka hedef kullanın.")
+    """Çıktı varsa kaldığı yerden sürer: yalnız çevirisi olmayan kol/bölümler koşar."""
     ornekler = json.loads(Path(a.veri).read_text(encoding="utf-8"))
     kollar = a.kollar.split(",")
-    yuk = {"ornekler": ornekler, "kollar": kollar, "bayraklar": {k: KOLLAR[k] for k in kollar},
-           "model": a.model, "es": a.es,
+    onceki = ([json.loads(s) for s in Path(a.cikti).read_text(encoding="utf-8").splitlines() if s.strip()]
+              if Path(a.cikti).exists() else [])
+    isler = eksik_isler(onceki, kollar, [x["chapter_no"] for x in ornekler])
+    if not isler:
+        print("Eksik iş yok."); return
+    print("Koşacak:", isler, flush=True)
+    yuk = {"ornekler": ornekler, "kollar": [k for k in kollar if k in isler], "isler": isler,
+           "bayraklar": {k: KOLLAR[k] for k in isler}, "model": a.model, "es": a.es,
            "kod": {n: (KOK / "app/core" / (n + ".py")).read_text(encoding="utf-8") for n in ENJEKTE}}
-    with open(a.cikti, "x", encoding="utf-8") as f:
+    with open(a.cikti, "a", encoding="utf-8") as f:
         def yaz(satir):
             f.write(json.dumps(satir, ensure_ascii=False) + "\n"); f.flush()
             print(json.dumps({k: satir.get(k) for k in ("kol", "bolum", "saniye", "hata_turu")}), flush=True)
@@ -394,7 +416,7 @@ def main():
     h.add_argument("--cikti", required=True); h.set_defaults(f=hazirla)
     c = alt.add_parser("calistir"); c.add_argument("--veri", required=True)
     c.add_argument("--kollar", default="A,A2,B,C,D,E"); c.add_argument("--model", default="vertex/gemini-3.6-flash")
-    c.add_argument("--es", type=int, default=4); c.add_argument("--cikti", required=True); c.set_defaults(f=calistir)
+    c.add_argument("--es", type=int, default=1); c.add_argument("--cikti", required=True); c.set_defaults(f=calistir)
     y = alt.add_parser("yargila"); y.add_argument("--veri", required=True); y.add_argument("--sonuc", required=True)
     y.add_argument("--ciftler", default="B:A,C:A,D:B,E:C,A2:A"); y.add_argument("--hakem", default="gemini-2.5-pro")
     y.add_argument("--es", type=int, default=4); y.add_argument("--tohum", type=int, default=11)
