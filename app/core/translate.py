@@ -1202,6 +1202,8 @@ _ROMAN_URETIM = ContextVar("roman_uretim", default=None)
 _CEVIRI_IZ = ContextVar("ceviri_iz", default=None)
 # Tutarlılık belleği bloğu (`ceviri_bellek`); boş/None ise çeviri istemi değişmez.
 _BELLEK_METNI = ContextVar("bellek_metni", default=None)
+# Bölüm özeti zinciri bloğu (`ozet_zinciri`, CEVIRI_OZET=1); None ise istem değişmez.
+_OZET_METNI = ContextVar("ozet_metni", default=None)
 
 
 def _izli_uret(*args, **kwargs):
@@ -1239,13 +1241,15 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
                       bellek_havuzu=None) -> dict:
     """Çeviri denemesini izler; başarısız deneme eski chapter kaydını değiştirmez."""
     from . import ceviri_baglam, ceviri_izleri
-    acik = os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
+    acik = (os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
+            or os.getenv("CEVIRI_OZET", "0") == "1")
     iz = ({"id": uuid.uuid4().hex, "book_slug": book_slug, "chapter_no": bolum_no,
            "kaynak": text, "kaynak_sha256": ceviri_baglam.kaynak_hash(text),
            "durum": "basladi", "cagrilar": [], "asamalar": []} if acik else None)
     iz_token = _CEVIRI_IZ.set(iz)
     roman_token = _ROMAN_URETIM.set(None)
     bellek_token = _BELLEK_METNI.set(None)
+    ozet_token = _OZET_METNI.set(None)
     try:
         sonuc = _translate_chapter_impl(text, api_key, glossary, models, prev_context,
                     kosullar, anlamlar, bolum_no, anlam_denetimi,
@@ -1262,6 +1266,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
             raise KaliteKontrolHatasi(str(exc)) from exc
         raise
     finally:
+        _OZET_METNI.reset(ozet_token)
         _BELLEK_METNI.reset(bellek_token)
         _ROMAN_URETIM.reset(roman_token)
         _CEVIRI_IZ.reset(iz_token)
@@ -1347,6 +1352,34 @@ def _translate_chapter_impl(
             iz.update(analiz=analiz, sozluk=ilgili, kosullar=kosullar or {})
         glossary = ceviri_baglam.yerel_sozluk(glossary, analiz)
         _ROMAN_URETIM.set(ceviri_baglam.baglam_metni(analiz, onceki))
+
+    # ÖZET ZİNCİRİ (CEVIRI_OZET=1, AI Novel Translation yöntemi; 2026-10-11 kullanıcı
+    # isteği): çeviriden önce bu bölümün kısa özeti. Önceki bölümün kayıtlı özeti
+    # yalnız ÖZET çağrısına girer; çeviriye yalnız bu bölümün özeti eklenir, çıktı
+    # biçimi ve terim tespiti değişmez. Özet düşerse çeviri özetsiz sürer.
+    ozet = ozet_modeli = None
+    if os.getenv("CEVIRI_OZET", "0") == "1" and text.strip():
+        from . import ozet_zinciri
+        onceki_ozet = ""
+        if (onceki_bolum and book_slug and type(bolum_no) is int
+                and onceki_bolum.get("book_slug") == book_slug
+                and onceki_bolum.get("chapter_no") == bolum_no - 1):
+            onceki_ozet = ozet_zinciri.oku(onceki_bolum.get("url"), onceki_bolum.get("source"))
+        def ozet_uret(user, system, asama):
+            with api_durum.baglam(asama=asama):
+                return _izli_uret(client_factory, models, user, system=system,
+                                  max_tokens=MAX_OUTPUT_TOKENS)
+        try:
+            ozet, ozet_modeli = ozet_zinciri.ozet_cikar(
+                text, onceki_ozet, _relevant_glossary(glossary, text), ozet_uret)
+        except Exception as exc:  # yardımcı adım: hatası çeviriyi düşürmez
+            ozet = None
+            if iz is not None:
+                iz["ozet_zinciri_hatasi"] = type(exc).__name__
+        if ozet:
+            _OZET_METNI.set(ozet_zinciri.baglam_metni(ozet))
+        if iz is not None:
+            iz["ozet_zinciri"] = {"onceki_ozet": onceki_ozet, "ozet": ozet, "model": ozet_modeli}
 
     # TUTARLILIK BELLEĞİ (CEVIRI_BELLEK=1): önceki bölümlerden ilgili kaynak→çeviri
     # çiftleri + önceki bölümün son paragrafları. Ek model çağrısı yok. Gelecek
@@ -1547,6 +1580,10 @@ def _translate_chapter_impl(
                 new_terms[x["kaynak"]] = x["hedef"]
         if book_slug and bolum_url and type(bolum_no) is int:
             ceviri_izleri.ozet_yaz(bolum_url, book_slug, bolum_no, text, analiz)
+    if ozet:
+        # Zincirin halkası yalnız çeviri başarıyla bitince yazılır.
+        from . import ozet_zinciri
+        ozet_zinciri.yaz(bolum_url, book_slug, bolum_no, text, ozet, ozet_modeli)
     return {
         "translation": translation,
         "source": "\n\n".join(en_paras) if aligned else None,
@@ -2739,9 +2776,12 @@ def _translate_chunk(
     # bile GEMINI_API_KEY'i zorunlu kılıyordu.
     baglam = _ROMAN_URETIM.get()
     bellek = _BELLEK_METNI.get()
+    ozet = _OZET_METNI.get()
     system = None
     if bellek:
         user = bellek + "\n\n" + user
+    if ozet:
+        user = ozet + "\n\n" + user
     if baglam is not None:
         from . import ceviri_baglam
         system = (SYSTEM_INSTRUCTION.split('- Yanıtı SADECE şu JSON ile ver:', 1)[0]

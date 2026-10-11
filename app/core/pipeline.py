@@ -349,10 +349,11 @@ def _roman_baglami(slug, url, prev_url, no):
     import os
     analiz = os.getenv("CEVIRI_ANALIZ", "1") != "0"
     bellek = os.getenv("CEVIRI_BELLEK", "0") == "1"
-    if not analiz and not bellek and os.getenv("CEVIRI_KALITE", "1") == "0":
+    ozet = os.getenv("CEVIRI_OZET", "0") == "1"  # özet zinciri: önceki bölümün kaydı
+    if not analiz and not bellek and not ozet and os.getenv("CEVIRI_KALITE", "1") == "0":
         return {}
     ek = {"book_slug": slug, "bolum_url": url,
-          "onceki_bolum": cache.onceki_kaynak(slug, prev_url, no) if analiz or bellek else None}
+          "onceki_bolum": cache.onceki_kaynak(slug, prev_url, no) if analiz or bellek or ozet else None}
     if bellek:
         ek["bellek_havuzu"] = cache.bellek_havuzu(slug, no)
     return ek

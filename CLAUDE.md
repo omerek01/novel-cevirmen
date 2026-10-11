@@ -1642,6 +1642,7 @@ grafik bağlamının çeviriye girmesi) Faz 1 ÖLÇÜLMEDEN başlamaz.
 | `CEVIRI_STIL` | Hayır | `0` → analiz bağlamındaki kısa üslup talimatını kaldırır. Analiz kapalıyken etkisiz |
 | `CEVIRI_BELLEK` | Hayır | `1` → tutarlılık belleği (`core/ceviri_bellek.py`): önceki 30 bölümün hizalı paragraflarından bu bölümdeki adları/hitapları taşıyan en fazla 10 kısa çift istemin başına konur. Varsayılan kapalı; kıyasta kazanç ölçülmedi |
 | `CEVIRI_KALITE` | Hayır | `0` → kalite katmanını (bölüm denetimi + kanıtlı paragraf onarımı) kapatır. Varsayılan açık. "Kaydet, işaretle": katman çeviriyi asla düşürmez, onaramadığını işaretler (`docs/CEVIRI-KALITE.md`) |
+| `CEVIRI_OZET` | Hayır | `1` → bölüm özeti zinciri (`core/ozet_zinciri.py`, AI Novel Translation yöntemi): çeviriden önce tek çağrıyla bu bölümün kısa Türkçe özeti çıkarılır (girdi: önceki bölümün kayıtlı özeti + ilgili sözlük + bölüm); çeviri istemine yalnız bu bölümün özeti eklenir, özet `ozet_zinciri` tablosuna yazılıp sonraki bölüme gider. Yeni adlar sözlüğe otomatik yazılmaz. Varsayılan kapalı; ölçülmeden açılmaz |
 | `SOZLUK_SIRADAN` | Hayır | `1` → büyük harfli sözlük kaydı parçada cümle ortasında hiç büyük harfle geçmiyorsa satırına `translate.SIRADAN_ISARETI` konur; model sıradan kelimeye büyük harfli terim basmaz ("armor" → "Zırhları" sınıfı). Varsayılan kapalı; bayrak kapalıyken prompt bayt bayt aynıdır |
 
 Sunucuda bu bayraklar `.env` yerine systemd ek dosyasıyla verilir
