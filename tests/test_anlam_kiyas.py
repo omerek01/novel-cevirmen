@@ -142,3 +142,20 @@ def test_bolum_karari_tek_elemanli_listeye_sarili_gelse_de_cozulur():
     yanit = [{"akis": "X", "anlam": "esit", "kopukluklar": {"X": [], "Y": [{"p": 1, "not": "n"}]}}]
     karar = ak.bolum_karari_coz(yanit, "b", 3)
     assert karar["akis"] == "b" and karar["kopukluk"]["a"] == [{"p": 1, "not": "n"}]
+
+
+# ---------- kollar ----------
+
+def test_her_kol_butun_bayraklari_acikca_verir_I_yalniz_ozet_zinciriyle_ayrisir():
+    # Kollar aynı süreçte sırayla koşar: bir kolun açtığı bayrak sonrakine sızmasın.
+    anahtarlar = {frozenset(b) for b in ak.KOLLAR.values()}
+    assert len(anahtarlar) == 1 and "CEVIRI_OZET" in next(iter(anahtarlar))
+    fark = {k for k in ak.KOLLAR["I"] if ak.KOLLAR["I"][k] != ak.KOLLAR["H"][k]}
+    assert fark == {"CEVIRI_OZET"} and ak.KOLLAR["I"]["CEVIRI_OZET"] == "1"
+
+
+def test_ozet_zinciri_uzak_kosuya_enjekte_edilir_ve_onceki_bolum_kolun_kendi_kaydidir():
+    assert ak.ENJEKTE.index("ozet_zinciri") < ak.ENJEKTE.index("translate")
+    # Her kolun özetleri url#kol altında saklanır; önceki bölüm aynı anahtarla aranmazsa
+    # zincir deneyde hiç kurulmaz (eski analiz ölçümünde olduğu gibi).
+    assert "onceki['url'] + '#' + kol" in ak._CALISTIR

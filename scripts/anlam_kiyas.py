@@ -41,24 +41,27 @@ UZAK_PYTHON = "/home/OMEREK/novel-cevirmen/.venv/bin/python -u"
 UZAK_DIZIN = "/home/OMEREK/anlam-kiyas-isler"
 CANLI_DB = "/home/OMEREK/novel-cevirmen/cache/chapters.db"
 UZAK_APP = "/home/OMEREK/novel-cevirmen-sozluk/app"
-ENJEKTE = ["ceviri_kalite", "ceviri_baglam", "ceviri_bellek", "ceviri_izleri", "translate"]
+ENJEKTE = ["ceviri_kalite", "ceviri_baglam", "ceviri_bellek", "ceviri_izleri", "ozet_zinciri", "translate"]
 
 # Kol = bayrak kümesi. Kalite denetimi G dışındaki kollarda KAPALI: onarım farkları
 # örterdi. Her kol her bayrağı açıkça verir: kollar aynı süreçte sırayla koştuğu için
 # bir kolun açtığı bayrak (G'nin kalitesi, H'nin işareti) sonraki kola sızmasın.
 KOLLAR = {
-    "A": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # canlı yol
-    "A2": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},  # gürültü tabanı
-    "B": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # eski yol
-    "C": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # özet, üslupsuz
-    "D": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # bellek, analizsiz
-    "E": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},   # özet + bellek
+    "A": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # canlı yol
+    "A2": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},  # gürültü tabanı
+    "B": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # eski yol
+    "C": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # özet, üslupsuz
+    "D": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # bellek, analizsiz
+    "E": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # özet + bellek
     # Faz 2: F eski yolu --model ile verilen BAŞKA modelle çevirir; G eski yola
     # canlıdaki kalite katmanını ekler (katmanın anlama katkısı ölçülür); H eski yola
     # sözlüğün sıradan kelime işaretini ekler (`translate.SIRADAN_ISARETI`).
-    "F": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0"},
-    "G": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "1", "SOZLUK_SIRADAN": "0"},
-    "H": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1"},
+    "F": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},
+    "G": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "1", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},
+    "H": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0"},
+    # I: canlıya benzeyen H + bölüm özeti zinciri (AI Novel Translation yöntemi). Zincir
+    # ancak ardışık bölümler kolun içinde SIRAYLA çevrilince kurulur: --es 1 ile koşturun.
+    "I": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "1"},
 }
 BOYUTLAR = ("anlam", "akicilik", "tutarlilik")
 
@@ -381,13 +384,18 @@ kilit = threading.Lock()
 def cevir(kol, x):
     s = time.monotonic()
     satir = {'kol': kol, 'kitap': x['book_slug'], 'bolum': x['chapter_no']}
+    # Kolun özetleri (analiz özeti, özet zinciri) url#kol altında saklanır; önceki bölüm
+    # aynı anahtarla aranmazsa zincir deneyde hiç kurulmaz, hep baştan özet çıkarılır.
+    onceki = x.get('previous')
+    if onceki:
+        onceki = dict(onceki, url=onceki['url'] + '#' + kol)
     # Vertex 429 "meşgul" geçicidir: deney canlı okumayla aynı kotayı paylaşır,
     # bu yüzden bir dakika beklenip en fazla iki kez yeniden denenir.
     for deneme in range(3):
         try:
             r = t.translate_chapter(x['source'], '', glossary=x['glossary'], kosullar=x.get('conditions') or {},
                 models=(p['model'],), prev_context=x.get('prev_context') or '', bolum_no=x['chapter_no'],
-                book_slug=x['book_slug'], bolum_url=x['url'] + '#' + kol, onceki_bolum=x.get('previous'),
+                book_slug=x['book_slug'], bolum_url=x['url'] + '#' + kol, onceki_bolum=onceki,
                 bellek_havuzu=x.get('bellek_havuzu') or [])
             satir.update(translation=r['translation'], source=r['source'], model=r.get('model'), deneme=deneme + 1)
             satir.pop('hata_turu', None); satir.pop('hata_mesaji', None)
@@ -395,7 +403,8 @@ def cevir(kol, x):
             if izler:
                 v = izler[0]['veri']
                 satir['iz'] = {'bellek': v.get('bellek'), 'ozet': len((v.get('analiz') or {}).get('ozet') or []),
-                               'terim': len((v.get('analiz') or {}).get('terimler') or [])}
+                               'terim': len((v.get('analiz') or {}).get('terimler') or []),
+                               'ozet_zinciri': v.get('ozet_zinciri')}
             break
         except Exception as e:
             satir.update(hata_turu=type(e).__name__, hata_mesaji=str(e)[:300])
