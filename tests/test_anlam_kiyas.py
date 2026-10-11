@@ -159,3 +159,19 @@ def test_ozet_zinciri_uzak_kosuya_enjekte_edilir_ve_onceki_bolum_kolun_kendi_kay
     # Her kolun özetleri url#kol altında saklanır; önceki bölüm aynı anahtarla aranmazsa
     # zincir deneyde hiç kurulmaz (eski analiz ölçümünde olduğu gibi).
     assert "onceki['url'] + '#' + kol" in ak._CALISTIR
+
+
+def test_zincir_kolu_kaldigi_yerden_surerken_onceki_halka_ciktidan_tohumlanir():
+    # Her koşu yeni geçici DB açar; yeniden koşan bölüm, önceki bölümün özetini ancak
+    # önceki çıktıdan alırsa zincir kopmaz (canlıda bu, kayıtlı özettir).
+    satirlar = [
+        {"kol": "I", "bolum": 968, "translation": "x", "iz": {"ozet_zinciri": {"ozet": "968 özeti"}}},
+        {"kol": "I", "bolum": 969, "translation": "y", "iz": {"ozet_zinciri": {"ozet": None}}},
+        {"kol": "H", "bolum": 599, "translation": "z", "iz": {}},
+        {"kol": "I", "bolum": 600, "hata_turu": "TranslateError"},
+    ]
+    isler = {"I": [969, 601], "H": [600]}
+    assert ak.zincir_tohumlari(satirlar, isler) == {"I": {"969": "968 özeti"}}
+    # Önceki bölüm de yeniden koşuyorsa eski halka tohumlanmaz (yenisinin üstüne yazılırdı).
+    assert ak.zincir_tohumlari(satirlar, {"I": [968, 969]}) == {}
+    assert "ozet_zinciri.yaz(onceki['url']" in ak._CALISTIR

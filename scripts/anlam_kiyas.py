@@ -227,6 +227,24 @@ def eksik_isler(satirlar: list[dict], kollar: list[str], bolumler: list[int]) ->
     return {k: v for k, v in sonuc.items() if v}
 
 
+def zincir_tohumlari(satirlar: list[dict], isler: dict[str, list[int]]) -> dict[str, dict[str, str]]:
+    """Yeniden koşacak her (kol, bölüm) için kolun ÖNCEKİ bölümündeki özet zinciri halkası.
+
+    Her koşu yeni geçici DB açar: kaldığı yerden süren zincir kolu önceki bölümün
+    özetini ancak önceki çıktıdan alırsa zincir kopmaz (canlıda bu, kayıtlı özettir)."""
+    ozetler = {(s["kol"], s["bolum"]): ((s.get("iz") or {}).get("ozet_zinciri") or {}).get("ozet")
+               for s in satirlar if s.get("translation")}
+    sonuc: dict[str, dict[str, str]] = {}
+    for kol, bolumler in isler.items():
+        for no in bolumler:
+            if no - 1 in bolumler:
+                continue  # önceki bölüm de bu koşuda çevrilecek: halkayı kendisi yazar
+            ozet = ozetler.get((kol, no - 1))
+            if ozet:
+                sonuc.setdefault(kol, {})[str(no)] = ozet
+    return sonuc
+
+
 def isaret_testi(a: int, b: int) -> float:
     """İki yönlü kesin işaret testi (beraberlikler hariç)."""
     n = a + b
@@ -389,6 +407,10 @@ def cevir(kol, x):
     onceki = x.get('previous')
     if onceki:
         onceki = dict(onceki, url=onceki['url'] + '#' + kol)
+        tohum = p.get('tohumlar', {}).get(kol, {}).get(str(x['chapter_no']))
+        if tohum:
+            from core import ozet_zinciri
+            ozet_zinciri.yaz(onceki['url'], x['book_slug'], x['chapter_no'] - 1, onceki['source'], tohum)
     # Vertex 429 "meşgul" geçicidir: deney canlı okumayla aynı kotayı paylaşır,
     # bu yüzden bir dakika beklenip en fazla iki kez yeniden denenir.
     for deneme in range(3):
@@ -493,6 +515,7 @@ def calistir(a):
             return
         yuk = {"ornekler": ornekler, "kollar": [k for k in kollar if k in isler], "isler": isler,
                "bayraklar": {k: KOLLAR[k] for k in isler}, "model": a.model, "es": a.es,
+               "tohumlar": zincir_tohumlari(onceki, isler),
                "kod": {n: (KOK / "app/core" / (n + ".py")).read_text(encoding="utf-8") for n in ENJEKTE}}
         _uzak(_sabitle(_CALISTIR), yuk, yaz)
 
