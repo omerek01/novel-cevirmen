@@ -1482,8 +1482,11 @@ def _translate_chapter_impl(
     kalite_metrik = None
     if os.getenv("CEVIRI_KALITE", "1") != "0" and tr_paras:
         from . import ceviri_kalite
-        if not aligned:
-            raise KaliteKontrolHatasi("Kalite kontrolü için paragraf hizalaması kurulamadı; yeni çeviri kaydedilmedi.")
+        # KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi
+        # düşürmez. Denetim yapılamazsa çeviri "denetlenemedi" durumuyla kaydedilir.
+        def denetlenemedi(neden):
+            return {"surum": 2, "durum": "denetlenemedi", "neden": neden, "denetlenen": 0,
+                    "onarilan": [], "onarilamayan": [], "supheli": [], "onarim_modeli": None}
         # Denetim bütün bölümü görür; onarım yalnız kanıtlı hatalı paragrafları.
         # Aynı seçilmiş zincir kullanılır: ücretsiz seçim ücretli modele geçmez.
         ilgili = _relevant_glossary(glossary, text)
@@ -1507,15 +1510,18 @@ def _translate_chapter_impl(
                 if any(x["paragraf"] in degisen for liste in son.values() for x in liste):
                     return False
             return True
-        try:
-            kalite_metrik = ceviri_kalite.denetle_ve_onar(
-                tr_paras, en_paras, ilgili,
-                {k: v for k, v in (kosullar or {}).items() if k in ilgili},
-                kalite_uret, kabul_kontrolu,
-                iz=iz.setdefault("kalite_deneyi", {}) if iz is not None else None,
-            )
-        except ceviri_kalite.KaliteHatasi as exc:
-            raise KaliteKontrolHatasi(str(exc)) from exc
+        if not aligned:
+            kalite_metrik = denetlenemedi("Paragraf hizalaması kurulamadı; kalite denetimi yapılmadı.")
+        else:
+            try:
+                kalite_metrik = ceviri_kalite.denetle_ve_onar(
+                    tr_paras, en_paras, ilgili,
+                    {k: v for k, v in (kosullar or {}).items() if k in ilgili},
+                    kalite_uret, kabul_kontrolu,
+                    iz=iz.setdefault("kalite_deneyi", {}) if iz is not None else None,
+                )
+            except ceviri_kalite.KaliteHatasi as exc:
+                kalite_metrik = denetlenemedi(str(exc))
         # Yalnız kabul edilen onarımların modelleri çeviri künyesine girer.
         if kalite_metrik["onarilan"] and kalite_metrik["onarim_modeli"]:
             used_models[kalite_metrik["onarim_modeli"]] = None

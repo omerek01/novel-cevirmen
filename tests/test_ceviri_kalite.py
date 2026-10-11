@@ -1,4 +1,12 @@
-"""Kaynak kanıtı, yabancı alfabe ve doğrulanan tek turluk onarım sözleşmesi."""
+"""Kaynak kanıtı, yabancı alfabe ve doğrulanan tek turluk onarım sözleşmesi.
+
+KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi artık
+düşürmez. Onarılamayan ya da kanıtı doğrulanamayan sorun paragrafı özgün hâliyle
+kalır ve "şüpheli" işaretlenir; denetim hiç tamamlanamazsa çeviri "denetlenemedi"
+durumuyla kaydedilir. Eski davranışta tek bir doğrulanamayan bulgu ya da onarım
+sonrası kalan hata bütün çeviriyi reddediyordu; daha önce çevrilmemiş bölüm hiç
+okunamıyordu (shadow-slave 968, iki deneme).
+"""
 import json
 from types import SimpleNamespace
 
@@ -117,22 +125,25 @@ def test_reddedilen_onarimin_once_sonrasi_izden_incelenebilir():
     yanitlar = [cevap({"denetlenen": [0], "hatalar": [hata()]}),
                 cevap({"duzeltmeler": [{"paragraf": 0, "ceviri": "Ucubenin altında kıpırdandı."}]}),
                 cevap({"denetlenen": [0], "hatalar": [hata("kıpırdandı", "shifted")]})]
-    with pytest.raises(q.KaliteHatasi):
-        q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
+    r = q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
                          lambda *a: (yanitlar.pop(0), "model"), iz=iz)
     assert iz["onarim_kaniti"][0]["sonra"] == "Ucubenin altında kıpırdandı."
+    assert iz["onarim_kaniti"][0]["kabul"] is False
     assert tr == ["Ucubin altında kıpırdandı."]
+    assert r["onarilan"] == [] and r["onarilamayan"] == [0]
+    assert r["durum"] == "supheli"
+    assert any(x["paragraf"] == 0 and "otomatik onarılamadı" in x["aciklama"] for x in r["supheli"])
 
 
 @pytest.mark.parametrize("bozuk", ["Ucubin altında kıpırdandı.", "Ucubenin altında едва kıpırdandı."])
-def test_basarisiz_onarim_asli_degistirmez(bozuk):
+def test_basarisiz_onarim_asli_degistirmez_ve_isaretlenir(bozuk):
     q = kalite(); tr = ["Ucubin altında kıpırdandı."]
     yanitlar = [cevap({"denetlenen": [0], "hatalar": [hata()]}),
                 cevap({"duzeltmeler": [{"paragraf": 0, "ceviri": bozuk}]}),
                 cevap({"denetlenen": [0], "hatalar": [hata()]})]
-    with pytest.raises(q.KaliteHatasi):
-        q.denetle_ve_onar(tr, ["beneath the abomination"], {}, {}, lambda *args: (yanitlar.pop(0), "gemini-3.6-flash"))
+    r = q.denetle_ve_onar(tr, ["beneath the abomination"], {}, {}, lambda *args: (yanitlar.pop(0), "gemini-3.6-flash"))
     assert tr == ["Ucubin altında kıpırdandı."]
+    assert r["onarilamayan"] == [0] and r["durum"] == "supheli"
 
 
 def test_bos_kesik_ve_hizalamayi_bozan_yanit_basari_sayilmaz():
@@ -152,7 +163,7 @@ def test_kalite_raporu_cache_metin_degisince_bayat_kalmaz():
     assert cache.get_chapter("test://kalite")["ceviri_kalitesi"] is None
 
 
-def test_ceviri_akisinda_yabanci_alfabe_kayda_giremez(monkeypatch):
+def test_ceviri_akisinda_onarilamayan_yabanci_alfabe_kaydedilip_isaretlenir(monkeypatch):
     monkeypatch.setenv("CEVIRI_KALITE", "1")
     monkeypatch.setattr(translate, "_gemini_fabrikasi", lambda key: object())
     def uret(*args, **kwargs):
@@ -162,20 +173,22 @@ def test_ceviri_akisinda_yabanci_alfabe_kayda_giremez(monkeypatch):
             return cevap({"duzeltmeler": [{"paragraf": 0, "ceviri": "Sunny едва kendi boyunun yarısıydı."}]}), "gemini-3.6-flash"
         return cevap({"translation": "[[1]] Sunny едва kendi boyunun yarısıydı.", "detected_names": [], "detected_terms": {}}), "gemini-3.6-flash"
     monkeypatch.setattr(translate, "_generate_with_fallback", uret)
-    with pytest.raises(translate.TranslateError):
-        translate.translate_chapter("Sunny was barely half his size.", "test", models=("gemini-3.6-flash",))
+    sonuc = translate.translate_chapter("Sunny was barely half his size.", "test", models=("gemini-3.6-flash",))
+    assert "едва" in sonuc["translation"]
+    assert sonuc["ceviri_kalitesi"]["durum"] == "supheli"
+    assert sonuc["ceviri_kalitesi"]["onarilamayan"] == [0]
+    assert any("едва" in x["aciklama"] for x in sonuc["ceviri_kalitesi"]["supheli"])
 
-    # Yeniden çeviri kalite kapısına takılırsa eski satır/arşiv korunur.
+    # Yeniden çeviri de kaydedilir; eski çeviri arşive gider (geri yüklenebilir).
     url = "https://ornek.test/kitap/chapter-1"
     cache.save_chapter(url, {"book_slug": "kitap", "book_title": "Kitap", "chapter_no": 1,
                             "translation": "Sunny'nin boyu onun yarısı bile değildi.",
                             "source": "Sunny was barely half his size."})
     monkeypatch.setattr(translate, "ceviri_anahtari_var_mi", lambda key: True)
     monkeypatch.setattr(pipeline, "_anlam_tanimlari", lambda slug: None)
-    with pytest.raises(translate.TranslateError):
-        pipeline.get_or_translate(url, "test", refresh=True, advance_position=False)
-    assert cache.get_chapter(url)["translation"] == "Sunny'nin boyu onun yarısı bile değildi."
-    assert cache.arsiv_listesi(url) == []
+    pipeline.get_or_translate(url, "test", refresh=True, advance_position=False)
+    assert "едва" in cache.get_chapter(url)["translation"]
+    assert len(cache.arsiv_listesi(url)) == 1
 
 
 def test_ceviri_akisinda_tamamlanan_denetim_raporu_tasinir(monkeypatch):
@@ -208,8 +221,11 @@ def test_onarilan_paragrafta_eski_sozluk_hatasi_da_kalamaz(monkeypatch):
             veri = {"translation": "[[1]] Ucubin Temple yakınında kıpırdandı.", "detected_names": [], "detected_terms": {}}
         return cevap(veri), "gemini-3.6-flash"
     monkeypatch.setattr(translate, "_generate_with_fallback", uret)
-    with pytest.raises(translate.KaliteKontrolHatasi):
-        translate.translate_chapter("beneath the abomination near the Temple.", "test", glossary={"Temple": "Tapınak"}, models=("gemini-3.6-flash",))
+    sonuc = translate.translate_chapter("beneath the abomination near the Temple.", "test",
+                                        glossary={"Temple": "Tapınak"}, models=("gemini-3.6-flash",))
+    # Onarım yeni sözlük ihlali getirdiği için kabul edilmez; paragraf özgün kalır, işaretlenir.
+    assert sonuc["translation"] == "Ucubin Temple yakınında kıpırdandı."
+    assert sonuc["ceviri_kalitesi"]["onarilamayan"] == [0]
 
 
 def test_uzun_paragrafta_iki_ad_duzeltmesi_yeniden_yazim_sayilmaz():
@@ -229,10 +245,11 @@ def test_yeni_sozluk_ihlali_onarimin_kabulu_engeller():
     q = kalite(); tr = ["Ucubin altında kıpırdandı."]
     yanitlar = [cevap({"denetlenen": [0], "hatalar": [hata()]}),
                 cevap({"duzeltmeler": [{"paragraf": 0, "ceviri": "Ucubenin altında kıpırdandı."}]})]
-    with pytest.raises(q.KaliteHatasi):
-        q.denetle_ve_onar(tr, ["beneath the abomination"], {}, {},
+    r = q.denetle_ve_onar(tr, ["beneath the abomination"], {}, {},
                          lambda *args: (yanitlar.pop(0), "model"), lambda tr: False)
     assert tr == ["Ucubin altında kıpırdandı."]
+    assert r["onarilamayan"] == [0]
+    assert yanitlar == []  # aday kalmadığı için doğrulama çağrısı yapılmadı
 
 
 def test_kalite_raporu_arsiv_geri_yuklemede_dogru_metne_aittir():
@@ -254,3 +271,62 @@ def test_hileli_denetim_yaniti_temiz_sayilmaz(veri):
     q = kalite()
     with pytest.raises(q.KaliteHatasi):
         q.denetim_coz(veri, ["abomination"], ["Ucubin"])
+
+
+# ---------- kaydet, işaretle (2026-10-11) ----------
+
+def test_kaniti_dogrulanamayan_bulgu_cevirmeyi_dusurmez_paragrafi_isaretler():
+    q = kalite(); tr = ["Ucubin altında kıpırdandı."]
+    r = q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
+                         lambda *a: (cevap({"denetlenen": [0], "hatalar": [hata(tr="olmayan alıntı")]}), "model"))
+    assert tr == ["Ucubin altında kıpırdandı."]
+    assert r["onarilan"] == [] and r["durum"] == "supheli"
+    assert "kanıt doğrulanamadı" in r["supheli"][0]["aciklama"]
+
+
+def test_bicimsiz_bulgu_temiz_sayilmaz():
+    q = kalite(); tr = ["Ucubin altında kıpırdandı."]
+    r = q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {},
+                         lambda *a: (cevap({"denetlenen": [0], "hatalar": [dict(hata(), guven=float("nan"))]}), "model"))
+    assert r["durum"] == "supheli" and r["gecersiz_bulgu"] == 1
+
+
+def test_bir_onarim_gecer_digeri_isaretlenir():
+    q = kalite()
+    en = ["He shifted beneath the abomination.", "Sunny reached the shore."]
+    tr = ["Ucubin altında kıpırdandı.", "Sunny kıyıya ulaştılar."]
+    yanitlar = [cevap({"denetlenen": [0, 1], "hatalar": [hata(), hata("ulaştılar", "reached", 1)]}),
+                cevap({"duzeltmeler": [{"paragraf": 0, "ceviri": "Ucubenin altında kıpırdandı."},
+                                       {"paragraf": 1, "ceviri": "Sunny kıyıya ulaştılar ki."}]}),
+                cevap({"denetlenen": [0, 1], "hatalar": [hata("ulaştılar ki", "reached", 1)]})]
+    r = q.denetle_ve_onar(tr, en, {}, {}, lambda *a: (yanitlar.pop(0), "model"))
+    assert tr == ["Ucubenin altında kıpırdandı.", "Sunny kıyıya ulaştılar."]
+    assert r["onarilan"] == [0] and r["onarilamayan"] == [1]
+
+
+def test_cok_sayida_sorunda_onarim_denenmez_hepsi_isaretlenir():
+    q = kalite(); n = q.MAX_ONARIM_PARAGRAF + 1
+    en = [f"P{i} abomination." for i in range(n)]
+    tr = [f"P{i} Ucubin." for i in range(n)]
+    cagri = []
+    def uret(user, system, asama):
+        cagri.append(asama)
+        return cevap({"denetlenen": list(range(n)), "hatalar": [hata(i=i) for i in range(n)]}), "model"
+    r = q.denetle_ve_onar(tr, en, {}, {}, uret)
+    assert cagri == ["kalite_denetimi"]
+    assert r["onarilamayan"] == list(range(n)) and r["durum"] == "supheli"
+
+
+def test_denetim_tamamlanamazsa_ceviri_denetlenemedi_olarak_kaydedilir(monkeypatch):
+    q = kalite()
+    monkeypatch.setenv("CEVIRI_KALITE", "1")
+    monkeypatch.setattr(translate, "_gemini_fabrikasi", lambda key: object())
+    def uret(*args, **kwargs):
+        if kwargs.get("system") == q.DENETIM_TALIMATI:
+            return SimpleNamespace(text="{}", candidates=[SimpleNamespace(finish_reason="MAX_TOKENS")]), "m"
+        return cevap({"translation": "[[1]] Sunny kıyıya çıktı.", "detected_names": [], "detected_terms": {}}), "m"
+    monkeypatch.setattr(translate, "_generate_with_fallback", uret)
+    sonuc = translate.translate_chapter("Sunny reached the shore.", "test", models=("m",))
+    assert sonuc["translation"] == "Sunny kıyıya çıktı."
+    assert sonuc["ceviri_kalitesi"]["durum"] == "denetlenemedi"
+    assert sonuc["ceviri_kalitesi"]["neden"]

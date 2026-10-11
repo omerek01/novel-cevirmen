@@ -23,3 +23,21 @@ def test_dusuk_guvenli_bulgu_okuyucuda_gorunur(sayfa):
     expect(kart).to_contain_text("Paragraf 1")
     expect(kart).to_contain_text("Cümle kuruluşu şüpheli")
     expect(kart.locator("script")).to_have_count(0)
+
+
+def test_denetlenemeyen_bolum_okunur_ve_kunyede_soylenir(sayfa):
+    urller = tohum.kitap(bolum_sayisi=1)
+    rapor = {"surum": 2, "durum": "denetlenemedi", "neden": "<b>Kalite kontrolüne erişilemedi.</b>",
+             "supheli": [], "onarilan": []}
+    with sqlite3.connect(db.db_path()) as c:
+        c.execute("UPDATE chapters SET ceviri_kalitesi=? WHERE url=?", (json.dumps(rapor), urller[0]))
+    sayfa.set_viewport_size({"width": 375, "height": 812})
+    sayfa.goto(sayfa.taban + "/")
+    sayfa.locator("#shelves .spine[data-slug]").first.click()
+    sayfa.locator("#chapterList .chapter-row").last.click()
+    kart = sayfa.locator("#readerBody .kunye").first
+    expect(kart.locator("summary")).to_contain_text("kalite denetimi tamamlanamadı")
+    kart.locator("summary").click()
+    expect(kart).to_contain_text("kalite denetimi yapılamadı")
+    expect(kart.locator("b")).to_have_count(0)
+    assert sayfa.evaluate("document.documentElement.scrollWidth") <= 375

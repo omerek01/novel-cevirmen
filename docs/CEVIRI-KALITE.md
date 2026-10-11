@@ -11,17 +11,25 @@ prefetch, toplu ve yeniden çeviri aynı `translate_chapter` yolunu kullanır.
   kalıntıdır. Türkçe harfler, noktalama ve emoji bu sınıfa girmez.
 - Model her paragraf için kapsam bildirir. Hata alıntıları kaynak ve çeviride
   birebir bulunmalı; tür, numara, güven ve bitiş nedeni doğrulanmalıdır.
+  Kanıtı doğrulanamayan ya da biçimi bozuk bulgu onarılmaz; paragraf şüpheli
+  işaretlenir ve rapor "denetlendi" sayılmaz.
 - Yüksek güvenli dilbilgisi/anlam hataları ve alfabe kalıntıları yalnız ilgili
-  paragraflarda tek tur onarılır. En fazla sekiz hedef paragraf onarılır.
+  paragraflarda tek tur onarılır. Sekizden fazla hedef varsa onarım denenmez,
+  hepsi şüpheli işaretlenir.
 - Onarım hedefleri değişemez, boş/işaretçili/birleştirilmiş/kısaltılmış veya
   aşırı yeniden yazılmış yanıt kabul edilmez. Onarılan paragraflar kaynakla
   tekrar denetlenir; sözlük, İngilizce kalıntı ve çift anlam kontrolleri de
-  uygulanır. Bütün kabul kapıları geçmeden özgün metin değiştirilmez.
+  uygulanır. Onarım PARAGRAF PARAGRAF kabul edilir: bir kapıya takılan paragraf
+  özgün hâliyle kalır ve "otomatik onarılamadı" notuyla şüpheli işaretlenir;
+  kapılardan geçen onarımlar uygulanır.
 - Düşük güvenli şüpheler otomatik düzeltilmez. `ceviri_kalitesi.supheli` içinde
   tutulur ve okuyucunun bölüm künyesinde gösterilir. Bu, kesin hata kararı değildir.
-- Kontrol tamamlanmaz veya onarım başarısız olursa `KaliteKontrolHatasi`
-  döner. Yeni çeviri kaydedilmez, eski çeviri/arşiv korunur. Toplu işler tüm
-  bölümü otomatik yeniden üreterek kalite onarımını tekrarlamaz.
+- KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi
+  düşürmez. Denetim hiç tamamlanamazsa (erişim, biçim, kapsam, hizalama) çeviri
+  `durum: denetlenemedi` ve nedeniyle kaydedilir; künye bunu açıkça söyler.
+  Eski davranışta tek doğrulanamayan bulgu ya da onarım sonrası kalan hata bütün
+  çeviriyi reddediyordu; daha önce çevrilmemiş bölüm hiç okunamıyordu
+  (shadow-slave 968, iki deneme). Toplu işler bölümü otomatik yeniden üretmez.
 - `chapters.ceviri_kalitesi` ve arşivdeki aynı alan eklemeli göçle oluşturulur.
   Kaynak/çeviri değiştiğinde eski rapor geçersizleşir. Eski bölümlerde NULL,
   denetlenmiş çeviride sürüm/kapsam/onarım/şüphe ve metin özetleri bulunur.

@@ -756,6 +756,9 @@ export function kunyeKarti(entry) {
   const kalintiIndeksleri = Object.keys(kalinti);
   const denetlenmeyen = entry.kosulluDenetlenmeyen || [];
   const supheler = entry.ceviriKalitesi?.supheli || [];
+  // KAYDET, İŞARETLE (2026-10-11): kalite denetimi tamamlanamasa da çeviri kaydedilir;
+  // okur bunu görmeli, yoksa denetlenmemiş bölüm "temiz" sanılır.
+  const denetlenemedi = entry.ceviriKalitesi?.durum === "denetlenemedi";
   // Çeviri anında kural olarak eklenenler (`adlar`) zaten listeleniyor; aynı ad
   // iki kez görünmesin.
   const yeniKayitlar = (entry.yeniKayitlar || []).filter((x) => !(x.kaynak in terimler));
@@ -771,12 +774,13 @@ export function kunyeKarti(entry) {
     kalintiIndeksleri.length === 0 &&
     denetlenmeyen.length === 0 &&
     yeniKayitlar.length === 0 &&
-    !kisalmis && supheler.length === 0
+    !kisalmis && supheler.length === 0 && !denetlenemedi
   )
     return null;
 
   const uyariVar =
-    ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0 || kisalmis || supheler.length > 0;
+    ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0 || kisalmis || supheler.length > 0 ||
+    denetlenemedi;
   const kutu = document.createElement("details");
   kutu.className = "kunye" + (uyariVar ? " kunye-uyarili" : "");
   const ozet = document.createElement("summary");
@@ -786,6 +790,7 @@ export function kunyeKarti(entry) {
   // sayılır: biri "terim yanlış", öteki "paragraf hiç çevrilmemiş".
   const uyarilar = [];
   if (supheler.length) uyarilar.push(`${supheler.length} çeviri şüphesi — inceleme gerekiyor`);
+  if (denetlenemedi) uyarilar.push("kalite denetimi tamamlanamadı");
   // Kısalma ÖNCE yazılır: ötekiler "bir terim/paragraf bozuk" der, bu "metnin bir
   // kısmı hiç YOK" der — okurun önce görmesi gereken bu.
   if (kisalmis) {
@@ -806,6 +811,15 @@ export function kunyeKarti(entry) {
 
   const govde = document.createElement("div");
   govde.className = "kunye-govde";
+  if (denetlenemedi) {
+    const satir = document.createElement("p");
+    satir.className = "gloss-hint kunye-satir kunye-ihlal";
+    const neden = entry.ceviriKalitesi?.neden ? ` (${entry.ceviriKalitesi.neden})` : "";
+    satir.textContent =
+      `Çeviri kaydedildi ama kaynakla kalite denetimi yapılamadı${neden}. ` +
+      "“Yeniden Çevir” ile tekrar denenebilir.";
+    govde.appendChild(satir);
+  }
   for (const bulgu of supheler) {
     const satir = document.createElement("p");
     satir.className = "gloss-hint kunye-satir";
