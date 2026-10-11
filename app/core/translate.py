@@ -2871,6 +2871,42 @@ def anlam_ipucu(en_paras: list[str], anlamlar: list[dict] | None, bolum_no: int 
     )
 
 
+# SIRADAN KELİME İŞARETİ (2026-10-11, anlam/bağlam araştırması, `SOZLUK_SIRADAN`).
+# Ölçülen sorun: Türkçe karşılıklı kayıt küçük harfli geçişte de prompt'a girer
+# (`_terim_metinde`, bilerek: hiyerarşi adları kaynakta çoğunlukla küçük harflidir)
+# ve "BİREBİR kullan" kuralı modeli sıradan kelimeye büyük harfli terimi basmaya
+# itiyor: "armor" -> "Zırhları", "hope" -> "Umut'u", "Seven chains" -> "Yediler
+# zincir". 8 bölümde 6 kolun her birinde küçük harfli 113 geçişin 7-18'i taştı;
+# hakemin akış kopukluğu notlarının bir kısmı tam bu. Kayıt prompt'tan ATILMAZ
+# (hiyerarşi adı küçük harfle de terimdir); yalnız modele "burada sıradan kelime
+# olabilir" bilgisi verilir, karar bağlamla modelde kalır.
+SIRADAN_ISARETI = "[sıradan kelime olabilir]"
+
+
+def _siradan_olabilir(source: str, target: str, metin: str, kosullar: dict[str, str],
+                      tekili: frozenset[str]) -> bool:
+    """Büyük harfli kayıt bu metinde cümle ORTASINDA hiç büyük harfle geçmiyor mu?
+
+    İngilizce korunan, koşullu ve kaynağı küçük harfli kayıtlar kapsam dışıdır:
+    ilk ikisinin kendi kuralı var, sonuncusu zaten küçük harfli terimdir (`beast`).
+    """
+    if not source[:1].isupper() or _ingilizce_korunan(source, target):
+        return False
+    if _gercek_kosul(kosullar.get(source)):
+        return False
+    desen = _term_regex(source, _cogul_esnek_mi(source, target, tekili))
+    gecisler = list(desen.finditer(metin))
+
+    def terim_gibi(m) -> bool:
+        # `_cumle_basinda` "[" sonrasını da cümle başı sayar; köşeli parantez içindeki
+        # büyük harfli geçiş ("[Swift]" niteliği) ise tam olarak terim kullanımıdır.
+        if m.group(0).islower():
+            return False
+        return metin[:m.start()].rstrip()[-1:] == "[" or not _cumle_basinda(metin, m.start())
+
+    return bool(gecisler) and not any(terim_gibi(m) for m in gecisler)
+
+
 def _build_user_prompt(
     en_paras: list[str],
     glossary: dict[str, str],
@@ -2888,6 +2924,11 @@ def _build_user_prompt(
     tekili = _tekili_kayitli_cogullar(glossary)
     relevant = _relevant_glossary(glossary, metin, tekili)
     kosullar = kosullar or {}
+    # Bayrak kapalıyken prompt bayt bayt eskisi gibidir (ölçülmeden yayılmasın).
+    siradan = (
+        {s for s, t in relevant.items() if _siradan_olabilir(s, t, metin, kosullar, tekili)}
+        if os.getenv("SOZLUK_SIRADAN", "0") != "0" else set()
+    )
 
     def _satir(s: str, t: str) -> str:
         # Koşul YALNIZ süzgeçten geçen (metinde fiilen geçen) terimler için yazılır;
@@ -2897,6 +2938,7 @@ def _build_user_prompt(
             f"{s} -> {t}"
             + (f"  [KOŞUL: {kosul}]" if kosul else "")
             + (f"  [YASAK: {yasak}]" if yasak else "")
+            + (f"  {SIRADAN_ISARETI}" if s in siradan else "")
         )
 
     glossary_str = (
@@ -2921,6 +2963,15 @@ def _build_user_prompt(
         glossary_str += (
             "\n([YASAK: \"X\"] taşıyan terimin karşılığı olarak X ASLA yazılmaz: X başka "
             "bir kavramın karşılığıdır ve ikisi okurda karışır. Sözlükteki karşılığı kullan.)"
+        )
+    if siradan:
+        glossary_str += (
+            f"\n({SIRADAN_ISARETI} işaretli kayıt bu metinde cümle ortasında hiç büyük harfle "
+            "geçmiyor. Kelime orada gündelik anlamıyla (sıfat, isim, fiil, sayı, deyim) "
+            "kullanılmışsa sözlük karşılığını UYGULAMA: cümleye uyan sıradan Türkçesini yaz ve "
+            "büyük harf kullanma. Kelime orada yine o dünyanın terimiyse (canavar/insan rütbe "
+            "ve sınıf adı, ör. \"Fallen monster\"; köşeli parantez içindeki ad; kişi ya da yer "
+            "adı) karşılığını aynen uygula.)"
         )
     numbered = "\n\n".join(f"[[{i + 1}]] {p}" for i, p in enumerate(en_paras))
     user = (
@@ -2954,6 +3005,8 @@ def _build_user_prompt(
             "\n\nSON HATIRLATMA — SÖZLÜK KURALI HÂLÂ GEÇERLİDİR: yukarıdaki sözlükte "
             "verilen karşılıkları BİREBİR kullan."
         )
+        if siradan:
+            user += f" ({SIRADAN_ISARETI} işaretli kayıtlarda sözlükteki not geçerlidir.)"
         if korunacak:
             user += (
                 " Şu adlar İngilizce yazımıyla AYNEN kalacak (yalnız Türkçe eki "
