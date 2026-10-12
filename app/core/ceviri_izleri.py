@@ -4,6 +4,11 @@ import time
 
 from . import db, ceviri_baglam
 
+# Tablonun TOPLAM iz sınırı. Kalite katmanı açıkken her çeviri iz yazar (canlı
+# ortalama ~107 KB, 2026-10-12) ve URL başına 5 izlik budama bölüm sayısıyla
+# sınırsız büyüyordu; 200 iz ~20 MB eder ve son bölümlerin incelenmesine yeter.
+IZ_UST_SINIRI = 200
+
 
 def _connect():
     conn = db.connect()
@@ -59,6 +64,9 @@ def iz_kaydet(ident: str, url: str, veri: dict):
             conn.execute("DELETE FROM ceviri_izleri WHERE url=? AND id NOT IN "
                          "(SELECT id FROM ceviri_izleri WHERE url=? ORDER BY zaman DESC LIMIT 5)",
                          (url, url))
+            conn.execute("DELETE FROM ceviri_izleri WHERE id NOT IN "
+                         "(SELECT id FROM ceviri_izleri ORDER BY zaman DESC LIMIT ?)",
+                         (IZ_UST_SINIRI,))
     finally:
         conn.close()
 

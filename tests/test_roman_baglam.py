@@ -172,3 +172,17 @@ def test_onceki_ozet_terim_kurallarini_degil_ozet_talimatini_kullanir():
     assert asama == "onceki_bolum_ozeti"
     assert "HİYERARŞİ" not in sistem and "30" not in sistem
     assert "BİREBİR" in sistem
+
+
+def test_iz_tablosu_toplamda_sinirli(monkeypatch):
+    """Kalite katmanı açıkken her çeviri ~100 KB iz yazar; budama yalnız URL başınaydı
+    ve tablo bölüm sayısıyla sınırsız büyüyordu (inceleme, 2026-10-12)."""
+    from core import ceviri_izleri as iz
+
+    saat = iter(range(1, 100))
+    monkeypatch.setattr(iz.time, "time", lambda: float(next(saat)))
+    monkeypatch.setattr(iz, "IZ_UST_SINIRI", 3)
+    for i in range(5):
+        iz.iz_kaydet(str(i), f"test://k/{i}", {"durum": "tamamlandi"})
+    kalan = {x["id"] for i in range(5) for x in iz.iz_oku(f"test://k/{i}")}
+    assert kalan == {"2", "3", "4"}
