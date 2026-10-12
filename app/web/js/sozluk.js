@@ -182,6 +182,10 @@ function kuyrukOlayi(ad, veri) {
       } else {
         islemiUygula(glossTermsSonHal, glossKosullarSonHal, op);
       }
+      // Tür süzgeci YALNIZ `glossRows`tan okur (terim listesinde tür yok). Süzgeç
+      // yanıt gelmeden seçildiyse satır eski türle gizlenmişti; tazelenen satırla
+      // yeniden çizilmezse liste boş kalıyordu (tarayıcı testi 15 koşuda 3 kez).
+      if (glossTurSuzgeci) yenidenSuz();
     }
   }
   for (const fn of dinleyiciler) {

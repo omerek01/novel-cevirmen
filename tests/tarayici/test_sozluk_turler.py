@@ -2,6 +2,8 @@
 adlandır ve sil; "Aynen koru" kaydı listede kelimenin kendisiyle görünür."""
 from __future__ import annotations
 
+from urllib.parse import urlparse
+
 from playwright.sync_api import expect
 
 import tohum
@@ -39,6 +41,38 @@ def test_panelden_yeni_tur_eklenir_ve_kayda_atanir(sayfa):
     # Süzgeç de yeni türü bilir.
     sayfa.keyboard.press("Escape")
     sayfa.locator("#glossTurSuz").select_option("Klan")
+    expect(sayfa.locator("#glossList .gloss-row")).to_have_count(1)
+
+
+def test_tur_suzgeci_kayit_sunucuya_ulasinca_tazelenir(sayfa):
+    """Kararsız kalan yukarıdaki testin kök nedeni (2026-10-12, 15 koşuda 3 ret):
+    tür süzgeci sunucunun yanıtı işlenmeden seçilince satır eski türle süzülüp
+    gizleniyordu; yanıt gelince `glossRows` tazeleniyor ama liste yeniden
+    çizilmiyordu. Yarış burada kayıt isteği tutularak KESİN üretilir."""
+    tohum.kitap()
+    tohum.sozluk(SLUG, {"Fire Keepers": "Ateş Bekçileri"})
+    _sozluge_git(sayfa)
+    tutulan = []
+
+    def _kayit_istegi(route):
+        istek = route.request
+        if istek.method == "POST" and urlparse(istek.url).path == f"/api/book/{SLUG}/glossary":
+            tutulan.append(route)
+        else:
+            route.continue_()
+
+    sayfa.route("**/api/book/**", _kayit_istegi)
+    sayfa.locator("#glossList .gloss-row", has_text="Fire Keepers").click()
+    sayfa.locator("#terimTurYonet > summary").click()
+    sayfa.locator("#terimTurYeni").fill("Klan")
+    sayfa.locator("#terimTurEkle").click()
+    expect(sayfa.locator("#terimTur")).to_have_value("Klan")
+    sayfa.locator("#terimKaydet").click()
+    sayfa.keyboard.press("Escape")
+    sayfa.locator("#glossTurSuz").select_option("Klan")
+    js_bekle(sayfa, "() => true")  # olay döngüsü dönsün, istek route'a düşsün
+    assert len(tutulan) == 1, "kayıt isteği tutulamadı"
+    tutulan[0].continue_()
     expect(sayfa.locator("#glossList .gloss-row")).to_have_count(1)
 
 
