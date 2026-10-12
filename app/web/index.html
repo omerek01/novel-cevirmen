@@ -504,12 +504,14 @@
       <!-- Kayıtlı terimde: onaylı alternatif yazımlar + ek anlamlar (çevrimiçi). -->
       <details id="terimEkler" class="terim-ekler" hidden>
         <summary class="style-summary">YAZIMLAR VE ANLAMLAR</summary>
-        <p class="terim-etiket">ALTERNATİF YAZIMLAR — aynı varlığın başka yazımı (otomatik birleştirilmez)</p>
+        <p class="terim-etiket">ALTERNATİF YAZIMLAR — aynı adın başka yazımı ya da yazım hatası; çeviride BU kaydın karşılığıyla yazılır</p>
+        <p class="modal-hint">Farklı bir ad, lakap ya da anlamsa “Ayrı kayıt” kullan: kendi karşılığıyla ayrı kayıt olur.</p>
         <div id="terimYazimlar" class="terim-adaylar"></div>
         <div class="terim-satir-ekle">
           <input id="terimYazimYeni" type="text" autocomplete="off" lang="en"
                  placeholder="Örn. Ore Empire" aria-label="Yeni alternatif yazım" />
-          <button id="terimYazimEkle" type="button" class="pill">Ekle</button>
+          <button id="terimYazimEkle" type="button" class="pill">Yazım ekle</button>
+          <button id="terimYazimAyri" type="button" class="pill">Ayrı kayıt</button>
         </div>
         <p class="terim-etiket">EK ANLAMLAR — aynı kelimenin bağlama göre başka karşılığı (koşul zorunlu)</p>
         <div id="terimAnlamlar" class="terim-anlamlar"></div>

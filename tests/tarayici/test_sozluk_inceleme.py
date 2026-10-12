@@ -119,6 +119,52 @@ def test_alternatif_yazim_ve_ek_anlam_panelden_eklenir(sayfa):
     expect(sayfa.locator("#glossList .gloss-row .gloss-cip-yazim")).to_have_text("+1 YAZIM")
 
 
+def _nightingale_paneli(sayfa):
+    from core import glossary
+
+    tohum.kitap()
+    tohum.sozluk(SLUG, {"Nightingale": "Nightingale"})
+    glossary.yazim_ekle(SLUG, "Nightingale", "Night")
+    _sozluge_git(sayfa)
+    sayfa.locator("#glossList .gloss-row", has_text="Nightingale").click()
+    expect(sayfa.locator("#terimEkler")).to_have_attribute("open", "")
+
+
+def test_alternatif_yazim_ayrilip_kendi_kaydi_olur(sayfa):
+    """Kullanıcı talebi (2026-10-12): `Night`, `Nightingale`ın yazımı yapılınca çeviride
+    `Nightingale`a zorlanıyordu. Yazım, panelden ayrılıp kendi karşılığıyla ayrı
+    kayıt olabilmeli."""
+    _nightingale_paneli(sayfa)
+    sayfa.locator("#terimYazimlar .terim-yazim-ayir").click()
+    # Yazım ana kayıttan kalktı ve panel yeni kayıt olarak `Night` ile açıldı.
+    js_bekle(sayfa, _sozlukte("!(v.ekler.Nightingale && v.ekler.Nightingale.yazimlar.length)"))
+    expect(sayfa.locator("#terimKaynak")).to_have_value("Night")
+    expect(sayfa.locator("#terimKarsilik")).to_have_value("")
+    sayfa.locator("#terimAynen").check()
+    sayfa.locator("#terimKaydet").click()
+    js_bekle(sayfa, _sozlukte("v.terms.Night === 'Night' && v.terms.Nightingale === 'Nightingale'"))
+
+
+def test_ayri_kayit_dugmesi_yazim_yerine_yeni_kayit_acar(sayfa):
+    _nightingale_paneli(sayfa)
+    sayfa.locator("#terimYazimYeni").fill("Gale")
+    sayfa.locator("#terimYazimAyri").click()
+    expect(sayfa.locator("#terimKaynak")).to_have_value("Gale")
+    sayfa.locator("#terimKarsilik").fill("Fırtına")
+    sayfa.locator("#terimKaydet").click()
+    js_bekle(sayfa, _sozlukte("v.terms.Gale === 'Fırtına' && v.ekler.Nightingale.yazimlar.join() === 'Night'"))
+
+
+def test_ayri_kayit_dugmesi_bagli_yazimi_ana_kayda_yazdirmaz(sayfa):
+    """Bağlı bir yazım (`Night`) panelde ana kayda çözülür; düğme onu yeni kayıt diye
+    açsaydı kaydet ANA kaydın karşılığını değiştirirdi. Önce ayrılması istenir."""
+    _nightingale_paneli(sayfa)
+    sayfa.locator("#terimYazimYeni").fill("night")
+    sayfa.locator("#terimYazimAyri").click()
+    expect(sayfa.locator("#terimEkDurum")).to_contain_text("Ayır")
+    expect(sayfa.locator("#terimKaynak")).to_have_value("Nightingale")
+
+
 def test_kunyede_kosullu_kayit_denetlenmedi_notu(sayfa):
     tohum.kitap(bolum_sayisi=1)
     tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"}, {"Silver Tower": "yalnız yapı adı"})

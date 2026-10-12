@@ -381,8 +381,44 @@ function yazimlariCiz(kaynak, yazimlar) {
     b.textContent = `${y} ×`;
     b.setAttribute("aria-label", `${y} yazımını kaldır`);
     b.addEventListener("click", () => ekIstegi("DELETE", "yazim", kaynak, { yazim: y }));
-    kutu.appendChild(b);
+    // Yazım ana kaydın karşılığıyla çevrilir; farklı bir ad/anlamsa (gerçek vaka:
+    // `Night` -> `Nightingale`) ayrılıp kendi karşılığıyla ayrı kayıt olmalı.
+    const ayir = document.createElement("button");
+    ayir.type = "button";
+    ayir.className = "chip terim-yazim-ayir";
+    ayir.textContent = "Ayır";
+    ayir.setAttribute("aria-label", `${y} yazımını ayrı kayıt yap`);
+    ayir.addEventListener("click", () => yazimiAyir(kaynak, y));
+    const grup = document.createElement("span");
+    grup.className = "terim-yazim-grup";
+    grup.append(b, ayir);
+    kutu.appendChild(grup);
   }
+}
+
+/* Bağlı yazımı ana kayıttan kaldırır, sonra paneli o yazım için YENİ kayıt olarak
+   açar. Sıra önemli: yazım bağlıyken `kayitliAnahtar` onu ana kayda çözer ve kaydet
+   ana kaydın karşılığını değiştirirdi. */
+async function yazimiAyir(kaynak, yazim) {
+  if (!panel) return;
+  const { slug } = panel;
+  if (!(await ekIstegi("DELETE", "yazim", kaynak, { yazim }))) return;
+  await terimPaneliAc({ slug, source: yazim });
+  yaz("terimDurum", `"${yazim}" artık ayrı kayıt: karşılığını yazıp kaydet.`);
+}
+
+/* Giriş satırındaki kelimeyi yazım olarak bağlamadan ayrı kayıt olarak açar. */
+async function ayriKayitAc() {
+  if (!panel || !panel.kayitli) return;
+  const yazim = el("terimYazimYeni").value.trim();
+  if (!yazim) return;
+  const { terms } = gorunenSozluk(panel.slug);
+  const sahibi = kayitliAnahtar(terms, yazim);
+  if (sahibi !== undefined && anahtarla(sahibi) !== anahtarla(yazim)) {
+    yaz("terimEkDurum", `"${yazim}" zaten "${sahibi}" kaydının yazımı: önce o kayıtta “Ayır”a bas.`);
+    return;
+  }
+  await terimPaneliAc({ slug: panel.slug, source: yazim });
 }
 
 function anlamSatiri(a = { target: "", kosul: "", ad_mi: false, etiket: "", ilk_bolum: null }) {
@@ -457,7 +493,7 @@ async function ekIstegi(yontem, tur, kaynak, alanlar) {
     veri = await res.json().catch(() => ({}));
     if (res.status === 409) {
       yaz("terimEkDurum", "Bu terim başka bir cihazda değişti — paneli kapatıp yeniden aç.");
-      return;
+      return false;
     }
     if (!res.ok) {
       const d = veri && veri.detail;
@@ -465,9 +501,9 @@ async function ekIstegi(yontem, tur, kaynak, alanlar) {
     }
   } catch (err) {
     yaz("terimEkDurum", "Kaydedilemedi: " + err.message);
-    return;
+    return false;
   }
-  if (!panel || panel.kayitli !== kaynak) return;
+  if (!panel || panel.kayitli !== kaynak) return false;
   if (veri.kayit) glossRows[veri.kayit.source] = veri.kayit; // yeni çakışma tabanı
   const ek = (glossEkler[kaynak] = glossEkler[kaynak] || { yazimlar: [], anlamlar: [] });
   if (veri.yazimlar) {
@@ -484,9 +520,10 @@ async function ekIstegi(yontem, tur, kaynak, alanlar) {
     yaz("terimEkDurum", `"${veri.silinen}" ayrı kayıttı; silindi ve bu kaydın yazımı oldu.`);
     await fetchGlossary(slug);
     yenidenSuz();
-    return;
+    return true;
   }
   yaz("terimEkDurum", "Sunucuya kaydedildi. Yeni çevrilen bölümlerde geçerli.");
+  return true;
 }
 
 function anlamlariKaydet() {
@@ -887,6 +924,7 @@ export function kur() {
     const yazim = el("terimYazimYeni").value.trim();
     if (panel && panel.kayitli && yazim) ekIstegi("POST", "yazim", panel.kayitli, { yazim });
   });
+  el("terimYazimAyri").addEventListener("click", ayriKayitAc);
   el("terimYazimYeni").addEventListener("keydown", (e) => {
     if (e.key !== "Enter") return;
     e.preventDefault();

@@ -1885,6 +1885,7 @@ dialog.terim-paneli .terim-kart {
   overflow-y: auto;
 }
 .terim-adaylar { display: flex; flex-wrap: wrap; gap: var(--s-sm); }
+.terim-yazim-grup { display: inline-flex; gap: 2px; }
 .terim-aday { text-transform: none; letter-spacing: 0.02em; font-size: 0.82rem; }
 .terim-aday-kayitli { border-color: var(--accent); color: var(--accent); }
 .terim-alan { display: block; }
