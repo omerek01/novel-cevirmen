@@ -162,6 +162,16 @@ def test_yakin_terim_yazim_varyantini_saymaz():
     assert glossary.yakin_terimler("kitap") == []
 
 
+def test_yakin_terim_kisa_ayri_kelimeleri_eslestirmez():
+    """Gerçek vaka (shadow-slave 975, 2026-10-12): otomatik eklenen `Shell -> Kabuk`
+    inceleme listesine `Spell -> Büyü` ile "yakın yazım" diye düştü. Kapı kısa
+    adlarda bu uyarıyı ölçerek susturuyor (`sozluk_kapi.YAKIN_MIN_UZUNLUK`);
+    liste ayrı bir ölçüt kullanınca kapının elediği gürültü listede geri geliyordu."""
+    glossary.set_term("kitap", "Shell", "Kabuk")
+    glossary.set_term("kitap", "Spell", "Büyü")
+    assert glossary.yakin_terimler("kitap") == []
+
+
 def test_yakin_terim_uzak_terimleri_eslestirmez():
     glossary.set_term("kitap", "Nephis", "Nephis")
     glossary.set_term("kitap", "Zero Wing", "Sıfır Kanat")

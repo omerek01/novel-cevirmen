@@ -1357,13 +1357,19 @@ def yakin_terimler(book_slug: str) -> list[tuple[str, str]]:
     Ham "tek karakter farkı" ölçütü KULLANILAMAZ: gerçek sözlükte 21 çift buldu
     ve 14'ü meşrudu — tekil/çoğul (`Evil Beast` / `Evil Beasts`, ki desen zaten
     çoğulu yakalıyor) ve rakam farkı (`Tier 2` / `Tier 3`). Uyaran her şeye
-    uyaran bir kapı görmezden gelinir, o yüzden ikisi de elenir; geriye 376
-    kayıtta 7 uyarı kalıyor ve hepsi insan gözü istiyor (`Orc`/`Ore`,
-    `Yan Ya`/`Yaya`, `Song`/`Seong`).
+    uyaran bir kapı görmezden gelinir, o yüzden ikisi de elenir. Kalanlar insan
+    gözü istiyor (`Orc Empire`/`Ore Empire`, `Yi Jin-Ho`/`Yu Jin-Ho`).
 
     Karşılaştırma `fold_term` üzerinden — yazım varyantı zaten tek terimdir ve
     `merge_terms`/`set_term` onu ayrı satır açtırmaz; buraya düşmemeli.
+
+    Çift ölçütü kapınınkiyle TEK (`sozluk_kapi._tek_harf_yakin`), kısa ad sınırı
+    dahil. Ayrı bir kopya tutulunca kapının ölçerek susturduğu kısa çiftler
+    (`Shell`/`Spell`, `Abel`/`Obel`) inceleme listesinde geri geliyordu
+    (shadow-slave 975, 2026-10-12).
     """
+    from . import sozluk_kapi
+
     satirlar = [(s, fold_term(s)) for s in get_glossary(book_slug)]
     # Her çifti denemek (n²) sunucuda (e2-micro, 855 kayıt) 7 sn sürüyor ve inceleme
     # listesini arayüzün 8 sn'lik sınırının üstüne itiyordu. Tek karakter farklı iki
@@ -1378,13 +1384,8 @@ def yakin_terimler(book_slug: str) -> list[tuple[str, str]]:
     ciftler: list[tuple[str, str]] = []
     for i, j in sorted(adaylar):
         (kaynak_a, fa), (kaynak_b, fb) = satirlar[i], satirlar[j]
-        yer = _fark_yeri(fa, fb)
-        if not yer or _cogul_cifti(fa, fb):
-            continue
-        idx = yer[0]
-        if fa[idx:idx + 1].isdigit() or fb[idx:idx + 1].isdigit():
-            continue  # "Tier 2" / "Tier 3" — meşru ayrı kayıtlar
-        ciftler.append((kaynak_a, kaynak_b))
+        if sozluk_kapi._tek_harf_yakin(fa, fb):
+            ciftler.append((kaynak_a, kaynak_b))
     return ciftler
 
 

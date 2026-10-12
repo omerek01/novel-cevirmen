@@ -105,19 +105,25 @@ def test_yakin_ve_kalip_taramasi_her_cifti_denemekle_ayni_sonucu_verir(monkeypat
     rnd = random.Random(7)
     harf = "aeiokğtdpbçcsr"
     kelimeler = ["".join(rnd.choice(harf) for _ in range(rnd.randint(2, 5))) for _ in range(160)]
-    kaynaklar = list(dict.fromkeys(kelimeler))
+    # Yakın yazım için AYRI liste (aşağıdaki kalıp taraması `kelimeler`i ve `rnd`yi
+    # kullanır). Kısa ad sınırının (`YAKIN_MIN_UZUNLUK`) üstünde de çift olsun:
+    # rastgele uzun kelimeler neredeyse hiç tek harf yakın düşmez, birkaçına tek
+    # harf değişimi ya da eklemesi uygulanır.
+    rnd_y = random.Random(11)
+    uzunlar = ["".join(rnd_y.choice(harf) for _ in range(rnd_y.randint(7, 9))) for _ in range(40)]
+    for k in uzunlar[:20]:
+        i = rnd_y.randrange(len(k))
+        uzunlar.append(k[:i] + rnd_y.choice(harf) + k[i + 1:])
+        uzunlar.append(k[:i] + rnd_y.choice(harf) + k[i:])
+    kaynaklar = list(dict.fromkeys(kelimeler + uzunlar))
 
     def eski_yakin(liste):
         satirlar = [(s, glossary.fold_term(s)) for s in liste]
         out = []
         for i, (a, fa) in enumerate(satirlar):
             for b, fb in satirlar[i + 1:]:
-                yer = glossary._fark_yeri(fa, fb)
-                if not yer or glossary._cogul_cifti(fa, fb):
-                    continue
-                if fa[yer[0]:yer[0] + 1].isdigit() or fb[yer[0]:yer[0] + 1].isdigit():
-                    continue
-                out.append((a, b))
+                if sozluk_kapi._tek_harf_yakin(fa, fb):
+                    out.append((a, b))
         return out
 
     monkeypatch.setattr(glossary, "get_glossary", lambda _slug: {k: k for k in kaynaklar})
