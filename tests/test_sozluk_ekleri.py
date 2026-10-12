@@ -121,6 +121,24 @@ def test_alternatif_yazim_uyum_denetiminde_de_olculur():
     assert "Ore Empire" in ihlal
 
 
+def test_ingilizce_korunan_adin_yazimi_uyum_ihlali_sayilmaz():
+    """Gerçek vaka (shadow-slave 972-975, 2026-10-12): `Night`, `Nightingale ->
+    Nightingale` kaydının alternatif yazımı yapılınca çeviri sözlüğüne
+    `Night -> Nightingale` olarak girdi. `House of Night -> Night Hanedanı` doğru
+    uygulandığı hâlde çevirideki `Night` "Türkçe karşılığı varken İngilizce kaldı"
+    diye işaretlendi. Karşılık zaten İngilizce bir ad — burada kaçan çeviri yok."""
+    glossary.set_term(KITAP, "Nightingale", "Nightingale")
+    glossary.set_term(KITAP, "House of Night", "Night Hanedanı")
+    glossary.yazim_ekle(KITAP, "Nightingale", "Night")
+    ihlal = translate.sozluk_ihlalleri(
+        glossary.ceviri_sozlugu(KITAP),
+        "The House of Night had agreed.",
+        "Night Hanedanı kabul etmişti.",
+        glossary.ceviri_kosullari(KITAP),
+    )
+    assert ihlal == {}
+
+
 def test_yazim_cakismalari_reddedilir():
     glossary.set_term(KITAP, "Orc Empire", "Ork İmparatorluğu")
     glossary.set_term(KITAP, "Ore", "Cevher")

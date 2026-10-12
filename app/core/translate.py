@@ -2171,6 +2171,13 @@ def _denetlenebilir_terimler(
             continue
         if _ingilizce_korunan(source, target):
             continue
+        # İngilizce korunan bir adın alternatif yazımı (`Night` -> `Nightingale`):
+        # karşılık da İngilizce bir ad, kaçan bir TÜRKÇE karşılık yok. Gerçek vaka
+        # (shadow-slave 972-975): `House of Night -> Night Hanedanı` doğru
+        # uygulanmışken çevirideki `Night` sahte ⚠ üretti; onarım da onu
+        # `Nightingale Hanedanı`na çevirmeye kalkabilirdi.
+        if _ingilizce_korunan(target, glossary.get(target) or ""):
+            continue
         if _terim_metinde(source, target, target, tekili_kayitli):
             continue  # karşılık kaynağı içeriyor: ölçülemez, sahte ihlal üretme
         yield source, target
