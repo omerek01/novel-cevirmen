@@ -33,7 +33,10 @@ def test_synthetic_miss_never_reaches_fetch(monkeypatch):
     monkeypatch.setattr(pipeline, "fetch_chapter", fail_fetch)
     with pytest.raises(synthetic.ImportedChapterMissing):
         pipeline.get_or_translate("paste://yok/1", "anahtar")
-    # API katmanı 404 + error_class döndürür.
+    # API katmanı 404 + error_class döndürür. Anahtar AÇIKÇA verilir: uç önce anahtar
+    # kapısına bakar ve `.env`'i olmayan çalışma ağacında (git worktree) 500 dönüyordu.
+    import server
+    monkeypatch.setattr(server, "API_KEY", "anahtar")
     res = _client().get("/api/chapter", params={"url": "paste://yok/1"})
     assert res.status_code == 404
     assert res.json()["detail"]["error_class"] == "ImportedChapterMissing"
@@ -279,6 +282,8 @@ def test_fetch_into_book_links_and_keeps_web_next(monkeypatch):
 
 
 def test_fetch_next_endpoint_validates(monkeypatch):
+    import server
+    monkeypatch.setattr(server, "API_KEY", "anahtar")  # `.env`'siz ağaçta da çalışsın
     library.upsert_book("wk", "WK", "http://s/1", "B1", 1)
     monkeypatch.setattr(pipeline, "fetch_chapter", lambda url, **k: {
         "book_slug": "h", "book_title": "H", "title": "B2", "chapter_no": 5,
