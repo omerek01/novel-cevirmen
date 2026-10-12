@@ -106,3 +106,25 @@ def test_pipeline_onceki_turkce_baglami_da_baska_kitaptan_almaz(monkeypatch):
         return {"translation": "Yeni çeviri.", "source": text, "detected_names": [], "detected_terms": {}, "chunk_count": 1}
     monkeypatch.setattr(pipeline, "translate_chapter", cevir)
     pipeline.get_or_translate(url, "test", refresh=True, advance_position=False)
+
+
+def test_iz_yazilamazsa_basarili_ceviri_dusmez(monkeypatch):
+    """İz yalnız teknik kayıttır. `finally` içinde yazılırken veritabanı kilidi gibi
+    bir hata başarılı çeviriyi de düşürüyordu (inceleme, 2026-10-12)."""
+    import sqlite3
+
+    kur(monkeypatch)
+
+    def uret(factory, models, user, **kw):
+        if kw.get("system") == ceviri_baglam.ANALIZ_TALIMATI:
+            return yanit(veri()), "model"
+        return yanit({"translation": "[[1]] Sunny Kül Köprüsü'nden geçti. Ordu seferine katıldı."}), "model"
+
+    def kilitli(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(translate, "_generate_with_fallback", uret)
+    monkeypatch.setattr(ceviri_izleri, "iz_kaydet", kilitli)
+    r = translate.translate_chapter(KAYNAK, "test", models=("model",),
+                                    book_slug="kitap", bolum_url="test://k/3", bolum_no=3)
+    assert "Kül Köprüsü" in r["translation"]

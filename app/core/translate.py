@@ -10,6 +10,7 @@ sıradaki modele düşülür.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sqlite3
@@ -1271,7 +1272,12 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
         _ROMAN_URETIM.reset(roman_token)
         _CEVIRI_IZ.reset(iz_token)
         if iz is not None:
-            ceviri_izleri.iz_kaydet(iz["id"], bolum_url or "kaynak://" + iz["kaynak_sha256"], iz)
+            # İz yalnız teknik kayıttır: `finally` içindeki bir yazma hatası (ör.
+            # veritabanı kilidi) başarılı çeviriyi ya da asıl hatayı EZMEMELİ.
+            try:
+                ceviri_izleri.iz_kaydet(iz["id"], bolum_url or "kaynak://" + iz["kaynak_sha256"], iz)
+            except (sqlite3.Error, TypeError, ValueError) as exc:
+                logging.getLogger(__name__).warning("çeviri izi yazılamadı: %s", exc)
 
 
 def _translate_chapter_impl(
