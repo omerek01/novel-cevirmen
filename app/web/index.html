@@ -577,12 +577,13 @@
   <!-- Ayarlar: alttan açılan sheet. `readerView` içindeyken yalnız
        okuyucuda erişilebiliyordu, oysa içindeki ayarların hepsi global. -->
   <dialog id="settingsPanel" class="settings-panel" aria-label="Okuma ayarları">
+    <p class="ayar-bolumu">Sayfa</p>
     <div class="setting-row">
       <span>Tema</span>
       <div class="segmented" role="group" aria-label="Tema">
-        <button class="seg" data-theme-opt="light">Açık</button>
-        <button class="seg" data-theme-opt="sepia">Sepya</button>
-        <button class="seg" data-theme-opt="dark">Koyu</button>
+        <button class="seg" data-theme-opt="light"><i class="theme-swatch" aria-hidden="true">Aa</i>Açık</button>
+        <button class="seg" data-theme-opt="sepia"><i class="theme-swatch" aria-hidden="true">Aa</i>Sepya</button>
+        <button class="seg" data-theme-opt="dark"><i class="theme-swatch" aria-hidden="true">Aa</i>Koyu</button>
       </div>
     </div>
     <div class="setting-row">
@@ -620,6 +621,7 @@
         <button class="seg" data-inf="0">Kapalı</button>
       </div>
     </div>
+    <p class="ayar-bolumu">Çeviri modeli</p>
     <div class="setting-row setting-row-dikey">
       <span>Çeviri modeli</span>
       <!-- Seçenekler SUNUCUDAN doldurulur (/api/settings/model): burada sabit bir
@@ -635,6 +637,7 @@
            gözlemi ve zincirin neden aşağı indiği. Kota TÜKETMEZ, yalnız kaydı okur. -->
       <button id="apiDurumAc" class="pill api-durum-ac">API durumu</button>
     </div>
+    <p class="ayar-bolumu">Bu bölüm</p>
     <div class="setting-row">
       <span>Bu bölüm</span>
       <button id="retranslate" class="pill">Yeniden çevir</button>
@@ -644,6 +647,7 @@
       <span>Önceki çeviri</span>
       <button id="arsivGeri" class="pill">Geri dön</button>
     </div>
+    <p class="ayar-bolumu">Bakım</p>
     <div class="setting-row">
       <span>Cloudflare oturumu</span>
       <button id="clearanceRefresh" class="pill">Yenile</button>

@@ -2529,3 +2529,36 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
   min-height: 44px; padding: 0 12px; border: 1px dashed var(--border); border-radius: 999px;
   background: none; font: 400 13.5px var(--sans); color: var(--ink-soft); cursor: pointer;
 }
+
+/* ---------- AYARLAR PANELİ (Okuma Salonu) ---------- */
+.settings-panel { background: var(--surface); border-radius: 22px 22px 0 0; border: 1px solid var(--border); }
+.settings-panel::before {
+  content: ""; display: block; width: 40px; height: 4px; margin: 0 auto 6px; border-radius: 4px; background: var(--border);
+}
+.ayar-bolumu {
+  display: flex; align-items: center; gap: 10px; margin: 22px 0 4px;
+  font-family: var(--caps); font-weight: 700; font-size: 13px; letter-spacing: 0.16em; color: var(--ink-dim);
+}
+.ayar-bolumu::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+.settings-panel .setting-row { border-bottom: 1px solid var(--border); }
+.settings-panel .setting-row > span:first-child { font-family: var(--sans); font-size: 16px; letter-spacing: 0; text-transform: none; color: var(--ink); }
+.segmented { border: 1px solid var(--border); background: var(--surface-2); border-radius: 12px; padding: 3px; }
+.seg { border-radius: 9px; font-family: var(--sans); font-size: 14.5px; letter-spacing: 0; text-transform: none; color: var(--ink-soft); }
+.seg[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgb(var(--shadow-rgb) / 0.25); }
+[data-theme-opt] { display: inline-flex; align-items: center; gap: 6px; }
+.theme-swatch {
+  display: inline-grid; place-items: center; width: 26px; height: 18px; border-radius: 3px;
+  border: 1px solid rgb(0 0 0 / 0.15); font: italic 400 11px/1 var(--book);
+}
+[data-theme-opt="light"] .theme-swatch { background: #fbfaf6; color: #1d1a16; }
+[data-theme-opt="sepia"] .theme-swatch { background: #f2ede2; color: #1d1a16; }
+[data-theme-opt="dark"] .theme-swatch { background: #14110e; color: #ece3d1; }
+/* Alt gezinme: etkin sekmede pirinç gösterge çizgisi. */
+.navtab[aria-current="page"] { color: var(--ink); }
+.navtab[aria-current="page"] .navtab-label { font-weight: 700; }
+.navtab[aria-current="page"]::after {
+  content: ""; display: block; width: 18px; height: 2px; margin: 3px auto 0; border-radius: 2px; background: var(--brass);
+}
+/* Ayarlar ya da terim paneli açıkken alt çubuk hapı panelin üstünde kalmasın. */
+body:has(#settingsPanel[open]) .okuyucu-alt,
+body:has(#terimPaneli[open]) .okuyucu-alt { display: none; }
