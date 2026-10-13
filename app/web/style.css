@@ -2372,3 +2372,61 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 #bookView .book-status-row .seg { min-width: 0; padding-inline: 0.6rem; }
 /* Raf şeridi kenardan kenara uzanır ama sayfayı yatayda büyütmez. */
 #bookView .book-body { overflow-x: clip; }
+
+/* ---------- OKUYUCU (Okuma Salonu, 2026-10-13) ---------- */
+/* Sola yaslı: iki yana yaslama hecelemesiz Türkçede kelime arası boşluk açıyordu. */
+.reader-body p, .reader-body .html-content p { text-align: start; }
+.chapter-sep {
+  font-family: var(--caps); font-weight: 700; font-size: 13.5px;
+  letter-spacing: 0.22em; color: var(--brass); text-transform: none;
+}
+.chapter-title {
+  margin: 0.3em 0 1.1em;
+  font: 400 clamp(28px, 9vw, 40px)/1.05 var(--display);
+  letter-spacing: -0.015em; color: var(--ink);
+}
+/* İlk paragrafta büyük ilk harf (yalnız metin bölümlerinde). */
+.chapter:not(.chapter-html):not(.chapter-manga) .chapter-title + p::first-letter {
+  float: left;
+  margin: 0.06em 0.1em 0 -0.02em;
+  font: 400 4.05em/0.8 var(--display);
+  color: var(--accent);
+}
+
+/* Alt çubuk: kapalı = hap, açık = tek sıra; hap çubuğa dönüşür (soluklaşma yok). */
+.okuyucu-alt {
+  position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 30;
+  transform: translateX(-50%);
+  width: min(352px, calc(100% - 28px)); height: 56px;
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; align-items: center;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 12px 26px -18px rgb(var(--shadow-rgb) / 0.75);
+  overflow: hidden;
+  transition: width 260ms cubic-bezier(0.2, 0, 0, 1), height 260ms cubic-bezier(0.2, 0, 0, 1),
+              border-radius 260ms cubic-bezier(0.2, 0, 0, 1);
+}
+.alt-oge {
+  display: grid; justify-items: center; align-content: center; gap: 1px;
+  height: 46px; min-width: 0; border: 0; border-radius: 12px; background: none; cursor: pointer;
+  font: 400 11.5px/1.1 var(--sans); color: var(--ink-soft);
+}
+.alt-oge > span { font-size: 19px; line-height: 1; }
+.alt-sonraki { background: var(--accent); color: var(--on-accent); font-weight: 700; }
+.alt-kapat { height: 46px; border: 0; background: none; cursor: pointer; color: var(--ink-dim); font-size: 20px; }
+.alt-hap {
+  display: none; align-items: center; gap: 8px;
+  height: 100%; padding: 0 14px 0 8px; border: 0; background: none; cursor: pointer;
+  font-family: var(--caps); font-size: 13.5px; letter-spacing: 0.06em; color: var(--ink-soft); white-space: nowrap;
+}
+.alt-halka { width: 28px; height: 28px; transform: rotate(-90deg); }
+.alt-halka circle { fill: none; stroke-width: 3; }
+.alt-halka .iz { stroke: var(--border); }
+.alt-halka .dolu { stroke: var(--brass); stroke-linecap: round; stroke-dasharray: 0 69.1; }
+.okuyucu-alt[data-hal="kapali"] { width: 136px; height: 44px; border-radius: 999px; padding: 0; grid-template-columns: 1fr; }
+.okuyucu-alt[data-hal="kapali"] > :not(.alt-hap) { display: none; }
+.okuyucu-alt[data-hal="kapali"] .alt-hap { display: inline-flex; }
+/* Metnin sonu çubuğun altında kalmasın. */
+#readerView .reader-body { padding-bottom: 96px; }
+@media (prefers-reduced-motion: reduce) { .okuyucu-alt { transition: none; } }

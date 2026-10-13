@@ -273,6 +273,19 @@
          kaydırmadır. Sonraki bölüm otomatik eklenir, önceki akış başındaki kartla. -->
     <main id="readerBody" class="reader-body" hidden></main>
     <div id="readerError" class="reader-error-card" role="alert" hidden></div>
+    <!-- ALT ÇUBUK (Okuma Salonu): kapalı = küçük hap (ilerleme halkası + kalan süre),
+         açık = tek sıra ince çubuk. Durum mantığı js/alt-cubuk.js (saf, Node testli). -->
+    <nav id="okuyucuAlt" class="okuyucu-alt" data-hal="kapali" aria-label="Bölüm gezinmesi">
+      <button id="altHap" class="alt-hap" type="button" aria-expanded="false" aria-label="Gezinmeyi aç">
+        <svg class="alt-halka" viewBox="0 0 28 28" aria-hidden="true"><circle class="iz" cx="14" cy="14" r="11"/><circle class="dolu" cx="14" cy="14" r="11"/></svg>
+        <span id="altKalan">1 dk</span><span aria-hidden="true">⌃</span>
+      </button>
+      <button id="altOnceki" class="alt-oge" type="button"><span aria-hidden="true">‹</span>Önceki</button>
+      <button id="altBolumler" class="alt-oge" type="button"><span aria-hidden="true">☰</span>Bölümler</button>
+      <button id="altSozluk" class="alt-oge" type="button"><span aria-hidden="true">Aa</span>Sözlük</button>
+      <button id="altSonraki" class="alt-oge alt-sonraki" type="button"><span aria-hidden="true">›</span>Sonraki</button>
+      <button id="altKapat" class="alt-kapat" type="button" aria-label="Gezinmeyi kapat">⌄</button>
+    </nav>
   </section>
 
   <!-- KİTAP EKLE -->

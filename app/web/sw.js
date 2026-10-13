@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v122"; // Okuma Salonu: kitap ekranı
+const SHELL_CACHE = "novellink-shell-v123"; // Okuma Salonu: okuyucu ve alt çubuk
 const DATA_CACHE = "novellink-data";
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 
@@ -31,6 +31,7 @@ const SHELL = [
   // aktarır ve biri indirilemezse uygulama HİÇ başlamaz. Listede olmayan bir
   // modül çevrimdışı açılışta ağdan istenir ve düşer.
   // tests/test_modul_kabugu.py her `js/*.js` dosyasının burada olduğunu tutar.
+  "/js/alt-cubuk.js",
   "/js/api-durum.js",
   "/js/api-durum-yardimci.js",
   "/js/ayarlar.js",

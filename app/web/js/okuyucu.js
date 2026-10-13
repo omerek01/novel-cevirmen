@@ -1,6 +1,7 @@
 /* Okuyucu: sonsuz okuma akışı, bölüm çizimi, künye, prefetch, iki-dilli satır,
    bölümde arama, köken odağı. */
 
+import { kalanDakika, sonrakiHal } from "./alt-cubuk.js";
 import { modelNedeniniBagla } from "./api-durum.js";
 import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { settings } from "./ayarlar.js";
@@ -134,6 +135,35 @@ export function updateProgress() {
   const ratio = currentRatio();
   bar.firstElementChild.style.transform = `scaleX(${ratio})`;
   bar.setAttribute("aria-valuenow", Math.round(ratio * 100));
+  altCubukGuncelle(ratio);
+}
+
+/* ALT ÇUBUK (Okuma Salonu, 2026-10-13): kapalı hap ↔ açık çubuk. Durum geçişleri
+   saf `alt-cubuk.js`'te; burada yalnız DOM'a yazılır. */
+export let altHal = "kapali";
+const HALKA = 2 * Math.PI * 11;
+
+export function altCubukCiz() {
+  const nav = el("okuyucuAlt");
+  if (!nav) return;
+  nav.dataset.hal = altHal;
+  el("altHap").setAttribute("aria-expanded", String(altHal === "acik"));
+}
+
+export function altOlay(olay) {
+  const yeni = sonrakiHal(altHal, olay);
+  if (yeni === altHal) return;
+  altHal = yeni;
+  altCubukCiz();
+}
+
+export function altCubukGuncelle(ratio) {
+  const e = activeEntry();
+  const sozcuk = e && e.paras ? e.paras.join(" ").split(/\s+/).length : 0;
+  const kalan = el("altKalan");
+  if (kalan) kalan.textContent = `${kalanDakika(ratio, sozcuk)} dk`;
+  const dolu = document.querySelector("#okuyucuAlt .dolu");
+  if (dolu) dolu.setAttribute("stroke-dasharray", `${(HALKA * ratio).toFixed(1)} ${HALKA.toFixed(1)}`);
 }
 /* OKUYUCU HUD'u (Stitch "Floating HUD: auto-hides on reader scroll").
    Sonsuz okuma akışında ekranın üstü de metindir; sabit duran çubuk hem alan
@@ -162,6 +192,7 @@ export function hudGuncelle() {
   if (Math.abs(fark) < 10) return;
   // Sayfanın TEPESİNDE daima görünür: kullanıcı oraya geri dönmek için gelir,
   // orada gizli bir çubuk aramaz.
+  if (fark > 0) altOlay("asagi-kaydir"); // okumaya dönüş: açık alt çubuk kapanır
   if (y < 80) bar.classList.remove("hud-gizli");
   else bar.classList.toggle("hud-gizli", fark > 0);
   hudSonY = y;
@@ -584,6 +615,15 @@ export function buildChapterEntry(url, data) {
         ? `— Bölüm ${entry.no} —`
         : `— ${entry.title || "Bölüm"} —`;
     art.appendChild(sep);
+    // Okuma Salonu: ayracın altında bölümün kendi adı (Caslon); "Chapter 381:" öneki atılır.
+    const ad = !isHtml && entry.title ? entry.title.replace(/^chapter\s*\d+\s*[:\-–—.]\s*/i, "") : "";
+    if (ad) {
+      const baslik = document.createElement("h2");
+      baslik.className = "chapter-title";
+      baslik.lang = "en";
+      baslik.textContent = ad;
+      art.appendChild(baslik);
+    }
   }
   entry.el = art; // renderParagraphs/renderHtml entry.el'e yazar → sep'ten ÖNCE atanmalı
   if (data.content_type === "translating") {
@@ -608,7 +648,7 @@ export function buildChapterEntry(url, data) {
 export function renderTranslatingPlaceholder(entry, done, total) {
   const art = entry.el;
   [...art.children].forEach((n) => {
-    if (!n.classList.contains("chapter-sep")) n.remove();
+    if (!n.classList.contains("chapter-sep") && !n.classList.contains("chapter-title")) n.remove();
   });
   const div = document.createElement("div");
   div.className = "manga-translating";
@@ -650,7 +690,7 @@ export async function pollTranslating(entry) {
 export function renderHtmlContent(entry) {
   const art = entry.el;
   [...art.children].forEach((n) => {
-    if (!n.classList.contains("chapter-sep")) n.remove();
+    if (!n.classList.contains("chapter-sep") && !n.classList.contains("chapter-title")) n.remove();
   });
   const div = document.createElement("div");
   div.className = "html-content";
@@ -664,7 +704,7 @@ export function renderHtmlContent(entry) {
 export function renderParagraphs(entry, query) {
   const art = entry.el || document.createElement("article");
   [...art.children].forEach((n) => {
-    if (!n.classList.contains("chapter-sep")) n.remove();
+    if (!n.classList.contains("chapter-sep") && !n.classList.contains("chapter-title")) n.remove();
   });
   const q = (query || "").trim();
   entry.paras.forEach((para, i) => {
@@ -1553,6 +1593,33 @@ export function cycleFind(dir) {
    çağırınca kurulur — döngüsel içe aktarmalarda yarım değerlendirilmiş bir
    modülün fonksiyonuna erken dokunulmasın. */
 export function kur() {
+  el("altHap").addEventListener("click", () => altOlay("hap"));
+  el("altKapat").addEventListener("click", () => altOlay("kapat"));
+  const altGit = (hedef) => {
+    if (!hedef) return;
+    altHal = "kapali"; // her bölüm kapalı başlar
+    altCubukCiz();
+    navigate(hedef);
+  };
+  el("altOnceki").addEventListener("click", () => {
+    const e = activeEntry();
+    altGit(e && e.prevUrl ? { view: "reader", url: e.prevUrl } : null);
+  });
+  el("altSonraki").addEventListener("click", () => {
+    const e = activeEntry();
+    const url = e ? pickNextTarget(e) : null;
+    altGit(url ? { view: "reader", url } : null);
+  });
+  el("altBolumler").addEventListener("click", () => {
+    const e = activeEntry();
+    const slug = (e && e.bookSlug) || durum.currentBookSlug;
+    altGit(slug ? { view: "book", slug } : null);
+  });
+  el("altSozluk").addEventListener("click", () => {
+    const e = activeEntry();
+    const slug = (e && e.bookSlug) || durum.currentBookSlug;
+    altGit(slug ? { view: "glossary", slug } : null);
+  });
   // Ayarlar → "Bu bölüm — Yeniden çevir": AKTİF bölümü yerinde yeniden çevirir
   // (akışı sıfırlamaz — dikişler korunur).
   el("retranslate").addEventListener("click", () => {
