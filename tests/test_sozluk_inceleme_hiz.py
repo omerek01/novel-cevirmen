@@ -153,3 +153,83 @@ def test_yakin_ve_kalip_taramasi_her_cifti_denemekle_ayni_sonucu_verir(monkeypat
         else:
             beklenen.update(ka + kb)
     assert beklenen and bulunan == beklenen
+
+
+def _sayan_ihlal(monkeypatch, bekle=None):
+    """`ihlal_supheleri` yerine çağrı sayısını neden metnine yazan sahte hesap."""
+    import time
+
+    sayac = {"n": 0}
+
+    def sahte(book_slug, kaynaklar=None, tam=False):
+        sayac["n"] += 1
+        n = sayac["n"]
+        if bekle is not None:
+            bekle.wait(10)
+        else:
+            time.sleep(0.3)  # eşzamanlı isteklerin hesabın içinde çakışması için
+        return {"Orc Empire": {"tur": sozluk_kapi.IHLAL_SUPHESI, "aciklama": f"hesap {n}", "ilgili": []}}
+
+    monkeypatch.setattr(sozluk_kapi, "ihlal_supheleri", sahte)
+    glossary._AGIR_ONBELLEK.clear()
+    return sayac
+
+
+def _ihlal_notu(liste):
+    kayit = next(x for x in liste if x["source"] == "Orc Empire")
+    return [n["aciklama"] for n in kayit["nedenler"] if n["tur"] == sozluk_kapi.IHLAL_SUPHESI]
+
+
+def test_ayni_anda_gelen_istekler_tek_hesap_yapar(monkeypatch):
+    # Ölçüldü (sunucu, 2026-10-13): eşzamanlı 3 istek ayrı ayrı hesaplayıp 251 sn sürdü.
+    import threading
+
+    glossary.set_term(KITAP, "Orc Empire", "Ork İmparatorluğu")
+    sayac = _sayan_ihlal(monkeypatch)
+    sonuclar = []
+    isler = [threading.Thread(target=lambda: sonuclar.append(glossary.inceleme_listesi(KITAP)))
+             for _ in range(3)]
+    for t in isler:
+        t.start()
+    for t in isler:
+        t.join()
+    assert sayac["n"] == 1
+    assert [_ihlal_notu(x) for x in sonuclar] == [["hesap 1"]] * 3
+
+
+def test_arayuz_eski_sonucu_beklemeden_alir_tazesi_arka_planda_hesaplanir(monkeypatch):
+    import threading
+    import time
+
+    glossary.set_term(KITAP, "Orc Empire", "Ork İmparatorluğu")
+    serbest = threading.Event()
+    serbest.set()
+    sayac = _sayan_ihlal(monkeypatch, bekle=serbest)
+    liste, guncelleniyor = glossary.inceleme_durumu(KITAP)  # saklı sonuç yok: hesaplanır
+    assert (_ihlal_notu(liste), guncelleniyor) == (["hesap 1"], False)
+
+    serbest.clear()  # arka plan hesabı bitmesin
+    # Elle düzenlenen kayıt onaylı sayılıp listeden düşer; hesabı yeni kayıt eskitir.
+    glossary.set_term(KITAP, "Yeni Kayit", "Yeni Kayıt")
+    baslangic = time.perf_counter()
+    liste, guncelleniyor = glossary.inceleme_durumu(KITAP)
+    assert time.perf_counter() - baslangic < 2
+    assert (_ihlal_notu(liste), guncelleniyor) == (["hesap 1"], True)
+    glossary.inceleme_durumu(KITAP)  # ikinci istek ikinci bir arka plan işi açmaz
+    serbest.set()
+    son = time.perf_counter() + 10
+    while time.perf_counter() < son:
+        liste, guncelleniyor = glossary.inceleme_durumu(KITAP)
+        if not guncelleniyor:
+            break
+        time.sleep(0.05)
+    assert (_ihlal_notu(liste), guncelleniyor) == (["hesap 2"], False)
+    assert sayac["n"] == 2
+
+
+def test_inceleme_ucu_guncelleniyor_bilgisini_doner():
+    glossary.set_term(KITAP, "Orc Empire", "Ork İmparatorluğu")
+    glossary._AGIR_ONBELLEK.clear()  # saklı sonuç yoksa uç hesabı bekler: taze döner
+    r = TestClient(server.app).get(f"/api/book/{KITAP}/glossary/review")
+    assert r.status_code == 200, r.text
+    assert r.json()["guncelleniyor"] is False

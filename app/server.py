@@ -916,9 +916,13 @@ def glossary_uyari(slug: str, response: Response) -> dict:
 
 @app.get("/api/book/{slug}/glossary/review")
 def glossary_review(slug: str) -> dict:
-    """İnceleme listesi (nedenleriyle) + reddedilen adaylar."""
+    """İnceleme listesi (nedenleriyle) + reddedilen adaylar.
+
+    Beklemez: ağır parçalar eskiyse saklı sonuçla döner, `guncelleniyor` True olur ve
+    tazesi arka planda hesaplanır; arayüz listeyi kısa aralıkla yeniden ister."""
     canonical = library.resolve_slug(slug)
-    return {"liste": glossary.inceleme_listesi(canonical), "red": glossary.red_listesi(canonical)}
+    liste, guncelleniyor = glossary.inceleme_durumu(canonical)
+    return {"liste": liste, "red": glossary.red_listesi(canonical), "guncelleniyor": guncelleniyor}
 
 
 @app.post("/api/book/{slug}/glossary/review")

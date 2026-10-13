@@ -7,9 +7,11 @@ chapters.db ile aynı dosyada ayrı bir tabloda tutulur.
 from __future__ import annotations
 
 import json
+import logging
 import os
 import re
 import sqlite3
+import threading
 import time
 import uuid
 from collections import defaultdict
@@ -2264,6 +2266,21 @@ def reddi_kaldir(book_slug: str, source: str) -> bool:
 # saklanır: silme varlık bağlarını da sildiği için yalnız (ucuz) grafik parçası yenilenir.
 _AGIR_ONBELLEK: dict[tuple[str, str], tuple[frozenset, tuple, dict]] = {}
 
+# Kitap başına TEK hesap (ölçüldü, sunucuda canlı DB kopyası 2026-10-13, 822 kayıt):
+# kayıt ekleme/karşılık değiştirme hesabı baştan başlatıyordu (9 sn; e2-micro'nun
+# işlemci payı bitince 59 sn) ve aynı anda gelen 2-3 istek her biri AYRI hesap
+# yapıyordu (157-251 sn). Kilit hesabı teke indirir; bekleyen istek bittiğinde
+# önbelleği yeniden yoklar. Arayüz ucu (`bayat_kabul`) hiç beklemez: saklı sonuç
+# eskiyse onu süzerek döner, ağır kısım arka planda TEK iş olarak tazelenir.
+_HESAP_KILITLERI: dict[str, threading.Lock] = {}
+_ARKA_HESAPLAR: set[str] = set()
+_KAYIT_KILIDI = threading.Lock()
+
+
+def _hesap_kilidi(book_slug: str) -> threading.Lock:
+    with _KAYIT_KILIDI:
+        return _HESAP_KILITLERI.setdefault(book_slug, threading.Lock())
+
 
 def _sozluk_ozeti(satir_listesi: list[dict]) -> frozenset:
     return frozenset(
@@ -2281,16 +2298,32 @@ def _imza_sorgusu(book_slug: str, sql: str) -> tuple | None:
         conn.close()
 
 
-def _onbellekli(book_slug: str, parca: str, ozet: frozenset, imza, kaynaklar: set[str], hesapla) -> dict:
-    saklanan = _AGIR_ONBELLEK.get((book_slug, parca))
-    if saklanan and saklanan[1] == imza and ozet <= saklanan[0]:
-        return {k: v for k, v in saklanan[2].items() if k in kaynaklar}
-    sonuc = hesapla()
-    _AGIR_ONBELLEK[(book_slug, parca)] = (ozet, imza, sonuc)
-    return sonuc
+def _taze_mi(saklanan, ozet: frozenset, imza) -> bool:
+    return bool(saklanan) and saklanan[1] == imza and ozet <= saklanan[0]
 
 
-def _agir_nedenler(book_slug: str, satir_listesi: list[dict], kaynaklar: set[str]) -> tuple[dict, dict]:
+def _onbellekli(
+    book_slug: str, parca: str, ozet: frozenset, imza, kaynaklar: set[str], hesapla,
+    bayat_kabul: bool = False,
+) -> tuple[dict, bool]:
+    """(sonuç, taze mi). `bayat_kabul`: saklı sonuç eskiyse hesaplamadan onu döndür."""
+    anahtar = (book_slug, parca)
+    saklanan = _AGIR_ONBELLEK.get(anahtar)
+    taze = _taze_mi(saklanan, ozet, imza)
+    if not taze and not (saklanan and bayat_kabul):
+        with _hesap_kilidi(book_slug):
+            saklanan = _AGIR_ONBELLEK.get(anahtar)  # beklerken başkası hesaplamış olabilir
+            if not _taze_mi(saklanan, ozet, imza):
+                saklanan = (ozet, imza, hesapla())
+                _AGIR_ONBELLEK[anahtar] = saklanan
+        taze = True
+    return {k: v for k, v in saklanan[2].items() if k in kaynaklar}, taze
+
+
+def _agir_nedenler(
+    book_slug: str, satir_listesi: list[dict], kaynaklar: set[str], bayat_kabul: bool = False
+) -> tuple[dict, dict, bool]:
+    """(ihlaller, grafik nedenleri, ikisi de taze mi)."""
     from . import sozluk_kapi, varlik_grafigi
 
     def grafik_hesapla():
@@ -2301,19 +2334,39 @@ def _agir_nedenler(book_slug: str, satir_listesi: list[dict], kaynaklar: set[str
             return {}
 
     ozet = _sozluk_ozeti(satir_listesi)
-    ihlaller = _onbellekli(
+    ihlaller, ihlal_taze = _onbellekli(
         book_slug, "ihlal", ozet,
         _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(created_at), "
                       "SUM(LENGTH(COALESCE(glossary_leaks, ''))) FROM chapters WHERE book_slug = ?"),
-        kaynaklar, lambda: sozluk_kapi.ihlal_supheleri(book_slug, kaynaklar),
+        kaynaklar, lambda: sozluk_kapi.ihlal_supheleri(book_slug, kaynaklar), bayat_kabul,
     )
-    grafik = _onbellekli(
+    grafik, grafik_taze = _onbellekli(
         book_slug, "grafik", ozet,
         _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at), MAX(created_at) "
                       "FROM varlik_bag WHERE book_slug = ?"),
-        kaynaklar, grafik_hesapla,
+        kaynaklar, grafik_hesapla, bayat_kabul,
     )
-    return ihlaller, grafik
+    return ihlaller, grafik, ihlal_taze and grafik_taze
+
+
+def _arka_planda_tazele(book_slug: str) -> None:
+    """Ağır parçaları arka planda hesapla; kitap başına aynı anda en çok bir iş."""
+    with _KAYIT_KILIDI:
+        if book_slug in _ARKA_HESAPLAR:
+            return
+        _ARKA_HESAPLAR.add(book_slug)
+
+    def calis():
+        try:
+            satirlar = get_glossary_rows(book_slug)
+            _agir_nedenler(book_slug, satirlar, {r["source"] for r in satirlar})
+        except Exception:  # noqa: BLE001 — arka plan işi sunucuyu düşürmez; sonraki istek yeniden dener
+            logging.getLogger(__name__).exception("inceleme listesi arka planda hesaplanamadı: %s", book_slug)
+        finally:
+            with _KAYIT_KILIDI:
+                _ARKA_HESAPLAR.discard(book_slug)
+
+    threading.Thread(target=calis, name=f"sozluk-inceleme-{book_slug}", daemon=True).start()
 
 
 def sozluklu_kitaplar() -> list[str]:
@@ -2326,7 +2379,16 @@ def sozluklu_kitaplar() -> list[str]:
 
 
 def inceleme_listesi(book_slug: str) -> list[dict]:
-    """İncelenecek kayıtlar, NEDENLERİYLE. Onaylanmış kayıt listeye girmez.
+    """Güncel inceleme listesi; ağır parçalar eskiyse hesaplanmasını BEKLER."""
+    return inceleme_durumu(book_slug, bayat_kabul=False)[0]
+
+
+def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict], bool]:
+    """(liste, güncelleniyor). İncelenecek kayıtlar, NEDENLERİYLE. Onaylanmış kayıt listeye girmez.
+
+    `bayat_kabul` (arayüz ucu): ağır parçaların saklı sonucu eskiyse beklemeden onunla
+    döner ve `güncelleniyor=True` der; tazesi arka planda hesaplanır. Ucuz nedenler
+    (yeni ekleme, yakın yazım, çakışma, aile) her zaman günceldir.
 
     Nedenler: yeni otomatik ekleme · tek harf yakın yazım (`yakin_terimler`) · aynı
     karşılığa giden farklı kaynaklar (`karsilik_cakismalari`) · terim ailesinde yazım
@@ -2372,7 +2434,9 @@ def inceleme_listesi(book_slug: str) -> list[dict]:
             ekle(kaynak, sozluk_kapi.POLITIKA, sorun)
     for kaynak, n in sozluk_kapi.kalip_tutarsizliklari(satir_listesi).items():
         ekle(kaynak, n["tur"], n["aciklama"], n["ilgili"])
-    ihlaller, grafik = _agir_nedenler(book_slug, satir_listesi, set(satirlar))
+    ihlaller, grafik, taze = _agir_nedenler(book_slug, satir_listesi, set(satirlar), bayat_kabul)
+    if not taze:
+        _arka_planda_tazele(book_slug)
     for kaynak, n in ihlaller.items():
         ekle(kaynak, n["tur"], n["aciklama"], (), bolumler=n.get("bolumler"))
     # VARLIK GRAFİĞİ kuralları (sınıf sözcüğü karışması, aynı kişinin adları).
@@ -2409,4 +2473,4 @@ def inceleme_listesi(book_slug: str) -> list[dict]:
     }
     liste = [{**satirlar[k], "nedenler": n} for k, n in nedenler.items()]
     liste.sort(key=lambda x: (min(oncelik.get(n["tur"], 3) for n in x["nedenler"]), -(x.get("created_at") or 0)))
-    return liste
+    return liste, not taze
