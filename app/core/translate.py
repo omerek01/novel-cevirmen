@@ -34,6 +34,7 @@ from google.genai import types
 from . import api_durum, kullanim
 from . import settings as _ayarlar
 from .glossary import fold_term
+from .ceviri_dili import ROMAN_DILI
 
 # Çeviri modeli zinciri — TEK MOTOR: GEMINI (2026-09-02, kullanıcı kararı).
 #
@@ -1019,7 +1020,7 @@ LAKAP_KURALI = (
 SYSTEM_INSTRUCTION = (
     "Sen profesyonel bir İngilizce'den Türkçe'ye web roman çevirmenisin.\n"
     "Kurallar:\n"
-    "- Akıcı, doğal, edebi Türkçe üret. Birebir değil, anlamı koru.\n"
+    "- Akıcı, doğal Türkçe üret. Birebir söz dizimi değil, kaynak anlamı koru.\n"
     # Ölçülen arıza (2026-09-05, shadow-slave önbelleği): hizalama TUTTUĞU hâlde
     # tek tek paragraflar İngilizce dönüyordu — #179/#181/#188 tam, #58/#177/#194
     # cümle başındaki bağlaç ya da yardımcı fiil kalıntısı. Prompt paragraf
@@ -1178,7 +1179,7 @@ SYSTEM_INSTRUCTION = (
     "birleşimini (Awakened Terror gibi) yeni bir özel ad olarak önerme; gerçek "
     "özel adları ise bütün olarak koru. "
     "Böyle bir ad yoksa boş bırak."
-)
+) + ROMAN_DILI
 
 # Paragraf hizalama işaretçisi: [[1]], [[ 2 ]] gibi. Çeviride korunur → her Türkçe
 # paragrafı kaynak İngilizce paragrafıyla eşler (sayı tutmasa bile hizalama bozulmaz).
@@ -1531,8 +1532,10 @@ def _translate_chapter_impl(
     # çeviri kokusunu ayrı bir turda giderir, ardından kalite katmanı kaynağa karşı
     # denetler. Tur çeviriyi düşürmez; yeni sözlük ihlali/İngilizce kalıntı getiren
     # paragraf özgün kalır. Ölçüm ve gerekçe: `core/ceviri_cilala.py`.
+    cilalama_oncesi = None
     if os.getenv("CEVIRI_CILALA", "0") == "1" and tr_paras and aligned:
         from . import ceviri_cilala
+        cilalama_oncesi = list(tr_paras)
         def cilala_uret(user, system, asama):
             with api_durum.baglam(asama=asama):
                 return _izli_uret(client_factory, models, user, system=system,
@@ -1590,6 +1593,7 @@ def _translate_chapter_impl(
                     {k: v for k, v in (kosullar or {}).items() if k in ilgili},
                     kalite_uret, kabul_kontrolu,
                     iz=iz.setdefault("kalite_deneyi", {}) if iz is not None else None,
+                    onceki_tr=cilalama_oncesi,
                 )
             except ceviri_kalite.KaliteHatasi as exc:
                 kalite_metrik = denetlenemedi(str(exc))

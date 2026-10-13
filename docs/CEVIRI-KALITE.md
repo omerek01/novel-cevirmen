@@ -4,6 +4,24 @@ Yeni metin çevirileri, mevcut kalıntı/sözlük/çift anlam kontrollerinden so
 önbelleğe yazılmadan önce İngilizce kaynakla birlikte denetlenir. Okuma,
 prefetch, toplu ve yeniden çeviri aynı `translate_chapter` yolunu kullanır.
 
+2026-10-14: çeviri, cilalama, kalite denetimi ve onarım, `core/ceviri_dili.py`
+içindeki ortak güncel Türkçe ölçütünü kullanır. Sıradan konuşmayı kitabi
+karşılıkla ağırlaştırmak somut üslup kusurudur; bilinçli resmî kaynak sesi,
+özel ad ve dünya terimleri korunur. Cilalama yalnız somut kusuru en küçük
+değişiklikle onarmayı ister. Bu talimat kusursuz düzenleme garantisi değildir.
+
+Cilalama varsa kalite denetimi değişen paragraflarda `onceki_ceviri` alanını
+da görür. Her onarım doğrulamasına önceki kabul edilmiş metin verilir. Önceki
+metin doğru varsayılmaz: kaynak üstün dayanak olmaya devam eder. Yeni model
+çağrısı eklenmedi; aynı paketlere karşılaştırma verisi eklenir.
+
+Eksiltme bulgusunun `onceki_ceviri_alintisi` kanıtı önceki metinde birebir
+bulunuyor ve adayda artık bulunmuyorsa, mevcut yakın alıntı değişmemiş olsa
+bile kesin bulgu adayı reddeder. Böylece silinen bir ayrıntı, yakınındaki
+korunan sözcük nedeniyle eski hata sanılarak kabul edilmez. Bu ek kanıt
+olmayan bulgu mevcut değişiklik denetimini kullanır; modelin eksik içeriği
+doğru tanıması ve kanıtı vermesi yine gereklidir.
+
 - `CEVIRI_KALITE=1` varsayılandır. `0` acil çıkış olarak yeni katmanı kapatır.
 - Denetim seçilmiş model zincirini kullanır; ücretsiz seçim ücretli modele
   geçirilmez. Denetim, onarım ve doğrulama API kayıtlarında ayrı aşamalardır.

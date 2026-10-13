@@ -112,8 +112,8 @@ def _cevap(veri):
                            candidates=[SimpleNamespace(finish_reason="STOP")])
 
 
-def _akis(monkeypatch, bayrak, ad_sil=False):
-    monkeypatch.setenv("CEVIRI_KALITE", "0")
+def _akis(monkeypatch, bayrak, ad_sil=False, kalite_acik=False):
+    monkeypatch.setenv("CEVIRI_KALITE", "1" if kalite_acik else "0")
     if bayrak is None:
         monkeypatch.delenv("CEVIRI_CILALA", raising=False)
     else:
@@ -124,6 +124,8 @@ def _akis(monkeypatch, bayrak, ad_sil=False):
     def uret(*args, **kwargs):
         asama = translate.api_durum.mevcut_baglam().get("asama") or "ceviri"
         asamalar.append(asama)
+        if asama == "kalite_denetimi":
+            return _cevap({"denetlenen": [0], "hatalar": []}), "gemini-3.6-flash"
         if asama == "cilalama":
             metin = "Taş kıyıya sessizce çıktı." if ad_sil else "Sunny taş kıyıya sessizce çıktı."
             return _cevap({"paragraflar": [{"n": 0, "tr": metin}]}), "gemini-3.6-flash"
@@ -151,3 +153,19 @@ def test_yeni_bulunan_ad_da_cilalamada_korunur(monkeypatch):
     sonuc, asamalar = _akis(monkeypatch, "1", ad_sil=True)
     assert asamalar.count("cilalama") == 1
     assert sonuc["translation"] == "Sunny sessizce taş kıyıya çıktı."
+
+
+def test_ceviri_akisi_cilalama_oncesini_kaliteye_tasir(monkeypatch):
+    from core import ceviri_kalite
+    asil = ceviri_kalite.denetle_ve_onar
+    gorulen = []
+
+    def kaydet(tr, *args, **kwargs):
+        gorulen.append((list(tr), kwargs.get("onceki_tr")))
+        return asil(tr, *args, **kwargs)
+
+    monkeypatch.setattr(ceviri_kalite, "denetle_ve_onar", kaydet)
+    sonuc, asamalar = _akis(monkeypatch, "1", kalite_acik=True)
+    assert gorulen == [(["Sunny taş kıyıya sessizce çıktı."], ["Sunny sessizce taş kıyıya çıktı."])]
+    assert asamalar.count("kalite_denetimi") == 1
+    assert sonuc["translation"] == gorulen[0][0][0]

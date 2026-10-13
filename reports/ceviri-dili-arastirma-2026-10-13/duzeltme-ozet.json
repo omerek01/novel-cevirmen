@@ -1,0 +1,79 @@
+{
+  "tarih_turkiye": "2026-10-14",
+  "tam_bolumler": [
+    {
+      "kitap": "shadow-slave",
+      "bolum": 983,
+      "paragraf": 36,
+      "kalite": "denetlendi",
+      "suphe": 0,
+      "onarilan": [],
+      "cagri": 3,
+      "hepsi_STOP": true,
+      "saniye": 98.5,
+      "kaynak_sha256": "aff5283671d82f34149906b4d4fdb1114a6a689f52770e082a3f4db1232950fc",
+      "ceviri_sha256": "dcfb135c8663d3794eaa670091d4c1f5825cd78116426b292d5982a18b470031",
+      "sozluk_sha256": "ad6e5dee81789e14ca2b744bdb7683a2336342e5b6862a70bd4cec8619bc4f61",
+      "istem_sistem_sha256": {
+        "ceviri": "dbaca71f4c7b3b21aaef41e5e72f252a800b88e924fc3d95d0198443a4ff2bff",
+        "cilalama": "59983205cfde457f2b2241adf8dd7b956e4078acacec77360500b71738fe88df",
+        "kalite_denetimi": "cffe863fbde8f59b1116bfc621709d4f9259712b79196e4d0bd30dbf9b917a83"
+      }
+    },
+    {
+      "kitap": "shadow-slave",
+      "bolum": 984,
+      "paragraf": 41,
+      "kalite": "denetlendi",
+      "suphe": 0,
+      "onarilan": [
+        6
+      ],
+      "cagri": 5,
+      "hepsi_STOP": true,
+      "saniye": 116.0,
+      "kaynak_sha256": "0bc101921c88cfa4262c6548bfed4bb438a53426926956bd3356363b9d081e18",
+      "ceviri_sha256": "501aabd4cf3296e36992a9eed39604e41a2997bbe481c487e09a3304e5cb7242",
+      "sozluk_sha256": "ad6e5dee81789e14ca2b744bdb7683a2336342e5b6862a70bd4cec8619bc4f61",
+      "istem_sistem_sha256": {
+        "ceviri": "dbaca71f4c7b3b21aaef41e5e72f252a800b88e924fc3d95d0198443a4ff2bff",
+        "cilalama": "59983205cfde457f2b2241adf8dd7b956e4078acacec77360500b71738fe88df",
+        "kalite_denetimi": "cffe863fbde8f59b1116bfc621709d4f9259712b79196e4d0bd30dbf9b917a83",
+        "kalite_onarimi": "5e59d85ee02e520b6e931f36cbc2896a365f51dfc131fd418b8890ec7ce9b91d",
+        "kalite_dogrulama": "cffe863fbde8f59b1116bfc621709d4f9259712b79196e4d0bd30dbf9b917a83"
+      }
+    },
+    {
+      "kitap": "reincarnation-of-the-strongest-sword-god",
+      "bolum": 1880,
+      "paragraf": 53,
+      "kalite": "denetlendi",
+      "suphe": 0,
+      "onarilan": [],
+      "cagri": 3,
+      "hepsi_STOP": true,
+      "saniye": 156.6,
+      "kaynak_sha256": "c9013ea2649e735009deae1552ed39604c804d2f05c6587dc20ede39a6b05002",
+      "ceviri_sha256": "d9c6b81ead9688c897f9140fb517dffb6405c091c91293a6db1b4bf9b4396ab6",
+      "sozluk_sha256": "9194fd81537238a1dacdbd702fb70bf36a8b8e500ff12b4ab5c494ffa1c9061b",
+      "istem_sistem_sha256": {
+        "ceviri": "dbaca71f4c7b3b21aaef41e5e72f252a800b88e924fc3d95d0198443a4ff2bff",
+        "cilalama": "59983205cfde457f2b2241adf8dd7b956e4078acacec77360500b71738fe88df",
+        "kalite_denetimi": "cffe863fbde8f59b1116bfc621709d4f9259712b79196e4d0bd30dbf9b917a83"
+      }
+    }
+  ],
+  "testler": {
+    "cevrimdisi_gecen": 1190,
+    "atlanan": 1,
+    "tarayici_ilk_gecen": 98,
+    "tarayici_ilk_kalan": 1,
+    "dar_ekran_tekrar_gecen": 3,
+    "hedefli_ve_js_gecen": 56
+  },
+  "canli_yazma_deneyde": false,
+  "insan_altin_veri": false,
+  "sozcuk_ornegi_regresyondan_alindi": true,
+  "model": "vertex/gemini-3.8-flash",
+  "daimi_ek_cagri": 0
+}

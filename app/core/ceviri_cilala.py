@@ -3,7 +3,7 @@
 Neden ayrı tur: 2026-10-13 araştırması (Lost in Literalism, ACL 2025; Iterative
 Translation Refinement, EAMT 2024) hedef dilde ayrı bir "cilalama" geçişinin çeviri
 kokusunu azalttığını, aynı kuralları çeviri istemine eklemenin azaltmadığını gösterdi.
-Ölçüm (`scripts/cilalama_kiyas.py`, 12 Shadow Slave bölümü, kör 2.5 Pro hakem; cilalı +
+Önceki talimatın ölçümü (`scripts/cilalama_kiyas.py`, 12 Shadow Slave bölümü, kör 2.5 Pro hakem; cilalı +
 kalite katmanı : canlı): akıcılık 41-13 (p<0,001), anlam 37-26, bölüm akışı 5-0.
 
 Güvenlik: tur ÇEVİRİYİ ASLA DÜŞÜRMEZ. Model hatası/biçimsiz yanıt → çeviri olduğu gibi;
@@ -14,18 +14,24 @@ karşı denetler (anlam kayması onarılır).
 2026-10-13 devralma denetimi: STOP dışındaki yanıt uygulanmaz. Aynen korunan adın
 paragraftaki geçiş sayısı azalırsa o paragraf özgün kalır; yeni bulunan adlar da
 korumaya girer. Türkçe karşılıkların koşulları/ekleri sayım kuralıyla tahmin edilmez.
+
+2026-10-14: ortak güncel Türkçe dil ölçütü ve en küçük kusur onarımı. Önceki
+akıcılık puanları bu yeni talimatın ölçümü değildir. Cilalama öncesi metin sonraki
+kalite denetimine taşınır; kaynakla birlikte yeni anlam kaybı ayrıca aranır.
 """
 from __future__ import annotations
 
 import json
 
-# 3. sürüm talimat (ölçülen hâli; değiştirirsen yeniden ölç).
+from .ceviri_dili import ROMAN_DILI
+
+# 4. sürüm talimat; gerçek model ölçümü reports/ceviri-dili-arastirma-2026-10-13/.
 TALIMAT = """Sen deneyimli bir Türkçe roman editörüsün. Sana İngilizce bir web roman
 bölümünün paragrafları ("en") ve her paragrafın Türkçe çevirisi ("tr") veriliyor. Görevin
 çeviriyi CİLALAMAK: metni, Türkçe yazılmış bir romandan çıkmış gibi doğal kılmak. Anlam ve
 bilgi BİREBİR korunur.
 
-DÜZELT (çeviri kokan her yeri düzelt; doğal olan cümleye dokunma):
+DÜZELT (yalnız somut kusuru en küçük değişiklikle onar; doğal cümleyi aynen bırak):
 - İngilizce söz dizimini izleyen cümleler: Türkçenin doğal sırasıyla yeniden kur.
 - Ekten anlaşılan gereksiz özne ve iyelik zamirleri (o, onlar, onun). Zamiri ASLA bir kişi
   adıyla değiştirme; kim olduğu belirsizleşecekse zamiri bırak.
@@ -55,7 +61,7 @@ Bitirmeden önce değiştirdiğin her cümleyi İngilizcesiyle karşılaştır: 
 hepsi duruyor mu, kaynakta olmayan bir şey girdi mi? Bir değişiklik anlamı zayıflatıyorsa o
 cümlede özgün çeviriyi bırak.
 
-Yalnız JSON: {"paragraflar":[{"n":0,"tr":"..."}]}"""
+Yalnız JSON: {"paragraflar":[{"n":0,"tr":"..."}]}""" + ROMAN_DILI
 
 # Cilalı paragraf özgünün bu oranları dışına çıkarsa içerik atlanmış ya da eklenmiş sayılır.
 MIN_ORAN, MAX_ORAN = 0.6, 1.6

@@ -3,6 +3,9 @@
 14 Ekim 2026, Türkiye saati. Çalışma 13 Ekim UTC'de başladı.
 Kod dayanağı: `roman-baglam`, `12612d25782f7376a18092ff22e11771817c6e5c`.
 
+Bu dosya ilk araştırmanın tarihsel sonucudur. Kullanıcının sonraki düzeltme ve
+canlıya alma talebiyle yapılan uygulama ve ölçüm: [DUZELTME.md](DUZELTME.md).
+
 ## Sonuç ve önerilen yol
 
 Sorun iki katmanda: cilalama, anlaşılır bir ifadeyi daha ağır bir sözcüğe çevirebiliyor;

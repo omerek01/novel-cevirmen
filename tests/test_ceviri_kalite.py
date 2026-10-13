@@ -134,6 +134,63 @@ def test_onarim_sonrasi_denetim_ve_komsunun_korunmasi():
     assert len(cagrilar[1][0]["hedefler"]) == 1
 
 
+def test_cilalama_oncesi_metin_yalniz_degisen_hedefte_denetlenir():
+    q = kalite()
+    en = ["The brave hunter arrived.", "Mira waited."]
+    once = ["Cesur avcı geldi.", "Mira bekledi."]
+    tr = ["Avcı geldi.", once[1]]
+    uret = asamali(kalite_denetimi=[temiz(2)])
+    q.denetle_ve_onar(tr, en, {}, {}, uret, onceki_tr=once)
+    hedefler = uret.cagrilar[0][1]["hedefler"]
+    assert hedefler[0]["onceki_ceviri"] == once[0]
+    assert "onceki_ceviri" not in hedefler[1]
+    assert once == ["Cesur avcı geldi.", "Mira bekledi."]
+
+
+def test_yanlis_hizali_onceki_ceviri_modele_gonderilmez():
+    q = kalite(); uret = asamali(kalite_denetimi=[temiz(2)])
+    with pytest.raises(q.KaliteHatasi):
+        q.denetle_ve_onar(["A", "B"], ["a", "b"], {}, {}, uret, onceki_tr=["A"])
+    assert uret.cagrilar == []
+
+
+def test_onarim_dogrulamasi_bir_onceki_adayi_gorur():
+    q = kalite()
+    uret = asamali(kalite_denetimi=[{"denetlenen": [0], "hatalar": [hata()]}],
+                   kalite_onarimi=[{"duzeltmeler": [{"paragraf": 0, "ceviri": "Ucubenin altında kıpırdandı."}]}],
+                   kalite_dogrulama=[temiz()])
+    tr = ["Ucubin altında kıpırdandı."]
+    q.denetle_ve_onar(tr, ["He shifted beneath the abomination."], {}, {}, uret)
+    hedef = uret.cagrilar[-1][1]["hedefler"][0]
+    assert hedef["onceki_ceviri"] == "Ucubin altında kıpırdandı."
+    assert hedef["ceviri"] == "Ucubenin altında kıpırdandı."
+
+
+def test_yeni_eksiltme_degismeyen_yakin_alinti_yuzunden_kabul_edilmez():
+    q = kalite()
+    en = ["The brave hunter immediately reached the shore and met his old friends waiting there."]
+    eski = "Cesur avcı hemen kıyıya geldi. Orada kendisini bekleyen eski arkadaşlarıyla karşılaştı."
+    aday = "Cesur avcı kıyıya ulaştı. Orada kendisini bekleyen eski arkadaşlarıyla karşılaştı."
+    ilk = {"paragraf": 0, "tur": "uslup", "kaynak": "reached the shore", "ceviri": "kıyıya geldi",
+           "aciklama": "Cümle kuruluşu kusuru.", "guven": .9}
+    eksik = {"paragraf": 0, "tur": "anlam", "kaynak": "immediately", "ceviri": "avcı",
+             "onceki_ceviri_alintisi": "hemen", "aciklama": "Onarım hemen anlamını sildi.", "guven": .99}
+    uret = asamali(kalite_denetimi=[{"denetlenen": [0], "hatalar": [ilk]}],
+                   kalite_onarimi=[{"duzeltmeler": [{"paragraf": 0, "ceviri": aday}]}],
+                   kalite_dogrulama=[{"denetlenen": [0], "hatalar": [eksik]}])
+    tr = [eski]; iz = {}
+    q.denetle_ve_onar(tr, en, {}, {}, uret, iz=iz)
+    assert tr == [eski]
+    assert iz["onarim_kaniti"][0]["kabul"] is False
+    assert iz["onarim_kaniti"][0]["neden"] == "onarım yeni bir hata getirdi"
+
+
+def test_kayip_kaniti_onceki_metinde_yoksa_kabul_kararini_degistirmez():
+    q = kalite()
+    assert not q._yeni_kayip({"onceki_ceviri_alintisi": "olmayan"}, "Avcı hemen geldi.", "Avcı geldi.")
+    assert not q._yeni_kayip({"onceki_ceviri_alintisi": "avcı"}, "avcı hemen geldi.", "avcı geldi.")
+
+
 def test_anlam_ve_akicilik_ayri_raporlanir_onarim_kaniti_saklanir():
     q = kalite(); x = hata(); iz = {}
     yanitlar = [cevap({"denetlenen": [0], "hatalar": [x]}),
