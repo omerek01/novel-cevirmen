@@ -8,7 +8,7 @@
    Değişken ADLARI eski sistemle aynı tutuldu (bileşenler bunları okuyor):
    `--accent` artık birincil eylem yeşili; pirinç (`--brass`) etiket ve ilerleme,
    mühür kırmızısı (`--stamp`) kaldığın yer ve inceleme. Oranlar zemine karşı
-   ölçüldü (WCAG); `--ink-dim` kasıtlı soluk, tek başına bilgi taşımaz.
+   ölçüldü (WCAG); küçük bilgi metni de en az 4.5:1 kontrast taşır.
    --------------------------------------------------------------------------- */
 :root {
   --bg: #fbfaf6;
@@ -16,7 +16,7 @@
   --surface-2: #f5f1e7;
   --ink: #1d1a16;      /* 16.60:1 */
   --ink-soft: #575045; /* 7.62:1 */
-  --ink-dim: #8a8173;  /* 3.68:1 kasıtlı soluk */
+  --ink-dim: #746b5e;  /* zemin 5.02:1; en koyu yüzeyde 4.65:1 */
   --line: #1d1a16;
   --border: #e3dacb;
   --accent: #2f5141;   /* 8.47:1 */
@@ -75,7 +75,7 @@
   --surface-2: #241e19;
   --ink: #ece3d1;      /* 14.76:1 */
   --ink-soft: #b9ac96; /* 8.42:1 */
-  --ink-dim: #857a6c;  /* 4.48:1 */
+  --ink-dim: #a49784;  /* zemin 6.57:1; en açık yüzeyde 5.76:1 */
   --line: #ece3d1;
   --border: #3a3129;
   --accent: #8cbaa0;   /* 8.64:1 */
@@ -102,7 +102,7 @@
   --surface-2: #ece5d6;
   --ink: #1d1a16;      /* 14.85:1 */
   --ink-soft: #575045; /* 6.82:1 */
-  --ink-dim: #857a6c;  /* 3.60:1 kasıtlı soluk */
+  --ink-dim: #706555;  /* zemin 4.88:1; en koyu yüzeyde 4.55:1 */
   --line: #1d1a16;
   --border: #d6cbb8;
   --accent: #2f5141;   /* 7.58:1 */
@@ -2579,6 +2579,9 @@ body:has(#terimPaneli[open]) .okuyucu-alt { display: none; }
 .chapter-title { animation: cizgiden-yuksel 320ms cubic-bezier(0.2, 0, 0, 1) both; }
 #shelfFilters .chip, .seg { transition: background-color 200ms, color 200ms; }
 .read-progress > span { transition: transform 150ms linear; }
+/* Kapak tek paylaşılan nesnedir; bütün ekranın varsayılan çapraz solması yok. */
+::view-transition-group(*) { animation-duration: 260ms; animation-timing-function: cubic-bezier(0.2, 0, 0, 1); }
+::view-transition-old(*), ::view-transition-new(*) { animation: none; mix-blend-mode: normal; }
 @media (prefers-reduced-motion: reduce) {
   .shelf .spine, .resume-fiche, .chapter-title { animation: none; }
   #shelfFilters .chip, .seg, .read-progress > span, .spine .spine-art { transition: none; }

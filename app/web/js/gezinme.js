@@ -51,15 +51,14 @@ export function senkronlaSekme(name) {
    (popstate) o kayda karşılık gelen görünüm yeniden çizilir — böylece geri tuşu
    uygulamayı kapatmak yerine bir önceki ekrana döner. Kök (kütüphane) görünümünde
    geri tuşu uygulamadan çıkar (beklenen davranış). */
-export function applyNavState(state) {
+export function applyNavState(state, kitapGorununce) {
   // Okuyucudan başka görünüme geçerken son konumu ANINDA yaz (uygulama-içi geri'de
   // pagehide/visibilitychange tetiklenmez; throttle'lı son POST kaçarsa kütüphane/
   // liste bir bölüm geride kalırdı).
   if (!views.reader.hidden && state && state.view !== "reader") persistScroll();
   switch (state && state.view) {
     case "book":
-      openBook(state.slug);
-      break;
+      return openBook(state.slug, kitapGorununce);
     case "glossary":
       openGlossary(state.slug, state.filtre);
       break;
@@ -96,7 +95,41 @@ export function applyNavState(state) {
 export function navigate(state, replace = false) {
   if (replace) history.replaceState(state, "");
   else history.pushState(state, "");
-  applyNavState(state);
+  // Yalnız görünür raftaki seçili kapak paylaşılır. Azaltılmış harekette ve
+  // API'siz tarayıcıda gezinme aynı yoldan, beklemeden çalışır.
+  const spine = state?.view === "book" && !views.library.hidden
+    ? [...document.querySelectorAll("#shelves .spine[data-slug]")]
+        .find((node) => node.dataset.slug === state.slug)
+    : null;
+  const kapak = spine?.querySelector(".spine-art");
+  if (!kapak || typeof document.startViewTransition !== "function" ||
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    return applyNavState(state);
+  }
+  const ad = CSS.escape(`kapak-${state.slug}`);
+  const hedef = el("bookHeroArt");
+  const temizle = () => {
+    kapak.style.removeProperty("view-transition-name");
+    hedef.style.removeProperty("view-transition-name");
+  };
+  kapak.style.viewTransitionName = ad;
+  let basladi = false;
+  try {
+    const gecis = document.startViewTransition(async () => {
+      basladi = true;
+      // Yalnız künye/kapak beklenir; yavaş bölüm listesi animasyonu dondurmaz.
+      await new Promise((resolve, reject) => {
+        Promise.resolve(applyNavState(state, resolve)).catch(reject);
+      });
+      hedef.style.viewTransitionName = ad;
+    });
+    // Görünmeyen sekme veya atlanan animasyon normaldir; gezinmeyi düşürmez.
+    gecis.ready.catch(() => {});
+    return gecis.finished.then(temizle, temizle);
+  } catch {
+    temizle();
+    if (!basladi) return applyNavState(state);
+  }
 }
 
 /* Olay kayıtları: modül yüklenirken DEĞİL, giriş noktası (`app.js`) sırayla

@@ -71,6 +71,7 @@ export function updateActiveChapter() {
 // Aktif bölüm değişince: reader-bar başlığı, "eski" yardımcı global'ler, konum kaydı
 // (replaceState — geçmişe YENİ kayıt eklemez) ve son-okuma/okuma-günlüğü güncellenir.
 export function setActiveChapter(e) {
+  if (activeUrl !== e.url) altOlay("kapat");
   activeUrl = e.url;
   durum.currentUrl = e.url;
   durum.currentBookSlug = e.bookSlug || durum.currentBookSlug;
@@ -475,6 +476,7 @@ export function fetchChapterData(url, refresh, track = true, refetch = false) {
 }
 
 export function resetStream() {
+  altOlay("kapat"); // yeniden açılan bölüm önceki çubuğun hâlini devralmaz
   stream = [];
   activeUrl = null;
   streamBusy = false;
@@ -1599,7 +1601,7 @@ export function kur() {
     if (!hedef) return;
     altHal = "kapali"; // her bölüm kapalı başlar
     altCubukCiz();
-    navigate(hedef);
+    navigate(hedef, hedef.view === "reader");
   };
   el("altOnceki").addEventListener("click", () => {
     const e = activeEntry();

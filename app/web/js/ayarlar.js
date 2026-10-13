@@ -43,7 +43,7 @@ export function applySettings() {
     "--reading-font",
     settings.font === "sans"
       ? 'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif'
-      : 'Georgia, "Times New Roman", serif'
+      : 'Literata, Georgia, "Times New Roman", serif'
   );
   root.style.setProperty(
     "--reading-line-height",

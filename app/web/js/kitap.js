@@ -18,7 +18,7 @@ import { el, escapeHtml, isSyntheticSlug, markSegment } from "./temel.js";
 export let bulkPollTimer = null;
 
 /* ---------- kitap (bölüm listesi) ---------- */
-export async function openBook(slug) {
+export async function openBook(slug, gorununce) {
   durum.currentBookSlug = slug;
   const books = await fetchBooks();
   durum.currentBook = (books || []).find((b) => b.slug === slug) || null;
@@ -52,6 +52,7 @@ export async function openBook(slug) {
   list.appendChild(loading);
   showView("book");
   window.scrollTo(0, 0);
+  gorununce?.(); // kapak geçişi bölüm listesinin ağ yanıtını beklemez
   discoverBulkJob(slug);
 
   try {

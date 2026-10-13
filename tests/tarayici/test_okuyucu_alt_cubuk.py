@@ -46,6 +46,30 @@ def test_sonraki_bolume_gider(sayfa):
     expect(sayfa.locator("#okuyucuAlt")).to_have_attribute("data-hal", "kapali")
 
 
+def test_alt_sonraki_gecmisi_buyutmez_geri_kitaba_doner(sayfa):
+    _okuyucu(sayfa)
+    once = sayfa.evaluate("history.length")
+    sayfa.locator("#altHap").click()
+    sayfa.locator("#altSonraki").click()
+    expect(sayfa.locator("#readerChapter")).to_have_text("Chapter 2")
+    assert sayfa.evaluate("history.length") == once
+    sayfa.locator("#backBtn").click()
+    expect(sayfa.locator("#bookView")).to_be_visible()
+
+
+def test_ust_geri_sonrasi_acilan_bolum_kapali_baslar(sayfa):
+    _okuyucu(sayfa, bolum_sayisi=3)
+    # Kısa ilk bölümü yeniden aç: başka bölümün kaydırması kusuru gizlemesin.
+    sayfa.locator("#altHap").click()
+    expect(sayfa.locator("#okuyucuAlt")).to_have_attribute("data-hal", "acik")
+    sayfa.locator("#backBtn").click()
+    expect(sayfa.locator("#bookView")).to_be_visible()
+    sayfa.locator("#chapterList .chapter-row").last.click()
+    expect(sayfa.locator("#readerChapter")).to_have_text("Chapter 1")
+    expect(sayfa.locator("#okuyucuAlt")).to_have_attribute("data-hal", "kapali")
+    expect(sayfa.locator("#altHap")).to_have_attribute("aria-expanded", "false")
+
+
 def test_bolum_basligi_aramadan_sonra_da_kalir(sayfa):
     # Paragraf çizimi makaleyi temizler; başlık korunmazsa ilk aramada kaybolur.
     _okuyucu(sayfa)
@@ -54,3 +78,9 @@ def test_bolum_basligi_aramadan_sonra_da_kalir(sayfa):
     sayfa.locator("#findBtn").click()
     sayfa.locator("#findInput").fill("a")
     expect(ilk.locator(".chapter-title")).to_have_count(1)
+
+
+def test_varsayilan_okuma_yazi_tipi_literata(sayfa):
+    _okuyucu(sayfa)
+    aile = sayfa.locator("#readerBody p[data-idx]").first.evaluate("e => getComputedStyle(e).fontFamily")
+    assert aile.split(",")[0].strip(' "') == "Literata"
