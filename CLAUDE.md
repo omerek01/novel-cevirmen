@@ -1062,7 +1062,7 @@ içe aktarılan bağlamaya atama yapılamaz) · `konum` · `ayarlar` · `gezinme
 sözlük ekranı) · `sozluk-kuyruk` (SAF, Node testli) · `sozluk-secim` (okurken seçim) ·
 `sozluk-inceleme` · `terim-paneli` · `terim-yardimci` (SAF) · `bildirim` · `diyalog`
 (ortak `<dialog>`) · `api-durum` (API durum paneli + künye "neden bu model?") ·
-`api-durum-yardimci` (SAF). **Yeni modül = `sw.js` SHELL listesine ekle** (`tests/test_modul_kabugu.py`
+`api-durum-yardimci` (SAF) · `alt-cubuk` (SAF, okuyucu alt çubuğunun hap/çubuk durumu). Görünüm: Okuma Salonu tasarımı (`docs/superpowers/specs/2026-10-13-okuma-salonu-design.md`); yazı tipleri `fonts/` altında yerel (Libre Caslon Display/Text, Alegreya Sans + SC, Literata). **Yeni modül = `sw.js` SHELL listesine ekle** (`tests/test_modul_kabugu.py`
 tutar): listede olmayan modül çevrimdışı açılışta indirilemez ve uygulama HİÇ başlamaz.
 **`scripts/start_chrome_cdp.py`** — gerçek Chrome'u `:9222` debug
 portu + ayrı profil (`cache/.chrome-cdp`) ile açar. **`faz0/`** — eski kavram-kanıtı
