@@ -174,3 +174,34 @@ def test_kunyede_kosullu_kayit_denetlenmedi_notu(sayfa):
     kunye = sayfa.locator("#readerBody .kunye").first
     kunye.locator("summary").click()
     expect(kunye.locator(".kunye-denetlenmedi")).to_contain_text("Silver Tower")
+
+
+def test_inceleme_listesi_guncellenirken_kendiliginden_tazelenir(sayfa):
+    # Sunucu ağır kısmı arka planda tazelerken saklı listeyle `guncelleniyor` döner;
+    # arayüz bunu gösterip listeyi yeniden istemeli (2026-10-13).
+    from urllib.parse import urlparse
+
+    from core import glossary
+
+    tohum.kitap()
+    glossary.set_term(SLUG, "Orc Empire", "Ork İmparatorluğu")
+    glossary.set_term(SLUG, "Ore Empire", "Ork İmparatorluğu")
+    istekler = []
+
+    def _inceleme(route):
+        istek = route.request
+        if istek.method != "GET" or urlparse(istek.url).path != f"/api/book/{SLUG}/glossary/review":
+            route.continue_()
+            return
+        istekler.append(istek.url)
+        yanit = route.fetch()
+        govde = yanit.json()
+        govde["guncelleniyor"] = len(istekler) == 1
+        route.fulfill(response=yanit, json=govde)
+
+    sayfa.route("**/api/book/**", _inceleme)
+    _sozluge_git(sayfa)
+    sayi = sayfa.locator("#glossReviewSayi")
+    expect(sayi).to_have_text("İNCELENECEKLER (2) · güncelleniyor…")
+    expect(sayi).to_have_text("İNCELENECEKLER (2)", timeout=10000)
+    assert len(istekler) == 2

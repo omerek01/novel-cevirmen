@@ -58,6 +58,14 @@ function dugme(metin, fn, sinif = "pill") {
 // önbellekten gelir). 8 sn'lik sınır listeyi telefonda hiç açtırmıyordu ve her
 // karardan sonraki tazeleme de düşüp eski listeyi bırakıyordu.
 const INCELEME_ZAMAN_ASIMI = 60000;
+// Sunucu beklemeden saklı (eski) sonucu döndürüp ağır kısmı arka planda tazeleyebilir
+// (`guncelleniyor`); o sürece liste yeniden istenir: 1, 2, 4 sn, sonra 5 sn arayla
+// (küçük kitapta tazeleme anında biter; e2-micro'da büyük kitapta 9-60 sn sürüyor).
+// Üst sınır, arka plan işi hata verirse sonsuz yoklamayı keser.
+const GUNCELLEME_ARALIK = 5000;
+const GUNCELLEME_UST_SINIR = 60;
+let guncellemeZamanlayici = null;
+let guncellemeDenemesi = 0;
 
 // Panelden (Düzenle) kaydedilen ya da silinen kayıt incelenmiş sayılır: kartı hemen
 // düşür, listeyi kısa bir gecikmeyle sunucudan tazele. Panel kuyruk üzerinden yazar ve
@@ -96,6 +104,7 @@ function sayaciAzalt() {
 export async function incelemeyiYukle(slug) {
   const kutu = el("glossReviewBox");
   if (!kutu) return;
+  clearTimeout(guncellemeZamanlayici);
   kuyrugaBaglan();
   const sayi = el("glossReviewSayi");
   if (kutu.hidden || !sayi.textContent.includes("(")) {
@@ -131,6 +140,21 @@ export async function incelemeyiYukle(slug) {
   if (slug !== durum.currentBookSlug) return;
   incelenecekler = new Set(veri.liste.map((x) => anahtarla(x.source)));
   ciz(slug, veri);
+  guncellemeyiIzle(slug, veri.guncelleniyor === true);
+}
+
+function guncellemeyiIzle(slug, guncelleniyor) {
+  if (!guncelleniyor || guncellemeDenemesi >= GUNCELLEME_UST_SINIR) {
+    guncellemeDenemesi = 0;
+    return;
+  }
+  guncellemeDenemesi += 1;
+  el("glossReviewSayi").textContent += " · güncelleniyor…";
+  const bekleme = Math.min(GUNCELLEME_ARALIK, 1000 * 2 ** (guncellemeDenemesi - 1));
+  guncellemeZamanlayici = setTimeout(() => {
+    if (slug === durum.currentBookSlug && !views.glossary.hidden) incelemeyiYukle(slug);
+    else guncellemeDenemesi = 0;
+  }, bekleme);
 }
 
 function ciz(slug, { liste, red }) {
