@@ -21,7 +21,8 @@
       <div class="wordmark">Novel<span class="wm-accent">Link</span></div>
       <button id="libThemeToggle" class="ghost-btn" aria-label="Tema değiştir">☾</button>
     </header>
-    <h2 class="section-label">KÜTÜP&shy;HANE</h2>
+    <h1 class="lib-title">Kütüphane</h1>
+    <p id="libSubtitle" class="lib-subtitle" hidden></p>
 
     <!-- Devam fişi: raftan çekilmiş ayraç — kimlik → fiş → raf (T2, D-B11v2).
          İçerik JS'te kurulur; hep SON OKUNAN kitabı hedefler (D-B10/12v2). -->
@@ -29,10 +30,10 @@
 
     <div id="shelfFilters" class="shelf-filters" role="group"
          aria-label="Duruma göre filtrele" hidden>
-      <button class="chip" data-filter="all" aria-pressed="true">TÜMÜ</button>
-      <button class="chip" data-filter="okunuyor" aria-pressed="false">OKUNUYOR</button>
-      <button class="chip" data-filter="beklemede" aria-pressed="false">BEKLEMEDE</button>
-      <button class="chip" data-filter="bitti" aria-pressed="false">BİTTİ</button>
+      <button class="chip" data-filter="all" aria-pressed="true">Tümü<sup></sup></button>
+      <button class="chip" data-filter="okunuyor" aria-pressed="false">Okunuyor<sup></sup></button>
+      <button class="chip" data-filter="beklemede" aria-pressed="false">Beklemede<sup></sup></button>
+      <button class="chip" data-filter="bitti" aria-pressed="false">Bitti<sup></sup></button>
     </div>
 
     <p id="libLoading" class="empty">Yükleniyor…</p>
@@ -52,7 +53,6 @@
          kendi raf tahtasında. Tek tür varsa başlık gizlenir (gereksiz gürültü yok). -->
     <div id="shelves" class="shelves"></div>
     <!-- D-B3/D-B11v2: istatistik fişte değil, rafın altında sessiz tek satır. -->
-    <p id="libStats" class="lib-stats" hidden></p>
     <!-- Otomatik cevrimdisi tarama: toplu ceviriyle SUNUCUDA hazirlanan bolumler
          "indir" dugmesine basilmadan telefona iner. Sessiz satir, modal degil —
          arka plan isi kullanicinin onunu kesmemeli. -->

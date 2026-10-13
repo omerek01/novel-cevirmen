@@ -200,11 +200,10 @@ body { background: var(--lamp), var(--bg); background-attachment: fixed; }
 
 /* Masaüstü hover (dokunmatikte :active yeterli; hover cihazlarda net geri bildirim). */
 @media (hover: hover) {
-  .spine:hover {
-    transform: translateY(-5px); /* kitabı raftan çeker gibi */
-    box-shadow: 3px 10px 22px rgba(0, 0, 0, 0.42);
-  }
-  .spine-add:hover { background: color-mix(in oklab, var(--accent) 9%, transparent); }
+  /* Yalnız kapak kalkar (kitabı raftan çeker gibi); ad ve tahta yerinde kalır. */
+  .spine .spine-art { transition: transform 160ms ease-out; }
+  .spine:hover .spine-art { transform: translateY(-4px); }
+  .spine-add:hover .spine-add-art { background: color-mix(in oklab, var(--accent) 7%, transparent); }
   .resume-fiche { transition: transform 140ms ease; }
   .resume-fiche:hover { transform: translateY(-2px); }
   .chip:hover { border-color: var(--accent); }
@@ -222,13 +221,46 @@ body { background: var(--lamp), var(--bg); background-attachment: fixed; }
 }
 
 /* ---------- Kütüphane ---------- */
+/* ---------- KÜTÜPHANE (Okuma Salonu, 2026-10-13) ----------
+   Kullanıcının kitaplık rafı düzeni ve iri "Kütüphane" başlığı korunur; raf
+   tahtası kapakların ALTINDA durur, adlar tahtanın altındaki yaftadadır. */
 .lib-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1rem 0.8rem;
+  padding: 1rem 1.25rem 0.2rem;
   padding-top: max(1rem, env(safe-area-inset-top));
-  border-bottom: 3px solid var(--line);
+}
+.lib-header .wordmark {
+  font-family: var(--caps);
+  font-weight: 700;
+  font-size: 15px;
+  letter-spacing: 0.14em;
+  color: var(--ink-soft);
+}
+.lib-header .wm-accent { color: var(--brass); }
+.lib-header .ghost-btn {
+  width: 44px; height: 44px;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--surface);
+}
+.lib-title {
+  margin: 0.3rem 1.25rem 0;
+  font: 400 clamp(64px, 21vw, 92px)/0.92 var(--display);
+  letter-spacing: -0.025em;
+  color: var(--ink);
+}
+.lib-subtitle {
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px 1.25rem 0;
+  font-family: var(--caps); font-weight: 500;
+  font-size: 15px; letter-spacing: 0.08em;
+  color: var(--brass);
+}
+.lib-subtitle::after {
+  content: ""; flex: 1; height: 1px; opacity: 0.55;
+  background: linear-gradient(90deg, var(--brass) 0 40%, transparent);
 }
 
 .empty {
@@ -238,296 +270,267 @@ body { background: var(--lamp), var(--bg); background-attachment: fixed; }
   line-height: 1.6;
 }
 
-/* Tür-bazlı raflar: her tür (Noveller/Mangalar/Kitaplar) kendi tahtasında. */
-.shelves { padding: 0.5rem 0 3rem; }
-.shelf-section + .shelf-section { margin-top: 1.6rem; }
-
-.shelf-heading {
-  display: flex;
-  align-items: baseline;
-  gap: 0.55rem;
-  padding: 0 1rem 0.1rem;
-}
-.shelf-heading-name {
-  font-weight: 800;
-  font-size: 0.86rem;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--ink);
-}
-.shelf-count {
-  font-weight: 800;
-  font-size: 0.68rem;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-  padding: 0.08rem 0.42rem;
-  border: 1.5px solid color-mix(in oklab, var(--ink) 22%, transparent);
-  border-radius: 999px;
-  line-height: 1.4;
-}
-
-.shelf-wrap { padding: 0 1rem; }
-.shelf {
-  display: flex;
-  /* Poster kartlari UST hizali: sirt metaforunda dip hizasi (flex-end) dogruydu
-     — kitaplar rafa oturuyordu — ama kart yuksekligi artik basligin 1 mi 2 mi
-     satir oldugu ile degisiyor ve dipten hizalayinca kapaklar birbirine gore
-     asagi yukari kayiyordu. */
-  align-items: flex-start;
-  gap: 12px;
-  overflow-x: auto;
-  padding: 1.2rem 0.2rem 0;
-  scrollbar-width: thin;
-  scroll-snap-type: x proximity; /* sırtlar kaydırınca hizalanır (dokunmatik his) */
-  overscroll-behavior-x: contain;
-}
-.spine { scroll-snap-align: start; }
-.shelf-board {
-  height: 15px;
-  /* Ahşap raf tahtası: sıcak koyu tonda ince eğim + üstte hafif ışık (metafor, slop değil). */
-  background:
-    linear-gradient(180deg,
-      color-mix(in oklab, var(--shelf), #ffffff 10%) 0 2px,
-      var(--shelf) 2px 100%);
-  border-radius: 2px;
-  box-shadow: 0 9px 20px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-/* KAPAK KARTI (Stitch "Novel Card"). Sirt metaforu 2:3 postere donustu, ama
-   kart BOYUTU kapaktan BAGIMSIZ sabittir: kitaplarin ancak bir kismi kapak
-   veriyor (kaynak sitesi kapanmis ya da og:image'i olmayanlar) ve boyutu
-   kapaga gore degistirmek rafi disli gosterirdi. Kapaksiz kitap ayni kutuda
-   renkli zemin + monogramla durur. */
-.spine {
-  position: relative;
-  flex: 0 0 auto;
-  width: 112px;
-  background: transparent;
-  color: var(--ink);
-  border: 0;
-  padding: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-  gap: var(--s-sm);
-  text-align: left;
-  cursor: pointer;
-  transition: transform 140ms ease;
-}
-
-.spine-art {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 2 / 3;
-  background: var(--spine, #555);
-  border-radius: var(--r-md);
-  /* Stitch: koyu zeminde kapak kenari kaybolmasin diye 1px ic hat. */
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.32);
-}
-.spine-cover {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-/* Kapaksiz kitabin monogrami: kitap adinin ilk iki bas harfi. Zemin `spineColor`
-   ile AA kontrasta ulasacak kadar koyulastirildigi icin metin hep beyaz. */
-.spine-mono {
-  font-family: var(--reading-font);
-  font-weight: 600;
-  font-size: 2.3rem;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.92);
-  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-.spine:active { transform: translateY(2px); }
-
-/* Baslik artik kapagin ALTINDA ve YATAY. Dikey sirt yazisi (writing-mode +
-   180 donus) kapak gorseliyle birlikte okunamaz hale geliyordu; poster
-   duzeninde ad kapagin disina cikar. */
-.spine-title {
-  font-weight: 600;
-  font-size: 0.78rem;
-  line-height: 1.25;
-  color: var(--ink);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-}
-/* Yerli alttan-yukarı yazım destekleyen tarayıcılarda (Chrome 130+/Firefox)
-   döndürme hilesine gerek yok: sideways-lr ilk harfi ALTTAN başlatır, sıralar
-   soldan sağa ilerler — transform kaynaklı hizalama sürprizleri biter. */
-@supports (writing-mode: sideways-lr) {
-  /* `.spine-title` BILEREK cikarildi: kitap adi artik kapagin altinda YATAY
-     duruyor. Burada kalinca poster duzenindeki basligi dikey ceviriyor ve
-     kartlar birbirinden farkli yukseklige ulasip raf disli goruniyordu. */
-  .spine-addlabel {
-    writing-mode: sideways-lr;
-    transform: none;
-    text-orientation: initial;
-  }
-}
-.spine-tag {
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--ink-soft);
-}
-/* Is rozeti kapagin SAG UST kosesinde (Stitch "progress badge"): kapak
-   gorseli varken ortada duran rozet resmi ortuyordu. */
-.spine-job {
-  position: absolute;
-  top: 6px;
-  right: 6px;
-  left: auto;
-  transform: none;
-  pointer-events: none;
-  max-width: 92px;
-  padding: 0.2rem 0.4rem;
-  border-radius: var(--r-full);
-  background: var(--accent);
-  color: var(--on-accent);
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.03em;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.spine-job[data-state="error"] { background: rgba(126, 30, 30, 0.82); }
-
-.spine-add {
-  /* Kart olcusune uyar: `.spine` artik yuksekligini `.spine-art`tan aliyor ve
-     ekle sirtinda art yok — kendi orani verilmezse dumduz cokerdi. */
-  aspect-ratio: 2 / 3;
-  align-items: center;
-  justify-content: center;
-  gap: var(--s-xs);
-  background: transparent;
-  color: var(--accent);
-  border: 2px dashed var(--accent);
-  border-radius: var(--r-md);
-  box-shadow: none;
-}
-.spine-plus { font-size: 2.2rem; font-weight: 800; line-height: 1; }
-.spine-addlabel {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  text-orientation: sideways;
-  direction: ltr;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.68rem;
-}
-
-/* ---------- Devam fişi (D-B11v2: raftan çekilmiş ayraç; T2: raf ÜSTÜNDE) ----------
-   spineColor zemini + sırt tipografisi; gölge/gradyan/ikon YOK (slop karalistesi). */
+/* Ödünç kartı: devam fişi. Çizgili kart, cebinden çıkmış kapak, tarih damgası. */
 .resume-fiche {
-  display: block;
-  width: calc(100% - 2rem);
-  margin: 0.2rem 1rem 0.9rem;
-  padding: 0.7rem 0.9rem 0.6rem;
+  position: relative;
+  display: grid;
+  align-content: start;
+  width: calc(100% - 2.5rem);
+  margin: 26px 1.25rem 0;
+  padding: 16px 18px 16px 22px;
+  min-height: 210px;
   text-align: left;
-  background: var(--spine, #555);
-  color: #fff; /* sırtlarla aynı kural: zemin koyu, yazı beyaz */
-  border: 0;
-  border-left: 6px solid rgba(0, 0, 0, 0.28); /* sırt kenarı yankısı */
-  border-radius: 3px 7px 7px 3px;
-  font-family: var(--sans);
+  color: var(--ink);
+  background:
+    repeating-linear-gradient(to bottom, transparent 0 27px, var(--border) 27px 28px) 0 54px / 100% calc(100% - 54px) no-repeat,
+    var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  box-shadow: 0 10px 24px -14px rgb(var(--shadow-rgb) / 0.45);
   cursor: pointer;
+  font-family: var(--sans);
+}
+.resume-fiche::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px;
+  background: var(--accent); border-radius: 3px 0 0 3px;
 }
 .resume-fiche:active { transform: translateY(1px); }
 .fiche-label {
-  display: block;
-  font-size: 0.62rem;
-  font-weight: 800;
-  letter-spacing: 0.2em;
-  opacity: 0.85;
+  font-family: var(--caps); font-weight: 700;
+  font-size: 12.5px; letter-spacing: 0.16em; color: var(--ink-dim);
 }
-.fiche-title {
-  display: block;
-  margin: 0.18rem 0 0.12rem;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-size: 1.05rem;
-  line-height: 1.15;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.fiche-chapter {
-  display: block;
-  margin-bottom: 0.55rem;
-  font-size: 0.78rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  opacity: 0.92;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.fiche-chname { font-weight: 600; letter-spacing: 0.02em; }
+.fiche-title, .fiche-chapter { padding-right: 96px; }
+.fiche-title { margin-top: 6px; font: 400 27px/1.05 var(--display); letter-spacing: -0.01em; }
+.fiche-chapter { margin-top: 6px; font: italic 400 15px/1.75 var(--book); color: var(--ink-soft); }
+.fiche-chname { font-weight: 400; letter-spacing: 0; }
 .fiche-progress {
-  display: block;
-  height: 2px;
-  background: rgba(255, 255, 255, 0.25);
+  position: relative; display: block; height: 18px; margin-top: 14px;
+  background:
+    repeating-linear-gradient(90deg, var(--border) 0 1px, transparent 1px 10%) bottom / 100% 7px no-repeat,
+    linear-gradient(var(--border), var(--border)) bottom / 100% 1px no-repeat;
 }
 .fiche-progress > span {
-  display: block;
-  height: 100%;
-  background: #fff;
+  position: absolute; left: 0; bottom: 0; height: 3px;
+  background: var(--brass); border-radius: 2px;
 }
+.fiche-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 14px; }
+.fiche-pct { font-family: var(--caps); font-size: 14px; letter-spacing: 0.05em; color: var(--ink-dim); }
+.fiche-go {
+  display: inline-flex; align-items: center; gap: 8px;
+  min-height: 44px; padding: 0 18px;
+  border-radius: var(--r-full);
+  background: var(--accent); color: var(--on-accent);
+  font-weight: 700; font-size: 15.5px;
+}
+.fiche-cover {
+  position: absolute; right: 14px; top: 16px;
+  width: 84px; aspect-ratio: 2 / 3; object-fit: cover;
+  border-radius: 2px 4px 4px 2px;
+  transform: rotate(3deg);
+  box-shadow: inset 3px 0 0 rgb(0 0 0 / 0.2), 0 8px 18px -8px rgb(var(--shadow-rgb) / 0.8);
+}
+.fiche-stamp {
+  position: absolute; right: 86px; top: 108px;
+  padding: 3px 8px 2px;
+  border: 1.6px solid var(--stamp); border-radius: 4px;
+  color: var(--stamp);
+  font-family: var(--caps); font-weight: 700;
+  font-size: 12.5px; letter-spacing: 0.12em; line-height: 1.25; text-align: center;
+  transform: rotate(-9deg);
+  opacity: 0.82;
+}
+.fiche-stamp small { display: block; font-size: 10px; letter-spacing: 0.2em; }
 
-/* ---------- Raf durum filtresi (D-B2v2: yaşam durumu yalnız burada) ---------- */
+/* Durum süzgeci: katalog dizini sekmeleri (sayılı). */
 .shelf-filters {
   display: flex;
-  gap: 0.5rem;
-  padding: 0 1rem 0.3rem;
-  overflow-x: auto; /* D-Resp: dar ekranda yatay kaydırma */
+  gap: 2px;
+  margin: 30px 0 0;
+  padding: 0 1.25rem;
+  border-bottom: 1px solid var(--border);
+  overflow-x: auto;
   scrollbar-width: none;
 }
-/* Stitch "Chips & Filter Pills": pasif cip GERI CEKILIR (ince hat + soluk metin),
-   aktif cip amber DOLGU degil amber TONAL zemindir. Dolgulu aktif hal raf
-   ustunde ikinci bir birincil-eylem gibi okunuyordu; asil birincil eylem devam
-   fisindeki "kaldigin yerden" dugmesi. Yukseklik Stitch'te 32px, burada 44px
-   KALIYOR: proje D-A11y dokunma hedefi ve onu kucultmek erisilebilirlik
-   gerilemesi olurdu. */
+#shelfFilters .chip {
+  min-height: 44px; padding: 0 14px;
+  border: 1px solid transparent; border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  background: none;
+  font-weight: 400; font-size: 15.5px; letter-spacing: 0;
+  color: var(--ink-dim);
+}
+#shelfFilters .chip sup { margin-left: 3px; font-family: var(--caps); font-size: 11px; color: var(--ink-dim); }
+#shelfFilters .chip[aria-pressed="true"] {
+  position: relative;
+  margin-bottom: -1px;
+  background: var(--surface);
+  border-color: var(--border);
+  color: var(--ink); font-weight: 700;
+}
+#shelfFilters .chip[aria-pressed="true"]::before {
+  content: ""; position: absolute; left: 12px; right: 12px; top: -1px; height: 2px;
+  background: var(--brass); border-radius: 0 0 2px 2px;
+}
+
+/* Genel çip (sözlük süzgeçleri vb.): ince hat, aktif = mürekkep dolgu. */
 .chip {
   flex: 0 0 auto;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--ink-soft);
   font-family: var(--sans);
-  font-weight: 700;
-  font-size: 0.72rem;
-  letter-spacing: 0.08em;
+  font-weight: 500;
+  font-size: 14.5px;
   padding: 0.4rem 0.9rem;
   min-height: 44px; /* D-A11y */
   border-radius: var(--r-full);
   cursor: pointer;
 }
 .chip[aria-pressed="true"] {
-  background: var(--accent-soft);
-  color: var(--accent);
-  border-color: var(--accent);
+  background: var(--ink);
+  color: var(--bg);
+  border-color: var(--ink);
+  font-weight: 700;
 }
+
+/* Raflar */
+.shelves { padding: 0.5rem 0 3rem; }
+.shelf-section { margin-top: 30px; }
+.shelf-heading { display: flex; align-items: center; margin: 0 1.25rem 14px; }
+.shelf-heading-name,
+.shelf-heading .shelf-count {
+  display: inline-flex; align-items: center;
+  padding: 5px 0 4px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--brass) 70%, #fff), var(--brass) 55%, color-mix(in srgb, var(--brass) 80%, #000));
+  color: #fffaf0;
+  font-family: var(--caps); font-weight: 700;
+  font-size: 14px; letter-spacing: 0.14em;
+  text-shadow: 0 -1px 0 rgb(0 0 0 / 0.25);
+  box-shadow: 0 1px 0 rgb(255 255 255 / 0.45) inset, 0 -1px 0 rgb(0 0 0 / 0.2) inset;
+}
+.shelf-heading-name { padding-left: 14px; border-radius: 3px 0 0 3px; }
+.shelf-heading .shelf-count { padding-right: 14px; border-radius: 0 3px 3px 0; }
+.shelf-heading .shelf-count::before { content: "·"; margin: 0 6px; }
+[data-theme="dark"] .shelf-heading-name,
+[data-theme="dark"] .shelf-heading .shelf-count { color: #201507; text-shadow: 0 1px 0 rgb(255 255 255 / 0.25); }
+
+.shelf-wrap { padding: 0; }
+.shelf {
+  --kapak-g: 108px;
+  --kapak-y: 162px;
+  display: flex;
+  /* Düğme içeriğini dikeyde ortalar: tek satır adlı kitap aşağı kayardı. */
+  align-items: flex-start;
+  gap: 18px;
+  padding: 6px 1.25rem 4px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  scroll-padding-inline: 1.25rem; /* yaslama sol iç boşluğu yok saymasın */
+  scrollbar-width: none;
+  /* Raf tahtası: kaydırmayla giden tek bant (background-attachment: local). */
+  background:
+    linear-gradient(to bottom,
+      transparent 0 calc(var(--kapak-y) + 6px),
+      var(--shelf-top) calc(var(--kapak-y) + 6px) calc(var(--kapak-y) + 11px),
+      var(--shelf-front-1) calc(var(--kapak-y) + 11px),
+      var(--shelf-front-2) calc(var(--kapak-y) + 25px),
+      var(--shelf-bottom) calc(var(--kapak-y) + 25px) calc(var(--kapak-y) + 27px),
+      transparent calc(var(--kapak-y) + 27px)) local;
+}
+.shelf::-webkit-scrollbar { display: none; }
+.shelf-board { display: none; }
+.spine {
+  flex: 0 0 var(--kapak-g);
+  width: var(--kapak-g);
+  display: block;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  scroll-snap-align: start;
+  font-family: var(--sans);
+}
+.spine-art {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: var(--kapak-g);
+  height: var(--kapak-y);
+  overflow: hidden;
+  border-radius: 2px 4px 4px 2px;
+  background: var(--spine, #555);
+  box-shadow:
+    inset 4px 0 0 rgb(0 0 0 / 0.22),
+    inset 5px 0 0 rgb(255 255 255 / 0.12),
+    0 2px 0 rgb(0 0 0 / 0.12),
+    3px 8px 10px -6px rgb(var(--shadow-rgb) / 0.75);
+}
+.spine-cover { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Kapaksız kitap: bez cilt üzerine yaldız baş harf. */
+.spine-art.cloth {
+  background:
+    repeating-linear-gradient(45deg, rgb(255 255 255 / 0.045) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(-45deg, rgb(0 0 0 / 0.07) 0 1px, transparent 1px 3px),
+    color-mix(in srgb, var(--spine, #2f4b3e) 70%, #1a1612);
+}
+.spine-art.cloth::before {
+  content: ""; position: absolute; inset: 8px 8px 8px 11px;
+  border: 1px solid rgb(214 180 110 / 0.55);
+}
+.spine-mono {
+  font: 400 34px/1 var(--display);
+  letter-spacing: 0.04em;
+  background: linear-gradient(170deg, #f3dc9e, #b58a3c 60%, #e7c77f);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.spine:active .spine-art { transform: translateY(2px); }
+.spine-title {
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+  margin-top: 36px;
+  font: 400 15px/1.22 var(--book);
+  color: var(--ink);
+}
+.spine-tag {
+  display: block; margin-top: 4px;
+  font-family: var(--caps); font-weight: 500;
+  font-size: 13px; letter-spacing: 0.07em; color: var(--ink-dim);
+}
+/* Toplu çeviri: kitaptan sarkan ayraç. */
+.spine-job {
+  position: absolute; top: -2px; right: 10px;
+  padding: 7px 5px 9px;
+  background: var(--stamp); color: #fff7ee;
+  font-family: var(--caps); font-weight: 700;
+  font-size: 11px; letter-spacing: 0.06em; line-height: 1;
+  writing-mode: vertical-rl;
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 50% 88%, 0 100%);
+  box-shadow: 0 2px 4px rgb(0 0 0 / 0.3);
+}
+.spine-job[data-state="error"] { background: #7e1e1e; }
+/* "Rafa kitap ekle": raftaki boş yer. */
+.spine-add-art {
+  align-content: center; gap: 8px;
+  background: transparent;
+  border: 1.5px dashed var(--ink-dim);
+  box-shadow: none;
+  color: var(--ink-soft);
+  text-align: center;
+}
+.spine-plus { font: 300 30px/1 var(--sans); color: var(--accent); }
+.spine-addlabel { font-size: 14px; line-height: 1.25; padding: 0 10px; }
+.spine-add-hint { color: var(--ink-dim); }
 
 /* ---------- Raf altı yüzeyler ---------- */
 .lib-stats {
-  margin: 0.2rem 1rem 1rem;
-  color: var(--ink-soft);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
+  margin: 0.2rem 1.25rem 1rem;
+  color: var(--ink-dim);
+  font-family: var(--caps);
+  font-size: 14px;
+  letter-spacing: 0.05em;
 }
+
 .lib-error { padding: 1.5rem 1.2rem; }
 .lib-error p {
   margin: 0 0 1rem;

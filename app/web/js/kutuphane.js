@@ -81,6 +81,16 @@ export function setShelfFilter(value) {
   renderLibrary();
 }
 
+// Durum sekmelerindeki sayılar (katalog sekmesi: "Okunuyor 5").
+export function sekmeSayilari(books) {
+  const say = { all: books.length, okunuyor: 0, beklemede: 0, bitti: 0 };
+  for (const b of books) say[b.status || "okunuyor"] = (say[b.status || "okunuyor"] || 0) + 1;
+  document.querySelectorAll("#shelfFilters .chip").forEach((c) => {
+    const sup = c.querySelector("sup");
+    if (sup) sup.textContent = String(say[c.dataset.filter] || 0);
+  });
+}
+
 // Kitabın "tazeliği" (ms): sunucu updated_at'i (çok-cihaz paylaşımı) ile yerel
 // son-okuma ts'inin büyüğü. Yerel ts, çevrimdışı okumada veya konum POST'u sessizce
 // düştüğünde (persistScroll .catch) sunucudan taze olabilir. Hem devam fişi hem raf
@@ -108,6 +118,9 @@ export function pickResumeBook(books) {
 
 // D-B11v2: fiş = raftan çekilmiş ayraç. spineColor zemini, sırt tipografisi,
 // bölüm no + başlık + ince ilerleme çizgisi. Gölge/gradyan/ikon yok.
+// Tarih damgası ay kısaltmaları (damga dar: üç harf).
+export const AYLAR = ["OCA", "ŞUB", "MAR", "NİS", "MAY", "HAZ", "TEM", "AĞU", "EYL", "EKİ", "KAS", "ARA"];
+
 export function renderResumeFiche(books) {
   const fiche = el("resumeFiche");
   const pick = pickResumeBook(books);
@@ -122,13 +135,23 @@ export function renderResumeFiche(books) {
     book.current_title || "";
   const pct = Math.round(Math.min(1, Math.max(0, target.ratio || 0)) * 100);
   fiche.style.setProperty("--spine", spineColor(book.slug));
+  // ÖDÜNÇ KARTI (Okuma Salonu, 2026-10-13): kütüphanenin ödünç kartı gibi; tarih
+  // damgası son okuma günü. "Chapter 380:" öneki numara ayrıca yazıldığı için atılır.
+  const ad = chTitle.replace(/^chapter\s*\d+\s*[:\-–—.]\s*/i, "");
+  const gun = new Date(bookFreshness(book) || Date.now());
+  const kapak = (book.cover || "").trim();
   fiche.innerHTML =
-    '<span class="fiche-label">DEVAM ET</span>' +
+    '<span class="fiche-label">Ödünç kartı</span>' +
     `<span class="fiche-title" lang="en">${escapeHtml(book.title)}</span>` +
-    `<span class="fiche-chapter">${
-      target.chapterNo ? "BÖL. " + target.chapterNo : "SON BÖLÜM"
-    }${chTitle ? ' <span class="fiche-chname" lang="en">· ' + escapeHtml(chTitle) + "</span>" : ""}</span>` +
-    `<span class="fiche-progress" aria-hidden="true"><span style="width:${pct}%"></span></span>`;
+    `<span class="fiche-chapter">${target.chapterNo ? "Bölüm " + target.chapterNo : "Son bölüm"}${
+      ad ? ' <span class="fiche-chname" lang="en">— ' + escapeHtml(ad) + "</span>" : ""}</span>` +
+    `<span class="fiche-progress" aria-hidden="true"><span style="width:${pct}%"></span></span>` +
+    `<span class="fiche-foot"><span class="fiche-pct">bölümün %${pct}’si</span>` +
+    '<span class="fiche-go">Devam et <span aria-hidden="true">→</span></span></span>' +
+    (kapak ? `<img class="fiche-cover" alt="" decoding="async" referrerpolicy="no-referrer" src="${escapeHtml(kapak)}">` : "") +
+    `<span class="fiche-stamp" aria-hidden="true">${gun.getDate()} ${AYLAR[gun.getMonth()]}<small>${gun.getFullYear()}</small></span>`;
+  const kapakImg = fiche.querySelector(".fiche-cover");
+  if (kapakImg) kapakImg.addEventListener("error", () => kapakImg.remove());
   fiche.onclick = () => {
     durum.currentBookSlug = book.slug; // ilk bölüm hata verirse "metni yapıştır" doğru kitaba yazsın
     navigate({ view: "reader", url: target.url, ratio: target.ratio });
@@ -138,23 +161,25 @@ export function renderResumeFiche(books) {
 
 // Raf altı sessiz istatistik satırı (D-B3: gün-1 "Bugün 0" gizlenir;
 // çevrimdışı/hata → satır tamamen gizli, okuma akışına etkisi yok).
-export async function renderLibStats() {
-  const line = el("libStats");
+export async function renderLibStats(kitapSayisi = 0) {
+  // Büyük başlığın altındaki sessiz satır: "8 kitap · 667 çevrilmiş bölüm".
+  // Çevrimdışı/hata → yalnız kitap sayısı; kitap yoksa satır gizli.
+  const line = el("libSubtitle");
+  if (!kitapSayisi) {
+    line.hidden = true;
+    return;
+  }
+  let metin = `${kitapSayisi} kitap`;
   try {
     const res = await fetch(`/api/stats?day=${localDay()}`);
-    if (!res.ok) throw new Error();
-    const s = await res.json();
-    if (!s.total) {
-      line.hidden = true;
-      return;
+    if (res.ok) {
+      const s = await res.json();
+      if (s.total) metin += ` · ${s.total} çevrilmiş bölüm`;
+      if (s.today) metin += ` · bugün ${s.today}`;
     }
-    line.textContent = s.today
-      ? `BUGÜN ${s.today} BÖLÜM · TOPLAM ${s.total}`
-      : `TOPLAM ${s.total} BÖLÜM`;
-    line.hidden = false;
-  } catch {
-    line.hidden = true;
-  }
+  } catch {}
+  line.textContent = metin;
+  line.hidden = false;
 }
 
 // Tek kitap sırtı (spine) düğmesi üret.
@@ -166,7 +191,7 @@ export function makeSpine(book, jobChecks) {
   // Etiket, resume ile AYNI merge'i kullanır → çevrimdışı okunan son bölüm de görünür
   // (sunucu chapter_no'su yalnız çevrimiçi güncellenir).
   const chNo = resolveResume(book, book.slug).chapterNo;
-  const tag = chNo ? "BÖL. " + chNo : "OKU";
+  const tag = chNo ? "Böl. " + chNo : "Oku";
   // KAPAK yalnız kütüphanede kullanılır (kullanıcı kararı 2026-09-10). Kitapların
   // ancak bir kısmında kapak var (kaynak sitesi kapanmış ya da og:image vermeyen
   // kitaplar) — bu yüzden kart BOYUTU her iki durumda da AYNI kalır ve kapaksız
@@ -177,7 +202,7 @@ export function makeSpine(book, jobChecks) {
     .map((w) => w[0] || "").join("").toUpperCase();
   if (kapak) spine.classList.add("has-cover");
   spine.innerHTML =
-    '<span class="spine-art">' +
+    `<span class="spine-art${kapak ? "" : " cloth"}">` +
       (kapak
         // referrerpolicy: bazı kaynak siteler dış referrer'lı isteği reddediyor.
         ? `<img class="spine-cover" alt="" loading="lazy" decoding="async"
@@ -193,6 +218,7 @@ export function makeSpine(book, jobChecks) {
     // engeli) KIRIK RESİM ikonu kalmasın: karta monogram görünümüne dön.
     img.addEventListener("error", () => {
       spine.classList.remove("has-cover");
+      img.parentElement.classList.add("cloth");
       img.replaceWith(Object.assign(document.createElement("span"), {
         className: "spine-mono", textContent: monogram,
       }));
@@ -208,7 +234,9 @@ export function makeAddSpine() {
   const add = document.createElement("button");
   add.className = "spine spine-add";
   add.innerHTML =
-    '<span class="spine-plus" aria-hidden="true">+</span><span class="spine-addlabel">KİTAP EKLE</span>';
+    '<span class="spine-art spine-add-art"><span class="spine-plus" aria-hidden="true">+</span>' +
+    '<span class="spine-addlabel">Rafa kitap ekle</span></span>' +
+    '<span class="spine-title spine-add-hint">URL, metin ya da dosya</span>';
   add.addEventListener("click", openAddModal);
   return add;
 }
@@ -262,7 +290,8 @@ export async function renderLibrary() {
   el("emptyState").hidden = books.length > 0;
   el("shelfFilters").hidden = books.length === 0;
   renderResumeFiche(books);
-  renderLibStats();
+  renderLibStats(books.length);
+  sekmeSayilari(books);
   // Beklemeden: toplu ceviriyle SUNUCUDA hazirlanmis bolumler, "cevrimdisi indir"
   // dugmesine basilmadan telefona insin. Uygulamayi acmak yeter.
   otoIndirmeTur();
