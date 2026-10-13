@@ -1527,6 +1527,26 @@ def _translate_chapter_impl(
 
     if iz is not None:
         iz["asamalar"].append({"asama": "eski_onarimlar_sonrasi", "metin": list(tr_paras)})
+    # TÜRKÇE CİLALAMA (2026-10-13, kullanıcı kararı; `CEVIRI_CILALA=1`, varsayılan kapalı):
+    # çeviri kokusunu ayrı bir turda giderir, ardından kalite katmanı kaynağa karşı
+    # denetler. Tur çeviriyi düşürmez; yeni sözlük ihlali/İngilizce kalıntı getiren
+    # paragraf özgün kalır. Ölçüm ve gerekçe: `core/ceviri_cilala.py`.
+    if os.getenv("CEVIRI_CILALA", "0") == "1" and tr_paras and aligned:
+        from . import ceviri_cilala
+        def cilala_uret(user, system, asama):
+            with api_durum.baglam(asama=asama):
+                return _izli_uret(client_factory, models, user, system=system,
+                                  max_tokens=MAX_OUTPUT_TOKENS)
+        def cilala_ihlalleri(paragraflar):
+            return (set(sozluk_ihlali_paragraflari(glossary, paragraflar, en_paras, kosullar))
+                    | set(ingilizce_kalinti(paragraflar, en_paras, glossary)))
+        cilalama = ceviri_cilala.cilala(tr_paras, en_paras, _relevant_glossary(glossary or {}, text),
+                                        cilala_uret, cilala_ihlalleri)
+        if cilalama.get("model"):
+            used_models[cilalama["model"]] = None
+        if iz is not None:
+            iz["cilalama"] = cilalama
+            iz["asamalar"].append({"asama": "cilalama_sonrasi", "metin": list(tr_paras)})
     kalite_metrik = None
     if os.getenv("CEVIRI_KALITE", "1") != "0" and tr_paras:
         from . import ceviri_kalite
