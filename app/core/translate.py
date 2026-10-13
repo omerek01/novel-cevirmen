@@ -1540,7 +1540,10 @@ def _translate_chapter_impl(
         def cilala_ihlalleri(paragraflar):
             return (set(sozluk_ihlali_paragraflari(glossary, paragraflar, en_paras, kosullar))
                     | set(ingilizce_kalinti(paragraflar, en_paras, glossary)))
-        cilalama = ceviri_cilala.cilala(tr_paras, en_paras, _relevant_glossary(glossary or {}, text),
+        # Henüz sözlüğe yazılmamış yeni adlar da metinde korunur. Mevcut kullanıcı
+        # karşılıkları önceliklidir; bu geçici liste kalıcı sözlük kuralı olmaz.
+        cilalama_sozlugu = {**dict.fromkeys(new_names, ""), **(glossary or {})}
+        cilalama = ceviri_cilala.cilala(tr_paras, en_paras, _relevant_glossary(cilalama_sozlugu, text),
                                         cilala_uret, cilala_ihlalleri)
         if cilalama.get("model"):
             used_models[cilalama["model"]] = None

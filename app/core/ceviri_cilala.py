@@ -10,11 +10,14 @@ Güvenlik: tur ÇEVİRİYİ ASLA DÜŞÜRMEZ. Model hatası/biçimsiz yanıt →
 eksik ya da aşırı kısalmış/uzamış paragraf → özgün paragraf; yeni sözlük ihlali ya da
 İngilizce kalıntı getiren paragraf → özgün paragraf. Ardından kalite katmanı kaynağa
 karşı denetler (anlam kayması onarılır).
+
+2026-10-13 devralma denetimi: STOP dışındaki yanıt uygulanmaz. Aynen korunan adın
+paragraftaki geçiş sayısı azalırsa o paragraf özgün kalır; yeni bulunan adlar da
+korumaya girer. Türkçe karşılıkların koşulları/ekleri sayım kuralıyla tahmin edilmez.
 """
 from __future__ import annotations
 
 import json
-import re
 
 # 3. sürüm talimat (ölçülen hâli; değiştirirsen yeniden ölç).
 TALIMAT = """Sen deneyimli bir Türkçe roman editörüsün. Sana İngilizce bir web roman
@@ -60,11 +63,12 @@ MIN_ORAN, MAX_ORAN = 0.6, 1.6
 
 def korunacak_terimler(sozluk: dict, en: list[str]) -> list[str]:
     """Bölümde kaynağı geçen sözlük kayıtlarının karşılıkları (boş karşılık = İngilizce kalır)."""
-    kaynak = "\n\n".join(en).casefold()
-    sonuc = set()
-    for k, v in (sozluk or {}).items():
-        if k and re.search(r"(?<!\w)" + re.escape(k.casefold()) + r"(?!\w)", kaynak):
-            sonuc.add((v or k).strip())
+    from .translate import _terim_metinde, _tekili_kayitli_cogullar
+
+    kaynak = "\n\n".join(en)
+    tekili = _tekili_kayitli_cogullar(sozluk)
+    sonuc = {(v or k).strip() for k, v in (sozluk or {}).items()
+             if k and _terim_metinde(k, v, kaynak, tekili)}
     return sorted(s for s in sonuc if s)
 
 
@@ -97,10 +101,25 @@ def cilala(tr: list[str], en: list[str], sozluk: dict, uret, ihlaller) -> dict:
             "paragraflar": [{"n": i, "en": e, "tr": t} for i, (e, t) in enumerate(zip(en, tr))]}
     try:
         yanit, model = uret(json.dumps(veri, ensure_ascii=False), TALIMAT, "cilalama")
+        adaylar = getattr(yanit, "candidates", None)
+        bitisler = ([getattr(a, "finish_reason", None) for a in adaylar] if adaylar
+                    else [getattr(yanit, "finish_reason", None)])
+        if any(str(b).split(".")[-1] != "STOP" for b in bitisler):
+            raise ValueError("Cilalama tamamlanmış bir yanıt vermedi.")
         aday = coz(getattr(yanit, "text", yanit) or "", tr)
     except Exception as exc:  # tur çeviriyi asla düşürmez
         return {"durum": "cilalanamadi", "neden": type(exc).__name__}
-    geri = sorted(i for i in set(ihlaller(aday)) - set(ihlaller(tr)) if aday[i] != tr[i])
+    from .translate import _relevant_glossary, _term_regex
+
+    # Aynen korunan adlar eski denetimde bilerek dışarıdadır. Cilalama bunları
+    # zamirle değiştiremez/silemez. Sözcük içi eşleşme sayılmaz; kesmeli ek serbest.
+    ilgili = _relevant_glossary(sozluk or {}, "\n\n".join(en))
+    adlar = [_term_regex(k) for k, v in ilgili.items()
+             if not v or k.casefold() == v.casefold()]
+    ad_kaybi = {i for i, (eski, yeni) in enumerate(zip(tr, aday))
+                if any(len(d.findall(yeni)) < len(d.findall(eski)) for d in adlar)}
+    geri = sorted(i for i in (set(ihlaller(aday)) - set(ihlaller(tr))) | ad_kaybi
+                  if aday[i] != tr[i])
     for i in geri:
         aday[i] = tr[i]
     degisen = sum(1 for a, b in zip(aday, tr) if a != b)
