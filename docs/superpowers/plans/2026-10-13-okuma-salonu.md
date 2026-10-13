@@ -13,6 +13,8 @@
 
 ## Genel kısıtlar
 
+**Devralma tamamlandı (2026-10-13):** Görev 1–6'nın mevcut commit'leri korundu. Görev 7'nin eksik kapak geçişi `e6c75c4` ile tamamlandı; alt çubuk geçmişi/sıfırlaması, Literata ve küçük metin kontrastı düzeltildi. Görev 8: 1184 çevrimdışı (1 atlanan), 99 tarayıcı ve 46 JS testi geçti; üç temada 21 telefon PNG'si incelendi. Eski adım kutuları ilk planın tarihsel kaydıdır. Küçük görsel fark: büyük inceleme sayısı yerine mevcut sayı metni korunuyor. Ayrıntı: `reports/okuma-salonu-tamamlama/RAPOR.md`. Push/canlı onayı bekliyor.
+
 - Kod, yorum, commit Türkçe. Push ve canlıya alma yalnız kullanıcı onayıyla.
 - `app/web/` değişen her commit'te `sw.js` `SHELL_CACHE` bir artar (v119 → v120 → …).
 - Yeni JS modülü ve yeni font dosyası `sw.js` `SHELL` listesine girer (`tests/test_modul_kabugu.py`).
