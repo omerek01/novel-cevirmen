@@ -72,14 +72,24 @@
       <span class="ghost-btn bar-spacer" aria-hidden="true">←</span>
     </header>
     <div class="book-body">
-      <button id="resumeBtn" class="next-btn" hidden>KALDIĞIN YERDEN DEVAM ET</button>
+      <!-- KİTAP KÜNYESİ (Okuma Salonu): kapak kısa rafın üstünde, yanında tür/durum, ad, bilgi. -->
+      <section class="book-hero" aria-label="Kitap">
+        <span id="bookHeroArt" class="spine-art book-hero-art"></span>
+        <div class="book-hero-text">
+          <p id="bookHeroKind" class="book-hero-kind"></p>
+          <h1 id="bookHeroTitle" class="book-hero-title" lang="en"></h1>
+          <p id="bookHeroInfo" class="book-hero-info"></p>
+        </div>
+        <span class="book-hero-shelf" aria-hidden="true"></span>
+      </section>
+      <button id="resumeBtn" class="next-btn resume-big" hidden><span><b>Kaldığın yerden devam et</b><small id="resumeSub"></small></span><span aria-hidden="true">→</span></button>
       <!-- İŞLEM HİYERARŞİSİ (belge 2026-09-16): telefonda bölüm listesine inmeden
            yedi düğme geçiliyordu. Sık kullanılanlar tek sırada; birleştirme,
            dışa aktarım, silme gibi seyrek/yıkıcı işlemler "Diğer işlemler"de. -->
       <div class="book-actions" role="group" aria-label="Kitap işlemleri">
-        <button id="openGlossaryBtn" class="book-action">SÖZLÜK</button>
-        <button id="offlineBtn" class="book-action">İNDİR</button>
-        <button id="bulkBtn" class="book-action">TOPLU ÇEVİR</button>
+        <button id="openGlossaryBtn" class="book-action"><b>Sözlük</b><small>terimler</small></button>
+        <button id="offlineBtn" class="book-action"><b>İndir</b><small>telefona</small></button>
+        <button id="bulkBtn" class="book-action"><b>Toplu çevir</b><small>önden</small></button>
       </div>
       <!-- Çevrimdışı durum: telefonda kaç bölüm, ne kadar yer, son indirme,
            kalıcı depolama. Sayılar SW önbelleğinden okunur (sunucuya gitmez). -->
@@ -89,7 +99,7 @@
         <button id="offlinePersistBtn" class="pill" hidden>Kalıcı depolama iste</button>
       </div>
       <details id="bookMore" class="book-more">
-        <summary class="book-more-ozet">DİĞER İŞLEMLER</summary>
+        <summary class="book-more-ozet">Diğer işlemler: durum, bölüm ekle, ePub, birleştir, sil</summary>
         <!-- D-B12: durum düzenleme yalnız burada; rafta sadece filtre çipleri. -->
         <div class="book-status-row">
           <span class="book-status-label">DURUM</span>
@@ -104,7 +114,7 @@
         <button id="mergeBtn" class="ghost-line-btn">BAŞKA KİTAPLA BİRLEŞTİR →</button>
         <button id="deleteBookBtn" class="ghost-line-btn danger-line">KİTABI SİL →</button>
       </details>
-      <h2 class="section-label small">BÖLÜMLER</h2>
+      <h2 class="book-chapters-title">Bölümler</h2>
       <input id="chapterSearch" class="chapter-search" type="search" inputmode="search"
              autocomplete="off" placeholder="Bölüm ara (başlık veya numara)…"
              aria-label="Bölüm ara" />

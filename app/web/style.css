@@ -2293,3 +2293,82 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 .terim-tur-satir button {
   min-height: 44px;
 }
+
+/* ---------- KİTAP EKRANI (Okuma Salonu, 2026-10-13) ---------- */
+#bookView .reader-bar .book-view-title {
+  font-family: var(--caps); font-weight: 700; font-size: 13px;
+  letter-spacing: 0.16em; color: var(--brass); text-transform: none;
+}
+#bookView .book-body { padding: 0 1.25rem 2rem; }
+.book-hero {
+  position: relative;
+  display: grid; grid-template-columns: minmax(64px, 116px) minmax(0, 1fr); gap: 0 18px; align-items: end;
+  margin-top: 24px; padding-bottom: 16px;
+}
+.book-hero-art { width: 100%; height: auto; aspect-ratio: 2 / 3; z-index: 1; } /* dar ekranda küçülür */
+.book-hero-kind {
+  margin: 0 0 6px;
+  font-family: var(--caps); font-weight: 700; font-size: 12.5px;
+  letter-spacing: 0.16em; color: var(--brass);
+}
+.book-hero-title { margin: 0; font: 400 clamp(24px, 9.5vw, 38px)/1 var(--display); letter-spacing: -0.015em; overflow-wrap: anywhere; }
+.book-hero-info { margin: 10px 0 4px; font-size: 15px; line-height: 1.45; color: var(--ink-soft); }
+.book-hero-shelf {
+  position: absolute; left: -1.25rem; right: -1.25rem; bottom: 0; height: 16px;
+  background: linear-gradient(var(--shelf-top) 0 5px, var(--shelf-front-1) 5px, var(--shelf-front-2) 14px, var(--shelf-bottom) 14px);
+  box-shadow: 0 8px 12px -8px rgb(var(--shadow-rgb) / 0.6);
+}
+#bookView .resume-big {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 62px; margin: 24px 0 0; padding: 10px 20px;
+  border: 0; border-radius: 14px;
+  background: var(--accent); color: var(--on-accent);
+  text-align: left; letter-spacing: 0; font-family: var(--sans);
+  box-shadow: 0 10px 20px -14px rgb(var(--shadow-rgb) / 0.9);
+}
+#bookView .resume-big, #bookView .book-action { text-transform: none; }
+#bookView .resume-big b { display: block; font-size: 17px; font-weight: 700; }
+#bookView .resume-big small { display: block; font-family: var(--caps); font-size: 13px; letter-spacing: 0.08em; opacity: 0.85; }
+#bookView .resume-big > span[aria-hidden] { font-size: 22px; }
+#bookView .book-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; margin-top: 12px; }
+#bookView .book-action {
+  display: grid; justify-items: start; align-content: center; gap: 2px;
+  min-height: 70px; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: 12px;
+  background: var(--surface); color: var(--ink);
+  text-align: left; letter-spacing: 0; font-family: var(--sans);
+}
+#bookView .book-action b { font-size: 15px; }
+#bookView .book-action small { font-family: var(--caps); font-size: 12px; letter-spacing: 0.06em; color: var(--ink-dim); }
+#bookView .book-more { margin-top: 12px; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+#bookView .book-more-ozet {
+  min-height: 50px; display: flex; align-items: center;
+  font-family: var(--sans); font-size: 15.5px; font-weight: 400; letter-spacing: 0; color: var(--ink-soft);
+}
+.book-chapters-title { margin: 30px 0 0; font: 400 36px/1 var(--display); }
+#bookView .chapter-search {
+  min-height: 48px; margin-top: 14px; padding: 0 14px;
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  font: 400 15.5px var(--sans); color: var(--ink);
+}
+#bookView .chapter-item { border-bottom: 1px solid var(--border); }
+#bookView .chapter-row {
+  position: relative;
+  display: grid; grid-template-columns: 44px 1fr auto; align-items: baseline; gap: 10px;
+  padding: 13px 0; border: 0; background: none; text-align: left; color: var(--ink);
+}
+#bookView .chapter-no { font-family: var(--caps); font-weight: 700; font-size: 14px; letter-spacing: 0.06em; color: var(--brass); }
+#bookView .chapter-name { font: 400 16.5px/1.3 var(--book); color: var(--ink); letter-spacing: 0; text-transform: none; }
+#bookView .chapter-row.current { background: none; border: 0; }
+#bookView .chapter-row.current::before {
+  content: ""; position: absolute; left: -1.25rem; top: 0; bottom: 0; width: 4px; background: var(--stamp);
+}
+#bookView .chapter-row.current .chapter-name { font-weight: 700; }
+.chapter-here { font-family: var(--caps); font-weight: 700; font-size: 12px; letter-spacing: 0.06em; color: var(--stamp); }
+#bookView .chapter-del { color: var(--ink-dim); opacity: 0.55; background: none; border: 0; }
+/* Durum seçimi dar ekranda (%200 yakınlaştırma) taşmasın: satır sarar, düğmeler daralır. */
+#bookView .book-status-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+#bookView .book-status-row .segmented { flex: 1 1 auto; min-width: 0; }
+#bookView .book-status-row .seg { min-width: 0; padding-inline: 0.6rem; }
+/* Raf şeridi kenardan kenara uzanır ama sayfayı yatayda büyütmez. */
+#bookView .book-body { overflow-x: clip; }

@@ -42,7 +42,7 @@ def test_kitap_sayfasi_bolum_listesi_ters_sirada(sayfa):
     expect(sayfa.locator("#bookView")).to_be_visible()
     satirlar = sayfa.locator("#chapterList .chapter-row .chapter-no")
     expect(satirlar).to_have_count(3)
-    expect(satirlar.first).to_have_text("BÖLÜM 3")
+    expect(satirlar.first).to_have_text("3")
 
 
 def _okuyucuya_gir(sayfa, bolum_sayisi=2):

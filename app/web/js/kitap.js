@@ -11,9 +11,9 @@ import {
 import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
 import { resolveResume } from "./konum.js";
-import { fetchBookJob, fetchBooks } from "./kutuphane.js";
+import { bookKind, fetchBookJob, fetchBooks, spineColor } from "./kutuphane.js";
 import { chapterListPrev, pickNextTarget } from "./okuyucu.js";
-import { el, isSyntheticSlug, markSegment } from "./temel.js";
+import { el, escapeHtml, isSyntheticSlug, markSegment } from "./temel.js";
 
 export let bulkPollTimer = null;
 
@@ -33,12 +33,16 @@ export async function openBook(slug) {
     // Liste vurgusu ("current") ve resume aynı bölümü göstersin (çevrimdışı okunan da).
     if (durum.currentBook) durum.currentBook.current_url = target.url;
     resume.hidden = false;
+    el("resumeSub").textContent =
+      (target.chapterNo ? `Bölüm ${target.chapterNo}` : "Son bölüm") +
+      ` · %${Math.round(Math.min(1, Math.max(0, target.ratio || 0)) * 100)}`;
     resume.onclick = () =>
       navigate({ view: "reader", url: target.url, ratio: target.ratio });
   } else {
     resume.hidden = true;
   }
 
+  kitapKunyesi(durum.currentBook, slug);
   el("chapterSearch").value = "";
   const list = el("chapterList");
   list.replaceChildren();
@@ -54,6 +58,7 @@ export async function openBook(slug) {
     const res = await fetch(`/api/book/${encodeURIComponent(slug)}/chapters`);
     const data = await res.json();
     durum.currentChapters = data.chapters || [];
+    el("bookHeroInfo").textContent = `${durum.currentChapters.length} bölüm çevrildi`;
     applyChapterFilter();
     // Beklemeden: toplu çeviriyle hazırlanmış bölümler de "çevrimdışı indir"
     // düğmesine basılmadan telefona insin. Toplu iş bitince openBook zaten
@@ -69,6 +74,27 @@ export async function openBook(slug) {
     err.textContent = "Bölümler yüklenemedi.";
     list.appendChild(err);
   }
+}
+
+// Kitap künyesi: kapak (yoksa bez cilt + baş harf), tür · durum, ad. Bilgi satırı
+// bölümler gelince yazılır.
+const DURUM_ADI = { okunuyor: "Okunuyor", beklemede: "Beklemede", bitti: "Bitti" };
+const TUR_ADI = { novel: "Novel", manga: "Manga", kitap: "Kitap" };
+export function kitapKunyesi(book, slug) {
+  const ad = book ? book.title : slug;
+  el("bookHeroTitle").textContent = ad;
+  el("bookHeroKind").textContent = book
+    ? `${TUR_ADI[bookKind(book)] || "Novel"} · ${DURUM_ADI[book.status || "okunuyor"] || ""}`
+    : "";
+  el("bookHeroInfo").textContent = "";
+  const art = el("bookHeroArt");
+  art.style.setProperty("--spine", spineColor(slug));
+  const kapak = ((book && book.cover) || "").trim();
+  const harf = ad.trim().split(/\s+/).slice(0, 2).map((w) => w[0] || "").join("").toUpperCase();
+  art.classList.toggle("cloth", !kapak);
+  art.innerHTML = kapak
+    ? `<img class="spine-cover" alt="" decoding="async" referrerpolicy="no-referrer" src="${escapeHtml(kapak)}">`
+    : `<span class="spine-mono" aria-hidden="true">${escapeHtml(harf)}</span>`;
 }
 
 // Saf: başlık veya bölüm numarasına göre filtrele (test edilebilir).
@@ -114,12 +140,20 @@ export function renderChapterList(chapters, book, query) {
     if (book && ch.url === book.current_url) row.classList.add("current");
     const no = document.createElement("span");
     no.className = "chapter-no";
-    no.textContent = ch.chapter_no ? "BÖLÜM " + ch.chapter_no : "BÖLÜM";
+    no.textContent = ch.chapter_no ? String(ch.chapter_no) : "·";
     const name = document.createElement("span");
     name.className = "chapter-name";
     name.lang = "en";
     name.textContent = ch.title || "";
     row.append(no, name);
+    if (row.classList.contains("current")) {
+      // Kaldığın yer: içindekiler satırında kırmızı ayraç şeridi + "burada".
+      row.setAttribute("aria-current", "true");
+      const yer = document.createElement("span");
+      yer.className = "chapter-here";
+      yer.textContent = "burada";
+      row.append(yer);
+    }
     row.addEventListener("click", () => navigate({ view: "reader", url: ch.url }));
     const del = document.createElement("button");
     del.className = "chapter-del";
