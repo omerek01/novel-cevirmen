@@ -913,6 +913,20 @@ export async function bolumuTazele(url) {
 /* ---------- olaylar ---------- */
 
 export function kur() {
+  // Örnek koşul düğmeleri: metni koşul alanına ekler (varsa "; " ile).
+  const ornekler = el("terimKosulOrnekleri");
+  if (ornekler) {
+    ornekler.addEventListener("click", (ev) => {
+      const btn = ev.target.closest("button[data-ek]");
+      if (!btn) return;
+      const alan = el("terimKosul");
+      const mevcut = alan.value.trim();
+      alan.value = mevcut ? `${mevcut}; ${btn.dataset.ek}` : btn.dataset.ek;
+      alan.dispatchEvent(new Event("input", { bubbles: true }));
+      alan.focus();
+    });
+  }
+
   el("terimKaydet").addEventListener("click", kaydet);
   el("terimSil").addEventListener("click", sil);
   el("terimOner").addEventListener("click", oneriIste);

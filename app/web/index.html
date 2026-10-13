@@ -132,6 +132,10 @@
       <span class="ghost-btn bar-spacer" aria-hidden="true">←</span>
     </header>
     <div class="book-body">
+      <h1 class="gloss-title">Sözlük</h1>
+      <!-- Açıklama "?" ile açılır (2026-10-09 kararı: komut açıklamaları "?" simgesiyle). -->
+      <details class="gloss-help">
+      <summary>Sözlük nasıl çalışır?</summary>
       <p class="gloss-hint">
         Bu terimler her yeni çevrilen bölümde aynı kalır. Karakter isimleri otomatik
         eklenir; kendi terimini de ekle (örn. "Aspect" → karşılığı boş bırak = İngilizce
@@ -140,6 +144,7 @@
         bağlanınca kaydedilir. Değişiklik yeni bölümlerde geçerli; eski bölüm için
         okuyucuda "Yeniden çevir".
       </p>
+      </details>
       <!-- YEDEK: sözlük tek bir PC'deki tek bir SQLite dosyasında yaşıyor; yedeği
            yoktu ve telefonda 267 satırı elden geçirmek pratik değil. -->
       <details id="glossIoBox" class="style-box">
@@ -523,6 +528,13 @@
         <textarea id="terimKosul" rows="2" autocomplete="off"
                   placeholder="Örn. yalnız rütbe adı olarak geçtiğinde; gündelik 'great' çevrilmez"></textarea>
       </label>
+      <!-- Hazır örnek koşullar: dokununca koşul alanına eklenir (hedef 4: koşul alanı
+           hazır örnekler ve açıklamayla anlaşılır olmalı). -->
+      <div id="terimKosulOrnekleri" class="ornek-kosullar" role="group" aria-label="Örnek koşullar">
+        <button type="button" data-ek="yalnız unvan ya da rütbe olarak geçtiğinde">+ yalnız unvan olarak</button>
+        <button type="button" data-ek="gündelik anlamda çevrilmez">+ gündelik anlamda çevrilmez</button>
+        <button type="button" data-ek="yalnız bir kişinin adı olarak geçtiğinde">+ yalnız kişi adı olarak</button>
+      </div>
       <div id="terimKoken" class="terim-koken" hidden></div>
       <!-- Kayıtlı terimde: onaylı alternatif yazımlar + ek anlamlar (çevrimiçi). -->
       <details id="terimEkler" class="terim-ekler" hidden>

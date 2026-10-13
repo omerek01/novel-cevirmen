@@ -2430,3 +2430,102 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 /* Metnin sonu çubuğun altında kalmasın. */
 #readerView .reader-body { padding-bottom: 96px; }
 @media (prefers-reduced-motion: reduce) { .okuyucu-alt { transition: none; } }
+
+/* ---------- ORTAK DENETİMLER (Okuma Salonu, 2026-10-13) ----------
+   Eski "editoryal" sistemdeki kalın siyah çerçeveli hap düğmeler ve kutular
+   inceltildi; birincil eylem kütüphane yeşili. */
+.pill {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--ink);
+  font-family: var(--sans); font-weight: 700; font-size: 14.5px; letter-spacing: 0;
+  text-transform: none;
+  border-radius: var(--r-full);
+}
+.pill:active { background: var(--accent-soft); color: var(--ink); border-color: var(--accent); }
+.next-btn {
+  background: var(--accent); color: var(--on-accent);
+  border: 0; border-radius: var(--r-full);
+  font-family: var(--sans); font-weight: 700; letter-spacing: 0; text-transform: none;
+}
+.ghost-line-btn {
+  border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+  color: var(--ink); font-family: var(--sans); font-weight: 500; letter-spacing: 0; text-transform: none;
+}
+.modal-card { background: var(--surface); border: 1px solid var(--border); border-radius: 22px; }
+.modal-title { font: 400 30px/1.05 var(--display); letter-spacing: -0.01em; text-transform: none; }
+.style-box { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.style-summary {
+  font-family: var(--sans); font-weight: 500; font-size: 15.5px; letter-spacing: 0;
+  text-transform: none; color: var(--ink-soft);
+}
+.style-box[open] .style-summary { border-bottom: 1px solid var(--border); }
+.terim-etiket, .gloss-tur-suz .terim-etiket {
+  font-family: var(--caps); font-weight: 700; font-size: 12px; letter-spacing: 0.14em;
+  color: var(--ink-dim); text-transform: none;
+}
+
+/* ---------- SÖZLÜK (Okuma Salonu) ---------- */
+#glossaryView .reader-bar .book-view-title {
+  font-family: var(--caps); font-weight: 700; font-size: 13px; letter-spacing: 0.16em;
+  color: var(--brass); text-transform: none;
+}
+#glossaryView .book-body { padding: 0 1.25rem 2rem; }
+.gloss-title { margin: 22px 0 0; font: 400 clamp(44px, 15vw, 60px)/0.95 var(--display); letter-spacing: -0.02em; }
+.gloss-help { margin: 10px 0 0; }
+.gloss-help > summary {
+  display: inline-flex; align-items: center; gap: 8px; min-height: 44px; cursor: pointer; list-style: none;
+  font-family: var(--caps); font-weight: 500; font-size: 15px; letter-spacing: 0.08em; color: var(--brass);
+}
+.gloss-help > summary::-webkit-details-marker { display: none; }
+.gloss-help > summary::before {
+  content: "?"; display: inline-grid; place-items: center; width: 26px; height: 26px;
+  border: 1px solid var(--border); border-radius: 50%; background: var(--surface);
+  font: 700 14px/1 var(--book); color: var(--brass);
+}
+.gloss-hint { color: var(--ink-soft); font-size: 15px; line-height: 1.55; }
+/* İnceleme kutusu: kırmızı şeritli katalog kartı. Başlık metni JS'ten gelir. */
+#glossReviewBox.gloss-review {
+  position: relative; border-radius: 3px; border-color: var(--border);
+  box-shadow: 0 10px 24px -16px rgb(var(--shadow-rgb) / 0.5);
+}
+#glossReviewBox.gloss-review::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--stamp); border-radius: 3px 0 0 3px;
+}
+#glossReviewSayi { min-height: 56px; padding-left: 1.1rem; font-family: var(--caps); font-weight: 700; font-size: 15px; letter-spacing: 0.1em; color: var(--stamp); }
+.gloss-add, .gloss-tools input[type="search"] { margin-top: 14px; }
+.gloss-add input, .gloss-tools input[type="search"], .terim-alan input, .terim-alan select, .terim-alan textarea, #terimTur {
+  border: 0; border-bottom: 1.5px solid var(--border); border-radius: 0;
+  background: transparent; color: var(--ink);
+  font: 400 17px/1.35 var(--sans);
+}
+.gloss-tools input[type="search"] { border: 1px solid var(--border); border-radius: 12px; background: var(--surface); padding-inline: 14px; }
+.gloss-add input:focus, .terim-alan input:focus, .terim-alan textarea:focus { outline: 0; border-bottom-color: var(--accent); }
+.gloss-filters { gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; margin-inline: -1.25rem; padding-inline: 1.25rem; }
+.gloss-list { border-top: 1px solid var(--border); }
+.gloss-row { border-bottom: 1px solid var(--border); padding: 14px 0; }
+.gloss-source { font: italic 400 17px/1.3 var(--book); color: var(--ink-soft); }
+.gloss-arrow { color: var(--brass); }
+.gloss-target-metin { font-family: var(--sans); font-weight: 700; color: var(--ink); }
+.gloss-cip {
+  border: 1px solid var(--border); border-radius: 4px; background: none;
+  font-family: var(--caps); font-weight: 500; font-size: 12px; letter-spacing: 0.07em; text-transform: none;
+  color: var(--ink-soft);
+}
+
+/* ---------- TERİM PANELİ (alttan açılan yaprak) ---------- */
+.terim-paneli .terim-kart { border-radius: 22px 22px 0 0; background: var(--surface); }
+.terim-paneli .terim-kart::before {
+  content: ""; display: block; width: 40px; height: 4px; margin: 0 auto 10px; border-radius: 4px; background: var(--border);
+}
+.terim-paneli .modal-title { font: 400 34px/1 var(--display); }
+.terim-koken { font-family: var(--sans); }
+.terim-koken q, .terim-koken blockquote, .terim-koken .koken-cumle {
+  font: italic 400 16px/1.55 var(--reading-font);
+}
+.terim-sil { color: var(--stamp); border-color: transparent; background: none; }
+.ornek-kosullar { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.ornek-kosullar button {
+  min-height: 44px; padding: 0 12px; border: 1px dashed var(--border); border-radius: 999px;
+  background: none; font: 400 13.5px var(--sans); color: var(--ink-soft); cursor: pointer;
+}
