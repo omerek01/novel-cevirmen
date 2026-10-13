@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v119"; // İnceleme listesi: beklemeden eski sonuç + arka plan tazeleme
+const SHELL_CACHE = "novellink-shell-v120"; // Okuma Salonu: yazı tipleri ve tema belirteçleri
 const DATA_CACHE = "novellink-data";
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 
@@ -60,12 +60,24 @@ const SHELL = [
   // ASLA cache'e yazmaz, yani burada olmayan font cevrimdisiyken indirilemez ve
   // tasarim sistem fontuna duserdi. ~700 KB, bir kez iner.
   "/fonts.css",
-  "/fonts/inter-400-latin-ext.woff2",
-  "/fonts/inter-400-latin.woff2",
-  "/fonts/inter-500-latin-ext.woff2",
-  "/fonts/inter-500-latin.woff2",
-  "/fonts/inter-600-latin-ext.woff2",
-  "/fonts/inter-600-latin.woff2",
+  "/fonts/alegreya-sans-400-latin-ext.woff2",
+  "/fonts/alegreya-sans-400-latin.woff2",
+  "/fonts/alegreya-sans-500-latin-ext.woff2",
+  "/fonts/alegreya-sans-500-latin.woff2",
+  "/fonts/alegreya-sans-700-latin-ext.woff2",
+  "/fonts/alegreya-sans-700-latin.woff2",
+  "/fonts/alegreya-sans-sc-500-latin-ext.woff2",
+  "/fonts/alegreya-sans-sc-500-latin.woff2",
+  "/fonts/alegreya-sans-sc-700-latin-ext.woff2",
+  "/fonts/alegreya-sans-sc-700-latin.woff2",
+  "/fonts/libre-caslon-display-400-latin-ext.woff2",
+  "/fonts/libre-caslon-display-400-latin.woff2",
+  "/fonts/libre-caslon-text-400-latin-ext.woff2",
+  "/fonts/libre-caslon-text-400-latin.woff2",
+  "/fonts/libre-caslon-text-400i-latin-ext.woff2",
+  "/fonts/libre-caslon-text-400i-latin.woff2",
+  "/fonts/libre-caslon-text-700-latin-ext.woff2",
+  "/fonts/libre-caslon-text-700-latin.woff2",
   "/fonts/literata-400-latin-ext.woff2",
   "/fonts/literata-400-latin.woff2",
   "/fonts/literata-600-latin-ext.woff2",
