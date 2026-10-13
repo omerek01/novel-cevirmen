@@ -1,0 +1,150 @@
+{
+  "tarih_turkiye": "2026-10-14",
+  "kod_commit": "12612d25782f7376a18092ff22e11771817c6e5c",
+  "ornek_sayisi": 11,
+  "ornekler": [
+    {
+      "bolum": 983,
+      "paragraf": 21
+    },
+    {
+      "bolum": 983,
+      "paragraf": 17
+    },
+    {
+      "bolum": 984,
+      "paragraf": 1
+    },
+    {
+      "bolum": 983,
+      "paragraf": 24
+    },
+    {
+      "bolum": 984,
+      "paragraf": 30
+    },
+    {
+      "bolum": 984,
+      "paragraf": 9
+    },
+    {
+      "bolum": 978,
+      "paragraf": 1
+    },
+    {
+      "bolum": 978,
+      "paragraf": 3
+    },
+    {
+      "bolum": 978,
+      "paragraf": 5
+    },
+    {
+      "bolum": 978,
+      "paragraf": 8
+    },
+    {
+      "bolum": 978,
+      "paragraf": 11
+    }
+  ],
+  "girdi_sha256": "2379e3c298d98cd91541013a8675764d72b1fa62d0883d8f87aa78f28152c510",
+  "cagri_denendi": 11,
+  "tamamlanan_deney_cagrisi": 10,
+  "canli_yazma": false,
+  "denetim": [
+    {
+      "ad": "eski-1",
+      "model": "gemini-3.8-flash",
+      "bitis": "STOP",
+      "bulgu": 0,
+      "sikayet_yakalandi": false,
+      "alinti_dogrulanamayan": 0,
+      "saniye": 19.1
+    },
+    {
+      "ad": "dil-olcutlu-1",
+      "model": "gemini-3.8-flash",
+      "bitis": "STOP",
+      "bulgu": 1,
+      "sikayet_yakalandi": false,
+      "alinti_dogrulanamayan": 0,
+      "saniye": 17.7
+    },
+    {
+      "ad": "eski-2",
+      "model": "gemini-3.8-flash",
+      "bitis": "STOP",
+      "bulgu": 0,
+      "sikayet_yakalandi": false,
+      "alinti_dogrulanamayan": 0,
+      "saniye": 18.5
+    },
+    {
+      "ad": "dil-olcutlu-2",
+      "model": "gemini-3.8-flash",
+      "bitis": "STOP",
+      "bulgu": 2,
+      "sikayet_yakalandi": true,
+      "alinti_dogrulanamayan": 0,
+      "saniye": 23.3
+    },
+    {
+      "ad": "ayri-model-eski",
+      "model": "gemini-2.5-pro",
+      "bitis": "STOP",
+      "bulgu": 1,
+      "sikayet_yakalandi": false,
+      "alinti_dogrulanamayan": 0,
+      "saniye": 26.7
+    },
+    {
+      "ad": "ayri-model-dil-olcutlu",
+      "model": "gemini-2.5-pro",
+      "bitis": "STOP",
+      "bulgu": 7,
+      "sikayet_yakalandi": true,
+      "alinti_dogrulanamayan": 0,
+      "saniye": 40.9
+    }
+  ],
+  "cilalama": [
+    {
+      "ad": "eski-1",
+      "bitis": "STOP",
+      "degisen": 11,
+      "ad_kaybi": [],
+      "saniye": 31.5
+    },
+    {
+      "ad": "hedefli-1",
+      "bitis": "STOP",
+      "degisen": 9,
+      "ad_kaybi": [],
+      "saniye": 18.3
+    },
+    {
+      "ad": "eski-2",
+      "bitis": "STOP",
+      "degisen": 10,
+      "ad_kaybi": [],
+      "saniye": 6.7
+    },
+    {
+      "ad": "hedefli-2",
+      "bitis": "STOP",
+      "degisen": 10,
+      "ad_kaybi": [],
+      "saniye": 25.6
+    }
+  ],
+  "kor_hakem": {
+    "model": "gemini-2.5-pro",
+    "durum": "tamamlanamadi",
+    "hata": "ServerError",
+    "saniye": 87.7,
+    "karar_sayisi": 0
+  },
+  "aday_uretime_hazir": false,
+  "aday_ret_nedeni": "983/24: denizci sayisi binlik olcekten kisi olcegine kayiyor; tam kalite dongusu sinanmadi"
+}
