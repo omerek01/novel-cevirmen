@@ -278,6 +278,15 @@ def test_sistem_talimati_deyimleri_ayri_kural_yapar():
     assert "ÖLÇÜT" in talimat              # modele kendini denetleme ölçütü verilir
 
 
+def test_sistem_talimati_az_bilinen_deyim_yerine_sade_ifade_ister():
+    """Kullanıcı bildirimi (2026-10-13): "the old me had it good" -> "eski halimin tuzu
+    kuruydu". Anlam doğru, deyim az bilinir; kural örneğiyle birlikte durmalı."""
+    talimat = translate.SYSTEM_INSTRUCTION
+    assert "SADE VE YAYGIN TÜRKÇE" in talimat
+    assert "the old me had it good" in talimat
+    assert "tuzu kuruydu' DEĞİL" in talimat
+
+
 # ---------- İngilizce korunan ad: küçük harfli geçiş sıradan kelimedir ----------
 # Ölçüm (gerçek bölümlerde, İngilizce kaynak): `Dark` 113, `Blue` 53, `Sun` 5 kez
 # SIRADAN kelime olarak eşleşiyordu. Her eşleşme prompt'a "bu ad AYNEN İngilizce

@@ -1051,6 +1051,15 @@ SYSTEM_INSTRUCTION = (
     "your court' -> 'sıra sende'. ÖLÇÜT: kurduğun Türkçe cümleyi bağlamı bilmeyen "
     "biri okuduğunda 'bu ne demek şimdi' diyorsa kalıbı birebir çevirmişsindir; "
     "o cümleyi anlamıyla yeniden yaz.\n"
+    # Kullanıcı bildirimi (2026-10-13, shadow-slave): "Ah, the old me had it good..."
+    # -> "Ah, eski halimin tuzu kuruydu...". Anlam doğruydu ama az bilinen deyim
+    # okuru durdurdu; "edebi Türkçe" maddesi modeli süslü kalıplara itiyordu.
+    "- SADE VE YAYGIN TÜRKÇE SEÇ: İngilizce cümle düz bir ifadeyse Türkçede de düz "
+    "söyle; az bilinen, eskimiş ya da yöresel deyim, atasözü ve kalıplarla SÜSLEME. "
+    "Herkesin bildiği yaygın deyimler serbesttir ('bardağı taşıran son damla', "
+    "'buzları eritmek'). Örnek: 'Ah, the old me had it good...' -> 'Ah, eskiden ne "
+    "rahatmışım...' ('eski halimin tuzu kuruydu' DEĞİL). ÖLÇÜT: günümüzün sıradan bir "
+    "okuru ifadeyi sözlüğe bakmadan hemen anlamıyorsa düz söyle.\n"
     "- İngilizce korunacak TEK sınıf: bir KİŞİYİ ADLANDIRAN ifadeler. İkisi de "
     "girer: gerçek adlar (Sunny, Kim Dokja, Nephis) ve gerçek adı bilinmeyen birini "
     "ad YERİNE GEÇEREK adlandıran lakaplar (Scholar, Shifty, Hero). Başka hiçbir "
