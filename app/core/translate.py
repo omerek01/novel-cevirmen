@@ -932,6 +932,10 @@ MAX_OUTPUT_TOKENS = 32768
 # kullanılmaz: ölçüm KOŞULLU kaydı ve 3.x modelini İÇERMELİ — ilk kapatma tam
 # olarak bu iki boşluktan geçti. Claude yolu bu daldan geçmez (`_claude_uret`).
 GEMINI_DUSUNME_BUTCESI: int | None = None
+# ÇAĞRI BAŞINA düşünme ayarı (`ThinkingConfig` alanları, ör. {"thinking_level": "low"}).
+# Yalnız yan işler (karakter defteri) kurar; çeviri yolu kurmaz, yani çeviri isteği aynen
+# kalır. Global bütçeyi değiştirmek okumayı da etkilerdi.
+_DUSUNME_AYARI: ContextVar[dict | None] = ContextVar("dusunme_ayari", default=None)
 # Bölümler arası bağlam: önceki bölümün son kaç kelimelik Türkçesi yeni bölümün ilk
 # parçasına verilir (zamir/hitap/sahne sürekliliği bölüm sınırında kopmasın).
 PREV_CHAPTER_CONTEXT_WORDS = 160
@@ -3199,6 +3203,7 @@ def _gemini_yapilandirmasi(system: str, max_tokens: int) -> types.GenerateConten
 
     İki kopya olsaydı biri güncellenip öteki unutulurdu (düşünme bütçesi tam da
     böyle bir ayar) ve "aynı model" iki yolda farklı çevirirdi."""
+    ayar = _DUSUNME_AYARI.get()
     return types.GenerateContentConfig(
         system_instruction=system,
         response_mime_type="application/json",
@@ -3206,7 +3211,9 @@ def _gemini_yapilandirmasi(system: str, max_tokens: int) -> types.GenerateConten
         max_output_tokens=max_tokens,
         safety_settings=SAFETY_SETTINGS,
         thinking_config=(
-            types.ThinkingConfig(thinking_budget=GEMINI_DUSUNME_BUTCESI)
+            types.ThinkingConfig(**ayar)
+            if ayar
+            else types.ThinkingConfig(thinking_budget=GEMINI_DUSUNME_BUTCESI)
             if GEMINI_DUSUNME_BUTCESI is not None
             else None
         ),

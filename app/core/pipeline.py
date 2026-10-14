@@ -9,7 +9,7 @@ from __future__ import annotations
 import sqlite3
 import threading
 
-from . import api_durum, bilgi_delta, budget, cache, glossary, library, sozluk_dogrulama, synthetic, varlik_grafigi
+from . import api_durum, bilgi_delta, budget, cache, glossary, karakter_defteri, library, sozluk_dogrulama, synthetic, varlik_grafigi
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
 # `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
@@ -484,12 +484,14 @@ def _do_fetch_translate_save(
                 **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
             )
     else:
-        result = translate_chapter(
-            chapter["text"], api_key=api_key, glossary=book_glossary,
-            prev_context=prev_context, kosullar=book_kosullar,
-            anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
-            **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
-        )
+        # Okuyucu bekliyor: yan işler (karakter defteri) bu sürede kotaya dokunmaz.
+        with budget.etkilesimli_ceviri():
+            result = translate_chapter(
+                chapter["text"], api_key=api_key, glossary=book_glossary,
+                prev_context=prev_context, kosullar=book_kosullar,
+                anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
+                **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
+            )
 
     # Sözlüğe işleme uçuşun İÇİNDE: eklenen terimler künyenin parçası ve bölümle
     # birlikte cache'e yazılıyor, böylece bölüm ikinci açılışta (önbellek isabeti)
@@ -544,6 +546,8 @@ def _do_fetch_translate_save(
     # BİLGİ GRAFİĞİ (Faz 2A, canlı mod): çeviri KAYDEDİLDİKTEN SONRA bölüm delta
     # kuyruğuna girer. Çıkarım okumayı ASLA beklemez ve hatası çeviriyi geri almaz.
     bilgi_delta.canli_kuyruga_ekle(book_slug, chapter.get("chapter_no"))
+    # KARAKTER DEFTERİ: bayrak ve kitap açıksa arka plan çıkarımı; asla fırlatmaz.
+    karakter_defteri.kuyruga_ekle(book_slug, chapter.get("chapter_no"))
     return payload
 
 

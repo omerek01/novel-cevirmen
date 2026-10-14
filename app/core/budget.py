@@ -9,12 +9,37 @@
 """
 from __future__ import annotations
 
+import contextlib
 import sqlite3
 import threading
 
 from . import db
 
 BG_TRANSLATE_SEM = threading.Semaphore(1)
+# Karakter defteri işçisi: aynı anda tek çıkarım çağrısı. Çeviri semaforundan AYRI —
+# paylaşılsaydı defter toplu çeviriyi bekletirdi.
+DEFTER_SEM = threading.Semaphore(1)
+
+# Okuyucunun beklediği (etkileşimli) çeviri sayısı. Yan işler (karakter defteri) bu
+# sıfırdan büyükken kotayı kullanmaz: Vertex kotası okumayla ortak.
+_ETKILESIMLI = 0
+_ETKILESIMLI_KILIT = threading.Lock()
+
+
+@contextlib.contextmanager
+def etkilesimli_ceviri():
+    global _ETKILESIMLI
+    with _ETKILESIMLI_KILIT:
+        _ETKILESIMLI += 1
+    try:
+        yield
+    finally:
+        with _ETKILESIMLI_KILIT:
+            _ETKILESIMLI -= 1
+
+
+def etkilesimli_var() -> bool:
+    return _ETKILESIMLI > 0
 
 # Gece otomatik çevirisinin günlük bölüm bütçesi (karar #13 varsayılanı).
 DAILY_AUTO_TRANSLATE_BUDGET = 20

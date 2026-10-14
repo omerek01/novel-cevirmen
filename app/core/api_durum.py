@@ -731,6 +731,7 @@ AMAC = {
     "sozluk_onerisi": "sözlük önerisi",
     "sozluk_dogrulama": "sözlük doğrulama",
     "varlik_cikarim": "varlık grafiği",
+    "karakter_defteri": "karakter defteri",
     "diger": "diğer",
 }
 

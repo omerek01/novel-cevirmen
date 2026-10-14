@@ -30,6 +30,9 @@ def temp_db(tmp_path, monkeypatch):
     # Kalite denetimi gerçek model çağırır; kendi testleri açıkça etkinleştirir.
     monkeypatch.setenv("CEVIRI_KALITE", "0")
     monkeypatch.setenv("CEVIRI_ANALIZ", "0")
+    # Karakter defteri işçisi gerçek model çağırır ve thread açar; kendi testleri açar.
+    monkeypatch.setenv("KARAKTER_DEFTERI", "0")
+    monkeypatch.setenv("CEVIRI_GRAFIK", "0")
     yield
 
 
