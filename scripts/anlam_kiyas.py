@@ -41,27 +41,35 @@ UZAK_PYTHON = "/home/OMEREK/novel-cevirmen/.venv/bin/python -u"
 UZAK_DIZIN = "/home/OMEREK/anlam-kiyas-isler"
 CANLI_DB = "/home/OMEREK/novel-cevirmen/cache/chapters.db"
 UZAK_APP = "/home/OMEREK/novel-cevirmen-sozluk/app"
-ENJEKTE = ["ceviri_kalite", "ceviri_baglam", "ceviri_bellek", "ceviri_izleri", "ozet_zinciri", "translate"]
+# `karakter_defteri` translate'ten SONRA: modül yüklenirken `translate`i içe aktarır, enjekte
+# edilmiş sürümü görmeli.
+ENJEKTE = ["ceviri_kalite", "ceviri_baglam", "ceviri_bellek", "ceviri_izleri", "ozet_zinciri", "translate",
+           "karakter_defteri"]
 
 # Kol = bayrak kümesi. Kalite denetimi G dışındaki kollarda KAPALI: onarım farkları
 # örterdi. Her kol her bayrağı açıkça verir: kollar aynı süreçte sırayla koştuğu için
 # bir kolun açtığı bayrak (G'nin kalitesi, H'nin işareti) sonraki kola sızmasın.
 KOLLAR = {
-    "A": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # canlı yol
-    "A2": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},  # gürültü tabanı
-    "B": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # eski yol
-    "C": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # özet, üslupsuz
-    "D": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # bellek, analizsiz
-    "E": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},   # özet + bellek
+    "A": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},   # canlı yol
+    "A2": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},  # gürültü tabanı
+    "B": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},   # eski yol
+    "C": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},   # özet, üslupsuz
+    "D": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},   # bellek, analizsiz
+    "E": {"CEVIRI_ANALIZ": "1", "CEVIRI_STIL": "0", "CEVIRI_BELLEK": "1", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},   # özet + bellek
     # Faz 2: F eski yolu --model ile verilen BAŞKA modelle çevirir; G eski yola
     # canlıdaki kalite katmanını ekler (katmanın anlama katkısı ölçülür); H eski yola
     # sözlüğün sıradan kelime işaretini ekler (`translate.SIRADAN_ISARETI`).
-    "F": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},
-    "G": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "1", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0"},
-    "H": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0"},
+    "F": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},
+    "G": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "1", "SOZLUK_SIRADAN": "0", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},
+    "H": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},
     # I: canlıya benzeyen H + bölüm özeti zinciri (AI Novel Translation yöntemi). Zincir
     # ancak ardışık bölümler kolun içinde SIRAYLA çevrilince kurulur: --es 1 ile koşturun.
-    "I": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "1"},
+    "I": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "1", "CEVIRI_GRAFIK": "0"},
+    # Karakter defteri: J = H + parçadaki kişilerin kartları (takma ad, hitabı belirleyen
+    # ilişki, kararlı sen/siz). H2 = H'nin kopyası (gürültü tabanı). Kartlar `hazirla --db`
+    # ile defteri taşıyan veritabanından örneğe konur (`defter`).
+    "H2": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},
+    "J": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "1"},
 }
 BOYUTLAR = ("anlam", "akicilik", "tutarlilik")
 
@@ -360,6 +368,13 @@ from core import glossary as g
 def ro(): return sqlite3.connect('file:' + CANLI_DB + '?mode=ro', uri=True)
 g._connect = ro
 p = json.loads(YUK); c = ro(); c.row_factory = sqlite3.Row
+kd = None
+if p.get('defter_kod'):  # canlı ağaçta olmayan modül: deney koduyla yüklenir
+    import types, core
+    kd = types.ModuleType('core.karakter_defteri'); kd.__package__ = 'core'
+    sys.modules['core.karakter_defteri'] = kd
+    exec(compile(p['defter_kod'], '<deney-karakter_defteri>', 'exec'), kd.__dict__)
+    kc = ro()  # Row fabrikasız bağlantı: modül demet bekler
 for no in p['bolumler']:
     r = c.execute("select * from chapters where book_slug=? and chapter_no=? and source_text is not null "
                   "and ifnull(content_type,'text')!='html' order by created_at desc", (p['kitap'], no)).fetchone()
@@ -377,7 +392,8 @@ for no in p['bolumler']:
         'previous': ({'url': o['url'], 'book_slug': o['book_slug'], 'chapter_no': o['chapter_no'],
                       'source': (o['raw_source'] or o['source_text']), 'hizali_kaynak': o['source_text'] or '',
                       'translation': o['translation'] or ''} if o else None),
-        'havuz_satirlari': havuz}, ensure_ascii=True), flush=True)
+        'havuz_satirlari': havuz, 'defter': kd.ceviri_kartlari(p['kitap'], no - 1, conn=kc) if kd else None},
+        ensure_ascii=True), flush=True)
 '''
 
 _ENJEKSIYON = r'''
@@ -418,7 +434,8 @@ def cevir(kol, x):
             r = t.translate_chapter(x['source'], '', glossary=x['glossary'], kosullar=x.get('conditions') or {},
                 models=(p['model'],), prev_context=x.get('prev_context') or '', bolum_no=x['chapter_no'],
                 book_slug=x['book_slug'], bolum_url=x['url'] + '#' + kol, onceki_bolum=onceki,
-                bellek_havuzu=x.get('bellek_havuzu') or [])
+                bellek_havuzu=x.get('bellek_havuzu') or [],
+                defter=x.get('defter') if os.environ.get('CEVIRI_GRAFIK') == '1' else None)
             satir.update(translation=r['translation'], source=r['source'], model=r.get('model'), deneme=deneme + 1)
             satir.pop('hata_turu', None); satir.pop('hata_mesaji', None)
             izler = iz.iz_oku(x['url'] + '#' + kol)
@@ -475,8 +492,8 @@ with ThreadPoolExecutor(p['es']) as ex:
 '''
 
 
-def _sabitle(kod: str) -> str:
-    return kod.replace("UZAK_APP", repr(UZAK_APP)).replace("CANLI_DB", repr(CANLI_DB))
+def _sabitle(kod: str, veritabani: str = CANLI_DB) -> str:
+    return kod.replace("UZAK_APP", repr(UZAK_APP)).replace("CANLI_DB", repr(veritabani))
 
 
 # ---------------------------------------------------------------- komutlar
@@ -487,7 +504,10 @@ def hazirla(a):
         raise SystemExit("Çıktı var; başka hedef kullanın.")
     bolumler = [int(x) for x in a.bolumler.split(",")]
     ornekler = []
-    for x in _uzak(_sabitle(_HAZIRLA), {"kitap": a.kitap, "bolumler": bolumler, "havuz": a.havuz}):
+    yuk = {"kitap": a.kitap, "bolumler": bolumler, "havuz": a.havuz}
+    if a.db:  # karakter defterini taşıyan kopya: örneklere `defter` kartları konur
+        yuk["defter_kod"] = (KOK / "app/core/karakter_defteri.py").read_text(encoding="utf-8")
+    for x in _uzak(_sabitle(_HAZIRLA, a.db or CANLI_DB), yuk):
         x["bellek_havuzu"] = ceviri_bellek.havuz_kur(x.pop("havuz_satirlari"))
         ornekler.append(x)
     Path(a.cikti).parent.mkdir(parents=True, exist_ok=True)
@@ -689,6 +709,7 @@ def main():
     alt = p.add_subparsers(dest="komut", required=True)
     h = alt.add_parser("hazirla"); h.add_argument("--kitap", default="shadow-slave")
     h.add_argument("--bolumler", required=True); h.add_argument("--havuz", type=int, default=30)
+    h.add_argument("--db", help="defteri taşıyan sunucu veritabanı (salt okunur); verilirse örneklere kart konur")
     h.add_argument("--cikti", required=True); h.set_defaults(f=hazirla)
     c = alt.add_parser("calistir"); c.add_argument("--veri", required=True)
     c.add_argument("--kollar", default="A,A2,B,C,D,E"); c.add_argument("--model", default="vertex/gemini-3.6-flash")
