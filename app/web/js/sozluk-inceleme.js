@@ -43,7 +43,31 @@ const NEDEN_ETIKETI = {
   sozcuk_karismasi: "SINIF SÖZCÜĞÜ",
   ad_tutarliligi: "AD POLİTİKASI",
   cogul_bicim: "ÇOĞUL BİÇİM",
+  // Karakter defteri (sunucu `karakter_defteri.sozluk_nedenleri`).
+  grafik_takma_ad: "TAKMA AD?",
+  grafik_genel_sozcuk: "SIRADAN SÖZCÜK",
+  grafik_kosul_onerisi: "İKİ KARŞILIK",
+  grafik_celiski: "İLİŞKİ ÇELİŞKİSİ",
 };
+
+// Takma ad önerisine karar: "Aynı kişi" bağı onaylar (bağlar asıl kişiye taşınır), "Ayrı"
+// reddeder (bir daha önerilmez). Sözlük kaydının kendisine dokunmaz.
+async function takmaAdKarari(slug, n, karar, kart) {
+  kart.classList.add("inceleme-isleniyor");
+  kart.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  try {
+    const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/defter/takma-ad`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ asil_kimlik: n.asil_kimlik, takma_kimlik: n.takma_kimlik, karar }),
+    });
+    if (!res.ok) throw new Error("sunucu " + res.status);
+    bildir(karar === "ayni" ? "Takma ad onaylandı." : "Ayrı kişi olarak kaydedildi.");
+  } catch (err) {
+    bildir("Karar kaydedilemedi (" + err.message + ").");
+  }
+  await incelemeyiYukle(slug);
+}
 
 function dugme(metin, fn, sinif = "pill") {
   const b = document.createElement("button");
@@ -222,6 +246,15 @@ function satir(slug, x) {
     p.className = "inceleme-aciklama";
     p.textContent = n.aciklama;
     kart.appendChild(p);
+    if (n.tur === "grafik_takma_ad" && n.asil_kimlik && n.takma_kimlik) {
+      const e = document.createElement("div");
+      e.className = "inceleme-eylem";
+      e.append(
+        dugme("Aynı kişi", () => takmaAdKarari(slug, n, "ayni", kart), "pill"),
+        dugme("Ayrı", () => takmaAdKarari(slug, n, "ayri", kart), "pill")
+      );
+      kart.appendChild(e);
+    }
   }
   if (x.tanim) {
     const t = document.createElement("p");

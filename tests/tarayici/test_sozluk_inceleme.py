@@ -205,3 +205,36 @@ def test_inceleme_listesi_guncellenirken_kendiliginden_tazelenir(sayfa):
     expect(sayi).to_have_text("İNCELENECEKLER (2) · güncelleniyor…")
     expect(sayi).to_have_text("İNCELENECEKLER (2)", timeout=10000)
     assert len(istekler) == 2
+
+
+def test_karakter_defteri_takma_ad_onerisi_karar_dugmeleriyle_kapanir(sayfa):
+    import json
+
+    from core import db, glossary, karakter_defteri, varlik_grafigi
+
+    tohum.kitap()
+    tohum.sozluk(SLUG, {"Nephis": "Nephis", "Changing Star": "Değişen Yıldız"})
+    kimlik = {r["source"]: r["kimlik"] for r in glossary.get_glossary_rows(SLUG)}
+    karakter_defteri._connect().close()
+    conn = db.connect()
+    for bolum in (3, 7):
+        conn.execute(
+            "INSERT INTO defter_iddia (book_slug, bolum, tur, ozne_ad, ozne_kimlik, iliski, nesne_ad, nesne_kimlik, "
+            "deger, gecerli, istem_surumu, created_at) VALUES (?, ?, 'varlik', 'Changing Star', ?, 'takma_adi', "
+            "'Nephis', ?, ?, 1, 'test', 0)",
+            (SLUG, bolum, kimlik["Changing Star"], kimlik["Nephis"],
+             json.dumps({"tr": "Değişen Yıldız", "t": "kisi"})),
+        )
+    conn.commit()
+    conn.close()
+    _sozluge_git(sayfa)
+    kutu = sayfa.locator("#glossReviewBox")
+    kutu.locator("summary").click()
+    kart = kutu.locator(".inceleme-kart[data-sozluk-kaynak='Changing Star']")
+    expect(kart).to_contain_text("TAKMA AD?")
+    expect(kart).to_contain_text("'Nephis' için takma ad")
+    kart.get_by_role("button", name="Ayrı").click()
+    expect(kutu.locator(".inceleme-kart[data-sozluk-kaynak='Changing Star']", has_text="TAKMA AD?")).to_have_count(
+        0, timeout=15000)
+    bag = [b for b in varlik_grafigi.baglar(SLUG, durumlar=("reddedildi",)) if b["iliski"] == "takma_adi"]
+    assert [(b["kaynak"], b["hedef"]) for b in bag] == [("Nephis", "Changing Star")]
