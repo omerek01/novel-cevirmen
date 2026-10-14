@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v127"; // Okuma Salonu: kapak geçişi
+const SHELL_CACHE = "novellink-shell-v128"; // Okuma Salonu logosu
 const DATA_CACHE = "novellink-data";
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 
@@ -57,6 +57,9 @@ const SHELL = [
   "/icon.svg",
   "/icon-192.png",
   "/icon-512.png",
+  "/icon-maskable-192.png",
+  "/icon-maskable-512.png",
+  "/apple-touch-icon.png",
   // Yazi tipleri kabugun PARCASIDIR: `cacheFirst` SHELL disindaki bir statigi
   // ASLA cache'e yazmaz, yani burada olmayan font cevrimdisiyken indirilemez ve
   // tasarim sistem fontuna duserdi. ~700 KB, bir kez iner.

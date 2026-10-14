@@ -1,8 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <rect width="512" height="512" rx="64" fill="#16130f"/>
-  <!-- NL monogram — Georgia Bold; PNG'lerle ayni metrikler (make_icons_nl.py) -->
-  <g font-family="Georgia, 'Times New Roman', serif" font-size="224" font-weight="bold" text-anchor="middle">
-    <text x="173" y="333" fill="#f1ece3">N</text>
-    <text x="356" y="333" fill="#e5482d">L</text>
+  <!-- NovelLink: Okuma Salonu logosu. Elle düzenleme; scripts/ikon_uret.py üretir. -->
+  <defs>
+    <clipPath id="kose"><rect width="512" height="512" rx="96"/></clipPath>
+    <radialGradient id="lamba" cx="256" cy="-40" r="420" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffc478" stop-opacity=".2"/>
+      <stop offset="1" stop-color="#ffc478" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="kurdele">
+      <stop offset="0" stop-color="#8f2f22"/>
+      <stop offset=".45" stop-color="#b8432f"/>
+      <stop offset="1" stop-color="#8a2c20"/>
+    </linearGradient>
+    <!-- N'nin çevresinde ince boşluk: kurdele harfin arkasından geçiyor okunur -->
+    <mask id="oyuk">
+      <rect width="512" height="512" fill="#fff"/>
+      <path transform="translate(114.24 374.40) scale(0.32 -0.32)" d="M689 -10 197 610V56L285 37V0H39V37L128 56V714L40 733V770H311L689 295V714L601 733V770H847V733L758 714V-10Z" fill="#000" stroke="#000" stroke-width="30" stroke-linejoin="round"/>
+    </mask>
+  </defs>
+  <g clip-path="url(#kose)">
+    <rect width="512" height="512" rx="96" fill="#14110e"/>
+    <rect width="512" height="512" fill="url(#lamba)"/>
+    <path mask="url(#oyuk)" fill="url(#kurdele)" d="M228 0H284V452L256 424L228 452Z"/>
   </g>
+  <path transform="translate(114.24 374.40) scale(0.32 -0.32)" d="M689 -10 197 610V56L285 37V0H39V37L128 56V714L40 733V770H311L689 295V714L601 733V770H847V733L758 714V-10Z" fill="#ece3d1"/>
 </svg>
