@@ -900,15 +900,18 @@ def sozluk_nedenleri(book_slug: str) -> dict[str, list[dict]]:
         conn.close()
     genel, ad, takma = defaultdict(set), defaultdict(set), defaultdict(set)
     formlar: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    gorunen: dict[str, Counter] = defaultdict(Counter)  # katlanmış biçim -> çevirideki asıl yazım
     iliski_b: dict[tuple, dict[str, set]] = defaultdict(lambda: defaultdict(set))
     for tur, ok, iliski, nk, bolum, deger in iddia:
         if tur == "genel":
             genel[ok].add(bolum)
         elif tur == "varlik":
             ad[ok].add(bolum)
-            form = _tr_govde((json.loads(deger or "{}") or {}).get("tr", ""))
+            ham = re.split(r"['’]", (json.loads(deger or "{}") or {}).get("tr", ""))[0].strip()
+            form = _tr_govde(ham)
             if form:
                 formlar[ok][form].add(bolum)
+                gorunen[form][ham] += 1
             if nk and nk != ok:
                 takma[(nk, ok)].add(bolum)
         elif tur == "bag" and iliski in _CELISEN and nk:
@@ -920,7 +923,8 @@ def sozluk_nedenleri(book_slug: str) -> dict[str, list[dict]]:
             out[satirlar[kimlik]["source"]].append(neden)
 
     for k, bolumler in genel.items():
-        if len(bolumler) >= GENEL_EN_AZ and not ad.get(k):
+        # Küçük harfli kayıt (beast, horde) zaten cins sözcük terimidir; sıradan kullanımı beklenir.
+        if len(bolumler) >= GENEL_EN_AZ and not ad.get(k) and k in satirlar and satirlar[k]["source"][:1].isupper():
             ekle(k, {"tur": "grafik_genel_sozcuk", "aciklama":
                      f"{len(bolumler)} bölümde ad olarak değil sıradan sözcük olarak geçti (bölüm "
                      f"{_bolum_ornegi(bolumler)}); hiç ad olarak geçmedi. Kural olarak kalırsa sıradan "
@@ -941,7 +945,8 @@ def sozluk_nedenleri(book_slug: str) -> dict[str, list[dict]]:
             if (not _ayni_karsilik(form, hedef) and len(bolumler) >= KARSILIK_EN_AZ
                     and len(bolumler) / toplam >= KARSILIK_ORAN):
                 ekle(k, {"tur": "grafik_kosul_onerisi", "aciklama":
-                         f"Çevirilerde kayıttaki '{satirlar[k]['target']}' yerine '{form}' de yerleşmiş "
+                         f"Çevirilerde kayıttaki '{satirlar[k]['target']}' yerine "
+                         f"'{gorunen[form].most_common(1)[0][0]}' de yerleşmiş "
                          f"({len(bolumler)}/{toplam} bölüm: {_bolum_ornegi(bolumler)}). Bağlama göre "
                          "değişiyorsa koşul ekle; değişmiyorsa çeviri sözlüğe uymamış olabilir."})
                 break

@@ -572,7 +572,7 @@ def test_kosul_onerisi_yerlesmis_farkli_karsiligi_bildirir(kitap):
     for b in (2, 3, 4):
         _iddia_yaz("varlik", "Captain", b, deger={"tr": "Kaptan", "t": "rutbe"})
     nedenler = kd.sozluk_nedenleri(KITAP)["Captain"]
-    assert nedenler[0]["tur"] == "grafik_kosul_onerisi" and "kaptan" in nedenler[0]["aciklama"]
+    assert nedenler[0]["tur"] == "grafik_kosul_onerisi" and "'Kaptan'" in nedenler[0]["aciklama"]
 
 
 def test_kayitla_ayni_karsilik_ekli_olsa_da_oneri_uretmez(kitap):
@@ -750,3 +750,10 @@ def test_hitap_uyumu_kolun_turkcesini_kararli_tabloyla_karsilastirir(kitap):
     assert kd.hitap_uyumu(KITAP, 13, en, ['"Sunny, dinle," dedi Nephis. Sen gel.'])["uyumsuz"] == 0
     # Kaynak paragraf farklıysa (hizalama kaymış) sayılmaz.
     assert kd.hitap_uyumu(KITAP, 13, ["başka"], ['"dinleyin"'])["degerlendirilen"] == 0
+
+
+def test_kucuk_harfli_cins_sozcuk_kaydi_genel_sozcuk_onerisi_almaz(kitap):
+    glossary.set_term(KITAP, "beast", "mahluk")
+    for b in (1, 2, 3):
+        _iddia_yaz("genel", "beast", b)
+    assert _nedenler("beast") == []
