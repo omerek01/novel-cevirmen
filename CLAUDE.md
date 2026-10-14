@@ -1645,6 +1645,7 @@ grafik bağlamının çeviriye girmesi) Faz 1 ÖLÇÜLMEDEN başlamaz.
 | `CEVIRI_CILALA` | Hayır | `1` → Türkçe cilalama turu (`core/ceviri_cilala.py`): çeviriden sonra, kalite katmanından önce tek çağrıyla çeviri kokusu giderilir (anlam ve sözlük korunur; yeni sözlük ihlali/İngilizce kalıntı getiren ya da boyu tutmayan paragraf özgün kalır, hata çeviriyi düşürmez). Varsayılan kapalı. Ölçüm 2026-10-13 (`scripts/cilalama_kiyas.py`, 12 SS bölümü, cilalı+kalite : canlı): akıcılık 41-13, anlam 37-26, bölüm akışı 5-0; bölüm başına ≈+1 çağrı |
 | `CEVIRI_OZET` | Hayır | `1` → bölüm özeti zinciri (`core/ozet_zinciri.py`, AI Novel Translation yöntemi): çeviriden önce tek çağrıyla bu bölümün kısa Türkçe özeti çıkarılır (girdi: önceki bölümün kayıtlı özeti + ilgili sözlük + bölüm); çeviri istemine yalnız bu bölümün özeti eklenir, özet `ozet_zinciri` tablosuna yazılıp sonraki bölüme gider. Yeni adlar sözlüğe otomatik yazılmaz. Varsayılan kapalı; ölçülmeden açılmaz |
 | `SOZLUK_SIRADAN` | Hayır | `1` → büyük harfli sözlük kaydı parçada cümle ortasında hiç büyük harfle geçmiyorsa satırına `translate.SIRADAN_ISARETI` konur; model sıradan kelimeye büyük harfli terim basmaz ("armor" → "Zırhları" sınıfı). Varsayılan kapalı; bayrak kapalıyken prompt bayt bayt aynıdır |
+| `KARAKTER_DEFTERI` | Hayır | `1` → karakter defteri canlı kuyruğu (`core/karakter_defteri.py`): kaydedilen her bölüm için ARKA PLANDA tek çağrı (hizalı EN+TR → varlık, bağ, sen/siz hitabı, sıradan sözcük). Okuma süren çeviri varken bekler (`budget.etkilesimli_var`), hata çeviriyi etkilemez. Varsayılan kapalı. Kitap listesi `KARAKTER_DEFTERI_KITAPLAR` (varsayılan `shadow-slave`), model `DEFTER_MODELI` (varsayılan `vertex/gemini-3.8-flash`, tek halka, düşme yok), düşünme `DEFTER_DUSUNME` (boş = model varsayılanı; `low`/`high` düzey, sayı bütçe) |
 
 Sunucuda bu bayraklar `.env` yerine systemd ek dosyasıyla verilir
 (`/etc/systemd/system/novel-cevirmen.service.d/*.conf`, `Environment=AD=değer`):
@@ -1652,6 +1653,10 @@ uygulama `.env`'i `load_dotenv(override=False)` ile yükler, systemd'nin verdiğ
 Bayrağı değiştirmek `.env`e dokunmayı gerektirmez; `daemon-reload` + servis yeniden başlatma yeter.
 Kollar arası kör kıyas: `scripts/anlam_kiyas.py` (`hazirla` → `calistir` → `yargila` /
 `yargila-bolum` → `ozet` / `ozet-bolum`); kollar `KOLLAR` sözlüğündeki bayrak kümeleridir.
+Karakter defteri pilot/doldurma: `scripts/karakter_defteri.py` (`--kuru`, `--taban`,
+`--pilot N --calistir`, `--from/--to --es K --calistir`, `--uzlastir`, `--metrik`, `--ornek`).
+Bölümler bağımsız işlenir (N−1 zinciri yok), paralel koşar. Bağlar `varlik_bag`a yalnız
+`aday` yazılır; hitap tablosu geçmiş çeviriyi ölçer, elle karar (`defter_hitap_karar`) üstündür.
 
 `OPENROUTER_API_KEY` · `MISTRAL_API_KEY` · `GROQ_API_KEY` · `CEREBRAS_API_KEY` 2026-09-02'de
 ARTIK OKUNMUYOR (Gemini dışı sağlayıcılar kaldırıldı). `.env`'de kalmaları zararsızdır ama
