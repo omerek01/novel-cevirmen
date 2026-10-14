@@ -445,3 +445,67 @@ def test_pilot_secimi_rastgele_ve_diyalog_yogununu_karistirir(kitap):
     import karakter_defteri as betik
 
     assert betik.pilot_secimi(KITAP, [1, 2], 2, 7) == [1, 2]
+
+
+# ---------- v2 kuralları (pilot elle denetiminden) ----------
+def _dogrula(tur, oge, en, tr):
+    return kd.dogrula(tur, oge, en, tr, kd._Cozucu(KITAP, []))
+
+
+def test_rutbe_yalniz_rutbe_adina_baglanir(kitap):
+    en = ["Captain Kai, the Archer of the company, nodded."]
+    tr = ["Bölüğün okçusu Yüzbaşı Kai başını salladı."]
+    gecer = _dogrula("bag", {"o": "Kai", "r": "rutbesi", "n": "Captain", "p": 1, "a": "Captain Kai"}, en, tr)
+    rol = _dogrula("bag", {"o": "Kai", "r": "rutbesi", "n": "Archer", "p": 1, "a": "the Archer of the company"},
+                   en, tr)
+    assert gecer["gecerli"] == 1 and rol["red_nedeni"] == "rutbe_degil"
+
+
+def test_gercek_ad_true_name_kaniti_ister(kitap):
+    tr = ["x"]
+    yok = _dogrula("bag", {"o": "Sunny", "r": "gercek_adi", "n": "Nephis", "p": 1, "a": "Sunny met Nephis"},
+                   ["Sunny met Nephis."], tr)
+    var = _dogrula("bag", {"o": "Sunny", "r": "gercek_adi", "n": "Nephis", "p": 1, "a": "True Name was Nephis"},
+                   ["Sunny's True Name was Nephis."], tr)
+    assert yok["red_nedeni"] == "gercek_ad_kanitsiz" and var["gecerli"] == 1
+
+
+def test_kucuk_harfli_gecis_ozel_ad_sayilmaz(kitap):
+    en = ["Sunny hid inside the hollow tree."]
+    tr = ["Sunny kovuk ağacın içine saklandı."]
+    v = _dogrula("varlik", {"ad": "Hollow", "tr": "kovuk", "t": "yer", "p": 1, "a": "inside the hollow tree"}, en, tr)
+    b = _dogrula("bag", {"o": "Sunny", "r": "dusmani", "n": "Hollow", "p": 1, "a": "Sunny hid inside the hollow"},
+                 en, tr)
+    assert v["red_nedeni"] == "ad_kucuk" and b["red_nedeni"] == "ad_kucuk"
+
+
+def test_turkce_alinti_harf_isaretsiz_de_bulunur(kitap):
+    k = _dogrula("hitap", {"p": 1, "ko": "Nephis", "mu": "Sunny", "f": "sen", "tra": "Oyle degil mi, Sunny"},
+                 ['"Right, Sunny?" Nephis asked.'], ['"Öyle değil mi, Sunny?" diye sordu Nephis.'])
+    assert k["gecerli"] == 1
+
+
+def test_konusan_bolumde_uzakta_adlandirilsa_da_gecerli(kitap):
+    en = ["Nephis turned to Sunny."] + ["..."] * 12 + ['"Why are you here?"']
+    tr = ["Nephis, Sunny'ye döndü."] + ["..."] * 12 + ['"Neden buradasın?"']
+    k = _dogrula("hitap", {"p": 14, "ko": "Nephis", "mu": "Sunny", "f": "sen", "tra": "Neden buradasın?"}, en, tr)
+    assert k["gecerli"] == 1
+
+
+def test_bolumde_hic_gecmeyen_konusan_reddedilir(kitap):
+    k = _dogrula("hitap", {"p": 1, "ko": "Julius", "mu": "Sunny", "f": "sen", "tra": "Neden buradasın?"},
+                 ['"Why are you here, Sunny?"'], ['"Neden buradasın, Sunny?"'])
+    assert k["red_nedeni"] == "ad_yok"
+
+
+def test_cogul_hitap_gecerli_ama_tabloya_girmez(kitap):
+    for no in (20, 21, 22):
+        _bolum_ekle(no, [f'"Both of you, listen," Sunny told Kai and Effie. ({no})'],
+                    [f'"İkiniz de dinleyin," dedi Sunny, Kai ile Effie\'ye. ({no})'])
+    cagir = _sahte({no: {"v": [], "g": [], "b": [], "h": [
+        {"p": 1, "ko": "Sunny", "mu": "Kai", "f": "cogul", "tra": "İkiniz de dinleyin"}]} for no in (20, 21, 22)})
+    for no in (20, 21, 22):
+        kd.bolum_isle(KITAP, no, cagir=cagir)
+    assert all(r[4] for r in _iddialar(20))
+    kimlik = {r["source"]: r["kimlik"] for r in glossary.get_glossary_rows(KITAP)}
+    assert kd.hitap_tablosu(KITAP)[(kimlik["Sunny"], kimlik["Kai"])]["bicim"] is None

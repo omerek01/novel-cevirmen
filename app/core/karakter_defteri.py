@@ -35,7 +35,9 @@ from collections import Counter, defaultdict
 from . import api_durum, budget, db, glossary, translate, varlik_grafigi
 from .varlik_cikarim import _normal, ad_temizle
 
-ISTEM_SURUMU = "defter-v1"
+# v2 (2026-10-14, pilot elle denetimi): çoğul hitap ayrı (`cogul`), rütbe yalnız rütbe
+# dizisinden, Gerçek Ad yalnız "True Name" kanıtıyla, ad en az bir kez büyük harfle.
+ISTEM_SURUMU = "defter-v2"
 VARSAYILAN_MODEL = "vertex/gemini-3.8-flash"
 # Düşünme tokenları da bu tavandan düşer. Pilot (2026-10-14, 20 SS bölümü, model varsayılan
 # düşünmesi): düşünme bölüm başına 1,3k–6,5k token; 8000'lik tavanda 14 bölümün 5'i yarıda
@@ -50,7 +52,9 @@ DEFTER_ILISKILERI = (
     "akrabasi", "lideri", "ogretmeni", "yoldasi", "dusmani", "klani", "grubu",
     "rutbesi", "takma_adi", "gercek_adi", "unvani",
 )
-HITAP_BICIMLERI = ("sen", "siz", "belirsiz")
+# `cogul`: birden çok kişiye hitap. Türkçede çoğul "siz" resmiyet DEĞİLDİR; tabloya girerse
+# "Sunny -> Kai: siz" gibi sahte bir resmiyet üretir (pilotta 50 hitabın ~5'i böyleydi).
+HITAP_BICIMLERI = ("sen", "siz", "cogul", "belirsiz")
 # Sistem sesi: sözlükte kayıtlı olmasa da konuşan olabilir (Spell'in rün mesajları).
 SISTEM_KONUSANLARI = frozenset({"spell"})
 _YER_TUTUCULAR = frozenset({
@@ -119,6 +123,7 @@ numaraları (`hitap_adaylari`).
 Yalnız JSON döndür: {"v":[...],"g":[...],"b":[...],"h":[...]}
 
 v — bu bölümde AD olarak geçen varlıklar (kişi, yer, örgüt/klan/grup, rütbe/unvan, yetenek, nesne):
+ Yalnız BÜYÜK HARFLE yazılan özel adlar; küçük harfli cins sözcükler (beast, cohort, dark sea) girmez.
  {"ad":"kayıtlıysa id (e3), değilse kaynaktaki ad aynen","tr":"Türkçe çeviride bu ad nasıl yazılmış (aynen)",
   "t":"kisi|yer|orgut|rutbe|yetenek|nesne|diger","asil":"bu ad başka bir varlığın takma adı, lakabı ya da
   kısaltmasıysa o varlığın id'si ya da adı; değilse null","p":paragraf_no,
@@ -134,12 +139,16 @@ b — metnin AÇIKÇA söylediği ilişkiler; tahmin yok:
  Yön: "o r n" = "o'nun r'si n". Örnekler: Sunny ogretmeni Julius (Julius, Sunny'nin öğretmeni);
  Nephis klani Immortal Flame; Sunny rutbesi Master; Nephis takma_adi Changing Star; Kai lideri Nephis
  (Nephis, Kai'nin lideri ya da amiri). s: ilişkiyi anlatıcı mı söylüyor, bir karakterin sözünde mi geçiyor.
+ rutbesi YALNIZ resmî rütbe/basamak adı içindir (Sleeper, Awakened, Master, Saint…); görev ya da rol
+ (archer, healer), yaratık sınıfı ve betimleme ("the ruthless tyrant") rütbe değildir. gercek_adi YALNIZ
+ metin "True Name" dediğinde; başka ad ya da lakap takma_adi'dir.
 
 h — yalnız `hitap_adaylari` paragraflarında, konuşanın karşısındakine DOĞRUDAN hitabı:
- {"p":paragraf_no,"ko":"konuşan","mu":"muhatap","f":"sen|siz|belirsiz",
-  "tra":"Türkçe paragraftan hitabı gösteren AYNEN alıntı, en çok 8 sözcük",
+ {"p":paragraf_no,"ko":"konuşan","mu":"muhatap","f":"sen|siz|cogul|belirsiz",
+  "tra":"TÜRKÇE paragraftan hitabı gösteren AYNEN alıntı (Türkçe harfleriyle), en çok 8 sözcük",
   "en":"İngilizce hitap sözcüğü varsa (sir, Lady Nephis, Master, Captain), yoksa boş"}
- f: Türkçe çevirinin FİİLEN kullandığı biçim (sen/siz zamiri ya da kişi eki). Konuşan ya da muhatap
+ f: Türkçe çevirinin FİİLEN kullandığı biçim (sen/siz zamiri ya da kişi eki). Konuşan BİRDEN ÇOK kişiye
+ hitap ediyorsa ("both of you", gruba konuşma) f="cogul" ve mu o kişilerden biri. Konuşan ya da muhatap
  metinden kesin anlaşılmıyorsa o paragrafı ATLA. Sistemin (Spell) mesajlarında konuşan "Spell".
 
 Kurallar: ad/o/n/ko/mu alanlarında kayıtlı id varsa id'yi yaz. Her öğenin paragraf numarası ve
@@ -329,6 +338,13 @@ class _Cozucu:
     def __init__(self, book_slug: str, kayitli: list[dict]):
         self.idden = {k["id"]: k for k in kayitli}
         self._dugum = varlik_grafigi.DugumCozucu(book_slug)
+        # Rütbe adları: kitap profilinin dizileri + sözlükte `rutbe` türlü kayıtlar. Grafikteki
+        # `rutbesi` bağlarının nesneleri BİLEREK alınmaz: eski model bağları ("Kai rutbesi
+        # Archer") denetimi kendi hatasıyla beslerdi.
+        p = varlik_grafigi.profil(book_slug) or {}
+        self.rutbeler = {x.casefold() for dizi in p.get("diziler", {}).values() for x in dizi}
+        self.rutbeler |= {x.casefold() for x in p.get("ek_rutbeler", ())}
+        self.rutbeler |= {r["source"].casefold() for r in self._dugum.satirlar.values() if r.get("tur") == "rutbe"}
 
     def coz(self, ref) -> tuple[str | None, str, list[str]]:
         ref = ad_temizle(str(ref or "")).strip()
@@ -342,8 +358,15 @@ class _Cozucu:
         return None, ref, [ref]
 
 
-def _geciyor(adlar: list[str], metin: str) -> bool:
-    return any(a and translate._term_regex(a).search(metin or "") for a in adlar)
+def _geciyor(adlar: list[str], metin: str, buyuk: bool = False) -> bool:
+    """Ad metinde geçiyor mu; `buyuk`: en az bir geçişi büyük harfle mi (özel ad olarak)."""
+    for a in adlar:
+        if not a:
+            continue
+        for m in translate._term_regex(a).finditer(metin or ""):
+            if not buyuk or m.group(0)[:1].isupper():
+                return True
+    return False
 
 
 def _alinti_var(alinti: str, metin: str) -> bool:
@@ -351,10 +374,18 @@ def _alinti_var(alinti: str, metin: str) -> bool:
     return bool(a) and a in _normal(metin).casefold()
 
 
+_KATLA = str.maketrans("ığüşöçâîû", "igusocaiu")
+
+
+def _katla(metin: str) -> str:
+    """Türkçe harf işaretlerini düzle: model alıntıyı bazen işaretsiz yazıyor ("Oyle degil mi")."""
+    return _tr_kucuk(_normal(metin)).translate(_KATLA)
+
+
 def _tr_var(alinti: str, metin: str) -> bool:
-    """Türkçe alıntı/ad paragrafta mı — ek toleranslı (`Nephis'in` ⊃ `Nephis`)."""
-    a = _tr_kucuk(_normal(alinti)).strip(" .,;:!?\"'…")
-    m = _tr_kucuk(_normal(metin))
+    """Türkçe alıntı/ad paragrafta mı — ek ve harf işareti toleranslı (`Nephis'in` ⊃ `Nephis`)."""
+    a = _katla(alinti).strip(" .,;:!?\"'…")
+    m = _katla(metin)
     if not a:
         return False
     return a in m or (len(a) > 5 and a[: max(4, len(a) - 3)] in m)
@@ -376,8 +407,9 @@ def _paragraf(p, n: int) -> int | None:
 def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozucu) -> dict:
     """Tek öğeyi kayda çevir ve biçimsel olarak doğrula. Döner: `defter_iddia` alanları.
 
-    Red nedenleri: paragraf_yok, ad_yok, yer_tutucu, alinti_yok, tr_yok, iliski_yok,
-    bicim_yok, hitap_celiski. ANLAMSAL karar yok — o, birikime (`uzlastir`) bırakılır."""
+    Red nedenleri: paragraf_yok, ad_yok, ad_kucuk, yer_tutucu, alinti_yok, tr_yok, iliski_yok,
+    rutbe_degil, gercek_ad_kanitsiz, bicim_yok, hitap_celiski. Anlam yargısı yok; yalnız pilot
+    denetiminde ölçülen ve metinden denetlenebilen hata sınıfları — gerisi birikime kalır."""
     n = len(en_p)
     kayit = {"tur": tur, "gecerli": 0, "red_nedeni": None, "deger": {}}
 
@@ -401,6 +433,8 @@ def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozu
             return red("yer_tutucu")
         if not _geciyor(adlar, en_p[p - 1]):
             return red("ad_yok")
+        if not _geciyor(adlar, en_p[p - 1], buyuk=True):
+            return red("ad_kucuk")
         if not _alinti_var(kayit["en_alinti"], en_p[p - 1]):
             return red("alinti_yok")
         if kayit["tr_alinti"] and not _tr_var(kayit["tr_alinti"], tr_p[p - 1]):
@@ -418,11 +452,17 @@ def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozu
             return red("paragraf_yok")
         if _yer_tutucu(oad) or _yer_tutucu(nad):
             return red("yer_tutucu")
-        pencere = "\n".join(en_p[max(0, p - 3): p])
+        pencere = "\n".join(en_p[max(0, p - 6): min(n, p + 1)])
         if not (_geciyor(oadlar, pencere) and _geciyor(nadlar, pencere)):
             return red("ad_yok")
+        if not (_geciyor(oadlar, pencere, buyuk=True) and _geciyor(nadlar, pencere, buyuk=True)):
+            return red("ad_kucuk")
         if not _alinti_var(kayit["en_alinti"], en_p[p - 1]):
             return red("alinti_yok")
+        if iliski == "rutbesi" and nad.casefold() not in cozucu.rutbeler:
+            return red("rutbe_degil")
+        if iliski == "gercek_adi" and "true name" not in pencere.casefold():
+            return red("gercek_ad_kanitsiz")
     elif tur == "hitap":
         kk, kad, kadlar = cozucu.coz(oge.get("ko"))
         mk, mad, madlar = cozucu.coz(oge.get("mu"))
@@ -434,16 +474,19 @@ def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozu
             return red("bicim_yok")
         if p is None:
             return red("paragraf_yok")
-        if _yer_tutucu(kad) or _yer_tutucu(mad):
+        cogul = bicim == "cogul"
+        if _yer_tutucu(kad) or (_yer_tutucu(mad) and not cogul):
             return red("yer_tutucu")
-        pencere = "\n".join(en_p[max(0, p - 7): min(n, p + 2)])
+        # Konuşan/muhatap BÖLÜMDE geçmeli (uydurma kişi olmasın). Pencere değil: iki kişilik uzun
+        # diyalogda konuşanın adı onlarca paragraf geçmeyebilir — pilotta doğru hitapları eliyordu.
+        bolum = "\n".join(en_p)
         sistem = kad.casefold() in SISTEM_KONUSANLARI
-        if not ((sistem or _geciyor(kadlar, pencere)) and _geciyor(madlar, pencere)):
+        if not ((sistem or _geciyor(kadlar, bolum)) and (cogul or _geciyor(madlar, bolum))):
             return red("ad_yok")
         if not _tr_var(kayit["tr_alinti"], tr_p[p - 1]):
             return red("tr_yok")
         sen, siz = hitap_isaretleri(kayit["tr_alinti"])
-        if (bicim == "sen" and siz and not sen) or (bicim == "siz" and sen and not siz):
+        if ((bicim == "sen" and siz and not sen) or (bicim in ("siz", "cogul") and sen and not siz)):
             return red("hitap_celiski")
     kayit["gecerli"] = 1
     return kayit
