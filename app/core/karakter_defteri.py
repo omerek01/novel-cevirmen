@@ -194,8 +194,10 @@ def _tr_kucuk(metin: str) -> str:
 
 _SIZ = re.compile(
     r"\b(?:siz|sizi|size|sizin|sizde|sizden|sizinle|sizler)\b"
-    r"|\w+(?:s[ıiuü]n[ıiuü]z|[ıiuü]n[ıiuü]z|y[ıiuü]n[ıiuü]z)\b"
+    r"|\w+(?:s[ıiuü]n[ıiuü]z|[ıiuü]n[ıiuü]z|y[ıiuü]n[ıiuü]z|y[ıiuü]n)\b"
 )
+# Kibar/çoğul emir `-yin` (dinleyin, bekleyin) siz işaretidir; aynı sonla biten adlar değil.
+_SIZ_DEGIL = frozenset({"oyun", "koyun", "boyun", "soyun", "huyun", "suyun"})
 # 2. tekil: zamir, geniş/şimdiki zaman `-sın`, geçmiş zaman `-dın/-tın` (kaldın, gittin).
 _SEN = re.compile(
     r"\b(?:sen|seni|sana|senin|sende|senden|seninle)\b|\b\w+(?:s|[dt])[ıiuü]n\b"
@@ -210,7 +212,8 @@ def hitap_isaretleri(tr: str) -> tuple[bool, bool]:
     model biçimi söyler, bu yalnız aday seçer ve modelin kendi alıntısıyla çelişkisini yakalar."""
     k = _tr_kucuk(tr)
     sen = any(m.group(0) not in _SEN_DEGIL for m in _SEN.finditer(k))
-    return sen, bool(_SIZ.search(k))
+    siz = any(m.group(0) not in _SIZ_DEGIL for m in _SIZ.finditer(k))
+    return sen, siz
 
 
 _TIRNAK = re.compile(r"[\"“”]")
@@ -1163,6 +1166,45 @@ def taban_olcumu(book_slug: str) -> dict:
     return {a: dict(v) if isinstance(v, Counter) else v for a, v in out.items()}
 
 
+def hitap_uyumu(book_slug: str, bolum: int, en_p: list[str], tr_p: list[str], conn=None) -> dict:
+    """Bir çevirinin (ör. ölçüm kolunun) hitabı, ÖNCEKİ bölümlerin kararlı tablosuna uyuyor mu.
+
+    Konuşan/muhatap çeviriye bağlı değildir: defterin bu bölüm için çıkardığı kayıtlar kullanılır
+    (paragraf metni aynıysa). Biçim çevirinin kendi Türkçe paragrafından, deterministik okunur;
+    yalnız tek biçim taşıyan paragraf sayılır. LLM hakemi hitap hatasını çoğu zaman kaçırdığı için
+    (arXiv 2412.01340) ölçüm bu hedefli sayıma dayanır."""
+    kendi = conn is None
+    conn = conn or _connect()
+    try:
+        tablo = hitap_tablosu(book_slug, bolum - 1, conn)
+        kaynak = bolum_metni(book_slug, bolum, conn)
+        satirlar = conn.execute(
+            "SELECT ozne_kimlik, ozne_ad, nesne_kimlik, nesne_ad, paragraf FROM defter_iddia WHERE book_slug = ? "
+            "AND bolum = ? AND tur = 'hitap' AND gecerli = 1", (book_slug, bolum),
+        ).fetchall()
+    finally:
+        if kendi:
+            conn.close()
+    sayi = uyumsuz = 0
+    ornek = []
+    gorulen = set()
+    for ok, oad, nk, nad, p in satirlar:
+        t = tablo.get((_uc(ok, oad), _uc(nk, nad)))
+        if (not t or not t["kararli"] or not p or p in gorulen or p > len(tr_p) or isinstance(kaynak, str)
+                or p > len(kaynak[0]) or _normal(kaynak[0][p - 1]) != _normal(en_p[p - 1] if p <= len(en_p) else "")):
+            continue
+        sen, siz = hitap_isaretleri(tr_p[p - 1])
+        if sen == siz:
+            continue
+        gorulen.add(p)
+        sayi += 1
+        bicim = "sen" if sen else "siz"
+        if bicim != t["bicim"]:
+            uyumsuz += 1
+            ornek.append({"paragraf": p, "konusan": oad, "muhatap": nad, "bicim": bicim, "beklenen": t["bicim"]})
+    return {"degerlendirilen": sayi, "uyumsuz": uyumsuz, "ornek": ornek[:10]}
+
+
 def metrik(book_slug: str) -> dict:
     """İşleme, iddia, maliyet, hitap tutarlılığı ve bağ adayı özeti."""
     from . import kullanim
@@ -1302,6 +1344,7 @@ def arka_planda_isle(book_slug: str) -> bool:
 
     def is_():
         islenen = 0
+        temiz = False
         try:
             while True:
                 bolum = _siradaki(book_slug)
@@ -1321,11 +1364,17 @@ def arka_planda_isle(book_slug: str) -> bool:
             if islenen:
                 uzlastir(book_slug)
             SON_DURUM[book_slug] = {"zaman": time.time(), "islenen": islenen}
+            temiz = True
         except Exception as hata:  # noqa: BLE001 — arka plan işi çeviriyi asla düşürmez
             SON_DURUM[book_slug] = {"zaman": time.time(), "hata": str(hata)[:300]}
         finally:
             with _KILIT:
                 _CALISAN.discard(book_slug)
+        # YARIŞ: işçi kapanırken kuyruğa giren bölüm `kuyruga_ekle`de "çalışıyor" görülüp
+        # sahipsiz kalıyordu (test yakaladı). Temiz bitişte kuyruk bir kez daha yoklanır;
+        # hata sonrası yoklanmaz — kalıcı bir arıza sonsuz yeniden başlatma doğurmasın.
+        if temiz and _siradaki(book_slug) is not None:
+            arka_planda_isle(book_slug)
 
     threading.Thread(target=is_, name=f"karakter-defteri-{book_slug}", daemon=True).start()
     return True

@@ -34,6 +34,7 @@ from core import api_durum, db, karakter_defteri as kd  # noqa: E402
 DURDUR = {"ardisik_basarisiz": 3, "gecersiz_orani": 0.5, "pencere": 10}
 ES_TAVAN = 8
 VARSAYILAN_CIKIS = 1500  # kuru tahminde bölüm başına çıkış tokeni (pilotta ölçülür)
+PARAGRAF = chr(10) * 2
 
 
 def bolumler(kitap: str) -> list[int]:
@@ -149,6 +150,36 @@ def calistir(args, secilen: list[int]) -> list[dict]:
     return sonuclar
 
 
+def hitap_kiyas(kitap: str, yol: str) -> dict:
+    """Her kolun ve canlı çevirinin hitap uyumsuzluğu (`kd.hitap_uyumu`, API'siz)."""
+    satirlar = [json.loads(s) for s in Path(yol).read_text(encoding="utf-8").splitlines() if s.strip()]
+    toplam: dict[str, dict] = {}
+    canli_bolumler = set()
+    for s in satirlar:
+        if not s.get("translation"):
+            continue
+        en_p = [p.strip() for p in (s.get("source") or "").split(PARAGRAF)]
+        tr_p = [p.strip() for p in s["translation"].split(PARAGRAF)]
+        u = kd.hitap_uyumu(kitap, s["bolum"], en_p, tr_p)
+        t = toplam.setdefault(s["kol"], {"degerlendirilen": 0, "uyumsuz": 0, "bolum": 0})
+        t["degerlendirilen"] += u["degerlendirilen"]
+        t["uyumsuz"] += u["uyumsuz"]
+        t["bolum"] += 1
+        canli_bolumler.add(s["bolum"])
+    canli = {"degerlendirilen": 0, "uyumsuz": 0, "bolum": 0}
+    for b in canli_bolumler:
+        metin = kd.bolum_metni(kitap, b)
+        if not isinstance(metin, str):
+            u = kd.hitap_uyumu(kitap, b, *metin)
+            canli["degerlendirilen"] += u["degerlendirilen"]
+            canli["uyumsuz"] += u["uyumsuz"]
+            canli["bolum"] += 1
+    toplam["canli"] = canli
+    for t in toplam.values():
+        t["oran"] = round(t["uyumsuz"] / t["degerlendirilen"], 3) if t["degerlendirilen"] else None
+    return toplam
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--kitap", default="shadow-slave")
@@ -168,6 +199,7 @@ def main() -> int:
     ap.add_argument("--ornek")
     ap.add_argument("--cikti")
     ap.add_argument("--rapor")
+    ap.add_argument("--hitap-kiyas", help="anlam_kiyas çıktısı (jsonl): kolların hitap uyumu")
     ap.add_argument("--env")
     args = ap.parse_args()
     sys.stdout.reconfigure(encoding="utf-8")
@@ -200,6 +232,9 @@ def main() -> int:
         Path(args.cikti or "defter-denetim.json").write_text(json.dumps(ornek, ensure_ascii=False, indent=1),
                                                              encoding="utf-8")
         print(f"denetim örneği: {len(ornek)} kayıt -> {args.cikti or 'defter-denetim.json'}")
+    if args.hitap_kiyas:
+        rapor["hitap_kiyas"] = hitap_kiyas(args.kitap, args.hitap_kiyas)
+        print(json.dumps(rapor["hitap_kiyas"], ensure_ascii=False, indent=1))
     if args.rapor:
         Path(args.rapor).write_text(json.dumps(rapor, ensure_ascii=False, indent=1, default=str), encoding="utf-8")
     return 0

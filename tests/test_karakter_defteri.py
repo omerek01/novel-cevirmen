@@ -127,6 +127,7 @@ def _iddialar(bolum=None):
     ("Geç kaldın.", (True, False)), ("Sen de gel.", (True, False)), ("Nasılsın?", (True, False)),
     ("Siz de gelin, efendim.", (False, True)), ("Biliyor musunuz?", (False, True)),
     ("Yaşlı kadın baktı.", (False, False)), ("Altın parladı.", (False, False)),
+    ("Lütfen bekleyin.", (False, True)), ("Bir oyun oynadı.", (False, False)),
 ])
 def test_hitap_isaretleri(metin, beklenen):
     assert kd.hitap_isaretleri(metin) == beklenen
@@ -737,3 +738,15 @@ def test_olcum_kollari_j_yalniz_grafik_bayragiyla_ayrisir():
     fark = {a for a in anlam_kiyas.KOLLAR["J"] if anlam_kiyas.KOLLAR["J"][a] != anlam_kiyas.KOLLAR["H"][a]}
     assert fark == {"CEVIRI_GRAFIK"} and anlam_kiyas.KOLLAR["H2"] == anlam_kiyas.KOLLAR["H"]
     assert anlam_kiyas.ENJEKTE.index("karakter_defteri") > anlam_kiyas.ENJEKTE.index("translate")
+
+
+def test_hitap_uyumu_kolun_turkcesini_kararli_tabloyla_karsilastirir(kitap):
+    yanitlar = {no: _hitap_bolumu(no, "sen") for no in (10, 11, 12, 13)}
+    cagir = _sahte(yanitlar)
+    for no in (10, 11, 12, 13):
+        kd.bolum_isle(KITAP, no, cagir=cagir)
+    en = ['"Sunny, listen," Nephis said. (13)']
+    assert kd.hitap_uyumu(KITAP, 13, en, ['"Sunny, dinleyin," dedi Nephis.'])["uyumsuz"] == 1
+    assert kd.hitap_uyumu(KITAP, 13, en, ['"Sunny, dinle," dedi Nephis. Sen gel.'])["uyumsuz"] == 0
+    # Kaynak paragraf farklıysa (hizalama kaymış) sayılmaz.
+    assert kd.hitap_uyumu(KITAP, 13, ["başka"], ['"dinleyin"'])["degerlendirilen"] == 0
