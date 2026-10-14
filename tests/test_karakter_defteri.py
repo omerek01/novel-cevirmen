@@ -336,11 +336,44 @@ def test_dusunme_ayari_yalniz_verilince_gonderilir(monkeypatch):
 
 
 @pytest.mark.parametrize("deger,beklenen", [
-    ("", None), ("low", {"thinking_level": "low"}), ("0", {"thinking_budget": 0}),
+    ("", {"thinking_level": "low"}), ("varsayilan", None), ("high", {"thinking_level": "high"}),
+    ("0", {"thinking_budget": 0}),
 ])
 def test_dusunme_ayari_ortamdan(monkeypatch, deger, beklenen):
     monkeypatch.setenv("DEFTER_DUSUNME", deger)
     assert kd.dusunme_ayari() == beklenen
+
+
+def test_yarim_yanitin_harcamasi_kayda_gecer_ve_basarida_birikir(kitap):
+    def yarim(user, model):
+        raise kd.YarimYanit("bitiş: MAX_TOKENS", {"model": model, "giris": 100, "cikis": 50, "dusunme": 40})
+
+    kd.bolum_isle(KITAP, 1, cagir=yarim)
+    kd.bolum_isle(KITAP, 1, cagir=_sahte({1: _bolum1}))  # sahte: 1000/200
+    conn = db.connect()
+    satir = conn.execute("SELECT durum, giris_token, cikis_token, dusunme_token FROM defter_isleme "
+                         "WHERE book_slug = ? AND bolum = 1", (KITAP,)).fetchone()
+    conn.close()
+    assert satir == ("completed", 1100, 250, 40)
+
+
+class _Yanit:
+    def __init__(self, neden):
+        self.candidates = [type("A", (), {"finish_reason": neden})()]
+        self.text = "{}"
+        self.usage_metadata = type("M", (), {"prompt_token_count": 10, "candidates_token_count": 5,
+                                             "thoughts_token_count": 3})()
+
+
+@pytest.mark.parametrize("neden,yarim", [("STOP", False), ("MAX_TOKENS", True)])
+def test_model_cagrisi_bitis_nedenini_denetler(monkeypatch, neden, yarim):
+    monkeypatch.setattr(translate, "_generate_with_fallback", lambda *a, **k: (_Yanit(neden), "m"))
+    if yarim:
+        with pytest.raises(kd.YarimYanit) as hata:
+            kd._model_cagir("u", "m")
+        assert "MAX_TOKENS" in str(hata.value) and hata.value.kullanim["giris"] == 10
+    else:
+        assert kd._model_cagir("u", "m")[1] == {"model": "m", "giris": 10, "cikis": 8, "dusunme": 3}
 
 
 # ---------- ölçüm ve betik ----------

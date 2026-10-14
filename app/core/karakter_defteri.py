@@ -37,7 +37,11 @@ from .varlik_cikarim import _normal, ad_temizle
 
 ISTEM_SURUMU = "defter-v1"
 VARSAYILAN_MODEL = "vertex/gemini-3.8-flash"
-CIKIS_TAVANI = 8000
+# Düşünme tokenları da bu tavandan düşer. Pilot (2026-10-14, 20 SS bölümü, model varsayılan
+# düşünmesi): düşünme bölüm başına 1,3k–6,5k token; 8000'lik tavanda 14 bölümün 5'i yarıda
+# kesildi (STOP yok). Tavan geniş, düşünme varsayılanı `low`.
+CIKIS_TAVANI = 16000
+VARSAYILAN_DUSUNME = "low"
 EN_COK_KAYIT = 60
 EN_COK_HITAP_ADAYI = 40
 EN_COK_DENEME = 3
@@ -158,10 +162,10 @@ def model_adi() -> str:
 
 
 def dusunme_ayari() -> dict | None:
-    """`DEFTER_DUSUNME`: boş -> modelin varsayılanı; low/medium/high/minimal -> düzey;
-    sayı -> bütçe. Düşünme tokenları ÇIKIŞ fiyatından ödenir; pilot A/B'si karar verir."""
-    deger = (os.getenv("DEFTER_DUSUNME") or "").strip().lower()
-    if not deger:
+    """`DEFTER_DUSUNME`: boş -> `VARSAYILAN_DUSUNME`; `varsayilan` -> modelin kendi ayarı;
+    low/medium/high/minimal -> düzey; sayı -> bütçe. Düşünme tokenları ÇIKIŞ fiyatından ödenir."""
+    deger = (os.getenv("DEFTER_DUSUNME") or VARSAYILAN_DUSUNME).strip().lower()
+    if deger == "varsayilan":
         return None
     if deger.lstrip("-").isdigit():
         return {"thinking_budget": int(deger)}
@@ -457,10 +461,23 @@ def _genel_kayitlari(g: list, kayitli: list[dict]) -> list[dict]:
 
 
 # ---------- bölüm işleme ----------
+class YarimYanit(translate.TranslateError):
+    """Model yanıtı STOP ile bitmedi (ör. MAX_TOKENS). Harcanan tokenlar `kullanim`da: yarıda
+    kalan deneme de ödenir, maliyet ölçümü onu saymazsa yanlış olur."""
+
+    def __init__(self, mesaj: str, kullanim: dict):
+        super().__init__(mesaj)
+        self.kullanim = kullanim
+
+
+def _bitis_nedeni(response) -> str:
+    adaylar = getattr(response, "candidates", None)
+    neden = getattr(adaylar[0], "finish_reason", None) if adaylar else getattr(response, "finish_reason", None)
+    return str(getattr(neden, "value", neden) or "yok")
+
+
 def _model_cagir(user: str, model: str) -> tuple[str, dict]:
     """TEK halka: çıkarım sessizce başka bir modele düşmemeli (ölçüm ve maliyet bozulur)."""
-    from . import sozluk_dogrulama
-
     jeton = translate._DUSUNME_AYARI.set(dusunme_ayari())
     try:
         response, kullanilan = translate._generate_with_fallback(
@@ -469,14 +486,15 @@ def _model_cagir(user: str, model: str) -> tuple[str, dict]:
         )
     finally:
         translate._DUSUNME_AYARI.reset(jeton)
-    sozluk_dogrulama._tamamlandi(response)
     meta = getattr(response, "usage_metadata", None)
     dusunme = getattr(meta, "thoughts_token_count", None) if meta is not None else None
     giris, cikis = translate._token_sayilari(response)
-    return getattr(response, "text", None) or "", {
-        "model": kullanilan, "giris": giris, "cikis": cikis,
-        "dusunme": dusunme if isinstance(dusunme, int) else 0,
-    }
+    kullanim = {"model": kullanilan, "giris": giris, "cikis": cikis,
+                "dusunme": dusunme if isinstance(dusunme, int) else 0}
+    neden = _bitis_nedeni(response)
+    if neden not in ("STOP", "FinishReason.STOP", "stop"):
+        raise YarimYanit(f"Defter yanıtı tamamlanmadı (bitiş: {neden}).", kullanim)
+    return getattr(response, "text", None) or "", kullanim
 
 
 def _isleme_yaz(conn, book_slug: str, bolum: int, durum: str, **alan) -> None:
@@ -489,6 +507,19 @@ def _isleme_yaz(conn, book_slug: str, bolum: int, durum: str, **alan) -> None:
     for ad, deger in alan.items():
         conn.execute(f"UPDATE defter_isleme SET {ad} = ? WHERE book_slug = ? AND bolum = ?",
                      (deger, book_slug, bolum))
+
+
+def _harcama_ekle(conn, book_slug: str, bolum: int, kullanim: dict) -> None:
+    """Token sayaçları BİRİKİMLİDİR: yarıda kalan ve yeniden denenen çağrılar da ödenir."""
+    if not kullanim:
+        return
+    conn.execute(
+        "UPDATE defter_isleme SET model = COALESCE(?, model), giris_token = IFNULL(giris_token, 0) + ?, "
+        "cikis_token = IFNULL(cikis_token, 0) + ?, dusunme_token = IFNULL(dusunme_token, 0) + ? "
+        "WHERE book_slug = ? AND bolum = ?",
+        (kullanim.get("model"), kullanim.get("giris") or 0, kullanim.get("cikis") or 0,
+         kullanim.get("dusunme") or 0, book_slug, bolum),
+    )
 
 
 def bolum_isle(book_slug: str, bolum: int, *, cagir=None, kuru: bool = False, model: str | None = None) -> dict:
@@ -534,6 +565,7 @@ def bolum_isle(book_slug: str, bolum: int, *, cagir=None, kuru: bool = False, mo
         try:
             _isleme_yaz(conn, book_slug, bolum, "failed" if deneme >= EN_COK_DENEME else "pending",
                         hata=f"{type(hata).__name__}: {hata}"[:400], sure_sn=round(time.time() - basla, 2))
+            _harcama_ekle(conn, book_slug, bolum, getattr(hata, "kullanim", None) or {})
             conn.commit()
         finally:
             conn.close()
@@ -563,10 +595,9 @@ def bolum_isle(book_slug: str, bolum: int, *, cagir=None, kuru: bool = False, mo
               k.get("paragraf"), k.get("en_alinti"), k.get("tr_alinti"), k.get("anlatim"),
               k["gecerli"], k["red_nedeni"], ISTEM_SURUMU, simdi) for k in kayitlar],
         )
-        _isleme_yaz(conn, book_slug, bolum, "completed", model=kullanim.get("model"),
-                    giris_token=kullanim.get("giris"), cikis_token=kullanim.get("cikis"),
-                    dusunme_token=kullanim.get("dusunme"), sure_sn=round(simdi - basla, 2), hata=None,
+        _isleme_yaz(conn, book_slug, bolum, "completed", sure_sn=round(simdi - basla, 2), hata=None,
                     metrik=json.dumps(metrik, ensure_ascii=False))
+        _harcama_ekle(conn, book_slug, bolum, kullanim)
         conn.commit()
     finally:
         conn.close()
