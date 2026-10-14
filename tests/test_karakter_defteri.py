@@ -390,8 +390,12 @@ def test_metrik_maliyet_ve_hitap_sapmasini_ozetler(kitap):
     cagir = _sahte(yanitlar)
     for no in (10, 11, 12, 13):
         kd.bolum_isle(KITAP, no, cagir=cagir, model="vertex/gemini-3.8-flash")
+    kd.bolum_isle(KITAP, 1, cagir=_sahte({1: _bolum1}))
+    kd.uzlastir(KITAP)
     m = kd.metrik(KITAP)
-    assert m["tamamlanan"] == 4 and m["token"]["giris"] == 4000
+    json.dumps(m)  # rapor dosyasına yazılabilmeli
+    assert m["model_baglari"]
+    assert m["tamamlanan"] == 5 and m["token"]["giris"] == 5000
     assert m["hitap"]["sapma"] == 1 and m["hitap"]["kararli_karsi_kayit"] == 1
     assert m["maliyet_usd"] > 0
 

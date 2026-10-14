@@ -893,7 +893,7 @@ def metrik(book_slug: str) -> dict:
         "hitap": {"cift": len(tablo), "kararli_cift": sum(1 for t in tablo.values() if t["kararli"]),
                   "kararli_karsi_kayit": toplam_hitap, "sapma": sapma,
                   "sapma_orani": round(sapma / toplam_hitap, 3) if toplam_hitap else None},
-        "model_baglari": dict(Counter((b["iliski"], b["guven"]) for b in baglar).most_common(40)),
+        "model_baglari": dict(Counter(f"{b['iliski']}@{b['guven']}" for b in baglar).most_common(40)),
     }
 
 
