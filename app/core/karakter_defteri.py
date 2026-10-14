@@ -723,9 +723,9 @@ def uzlastir(book_slug: str) -> dict:
             vconn.commit()
         finally:
             vconn.close()
-        return {"grup": len(gruplar), "yazilan": yazilan, "yeni": yeni}
     finally:
         conn.close()
+    return {"grup": len(gruplar), "yazilan": yazilan, "yeni": yeni, "tur_dolan": tur_doldur(book_slug)}
 
 
 # ---------- hitap ----------
@@ -841,6 +841,185 @@ def hitap_denetle(book_slug: str, bolum: int) -> list[dict]:
         return sapma
     finally:
         conn.close()
+
+
+# ---------- sözlüğe katkı (Faz 2) ----------
+# Defter sözlüğü DEĞİŞTİRMEZ (tek istisna: boş `tur`, `tur_doldur`). Katkısı inceleme listesine
+# giden nedenlerdir; karar kullanıcınındır. Eşikler tek bölümlük gürültüyü eler: v11'in
+# inceleme listesini her iddiayla doldurması tekrarlanmasın.
+GENEL_EN_AZ = 3
+TAKMA_EN_AZ = 2
+KARSILIK_EN_AZ = 3
+KARSILIK_ORAN = 0.25
+TUR_EN_AZ = 2
+TUR_ORAN = 0.7
+_CELISEN = ("yoldasi", "dusmani")
+
+
+def _tr_govde(metin: str) -> str:
+    """Türkçe adın gövdesi: kesme işaretinden sonrası (ek) atılır, harf işaretleri düzlenir."""
+    return _katla(re.split(r"['’]", metin or "")[0]).strip()
+
+
+def _ayni_karsilik(form: str, hedef: str) -> bool:
+    if not form or not hedef:
+        return True
+    return form == hedef or form.startswith(hedef[: max(4, len(hedef) - 2)]) or hedef.startswith(form)
+
+
+def _bolum_ornegi(bolumler) -> str:
+    return ", ".join(str(b) for b in sorted(bolumler)[:4]) + ("…" if len(bolumler) > 4 else "")
+
+
+def sozluk_nedenleri(book_slug: str) -> dict[str, list[dict]]:
+    """{kaynak: [neden]} — `varlik_grafigi.kalite_nedenleri` üzerinden inceleme listesine girer.
+
+    * `grafik_genel_sozcuk`: kayıt ≥3 bölümde sıradan sözcük olarak geçti, hiç ad olarak geçmedi.
+    * `grafik_takma_ad`: ≥2 bölümde başka bir kaydın takma adı/lakabı olarak geçti, karar verilmedi.
+    * `grafik_kosul_onerisi`: çevirilerde kayıttan farklı bir karşılık ≥3 bölümde ve ≥%25 yerleşmiş.
+    * `grafik_celiski`: iki kişi ≥2 bölümde yoldaş, ≥2 bölümde düşman olarak geçti."""
+    conn = _connect()
+    try:
+        satirlar = {r[0]: {"source": r[1], "target": r[2]} for r in conn.execute(
+            "SELECT kimlik, source, target FROM glossary WHERE book_slug = ? AND kimlik IS NOT NULL", (book_slug,))}
+        iddia = conn.execute(
+            "SELECT tur, ozne_kimlik, iliski, nesne_kimlik, bolum, deger FROM defter_iddia "
+            "WHERE book_slug = ? AND gecerli = 1 AND ozne_kimlik IS NOT NULL", (book_slug,),
+        ).fetchall()
+        try:
+            karar = {(r[0], r[1]): r[2] for r in conn.execute(
+                "SELECT kaynak_kimlik, hedef_kimlik, durum FROM varlik_bag WHERE book_slug = ? "
+                "AND iliski IN ('takma_adi', 'gercek_adi') AND durum IN ('onaylandi', 'reddedildi')",
+                (book_slug,))}
+        except Exception:  # noqa: BLE001 — varlik_bag yoksa karar da yok
+            karar = {}
+    finally:
+        conn.close()
+    genel, ad, takma = defaultdict(set), defaultdict(set), defaultdict(set)
+    formlar: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    iliski_b: dict[tuple, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    for tur, ok, iliski, nk, bolum, deger in iddia:
+        if tur == "genel":
+            genel[ok].add(bolum)
+        elif tur == "varlik":
+            ad[ok].add(bolum)
+            form = _tr_govde((json.loads(deger or "{}") or {}).get("tr", ""))
+            if form:
+                formlar[ok][form].add(bolum)
+            if nk and nk != ok:
+                takma[(nk, ok)].add(bolum)
+        elif tur == "bag" and iliski in _CELISEN and nk:
+            iliski_b[tuple(sorted((ok, nk)))][iliski].add(bolum)
+    out: dict[str, list[dict]] = defaultdict(list)
+
+    def ekle(kimlik, neden):
+        if kimlik in satirlar:
+            out[satirlar[kimlik]["source"]].append(neden)
+
+    for k, bolumler in genel.items():
+        if len(bolumler) >= GENEL_EN_AZ and not ad.get(k):
+            ekle(k, {"tur": "grafik_genel_sozcuk", "aciklama":
+                     f"{len(bolumler)} bölümde ad olarak değil sıradan sözcük olarak geçti (bölüm "
+                     f"{_bolum_ornegi(bolumler)}); hiç ad olarak geçmedi. Kural olarak kalırsa sıradan "
+                     "kelimeye özel karşılık basılabilir: koşul ekle ya da kaydı kaldır."})
+    for (asil, takma_k), bolumler in takma.items():
+        if len(bolumler) < TAKMA_EN_AZ or (asil, takma_k) in karar or asil not in satirlar:
+            continue
+        ekle(takma_k, {"tur": "grafik_takma_ad", "aciklama":
+                       f"'{satirlar[asil]['source']}' için takma ad/lakap olarak geçiyor ({len(bolumler)} bölüm: "
+                       f"{_bolum_ornegi(bolumler)}). Aynı kişiyse 'Aynı kişi' de; değilse 'Ayrı'.",
+                       "ilgili": [satirlar[asil]["source"]], "asil_kimlik": asil, "takma_kimlik": takma_k})
+    for k, dagilim in formlar.items():
+        if k not in satirlar:
+            continue
+        hedef = _tr_govde(satirlar[k]["target"] or "")
+        toplam = len(set().union(*dagilim.values()))
+        for form, bolumler in sorted(dagilim.items(), key=lambda x: -len(x[1])):
+            if (not _ayni_karsilik(form, hedef) and len(bolumler) >= KARSILIK_EN_AZ
+                    and len(bolumler) / toplam >= KARSILIK_ORAN):
+                ekle(k, {"tur": "grafik_kosul_onerisi", "aciklama":
+                         f"Çevirilerde kayıttaki '{satirlar[k]['target']}' yerine '{form}' de yerleşmiş "
+                         f"({len(bolumler)}/{toplam} bölüm: {_bolum_ornegi(bolumler)}). Bağlama göre "
+                         "değişiyorsa koşul ekle; değişmiyorsa çeviri sözlüğe uymamış olabilir."})
+                break
+    for (a, b), dagilim in iliski_b.items():
+        if all(len(dagilim.get(r, ())) >= 2 for r in _CELISEN):
+            for x, y in ((a, b), (b, a)):
+                if y in satirlar:
+                    ekle(x, {"tur": "grafik_celiski", "aciklama":
+                             f"'{satirlar[y]['source']}' ile hem yoldaş ({len(dagilim['yoldasi'])} bölüm) hem "
+                             f"düşman ({len(dagilim['dusmani'])} bölüm) olarak geçiyor; ilişki zamanla "
+                             "değişmiş olabilir.", "ilgili": [satirlar[y]["source"]]})
+    return dict(out)
+
+
+def takma_ad_karari(book_slug: str, asil: str, takma_k: str, karar: str) -> bool:
+    """Kullanıcı kararı. `ayni`: elle onaylı takma ad bağı + bağların asıl kişiye taşınması.
+    `ayri`: bağ reddedilir; `bag_ekle` reddedilmiş bağı diriltmediği için bir daha önerilmez."""
+    if karar not in ("ayni", "ayri"):
+        raise ValueError("karar: ayni | ayri")
+    if karar == "ayni":
+        varlik_grafigi.bag_ekle(book_slug, asil, "takma_adi", takma_k, None, None, "manual")
+        varlik_grafigi.takma_adlari_birlestir(book_slug)
+        return True
+    if not varlik_grafigi.bag_durumu(book_slug, asil, "takma_adi", takma_k, "reddedildi"):
+        varlik_grafigi.bag_ekle(book_slug, asil, "takma_adi", takma_k, None, None, "manual", durum="reddedildi")
+    return True
+
+
+def tur_doldur(book_slug: str) -> int:
+    """BOŞ `tur`u, ≥2 bölümde ve ≥%70 aynı tür görülmüşse doldurur (`tanim_yaz(yalniz_bossa)`:
+    kullanıcının yazdığını ezmez). Tür çeviri istemine girmez; doğrulamanın yolu da budur."""
+    conn = _connect()
+    try:
+        satirlar = {r[0]: r[1] for r in conn.execute(
+            "SELECT kimlik, source FROM glossary WHERE book_slug = ? AND (tur IS NULL OR tur = '')",
+            (book_slug,))}
+        iddia = conn.execute(
+            "SELECT ozne_kimlik, bolum, deger FROM defter_iddia WHERE book_slug = ? AND tur = 'varlik' "
+            "AND gecerli = 1 AND ozne_kimlik IS NOT NULL", (book_slug,),
+        ).fetchall()
+    finally:
+        conn.close()
+    turler: dict[str, dict[str, set]] = defaultdict(lambda: defaultdict(set))
+    for k, bolum, deger in iddia:
+        if k in satirlar:
+            turler[k][(json.loads(deger or "{}") or {}).get("t") or "diger"].add(bolum)
+    yazilan = 0
+    for k, dagilim in turler.items():
+        tur, bolumler = max(dagilim.items(), key=lambda x: len(x[1]))
+        toplam = sum(len(v) for v in dagilim.values())
+        if len(bolumler) >= TUR_EN_AZ and len(bolumler) / toplam >= TUR_ORAN and tur != "diger":
+            yazilan += bool(glossary.tanim_yaz(book_slug, satirlar[k], None, tur=tur, yalniz_bossa=True))
+    return yazilan
+
+
+def kart(book_slug: str, kimlik: str | None, en_cok_bolum: int | None = None) -> dict | None:
+    """Doğrulama bağlamı için kısa kimlik kartı: tür dağılımı, takma adlar, çevirideki biçimler.
+    YALNIZ BAĞLAMDIR (karar verdirmez); `baglam_hash`e girmez."""
+    if not kimlik:
+        return None
+    conn = _connect()
+    try:
+        sinir = en_cok_bolum if en_cok_bolum is not None else 10**9
+        iddia = conn.execute(
+            "SELECT deger, nesne_ad, bolum FROM defter_iddia WHERE book_slug = ? AND tur = 'varlik' "
+            "AND gecerli = 1 AND ozne_kimlik = ? AND bolum <= ?", (book_slug, kimlik, sinir),
+        ).fetchall()
+    finally:
+        conn.close()
+    if not iddia:
+        return None
+    turler, formlar, asil = Counter(), Counter(), Counter()
+    for deger, nesne_ad, _b in iddia:
+        d = json.loads(deger or "{}") or {}
+        turler[d.get("t") or "diger"] += 1
+        if d.get("tr"):
+            formlar[_tr_govde(d["tr"])] += 1
+        if nesne_ad:
+            asil[nesne_ad] += 1
+    return {"bolum": len({b for *_x, b in iddia}), "tur": dict(turler.most_common(3)),
+            "ceviride": dict(formlar.most_common(3)), "takma_adi_oldugu": dict(asil.most_common(2))}
 
 
 # ---------- ölçüm (API'siz) ----------

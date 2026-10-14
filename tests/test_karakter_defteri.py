@@ -509,3 +509,135 @@ def test_cogul_hitap_gecerli_ama_tabloya_girmez(kitap):
     assert all(r[4] for r in _iddialar(20))
     kimlik = {r["source"]: r["kimlik"] for r in glossary.get_glossary_rows(KITAP)}
     assert kd.hitap_tablosu(KITAP)[(kimlik["Sunny"], kimlik["Kai"])]["bicim"] is None
+
+
+# ---------- Faz 2: sözlüğe katkı ----------
+def _kimlik():
+    return {r["source"]: r["kimlik"] for r in glossary.get_glossary_rows(KITAP)}
+
+
+def _iddia_yaz(tur, ozne, bolum, nesne=None, deger=None, iliski=None):
+    kd._connect().close()
+    k = _kimlik()
+    conn = db.connect()
+    conn.execute(
+        "INSERT INTO defter_iddia (book_slug, bolum, tur, ozne_ad, ozne_kimlik, iliski, nesne_ad, nesne_kimlik, "
+        "deger, gecerli, istem_surumu, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'test', 0)",
+        (KITAP, bolum, tur, ozne, k.get(ozne), iliski, nesne, k.get(nesne) if nesne else None,
+         json.dumps(deger or {}, ensure_ascii=False)),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _nedenler(kaynak):
+    return [n["tur"] for n in kd.sozluk_nedenleri(KITAP).get(kaynak, [])]
+
+
+def test_genel_sozcuk_uc_bolum_ve_hic_ad_olmama_ister(kitap):
+    for b in (1, 2):
+        _iddia_yaz("genel", "Hollow", b)
+    assert "grafik_genel_sozcuk" not in _nedenler("Hollow")
+    _iddia_yaz("genel", "Hollow", 3)
+    assert "grafik_genel_sozcuk" in _nedenler("Hollow")
+    _iddia_yaz("varlik", "Hollow", 4, deger={"tr": "Kovuk", "t": "yer"})
+    assert "grafik_genel_sozcuk" not in _nedenler("Hollow")
+
+
+def test_takma_ad_onerisi_karar_verilince_kaybolur_ve_dirilmez(kitap):
+    for b in (1, 2):
+        _iddia_yaz("varlik", "Changing Star", b, nesne="Nephis", deger={"tr": "Değişen Yıldız", "t": "kisi"},
+                   iliski="takma_adi")
+    neden = kd.sozluk_nedenleri(KITAP)["Changing Star"][0]
+    k = _kimlik()
+    assert (neden["tur"], neden["asil_kimlik"], neden["takma_kimlik"]) == (
+        "grafik_takma_ad", k["Nephis"], k["Changing Star"])
+    kd.takma_ad_karari(KITAP, k["Nephis"], k["Changing Star"], "ayri")
+    assert "grafik_takma_ad" not in _nedenler("Changing Star")
+    kd.uzlastir(KITAP)
+    assert _bag("Nephis", "takma_adi", "Changing Star")["durum"] == "reddedildi"
+
+
+def test_takma_ad_ayni_karari_onaylar(kitap):
+    k = _kimlik()
+    kd.takma_ad_karari(KITAP, k["Nephis"], k["Changing Star"], "ayni")
+    assert _bag("Nephis", "takma_adi", "Changing Star")["durum"] == "onaylandi"
+    with pytest.raises(ValueError):
+        kd.takma_ad_karari(KITAP, k["Nephis"], k["Changing Star"], "belki")
+
+
+def test_kosul_onerisi_yerlesmis_farkli_karsiligi_bildirir(kitap):
+    _iddia_yaz("varlik", "Captain", 1, deger={"tr": "Yüzbaşı'ya", "t": "rutbe"})
+    for b in (2, 3, 4):
+        _iddia_yaz("varlik", "Captain", b, deger={"tr": "Kaptan", "t": "rutbe"})
+    nedenler = kd.sozluk_nedenleri(KITAP)["Captain"]
+    assert nedenler[0]["tur"] == "grafik_kosul_onerisi" and "kaptan" in nedenler[0]["aciklama"]
+
+
+def test_kayitla_ayni_karsilik_ekli_olsa_da_oneri_uretmez(kitap):
+    for b, tr in ((1, "Yüzbaşı"), (2, "Yüzbaşı'nın"), (3, "yüzbaşıya"), (4, "Yuzbasi")):
+        _iddia_yaz("varlik", "Captain", b, deger={"tr": tr, "t": "rutbe"})
+    assert _nedenler("Captain") == []
+
+
+def test_celiski_iki_iliskinin_ikisi_de_iki_bolum_ister(kitap):
+    for b in (1, 2):
+        _iddia_yaz("bag", "Sunny", b, nesne="Kai", iliski="yoldasi")
+    _iddia_yaz("bag", "Kai", 3, nesne="Sunny", iliski="dusmani")
+    assert "grafik_celiski" not in _nedenler("Sunny")
+    _iddia_yaz("bag", "Sunny", 4, nesne="Kai", iliski="dusmani")
+    assert "grafik_celiski" in _nedenler("Sunny") and "grafik_celiski" in _nedenler("Kai")
+
+
+def test_tur_doldur_yalniz_bos_turu_ve_kararli_cogunlugu_yazar(kitap):
+    conn = db.connect()
+    conn.execute("UPDATE glossary SET tur = NULL WHERE book_slug = ? AND source IN ('Julius', 'Kai')", (KITAP,))
+    conn.commit()
+    conn.close()
+    for b in (1, 2):
+        _iddia_yaz("varlik", "Julius", b, deger={"tr": "Julius", "t": "kisi"})
+        _iddia_yaz("varlik", "Sunny", b, deger={"tr": "Sunny", "t": "yer"})  # tur dolu: ezilmez
+    _iddia_yaz("varlik", "Kai", 1, deger={"tr": "Kai", "t": "kisi"})  # tek bölüm: yazılmaz
+    assert kd.tur_doldur(KITAP) == 1
+    turler = {r["source"]: r["tur"] for r in glossary.get_glossary_rows(KITAP)}
+    assert (turler["Julius"], turler["Sunny"], turler["Kai"]) == ("kisi", "kisi", None)
+
+
+def test_inceleme_listesine_ek_alanlariyla_girer_onaylida_girmez(kitap):
+    for b in (1, 2):
+        _iddia_yaz("varlik", "Changing Star", b, nesne="Nephis", deger={"tr": "Değişen Yıldız"}, iliski="takma_adi")
+    liste = {x["source"]: x for x in glossary.inceleme_listesi(KITAP)}
+    neden = next(n for n in liste["Changing Star"]["nedenler"] if n["tur"] == "grafik_takma_ad")
+    assert neden["asil_kimlik"] == _kimlik()["Nephis"] and neden["ilgili"] == ["Nephis"]
+    glossary.onayla(KITAP, "Changing Star")
+    assert "Changing Star" not in {x["source"] for x in glossary.inceleme_listesi(KITAP)}
+
+
+def test_takma_ad_ucu(kitap):
+    from fastapi.testclient import TestClient
+
+    import server
+
+    k = _kimlik()
+    istemci = TestClient(server.app)
+    uc = f"/api/book/{KITAP}/defter/takma-ad"
+    assert istemci.post(uc, json={"asil_kimlik": k["Nephis"], "takma_kimlik": k["Changing Star"],
+                                  "karar": "ayni"}).status_code == 200
+    assert _bag("Nephis", "takma_adi", "Changing Star")["durum"] == "onaylandi"
+    assert istemci.post(uc, json={"asil_kimlik": "yok", "takma_kimlik": k["Nephis"],
+                                  "karar": "ayni"}).status_code == 404
+    assert istemci.post(uc, json={"asil_kimlik": k["Nephis"], "takma_kimlik": k["Kai"],
+                                  "karar": "belki"}).status_code == 400
+
+
+def test_dogrulama_karti_baglam_hashini_degistirmez(kitap):
+    from core import sozluk_dogrulama
+
+    satir = next(r for r in glossary.get_glossary_rows(KITAP) if r["source"] == "Nephis")
+    bolumler = [{"chapter_no": 1, "text": "\n\n".join(BOLUM1_EN)}]
+    once = sozluk_dogrulama._hazirla(KITAP, satir, bolumler, [satir])
+    assert once["kart"] is None
+    for b in (1, 2):
+        _iddia_yaz("varlik", "Nephis", b, deger={"tr": "Nephis", "t": "kisi"})
+    sonra = sozluk_dogrulama._hazirla(KITAP, satir, bolumler, [satir])
+    assert sonra["kart"]["tur"] == {"kisi": 2} and sonra["baglam_hash"] == once["baglam_hash"]

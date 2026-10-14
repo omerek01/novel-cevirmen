@@ -1501,6 +1501,11 @@ def kalite_nedenleri(book_slug: str) -> dict[str, list[dict]]:
     for kural in (sozcuk_karismalari, ad_tutarsizliklari):
         for kaynak, neden in kural(book_slug).items():
             out.setdefault(kaynak, []).append(neden)
+    # KARAKTER DEFTERİ nedenleri (takma ad, sıradan sözcük, karşılık farkı, çelişki).
+    from . import karakter_defteri
+
+    for kaynak, liste in karakter_defteri.sozluk_nedenleri(book_slug).items():
+        out.setdefault(kaynak, []).extend(liste)
     return out
 
 

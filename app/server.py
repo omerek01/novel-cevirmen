@@ -39,7 +39,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import api_durum, cache, epub_export, glossary, import_book, jobs, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
+from core import api_durum, cache, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -288,6 +288,12 @@ class GlossaryKarar(BaseModel):
     source: str
     karar: str  # onayla | reddet
     taban_surum: int | None = None
+
+
+class TakmaAdKarari(BaseModel):
+    asil_kimlik: str
+    takma_kimlik: str
+    karar: str  # ayni | ayri
 
 
 class GlossaryYasak(BaseModel):
@@ -945,6 +951,21 @@ def glossary_review_decision(slug: str, req: GlossaryKarar) -> dict:
             raise _kayit_bulunamadi()
         return {"ok": True, "silinen": silinen}
     raise HTTPException(status_code=400, detail="karar: onayla | reddet")
+
+
+@app.post("/api/book/{slug}/defter/takma-ad")
+def defter_takma_ad(slug: str, req: TakmaAdKarari) -> dict:
+    """Karakter defterinin takma ad önerisine karar: `ayni` bağı onaylar ve bağları asıl kişiye
+    taşır; `ayri` reddeder (bir daha önerilmez). İnceleme listesi grafik imzasıyla tazelenir."""
+    canonical = library.resolve_slug(slug)
+    kimlikler = {r["kimlik"] for r in glossary.get_glossary_rows(canonical)}
+    if req.asil_kimlik not in kimlikler or req.takma_kimlik not in kimlikler:
+        raise _kayit_bulunamadi()
+    try:
+        karakter_defteri.takma_ad_karari(canonical, req.asil_kimlik, req.takma_kimlik, req.karar)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
 
 
 @app.put("/api/book/{slug}/glossary/yasak")

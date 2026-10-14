@@ -57,6 +57,7 @@ lakaplar İngilizce korunur; diğer özel adlarda Türkçe politika uygulanır. 
 diyalog veya sıradan sözcük olmak tek başına red nedeni değil. Birden fazla anlam global kuralı
 bozuyorsa inceleme ve koşul önerisi ver. Yakın yazımları veya kişi/klan kimliğini birleştirme.
 Mevcut karşılığı değiştirme; düzeltme yalnız öneri olsun. Türkçe mevcut çeviri doğruluk kanıtı değil.
+`kart` (varsa) önceki bölümlerden çıkarılmış kısa kimlik özetidir; yalnız bağlamdır, kanıt değildir.
 Sıradan çoğul biçimi ayrı terim olarak onaylama; tekil kaydı öner. Çoğul biçim kaynakta gerçekten
 adlandırılmış bir canavarın, topluluğun, niteliğin, efsunun veya başka özel adın özgün adıysa
 cogul_ozel_ad=true ver ve bunu gösteren kaynak cümlesini kanıt olarak alıntıla. Yalnız büyük
@@ -280,7 +281,8 @@ def dogrula_parti(kayitlar, api_key='', kitap_basligi='', models=None):
         raise translate.TranslateError(translate.ANAHTAR_YOK_MESAJI)
     payload = {'kitap': kitap_basligi, 'kayitlar': [
         {a:k.get(a) for a in ('source','target','kimlik','surum','kosul','tur','baglamlar',
-                              'ekler','politikalar','kapi_notu','ayni_karsilik')} for k in kayitlar]}
+                              'ekler','politikalar','kapi_notu','ayni_karsilik','kart') if a != 'kart' or k.get(a)}
+        for k in kayitlar]}
     ids = sozluk_isleri.deneme_baslat([k['_is'] for k in kayitlar if k.get('_is')])
     ham = None
     model = None
@@ -344,7 +346,18 @@ def _hazirla(book_slug, r, bolumler, satirlar):
         'baglam_hash':sozluk_isleri.ozet(baglamlar), 'kayit_hash':sozluk_isleri.kayit_ozeti(r),
         'ekler':glossary.ekler(book_slug).get(r['source'],{}), 'politikalar':glossary.politikalar(book_slug),
         'kapi_notu':_kapi_notu(r), 'ayni_karsilik':[x['source'] for x in satirlar
-            if x['source']!=r['source'] and x.get('target')==r.get('target') and r.get('target')!=r['source']]}
+            if x['source']!=r['source'] and x.get('target')==r.get('target') and r.get('target')!=r['source']],
+        # Karakter defteri kimlik kartı: yalnız bağlam; `baglam_hash`e GİRMEZ (girse defter her
+        # güncellendiğinde bütün kayıtlar yeniden doğrulanırdı).
+        'kart':_kart(book_slug, r.get('kimlik'))}
+
+
+def _kart(book_slug, kimlik):
+    from . import karakter_defteri
+    try:
+        return karakter_defteri.kart(book_slug, kimlik)
+    except Exception:  # noqa: BLE001 — kart yoksa doğrulama eskisi gibi sürer
+        return None
 
 
 def _sonuc(k,sonuc,not_,yanit=None):

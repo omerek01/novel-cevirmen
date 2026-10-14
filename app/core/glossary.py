@@ -2342,8 +2342,11 @@ def _agir_nedenler(
     )
     grafik, grafik_taze = _onbellekli(
         book_slug, "grafik", ozet,
-        _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at), MAX(created_at) "
-                      "FROM varlik_bag WHERE book_slug = ?"),
+        # Karakter defteri de grafik nedeni üretir: işlenen bölüm değişince liste bayat kalmasın.
+        # İki imza AYRI sorgu: defter tablosu yoksa grafik imzası yine çalışmalı.
+        (_imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at), MAX(created_at) "
+                       "FROM varlik_bag WHERE book_slug = ?"),
+         _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at) FROM defter_isleme WHERE book_slug = ?")),
         kaynaklar, grafik_hesapla, bayat_kabul,
     )
     return ihlaller, grafik, ihlal_taze and grafik_taze
@@ -2442,7 +2445,9 @@ def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict
     # VARLIK GRAFİĞİ kuralları (sınıf sözcüğü karışması, aynı kişinin adları).
     for kaynak, liste in grafik.items():
         for n in liste:
-            ekle(kaynak, n["tur"], n["aciklama"], n.get("ilgili") or ())
+            # Ek alanlar (ör. takma ad kararının kimlikleri) arayüzün eylem düğmelerine gider.
+            ek = {a: v for a, v in n.items() if a not in ("tur", "aciklama", "ilgili")}
+            ekle(kaynak, n["tur"], n["aciklama"], n.get("ilgili") or (), **ek)
     for a, b in yakin_terimler(book_slug):
         ekle(a, "yakin_yazim", f"'{b}' ile tek harf farklı — biri yazım hatası olabilir.", [b])
         ekle(b, "yakin_yazim", f"'{a}' ile tek harf farklı — biri yazım hatası olabilir.", [a])
@@ -2467,7 +2472,8 @@ def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict
     # model doğrulamasının reddi, en son stil/yeni ekleme bilgisi.
     oncelik = {
         "bicim": 0, "yasak_karsilik": 0, "karsilik_cakismasi": 1, "dogrulama": 1,
-        "sozcuk_karismasi": 1, "ad_tutarliligi": 2,
+        "sozcuk_karismasi": 1, "ad_tutarliligi": 2, "grafik_celiski": 1,
+        "grafik_takma_ad": 2, "grafik_kosul_onerisi": 2, "grafik_genel_sozcuk": 2,
         "ihlal_suphesi": 2, "sayi_uyumsuzlugu": 2, "politika": 2, "yakin_yazim": 3,
         "kalip_tutarsizligi": 4, "kardes_tutarsizligi": 4, "yeni_otomatik": 5,
     }
