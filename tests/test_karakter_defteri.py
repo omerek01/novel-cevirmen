@@ -641,3 +641,99 @@ def test_dogrulama_karti_baglam_hashini_degistirmez(kitap):
         _iddia_yaz("varlik", "Nephis", b, deger={"tr": "Nephis", "t": "kisi"})
     sonra = sozluk_dogrulama._hazirla(KITAP, satir, bolumler, [satir])
     assert sonra["kart"]["tur"] == {"kisi": 2} and sonra["baglam_hash"] == once["baglam_hash"]
+
+
+# ---------- Faz 3: çeviriye katkı ----------
+def _snap():
+    k = _kimlik()
+    return {"bolum": 9, "varliklar": {
+        k["Nephis"]: {"ad": "Nephis", "adlar": ["Nephis", "Changing Star"], "takma": ["Changing Star"]},
+        k["Sunny"]: {"ad": "Sunny", "adlar": ["Sunny"], "takma": []},
+        k["Julius"]: {"ad": "Julius", "adlar": ["Julius"], "takma": []}},
+        "iliskiler": [{"o": k["Sunny"], "r": "ogretmeni", "n": k["Julius"]}],
+        "hitap": [{"ko": k["Sunny"], "mu": k["Nephis"], "ko_ad": "Sunny", "mu_ad": "Nephis", "bicim": "sen",
+                   "n": 5, "son_bolum": 8, "elle": False},
+                  {"ko": "ad:spell", "mu": k["Sunny"], "ko_ad": "Spell", "mu_ad": "Sunny", "bicim": "siz",
+                   "n": 9, "son_bolum": 8, "elle": False}]}
+
+
+def test_kart_yalniz_parcadaki_kisileri_ve_iki_ucu_gorulen_hitabi_tasir(kitap):
+    snap = _snap()
+    kart = kd.kart_metni(snap, ["Changing Star nodded at Sunny."])
+    assert kart.startswith(kd.KART_BASLIGI)
+    assert "Nephis = Changing Star (aynı kişi)" in kart and "Sunny → Nephis: sen" in kart
+    assert "Julius" not in kart and "Spell" not in kart
+    assert "Spell → Sunny: siz" in kd.kart_metni(snap, ["[You have received a Memory.]", "Sunny smiled."])
+    assert "Julius: Sunny'in öğretmeni" in kd.kart_metni(snap, ["Sunny thanked Julius."])
+    assert kd.kart_metni(snap, ["Nobody is here."]) == "" and kd.kart_metni(None, ["Sunny"]) == ""
+    assert kd.kart_metni(snap, ["the sunny day"]) == ""  # küçük harf: ad değil
+
+
+def test_kart_tavani_asilmaz(kitap):
+    snap = _snap()
+    k = _kimlik()
+    snap["hitap"] = [dict(snap["hitap"][0], son_bolum=i) for i in range(60)]
+    kart = kd.kart_metni(snap, ["Sunny and Nephis."])
+    assert len(kart) <= kd.KART_KARAKTER_TAVANI and kart.count("\n") <= kd.KART_SATIR_TAVANI
+
+
+def test_ceviri_kartlari_gelecegi_ve_dusuk_guveni_almaz(kitap):
+    k = _kimlik()
+    vg.bag_ekle(KITAP, k["Nephis"], "takma_adi", k["Changing Star"], 3, "x", "model", guven=1.0, durum="aday")
+    vg.bag_ekle(KITAP, k["Sunny"], "ogretmeni", k["Julius"], 3, "x", "model", guven=0.5, durum="aday")
+    vg.bag_ekle(KITAP, k["Sunny"], "lideri", k["Kai"], 20, "x", "manual")
+    snap = kd.ceviri_kartlari(KITAP, 10)
+    assert snap["varliklar"][k["Nephis"]]["takma"] == ["Changing Star"]
+    assert snap["iliskiler"] == []  # 0,5 güven ve 20. bölümdeki bağ girmez
+    yanitlar = {no: _hitap_bolumu(no, "sen") for no in (10, 11, 12)}
+    cagir = _sahte(yanitlar)
+    for no in (10, 11, 12):
+        kd.bolum_isle(KITAP, no, cagir=cagir)
+    assert kd.ceviri_kartlari(KITAP, 11)["hitap"] == []  # 2 kayıt: kararsız
+    assert [h["bicim"] for h in kd.ceviri_kartlari(KITAP, 12)["hitap"]] == ["sen"]
+
+
+def _istem_yakala(monkeypatch):
+    yakalanan = []
+
+    class _Y:
+        text = json.dumps({"translation": "x", "detected_names": [], "detected_terms": []})
+
+    def sahte(client_factory, models, user, **kw):
+        yakalanan.append(user)
+        return _Y(), "m"
+
+    monkeypatch.setattr(translate, "_izli_uret", sahte)
+    return yakalanan
+
+
+def test_bayrak_kapaliyken_ceviri_istemi_bayt_bayt_ayni(kitap, monkeypatch):
+    yakalanan = _istem_yakala(monkeypatch)
+    paras = ["Changing Star nodded at Sunny."]
+    translate._translate_chunk(None, ("m",), paras, {"Sunny": "Sunny"}, "")
+    jeton = translate._DEFTER_KARTLARI.set(None)
+    translate._translate_chunk(None, ("m",), paras, {"Sunny": "Sunny"}, "")
+    translate._DEFTER_KARTLARI.reset(jeton)
+    jeton = translate._DEFTER_KARTLARI.set(_snap())
+    translate._translate_chunk(None, ("m",), paras, {"Sunny": "Sunny"}, "")
+    translate._DEFTER_KARTLARI.reset(jeton)
+    assert yakalanan[0] == yakalanan[1]
+    assert yakalanan[2] == kd.kart_metni(_snap(), paras) + "\n\n" + yakalanan[0]
+
+
+def test_pipeline_bayrak_kapaliyken_kart_kurmaz(kitap, monkeypatch):
+    from core import pipeline
+
+    monkeypatch.setattr(kd, "ceviri_kartlari", lambda *a, **k: pytest.fail("kart kuruldu"))
+    assert pipeline._defter_kartlari(KITAP, 5) is None
+    monkeypatch.setenv("CEVIRI_GRAFIK", "1")
+    monkeypatch.setattr(kd, "ceviri_kartlari", lambda s, n, conn=None: {"bolum": n})
+    assert pipeline._defter_kartlari(KITAP, 5) == {"bolum": 4}
+
+
+def test_olcum_kollari_j_yalniz_grafik_bayragiyla_ayrisir():
+    import anlam_kiyas
+
+    fark = {a for a in anlam_kiyas.KOLLAR["J"] if anlam_kiyas.KOLLAR["J"][a] != anlam_kiyas.KOLLAR["H"][a]}
+    assert fark == {"CEVIRI_GRAFIK"} and anlam_kiyas.KOLLAR["H2"] == anlam_kiyas.KOLLAR["H"]
+    assert anlam_kiyas.ENJEKTE.index("karakter_defteri") > anlam_kiyas.ENJEKTE.index("translate")

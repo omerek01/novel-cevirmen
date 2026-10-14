@@ -6,6 +6,7 @@ aynı mantığı kullanır (DRY). FetchError/TranslateError yukarı sızar; ça�
 """
 from __future__ import annotations
 
+import os
 import sqlite3
 import threading
 
@@ -400,6 +401,17 @@ def _onbellek_kaynagi(url: str) -> dict | None:
     }
 
 
+def _defter_kartlari(book_slug: str, chapter_no) -> dict | None:
+    """`CEVIRI_GRAFIK=1` ise karakter defteri kartları (yalnız N−1'e kadarki bilgi). Varsayılan
+    kapalı: kapalıyken çeviri istemi bayt bayt aynıdır. Hata çeviriyi düşürmez."""
+    if os.getenv("CEVIRI_GRAFIK", "0") != "1" or type(chapter_no) is not int:
+        return None
+    try:
+        return karakter_defteri.ceviri_kartlari(book_slug, chapter_no - 1)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _do_fetch_translate_save(
     url: str, api_key: str, background: bool, ticket, refetch: bool = False
 ) -> dict:
@@ -473,6 +485,7 @@ def _do_fetch_translate_save(
     # prefetch, toplu çeviri ve "yeniden çevir" aynı sırayı kullanır. Yola göre ayrı
     # zincir DENENDİ ve kaldırıldı (2026-08-17, kullanıcı kararı) — okumanın gövdesi
     # prefetch'ten geldiği için ucuz zincir pratikte çevirinin ÇOĞUNU belirliyordu.
+    defter = _defter_kartlari(book_slug, chapter.get("chapter_no"))
     if background:
         # Karar #13 / E-12: aynı anda en fazla 1 arka plan çevirisi — kapı yalnız
         # çekimi serileştiriyordu; çeviri aşaması da Gemini kotasını korur.
@@ -480,7 +493,7 @@ def _do_fetch_translate_save(
             result = translate_chapter(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
                 prev_context=prev_context, kosullar=book_kosullar,
-                anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
+                anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"), defter=defter,
                 **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
             )
     else:
@@ -489,7 +502,7 @@ def _do_fetch_translate_save(
             result = translate_chapter(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
                 prev_context=prev_context, kosullar=book_kosullar,
-                anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"),
+                anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"), defter=defter,
                 **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
             )
 

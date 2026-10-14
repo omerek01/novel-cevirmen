@@ -1022,6 +1022,109 @@ def kart(book_slug: str, kimlik: str | None, en_cok_bolum: int | None = None) ->
             "ceviride": dict(formlar.most_common(3)), "takma_adi_oldugu": dict(asil.most_common(2))}
 
 
+# ---------- çeviriye katkı (Faz 3) ----------
+KART_ILISKILERI = ("lideri", "ogretmeni", "akrabasi")  # hitap biçimini belirleyen ilişkiler
+KART_SATIR_TAVANI = 25
+KART_KARAKTER_TAVANI = 1200
+KART_BASLIGI = ("KARAKTER KARTLARI (önceki bölümlerden çıkarıldı; KURAL DEĞİLDİR — bu bölümün metni "
+                "farklı gösteriyorsa metne uy):")
+
+
+def ceviri_kartlari(book_slug: str, en_cok_bolum: int | None, conn=None) -> dict:
+    """Bölüm N'nin çevirisi için anlık görüntü (yalnız N−1'e kadarki bilgi). Saf veri: ölçüm
+    aracının geçici veritabanında da çalışsın diye parametreyle taşınır (`conn` salt okunur olabilir).
+
+    Girenler: takma adlar (onaylı ya da güven ≥0,8), hitabı belirleyen ilişkiler (aynı eşik),
+    kararlı sen/siz çiftleri. Tek bölümlük düşük güvenli iddia GİRMEZ."""
+    kendi = conn is None
+    conn = conn or _connect()
+    try:
+        sinir = en_cok_bolum if en_cok_bolum is not None else 10**9
+        adlar = {r[0]: r[1] for r in conn.execute(
+            "SELECT kimlik, source FROM glossary WHERE book_slug = ? AND kimlik IS NOT NULL", (book_slug,))}
+        yazimlar: dict[str, list[str]] = defaultdict(list)
+        try:
+            for k, y in conn.execute("SELECT kimlik, yazim FROM sozluk_yazim WHERE book_slug = ?", (book_slug,)):
+                yazimlar[k].append(y)
+            baglar = conn.execute(
+                "SELECT kaynak_kimlik, iliski, hedef_kimlik FROM varlik_bag WHERE book_slug = ? "
+                "AND durum != 'reddedildi' AND (durum = 'onaylandi' OR IFNULL(guven, 0) >= 0.8) "
+                "AND IFNULL(ilk_bolum, 0) <= ? AND iliski IN ('takma_adi', 'gercek_adi', 'lideri', "
+                "'ogretmeni', 'akrabasi') AND instr(kaynak_kimlik, '#') = 0 AND instr(hedef_kimlik, '#') = 0",
+                (book_slug, sinir),
+            ).fetchall()
+        except Exception:  # noqa: BLE001 — tablo yoksa yalnız hitap
+            baglar = []
+        tablo = hitap_tablosu(book_slug, en_cok_bolum, conn)
+    finally:
+        if kendi:
+            conn.close()
+    varliklar: dict[str, dict] = {}
+
+    def varlik(k):
+        if k not in varliklar and k in adlar:
+            varliklar[k] = {"ad": adlar[k], "adlar": [adlar[k], *yazimlar.get(k, [])], "takma": []}
+        return varliklar.get(k)
+
+    iliskiler = []
+    for kaynak, iliski, hedef in baglar:
+        a, h = varlik(kaynak), varlik(hedef)
+        if not (a and h):
+            continue
+        if iliski in ("takma_adi", "gercek_adi"):
+            a["takma"].append(h["ad"])
+            a["adlar"].append(h["ad"])
+        else:
+            iliskiler.append({"o": kaynak, "r": iliski, "n": hedef})
+    hitap = []
+    for (ko, mu), t in tablo.items():
+        if not t["kararli"] or t["bicim"] not in ("sen", "siz"):
+            continue
+        for uc in (ko, mu):
+            if not uc.startswith("ad:"):
+                varlik(uc)
+        hitap.append({"ko": ko, "mu": mu, "ko_ad": t["konusan"], "mu_ad": t["muhatap"], "bicim": t["bicim"],
+                      "n": t["n"], "son_bolum": t["son_bolum"], "elle": t["elle"]})
+    return {"bolum": en_cok_bolum, "varliklar": varliklar, "iliskiler": iliskiler, "hitap": hitap}
+
+
+def kart_metni(snap: dict | None, en_paras: list[str]) -> str:
+    """Parçada geçen varlıkların kartı (TransGraph: yalnız ilgili komşuluk). Boşsa ''."""
+    if not snap:
+        return ""
+    metin = "\n\n".join(en_paras)
+    varliklar = snap.get("varliklar") or {}
+    gorulen = {k for k, v in varliklar.items() if _geciyor(v["adlar"], metin, buyuk=True)}
+    sistem_var = any(p.lstrip().startswith("[") for p in en_paras)
+
+    def var(uc):
+        if uc.startswith("ad:"):
+            return uc[3:] in SISTEM_KONUSANLARI and sistem_var
+        return uc in gorulen
+
+    satirlar = []
+    for k in sorted(gorulen, key=lambda x: varliklar[x]["ad"]):
+        if varliklar[k]["takma"]:
+            satirlar.append(f"- {varliklar[k]['ad']} = {', '.join(sorted(set(varliklar[k]['takma'])))} (aynı kişi)")
+    for b in snap.get("iliskiler") or []:
+        if b["o"] in gorulen and b["n"] in gorulen:
+            etiket = varlik_grafigi.ILISKILER[b["r"]]["etiket"]
+            satirlar.append(f"- {varliklar[b['n']]['ad']}: {varliklar[b['o']]['ad']}'in {etiket}")
+    for h in snap.get("hitap") or []:
+        if var(h["ko"]) and var(h["mu"]):
+            kaynak = "elle karar" if h.get("elle") else f"{h['n']} kayıt, son bölüm {h['son_bolum']}"
+            satirlar.append(f"- {h['ko_ad']} → {h['mu_ad']}: {h['bicim']} ({kaynak})")
+    if not satirlar:
+        return ""
+    out, uzunluk = [KART_BASLIGI], len(KART_BASLIGI)
+    for s in satirlar[:KART_SATIR_TAVANI]:
+        if uzunluk + len(s) + 1 > KART_KARAKTER_TAVANI:
+            break
+        out.append(s)
+        uzunluk += len(s) + 1
+    return "\n".join(out)
+
+
 # ---------- ölçüm (API'siz) ----------
 _CAPTAIN = re.compile(r"\bCaptain\b")
 

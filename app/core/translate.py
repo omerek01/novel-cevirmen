@@ -1219,6 +1219,8 @@ _CEVIRI_IZ = ContextVar("ceviri_iz", default=None)
 _BELLEK_METNI = ContextVar("bellek_metni", default=None)
 # Bölüm özeti zinciri bloğu (`ozet_zinciri`, CEVIRI_OZET=1); None ise istem değişmez.
 _OZET_METNI = ContextVar("ozet_metni", default=None)
+# Karakter defteri anlık görüntüsü (`CEVIRI_GRAFIK`); kart parça başına `_translate_chunk`ta kurulur.
+_DEFTER_KARTLARI = ContextVar("defter_kartlari", default=None)
 
 
 def _izli_uret(*args, **kwargs):
@@ -1253,8 +1255,11 @@ def _izli_uret(*args, **kwargs):
 def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_context="",
                       kosullar=None, anlamlar=None, bolum_no=None, anlam_denetimi=None,
                       *, book_slug=None, bolum_url=None, onceki_bolum=None,
-                      bellek_havuzu=None) -> dict:
-    """Çeviri denemesini izler; başarısız deneme eski chapter kaydını değiştirmez."""
+                      bellek_havuzu=None, defter=None) -> dict:
+    """Çeviri denemesini izler; başarısız deneme eski chapter kaydını değiştirmez.
+
+    `defter`: karakter defteri anlık görüntüsü (`karakter_defteri.ceviri_kartlari`); verilirse
+    her parçaya yalnız o parçada geçen kişilerin kartı eklenir. None -> istem aynen kalır."""
     from . import ceviri_baglam, ceviri_izleri
     acik = (os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
             or os.getenv("CEVIRI_OZET", "0") == "1")
@@ -1265,6 +1270,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
     roman_token = _ROMAN_URETIM.set(None)
     bellek_token = _BELLEK_METNI.set(None)
     ozet_token = _OZET_METNI.set(None)
+    defter_token = _DEFTER_KARTLARI.set(defter or None)
     try:
         sonuc = _translate_chapter_impl(text, api_key, glossary, models, prev_context,
                     kosullar, anlamlar, bolum_no, anlam_denetimi,
@@ -1281,6 +1287,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
             raise KaliteKontrolHatasi(str(exc)) from exc
         raise
     finally:
+        _DEFTER_KARTLARI.reset(defter_token)
         _OZET_METNI.reset(ozet_token)
         _BELLEK_METNI.reset(bellek_token)
         _ROMAN_URETIM.reset(roman_token)
@@ -2830,7 +2837,13 @@ def _translate_chunk(
     baglam = _ROMAN_URETIM.get()
     bellek = _BELLEK_METNI.get()
     ozet = _OZET_METNI.get()
+    defter = _DEFTER_KARTLARI.get()
     system = None
+    if defter:
+        from . import karakter_defteri
+        kart = karakter_defteri.kart_metni(defter, en_paras)
+        if kart:
+            user = kart + "\n\n" + user
     if bellek:
         user = bellek + "\n\n" + user
     if ozet:
