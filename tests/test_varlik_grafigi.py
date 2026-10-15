@@ -534,3 +534,13 @@ def test_saint_silinince_anlam_dugumu_baglari_da_gider():
     conn = vg._connect()
     assert conn.execute("SELECT COUNT(*) FROM varlik_bag WHERE hedef_kimlik LIKE '%#golge'").fetchone()[0] == 0
     conn.close()
+
+
+def test_tekil_efsun_satiri_aciklamanin_hangi_efsuna_ait_oldugunu_soyler():
+    # Ölçülen biçim (SS 83): liste satırından sonra "Enchantment: [Doubtless]." gelir ve
+    # açıklama YALNIZ o efsunundur; sıradaki ilk efsuna (Enhanced Durability) verilmemeli.
+    metin = ("Memory: [Shroud].\n\nMemory Enchantments: [Enhanced Durability], [Doubtless].\n\n"
+             "Enchantment: [Doubtless].\n\nEnchantment Description: [Protects against mind attacks.]")
+    bulunan = [(o, i, n, k) for o, i, n, k in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
+               if i == "efsunu"]
+    assert [(n, "mind" in k) for _o, _i, n, k in bulunan] == [("Enhanced Durability", False), ("Doubtless", True)]

@@ -1139,6 +1139,14 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
                     gorunus = oge
         elif blok_tur in _BLOK_ALT and anahtar in _BLOK_ALT[blok_tur] and blok_ozne:
             for oge in _ogeler(deger):
+                if anahtar == "Enchantment" and oge in efsunlar:
+                    # Listede zaten olan efsunun tekil satırı (SS 83: "Enchantment: [Doubtless].")
+                    # sıradaki açıklamanın KİME ait olduğunu söyler; bağ yinelenmez.
+                    i = efsunlar[oge]
+                    if i in efsun_sirasi:
+                        efsun_sirasi.remove(i)
+                    efsun_sirasi.insert(0, i)
+                    continue
                 if _BLOK_ALT[blok_tur][anahtar] == "efsunu":
                     efsun_sirasi.append(len(out))
                     efsunlar[oge] = len(out)
