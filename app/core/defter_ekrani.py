@@ -108,10 +108,13 @@ def liste(book_slug: str, konum: int | None) -> dict:
     kayit = defter_kayit.gorunum(book_slug, konum)["kayitlar"]
     bag_sayisi: Counter = Counter()
     takma: dict[str, list[str]] = defaultdict(list)
+    takma_tr: dict[str, list[str]] = defaultdict(list)  # aramada Türkçe takma ad da bulunsun
     for b in _baglar(book_slug, konum):
         if b["iliski"] in ("takma_adi", "gercek_adi"):
             if b["durum"] == "onaylandi" or (b["guven"] or 0) >= 0.8:
                 takma[b["kaynak_kimlik"]].append(b["hedef"])
+                if b["hedef_karsilik"] and b["hedef_karsilik"] != b["hedef"]:
+                    takma_tr[b["kaynak_kimlik"]].append(b["hedef_karsilik"])
         elif b["iliski"] not in _KART_DISI_ILISKILER:
             bag_sayisi[b["kaynak_kimlik"]] += 1
             bag_sayisi[b["hedef_kimlik"]] += 1
@@ -127,7 +130,8 @@ def liste(book_slug: str, konum: int | None) -> dict:
 
     def ozet(kimlik: str, ad: str, tr: str | None, bolum: int) -> dict:
         katli = {glossary.fold_term(x) for x in (ad, *takma.get(kimlik, []))}
-        return {"kimlik": kimlik, "ad": ad, "tr": tr, "takma": takma.get(kimlik, []), "bolum_sayisi": bolum,
+        return {"kimlik": kimlik, "ad": ad, "tr": tr, "takma": takma.get(kimlik, []),
+                "takma_tr": takma_tr.get(kimlik, []), "bolum_sayisi": bolum,
                 "bag_sayisi": bag_sayisi[kimlik], "hitap_cifti": hitap_cifti[kimlik], "karisik": karisik[kimlik],
                 "ani_sayisi": sum(1 for k in kayit["ani"] if glossary.fold_term(k["sahip"]) in katli),
                 "run": any(run_sahipleri[x] for x in katli)}
@@ -178,8 +182,11 @@ def liste(book_slug: str, konum: int | None) -> dict:
                                    "kimlik": kimlik, "sahip": "", "alanlar": {}, "ilk_bolum": ilk,
                                    "oldurulme": None, "origin": "sozluk"})
     yaratiklar.sort(key=lambda k: (k["ilk_bolum"] or 0, k["ad"].casefold()))
-    efsun_sayisi = Counter(glossary.fold_term(k["sahip"]) for k in kayit["efsun"])
-    anilar = [dict(k, efsun_sayisi=efsun_sayisi[glossary.fold_term(k["ad"])]) for k in kayit["ani"]]
+    efsunlar = defaultdict(list)
+    for k in kayit["efsun"]:
+        efsunlar[glossary.fold_term(k["sahip"])].append(k)
+    anilar = [dict(k, efsunlar=efsunlar.get(glossary.fold_term(k["ad"]), []),
+                   efsun_sayisi=len(efsunlar.get(glossary.fold_term(k["ad"]), []))) for k in kayit["ani"]]
     return {"sinir": konum, "kisiler": kisiler, "gruplar": gruplar, "yaratiklar": yaratiklar,
             "anilar": anilar, "nitelikler": kayit["nitelik"], "yankilar": kayit["golge"] + kayit["yanki"],
             "karsiliklar": _karsiliklar(book_slug, [*yaratiklar, *anilar, *kayit["golge"], *kayit["yanki"]]),
