@@ -1177,25 +1177,30 @@ def hitap_uyumu(book_slug: str, bolum: int, en_p: list[str], tr_p: list[str], co
     Konuşan/muhatap çeviriye bağlı değildir: defterin bu bölüm için çıkardığı kayıtlar kullanılır
     (paragraf metni aynıysa). Biçim çevirinin kendi Türkçe paragrafından, deterministik okunur;
     yalnız tek biçim taşıyan paragraf sayılır. LLM hakemi hitap hatasını çoğu zaman kaçırdığı için
-    (arXiv 2412.01340) ölçüm bu hedefli sayıma dayanır."""
+    (arXiv 2412.01340) ölçüm bu hedefli sayıma dayanır.
+
+    Gruba hitap (`cogul`) ve `belirsiz` kayıtlar sayılmaz; gruba konuşulan paragraf da: çoğul
+    "siz" doğrudur, tekil çiftin "sen"iyle çelişki değildir (Faz 3 elle denetimi, 2026-10-15)."""
     kendi = conn is None
     conn = conn or _connect()
     try:
         tablo = hitap_tablosu(book_slug, bolum - 1, conn)
         kaynak = bolum_metni(book_slug, bolum, conn)
         satirlar = conn.execute(
-            "SELECT ozne_kimlik, ozne_ad, nesne_kimlik, nesne_ad, paragraf FROM defter_iddia WHERE book_slug = ? "
-            "AND bolum = ? AND tur = 'hitap' AND gecerli = 1", (book_slug, bolum),
+            "SELECT ozne_kimlik, ozne_ad, nesne_kimlik, nesne_ad, paragraf, deger FROM defter_iddia "
+            "WHERE book_slug = ? AND bolum = ? AND tur = 'hitap' AND gecerli = 1", (book_slug, bolum),
         ).fetchall()
     finally:
         if kendi:
             conn.close()
+    bicimler = [(json.loads(s[5] or "{}") or {}).get("f") for s in satirlar]
+    gruba = {s[4] for s, f in zip(satirlar, bicimler) if f not in ("sen", "siz")}
     sayi = uyumsuz = 0
     ornek = []
-    gorulen = set()
-    for ok, oad, nk, nad, p in satirlar:
+    gorulen = set(gruba)
+    for (ok, oad, nk, nad, p, _d), f in zip(satirlar, bicimler):
         t = tablo.get((_uc(ok, oad), _uc(nk, nad)))
-        if (not t or not t["kararli"] or not p or p in gorulen or p > len(tr_p) or isinstance(kaynak, str)
+        if (f not in ("sen", "siz") or not t or not t["kararli"] or not p or p in gorulen or p > len(tr_p) or isinstance(kaynak, str)
                 or p > len(kaynak[0]) or _normal(kaynak[0][p - 1]) != _normal(en_p[p - 1] if p <= len(en_p) else "")):
             continue
         sen, siz = hitap_isaretleri(tr_p[p - 1])

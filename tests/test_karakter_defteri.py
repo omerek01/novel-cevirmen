@@ -752,6 +752,19 @@ def test_hitap_uyumu_kolun_turkcesini_kararli_tabloyla_karsilastirir(kitap):
     assert kd.hitap_uyumu(KITAP, 13, ["başka"], ['"dinleyin"'])["degerlendirilen"] == 0
 
 
+def test_hitap_uyumu_gruba_hitabi_tekil_ciftle_karsilastirmaz(kitap):
+    # Gruba konuşmada çoğul "siz" doğrudur; tekil çiftin "sen"iyle çelişki sayılmaz
+    # (A/B elle denetiminde 30 uyumsuzluğun ~19'u böyle gruba hitaptı).
+    yanitlar = {no: _hitap_bolumu(no, "sen") for no in (10, 11, 12)}
+    yanitlar[13] = _hitap_bolumu(13, "cogul")
+    cagir = _sahte(yanitlar)
+    for no in (10, 11, 12, 13):
+        kd.bolum_isle(KITAP, no, cagir=cagir)
+    en = ['"Sunny, listen," Nephis said. (13)']
+    u = kd.hitap_uyumu(KITAP, 13, en, ['"Sunny, dinleyin," dedi Nephis.'])
+    assert (u["degerlendirilen"], u["uyumsuz"]) == (0, 0)
+
+
 def test_kucuk_harfli_cins_sozcuk_kaydi_genel_sozcuk_onerisi_almaz(kitap):
     glossary.set_term(KITAP, "beast", "mahluk")
     for b in (1, 2, 3):
