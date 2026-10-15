@@ -88,6 +88,7 @@
            dışa aktarım, silme gibi seyrek/yıkıcı işlemler "Diğer işlemler"de. -->
       <div class="book-actions" role="group" aria-label="Kitap işlemleri">
         <button id="openGlossaryBtn" class="book-action"><b>Sözlük</b><small>terimler</small></button>
+        <button id="openDefterBtn" class="book-action"><b>Defter</b><small>karakterler</small></button>
         <button id="offlineBtn" class="book-action"><b>İndir</b><small>telefona</small></button>
         <button id="bulkBtn" class="book-action"><b>Toplu çevir</b><small>önden</small></button>
       </div>
@@ -119,6 +120,45 @@
              autocomplete="off" placeholder="Bölüm ara (başlık veya numara)…"
              aria-label="Bölüm ara" />
       <div id="chapterList" class="chapter-list"></div>
+    </div>
+  </section>
+
+  <!-- DEFTER: karakterler, yaratıklar, anılar, nitelikler, gölge/yankılar (js/defter.js).
+       Okuma konumunun ilerisi gizlidir; "Tüm kitap" açıkça seçilince açılır. -->
+  <section id="defterView" class="view" hidden>
+    <header class="reader-bar">
+      <button id="defterBackBtn" class="ghost-btn" aria-label="Kitaba dön">←</button>
+      <div class="reader-titles">
+        <div id="defterTitle" class="book-view-title">DEFTER</div>
+      </div>
+      <span class="ghost-btn bar-spacer" aria-hidden="true">←</span>
+    </header>
+    <div class="book-body">
+      <h1 class="gloss-title">Defter</h1>
+      <details class="gloss-help">
+        <summary>Defter nasıl çalışır?</summary>
+        <p class="gloss-hint">
+          Çevrilen bölümlerden kişiler, bağlar ve sen/siz hitapları; rün mesajlarından anılar,
+          efsunlar, nitelikler, gölgeler, yankılar ve öldürülen yaratıklar çıkarılır. Her kaydı
+          düzeltebilir, ekleyebilir ya da kaldırabilirsin; elle kayıt otomatik okumayla değişmez.
+          Seçtiğin sen/siz, sonraki çevirilerde kullanılır. Adların Türkçesi sözlükle ortaktır.
+        </p>
+      </details>
+      <div class="defter-sinir">
+        <span><b id="defterSinirMetin">…</b><small id="defterSinirNot">Okuma konumun · ilerisi gizli</small></span>
+        <button id="defterSinirBtn" type="button" class="chip" aria-pressed="false">Tüm kitap</button>
+      </div>
+      <div class="gloss-tools">
+        <input id="defterAra" type="search" placeholder="Ad, takma ad ya da efsun ara"
+               aria-label="Defterde ara" autocomplete="off" />
+        <div id="defterSekmeler" class="gloss-filters" role="group" aria-label="Defter bölümü"></div>
+      </div>
+      <div class="defter-liste-ust">
+        <p id="defterSayi" class="defter-sayi"></p>
+        <button id="defterEkleBtn" type="button" class="pill" hidden>+ Ekle</button>
+      </div>
+      <p id="defterDurum" class="modal-hint" role="status" aria-live="polite"></p>
+      <ul id="defterListe" class="defter-liste"></ul>
     </div>
   </section>
 
@@ -572,6 +612,36 @@
       <section id="terimEtki" class="terim-etki" hidden></section>
       <section id="terimGecmis" class="terim-gecmis" hidden></section>
     </div>
+  </dialog>
+
+  <!-- DEFTER KARTI ve elle kayıt formu: alttan açılan yapraklar (js/defter.js). -->
+  <dialog id="defterKart" class="modal terim-paneli defter-kart" aria-labelledby="defterKart-baslik">
+    <div class="modal-card terim-kart">
+      <div class="terim-ust">
+        <h3 id="defterKart-baslik" class="modal-title" lang="en"></h3>
+        <button id="defterKartKapat" type="button" class="ghost-btn" aria-label="Kartı kapat">×</button>
+      </div>
+      <div id="defterKartIcerik"></div>
+    </div>
+  </dialog>
+  <dialog id="defterForm" class="modal terim-paneli" aria-labelledby="defterForm-baslik">
+    <form id="defterFormIc" class="modal-card terim-kart" method="dialog">
+      <div class="terim-ust">
+        <h3 id="defterForm-baslik" class="modal-title"></h3>
+        <button id="defterFormKapat" type="button" class="ghost-btn" aria-label="Kapat">×</button>
+      </div>
+      <div id="defterFormAlanlar"></div>
+      <div id="defterFormEk"></div>
+      <p id="defterFormDurum" class="modal-hint terim-durum" role="status" aria-live="polite"></p>
+      <div class="modal-actions terim-eylemler">
+        <button id="defterFormKaldir" type="button" class="pill terim-sil" hidden>Kaldır</button>
+        <span class="terim-eylem-sag">
+          <button id="defterFormVazgec" type="button" class="pill">Vazgeç</button>
+          <button id="defterFormKaydet" type="submit" class="next-btn">Kaydet</button>
+        </span>
+      </div>
+      <p id="defterFormNot" class="modal-hint">Kaydedince kayıt “elle” olur; sonraki bölümlerin otomatik okuması onu değiştirmez.</p>
+    </form>
   </dialog>
 
   <!-- Ayarlar: alttan açılan sheet. `readerView` içindeyken yalnız

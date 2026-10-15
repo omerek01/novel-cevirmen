@@ -503,6 +503,9 @@ export function kur() {
   el("openGlossaryBtn").addEventListener("click", () => {
     if (durum.currentBookSlug) navigate({ view: "glossary", slug: durum.currentBookSlug });
   });
+  el("openDefterBtn").addEventListener("click", () => {
+    if (durum.currentBookSlug) navigate({ view: "defter", slug: durum.currentBookSlug });
+  });
 
   el("chapterSearch").addEventListener("input", applyChapterFilter);
 

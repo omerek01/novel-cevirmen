@@ -11,6 +11,7 @@ export const views = {
   library: el("libraryView"),
   book: el("bookView"),
   glossary: el("glossaryView"),
+  defter: el("defterView"),
   reader: el("readerView"),
   apidurum: el("apiDurumView"),
 };

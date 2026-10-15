@@ -8,6 +8,7 @@ import { views } from "./durum.js";
 import { openBook } from "./kitap.js";
 import { renderLibrary } from "./kutuphane.js";
 import { hudGoster, kokeneOdaklan, loadChapter, persistScroll } from "./okuyucu.js";
+import { openDefter } from "./defter.js";
 import { openGlossary } from "./sozluk.js";
 import { ICONS, el } from "./temel.js";
 
@@ -61,6 +62,9 @@ export function applyNavState(state, kitapGorununce) {
       return openBook(state.slug, kitapGorununce);
     case "glossary":
       openGlossary(state.slug, state.filtre);
+      break;
+    case "defter":
+      openDefter(state.slug, state.tum);
       break;
     case "apidurum":
       apiDurumGoster();

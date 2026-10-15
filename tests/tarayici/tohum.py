@@ -17,6 +17,8 @@ TABLOLAR = (
     # `api_meta` (kayıt başlangıcı) BİLEREK temizlenmez: sunucu süreci tabloları
     # kurduğunu hatırlıyor ve başlangıç satırını yeniden yazmaz.
     "api_gunluk", "api_son", "api_olay",
+    # Karakter defteri ve varlık grafiği (defter ekranı testleri).
+    "defter_iddia", "defter_isleme", "defter_hitap_karar", "defter_kayit", "varlik_bag", "varlik_deger",
 )
 
 TR = [

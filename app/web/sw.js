@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v129"; // karakter defteri inceleme nedenleri
+const SHELL_CACHE = "novellink-shell-v130"; // defter ekranı (karakterler, anılar, elle düzenleme)
 const DATA_CACHE = "novellink-data";
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 
@@ -37,6 +37,8 @@ const SHELL = [
   "/js/ayarlar.js",
   "/js/bildirim.js",
   "/js/cevrimdisi.js",
+  "/js/defter.js",
+  "/js/defter-yardimci.js",
   "/js/diyalog.js",
   "/js/durum.js",
   "/js/ekle.js",
