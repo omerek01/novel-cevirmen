@@ -145,8 +145,9 @@ function altMetin(k, karsiliklar) {
       return parca.join(" · ");
     }
     case "yaratiklar":
-      return [tr(a.rutbe, karsiliklar), tr(a.sinif, karsiliklar)].filter(Boolean).join(" ") +
-        (k.oldurulme != null ? ` · ${k.sahip || "?"} öldürdü, bölüm ${k.oldurulme}` : k.kimlik ? " · sözlükte" : "");
+      return [[tr(a.rutbe, karsiliklar), tr(a.sinif, karsiliklar)].filter(Boolean).join(" "),
+        k.oldurulme != null ? `${k.sahip || "?"} öldürdü, bölüm ${k.oldurulme}` : k.kimlik && "sözlük kaydı"]
+        .filter(Boolean).join(" · ");
     case "anilar":
       return [tr(a.tur, karsiliklar), tr(a.rutbe, karsiliklar), kademeMetni(a.kademe),
         k.efsun_sayisi && `${k.efsun_sayisi} efsun`, k.sahip].filter(Boolean).join(" · ");
