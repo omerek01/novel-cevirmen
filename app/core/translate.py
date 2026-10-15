@@ -1021,6 +1021,17 @@ LAKAP_KURALI = (
     "başkasında cins isim olabilir; ölçüt BELİRTEÇ ve tek-kişi göndergesidir.\n"
 )
 
+# GERÇEK AD politikası (2026-10-15, kullanıcı kararı: "gerçek adlar Türkçe yazılacak"). Kişi adı
+# istisnası yalnız kişinin KENDİ adıdır; Büyü'nün verdiği anlamlı ad çevrilir. Üç istem de bunu
+# taşır (çeviri, terim önerisi, sözlük sınıflama): biri ayrışırsa aynı kitapta iki politika oluşur.
+GERCEK_AD_KURALI = (
+    "- GERÇEK AD (True Name): Büyü'nün/sistemin bir kişiye verdiği, anlamı olan ad "
+    "(rünlerde 'True Name: Lost from Light'; Changing Star, Song of the Fallen) kişiyi "
+    "adlandırsa da İngilizce KALMAZ, anlamıyla Türkçeye çevrilir (Işıktan Mahrum, Değişen "
+    "Yıldız, Düşmüşlerin Şarkısı) ve karakter adı SAYILMAZ. Kişinin kendi "
+    "adı (Sunny, Nephis, Sunless) bu kurala girmez, İngilizce kalır.\n"
+)
+
 SYSTEM_INSTRUCTION = (
     "Sen profesyonel bir İngilizce'den Türkçe'ye web roman çevirmenisin.\n"
     "Kurallar:\n"
@@ -1066,10 +1077,10 @@ SYSTEM_INSTRUCTION = (
     "rahatmışım...' ('eski halimin tuzu kuruydu' DEĞİL). ÖLÇÜT: günümüzün sıradan bir "
     "okuru ifadeyi sözlüğe bakmadan hemen anlamıyorsa düz söyle.\n"
     "- İngilizce korunacak TEK sınıf: bir KİŞİYİ ADLANDIRAN ifadeler. İkisi de "
-    "girer: gerçek adlar (Sunny, Kim Dokja, Nephis) ve gerçek adı bilinmeyen birini "
+    "girer: kişilerin kendi adları (Sunny, Kim Dokja, Nephis) ve adı bilinmeyen birini "
     "ad YERİNE GEÇEREK adlandıran lakaplar (Scholar, Shifty, Hero). Başka hiçbir "
     "özel ad İngilizce kalmaz.\n"
-    + LAKAP_KURALI +
+    + LAKAP_KURALI + GERCEK_AD_KURALI +
     "- Büyü, beceri, sınıf, ırk, KATEGORİ UNVANI, eşya, YER, LONCA/klan/birlik/örgüt ve "
     "sistem/dünya terimlerini İngilizce BIRAKMA; Türkçe'ye çevir (Spell -> Büyü, "
     "Nightmare -> Kabus, Skill -> Beceri, Zero Wing -> Sıfır Kanat gibi). Bir "
@@ -1148,13 +1159,14 @@ SYSTEM_INSTRUCTION = (
     '- Yanıtı SADECE şu JSON ile ver: {"translation": "[[1]] ...\\n\\n[[2]] ...", '
     '"detected_names": ["..."], '
     '"detected_terms": {"İngilizce özel ad": "Türkçe karşılığı"}}\n'
-    "- detected_names: metinde geçen KİŞİLERİ adlandıran ifadeler — gerçek adlar VE "
+    "- detected_names: metinde geçen KİŞİLERİ adlandıran ifadeler — kişilerin kendi adları VE "
     "yukarıdaki LAKAP ÖLÇÜTÜ'nü geçen lakaplar, İngilizce yazımıyla (çeviride de "
     "İngilizce kalan tek sınıf bunlardır). Buraya bir KİŞİYİ ADLANDIRMAYAN hiçbir "
     "şeyi yazma: lonca/klan, şehir, krallık, imparatorluk, kale, eşya, beceri, ırk, "
     "kategori unvanı, canavar türü buraya girerse kitabın sözlüğüne İngilizce olarak "
     "çakılır ve sonraki bölümlerde de Türkçeye çevrilemez. Bir KİŞİYİ mi adlandırıyor "
-    "diye tereddüt ediyorsan detected_names'e DEĞİL detected_terms'e yaz.\n"
+    "diye tereddüt ediyorsan detected_names'e DEĞİL detected_terms'e yaz. GERÇEK AD da "
+    "detected_names'e girmez; Türkçe karşılığıyla detected_terms'e yazılır.\n"
     "- detected_names'teki her ad çeviri metninde de AYNEN İngilizce yazımıyla "
     "geçmelidir. Çeviride Türkçeleştirdiğin bir adı buraya YAZMA ve buraya asla "
     "Türkçe kelime koyma (Türkçeleştirdiysen yeri detected_terms'tir).\n"
@@ -1775,8 +1787,8 @@ SUGGEST_INSTRUCTION = (
     "cümle verilecek; bu adın kitap sözlüğüne nasıl kaydedileceğine karar ver.\n"
     "Kural (çeviri sözlüğünün kuralıyla AYNI):\n"
     "- Ad bir KİŞİYİ adlandırıyorsa İngilizce KALIR: karşılık, adın kendisidir. "
-    "Gerçek ad da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
-    + LAKAP_KURALI +
+    "Kişinin kendi adı da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
+    + LAKAP_KURALI + GERCEK_AD_KURALI +
     "- Başka her özel ad (yer, şehir, imparatorluk, lonca/klan/örgüt, eşya, silah, "
     "beceri/büyü/teknik, kategori unvanı, ırk, adlandırılmış canavar, sistem/dünya terimi) "
     "TÜRKÇE'ye çevrilir; karşılık o Türkçe biçimdir.\n"
@@ -1839,8 +1851,8 @@ CLASSIFY_INSTRUCTION = (
     "doğru olup olmadığına karar ver.\n"
     "Kural (çeviri sözlüğünün kuralıyla AYNI):\n"
     "- Ad bir KİŞİYİ adlandırıyorsa İngilizce KALIR: karşılık adın kendisidir. "
-    "Gerçek ad da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
-    + LAKAP_KURALI +
+    "Kişinin kendi adı da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
+    + LAKAP_KURALI + GERCEK_AD_KURALI +
     "- Başka her özel ad (yer, şehir, imparatorluk, krallık, kale, lonca/klan/örgüt, "
     "eşya, silah, zırh, beceri/büyü/teknik, kategori unvanı, ırk, sınıf, adlandırılmış canavar, "
     "olay, sistem/dünya terimi) TÜRKÇE'ye çevrilir; karşılık o Türkçe biçimdir.\n"
