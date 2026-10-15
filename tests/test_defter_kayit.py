@@ -210,3 +210,49 @@ def test_ceviri_akisi_bolumun_runlerini_deftere_katar():
 
     pipeline._sozluge_isle(KITAP, {"detected_names": [], "detected_terms": []}, 16, RUNLER)
     assert _bul(dk.gorunum(KITAP, None), "ani", "Azure Blade", "Sunny")
+
+
+# ---------- başlıksız sayaçlar (2026-10-15, kullanıcı bildirimi: 848'den sonra güncellenmedi) ----------
+BOLUM_848 = """Name: Sunless.
+
+Shadow Fragments: [777/4000].
+
+Shadow: [Marble Saint].
+
+Shadow Fragments: [44/200].
+
+Shadow Abilities: [Weapon Sage], [Underworld Armament]."""
+
+BOLUM_989 = """As he walked, Sunny decided to check on his runes out of boredom.
+
+Shadow Fragments: [2471/4000].
+
+Next, Sunny checked on Saint.
+
+Shadow Fragments: [146/200]."""
+
+
+def _sayaclari_dogrula():
+    g = dk.gorunum(KITAP, None)
+    assert _bul(g, "alan", "Shadow Fragments", "Sunny")["deger"] == "2471/4000"
+    saint = _bul(g, "golge", "Marble Saint", "Sunny")
+    assert saint["alanlar"]["Shadow Fragments"] == "146/200"
+    assert set(saint["alanlar"]["yetenekler"]) == {"Weapon Sage", "Underworld Armament"}
+    # Spoiler: 900. bölümdeki okur sonraki sayıyı görmez.
+    once = dk.gorunum(KITAP, 900)
+    assert _bul(once, "alan", "Shadow Fragments", "Sunny")["deger"] == "777/4000"
+    assert _bul(once, "golge", "Marble Saint", "Sunny")["alanlar"]["Shadow Fragments"] == "44/200"
+
+
+def test_basliksiz_sayaclar_dogru_sahibe_yazilir_bastan_kurulumda():
+    _bolum(848, BOLUM_848)
+    _bolum(989, BOLUM_989)
+    dk.cikar(KITAP)
+    _sayaclari_dogrula()
+
+
+def test_basliksiz_sayaclar_tek_bolum_akisinda_da_dogru_sahibe_yazilir():
+    # Çeviri akışı bölümü tek başına görür; paydaların sahipleri defterden okunur.
+    dk.bolumden(KITAP, 848, BOLUM_848)
+    dk.bolumden(KITAP, 989, BOLUM_989)
+    _sayaclari_dogrula()

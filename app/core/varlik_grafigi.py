@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 import sqlite3
 import time
+from collections import deque
 
 from . import cache, db, glossary
 
@@ -989,10 +990,13 @@ _BLOK_ALT = {
     # Efsun satırı kitapta üç biçimde yazılıyor (ölçüldü): "Memory Enchantments:",
     # tekil "Enchantment:" ve düz "Enchantments:" (923. bölüm, Bitter Cusp / Stifled Scream).
     "Memory": {"Memory Rank": "rutbesi", "Memory Type": "esya_turu", "Memory Enchantments": "efsunu",
-               "Enchantments": "efsunu", "Enchantment": "efsunu"},
+               "Enchantments": "efsunu", "Enchantment": "efsunu", "Memory Enchantment": "efsunu"},
     # Gölge/yankı nitelikleri (2026-10-15, defter): "Shadow Attributes: [Battle Master], [Stalwart]".
-    "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi", "Shadow Attributes": "niteligi"},
-    "Echo": {"Echo Type": "sinifi", "Echo Core": "rutbesi", "Echo Rank": "rutbesi", "Echo Attributes": "niteligi"},
+    # Yetenekler (`Shadow Abilities`, `Echo Abilities`) 995 bölümlük taramada HİÇ okunmuyordu (8 satır).
+    "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi", "Shadow Attributes": "niteligi",
+               "Shadow Abilities": "yetenegi"},
+    "Echo": {"Echo Type": "sinifi", "Echo Class": "sinifi", "Echo Core": "rutbesi", "Echo Rank": "rutbesi",
+             "Echo Attributes": "niteligi", "Echo Abilities": "yetenegi"},
 }
 _BLOK_SAHIPLIK = {"Memory": "anisi", "Shadow": "golgesi", "Echo": "yanki"}
 # Sonraki bölümlerde Anı rünlerinin ARASINA anlatım giriyor ("He continued to study
@@ -1002,9 +1006,13 @@ _BLOK_SAHIPLIK = {"Memory": "anisi", "Shadow": "golgesi", "Echo": "yanki"}
 # (düz paragraf bloğu kapatır) yerinde: ölçülen yanlış atıf başka anahtarlardaydı.
 _ANI_ANAHTARLARI = frozenset(
     ("Memory Rank", "Memory Tier", "Memory Type", "Memory Description", "Memory Enchantments",
-     "Enchantments", "Enchantment", "Enchantment Description")
+     "Enchantments", "Enchantment", "Enchantment Description", "Memory Enchantment",
+     "Death Charge", "Vanquished Foes")
 )
 ANI_ANLATIM_PENCERESI = 12
+# Gölge/yankı anahtarları ("Shadow Abilities") başka bir şeyin rünü sanılamaz; 655. bölümde
+# Nightmare'ın rünleri arasında 13 paragraf anlatım var.
+ESYA_ANLATIM_PENCERESI = 20
 # "[Echoing Silence] Enchantment Description: ..." — açıklama efsun adıyla aynı paragrafta.
 _SATIR_ICI_EFSUN = re.compile(r"^\[([^\]]+)\]\s*Enchantment Description:")
 # Durum bloğu (`Name: X`) satırları -> ilişki (özne: X).
@@ -1013,13 +1021,62 @@ _DURUM_SATIRLARI = {
     "Attributes": "niteligi", "Aspect": "gorunusu", "Shadows": "golgesi",
     "Class": "sinifi", "Aspect Abilities": "yetenegi", "Aspect Legacy": "yetenegi",
     "Flaw": "kusuru", "Dream Anchor": "ruya_capasi",
+    # Tekil biçimler (85/341/450/974: yeni Nitelik; 353/354/744: Görünüş yeteneği).
+    "Attribute": "niteligi", "Aspect Ability": "yetenegi", "Innate Ability": "yetenegi",
 }
-# Durum DEĞERİ satırları (bağ değil, `varlik_deger`): blok türü -> anahtarlar.
+# Durum DEĞERİ satırları (bağ değil, `varlik_deger`): blok türü -> anahtarlar. Sayaçlar
+# (`Death Charge`, `Vanquished Foes`, `Nightmares required`) anının/gölgenin değeridir.
 _DEGER_SATIRLARI = {
-    "durum": frozenset(("Soul", "Shadow Cores", "Shadow Fragments", "Soul Cores", "Soul Fragments")),
-    "Memory": frozenset(("Memory Tier",)),
+    "durum": frozenset(("Soul", "Shadow Cores", "Shadow Fragments", "Soul Cores", "Soul Fragments",
+                        "Shadow Core", "Soul Core", "Shadow Dance Mastery Level")),
+    "Memory": frozenset(("Memory Tier", "Death Charge", "Vanquished Foes")),
+    "Shadow": frozenset(("Shadow Fragments", "Nightmares required", "Dormant Nightmares")),
 }
+_DEGER_ANAHTARLARI = frozenset().union(*_DEGER_SATIRLARI.values())
 DEGER = "_deger"  # (özne, DEGER, "anahtar\tdeğer", kanıt)
+# Başlıksız küme (`Name:` olmadan "Aspect: [Shadow Slave]."): bölümün son durum öznesine,
+# o yoksa ana karaktere gider (995 bölümlük tarama: 15, 219, 352, 353, 358, 549, 653...).
+# `Rank`, `True Name`, `Class` BİLEREK yok: tek başına başka bir şeyin rünü ya da diyalog
+# olabilir. Değer köşeli olmalı ("Memories: none of your business" rün değildir).
+_BASLIKSIZ_DURUM = frozenset(_DURUM_SATIRLARI) - {"Rank", "True Name", "Class"}
+# Gölge/yankı bloğunu anlatımdan sonra yeniden açan anahtarlar. `Shadow Fragments` BİLEREK
+# yok: Sunny'nin kendi sayacıyla aynı ad; sahibini payda söyler (`_sayac_sahibi`).
+_ESYA_DEVAM = {t: (frozenset(_BLOK_ALT[t]) | _DEGER_SATIRLARI.get(t, frozenset())) - {"Shadow Fragments"}
+               for t in ("Shadow", "Echo")}
+# "[Shadow Fragments: 14/1000]." — erken bölümlerin köşeli biçimi (34, 41, 106, 511).
+_KOSELI_SATIR = re.compile(r"^\[([A-Z][A-Za-z ]{1,30}):\s*([^\[\]]+?)\.?\]\.?$")
+_PAYDA = re.compile(r"^\s*\d+\s*/\s*(\d+)\s*$")
+_TIRNAKLAR = "\"“”'‘’"
+
+
+def payda(deger: str | None) -> int | None:
+    """"870/4000" -> 4000; sayaç değilse None."""
+    m = _PAYDA.match(deger or "")
+    return int(m.group(1)) if m else None
+
+
+def _sayac_sahibi(anahtar: str, deger: str, paydalar: dict | None, ana_karakter: str,
+                  esya: str | None = None) -> str | None:
+    """Başlıksız sayaç satırının sahibi (ölçülen arıza: 848'den sonra Sunny'nin parça sayısı
+    güncellenmiyordu; 870/873/922/989'da satır rün listesi AÇILMADAN okunuyor).
+
+    Payda sahibini ayırır: Sunny'nin eşiği 1000 x çekirdek, Saint'inki 200, Nightmare'ınki 300.
+    Önceki bölümlerde bu (anahtar, payda) kimde görüldüyse onundur; ana karakterin o anahtarda
+    gördüğü en büyük paydadan BÜYÜKSE yeni çekirdeğin eşiğidir (ana karakterin). `esya`: az
+    önce rünleri okunan gölge; paydası ana karakterinkinden KÜÇÜKSE onundur (106: Stone Saint'in
+    ilk "[Shadow Fragments: 0/200.]" satırı anlatımdan sonra geliyor). Bilinmeyen payda kimseye
+    yazılmaz: yanlış sahip, eksik kayıttan kötüdür."""
+    p = payda(deger)
+    if p is None or paydalar is None:
+        return None
+    if (anahtar, p) in paydalar:
+        return paydalar[(anahtar, p)]
+    ana_paydalari = [q for (a, q), o in paydalar.items() if a == anahtar and o == ana_karakter]
+    if ana_paydalari and p > max(ana_paydalari):
+        return ana_karakter
+    if esya and ana_paydalari and p < max(ana_paydalari):
+        return esya
+    return None
 
 # Durum bloğunu anlatımdan SONRA yeniden açabilen anahtarlar. `Rank`, `True Name`
 # ve `Name` BİLEREK yok: tek başına "Rank:" başka bir şeyin rünü ya da diyalog
@@ -1030,7 +1087,8 @@ _DURUM_DEVAM_ANAHTARLARI = frozenset(
     ("Class", "Soul", "Shadow Cores", "Shadow Fragments", "Memories", "Echoes", "Shadows",
      "Attributes", "Attribute Description", "Aspect", "Aspect Rank", "Aspect Description",
      "Aspect Abilities", "Ability Description", "Aspect Legacy", "Flaw", "Flaw Description",
-     "Dream Anchor")
+     "Dream Anchor", "Attribute", "Aspect Ability", "Innate Ability", "Shadow Core", "Soul Core",
+     "Shadow Dance Mastery Level", "Soul Cores", "Soul Fragments")
 )
 
 
@@ -1043,13 +1101,22 @@ def _ogeler(deger: str) -> list[str]:
     return [] if tek in ("", "—", "-") else [tek]
 
 
-def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ...] = ()) -> list[tuple]:
+def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ...] = (),
+                         paydalar: dict | None = None, bilinen_anilar: set[str] | None = None) -> list[tuple]:
     """Bir bölümün kaynağından (özne, ilişki, nesne, kanıt) dörtlüleri — ad düzeyinde.
 
     Rün satırları ardışık paragraflar olarak gelir; boş olmayan ve rün biçiminde
-    olmayan bir paragraf bloğu kapatır. `Name: X` bloğu X'in durumudur; `Memory:`,
-    `Shadow:`, `Echo:` blokları ana karakterin sahip olduğu şeyi anlatır (rünleri
-    okuyan odur — sunucu kopyasındaki bütün örneklerde öyle).
+    olmayan bir paragraf bloğu kapatır. `Name: X` (ya da efendinin kısa kümesi
+    `Master: X`) bloğu X'in durumudur; `Memory:`, `Shadow:`, `Echo:` blokları rünleri
+    okunan kişinin (bölümdeki son `Name:` öznesi, yoksa ana karakter) sahip olduğu şeyi anlatır.
+
+    `paydalar`: bölümler arasında taşınan (anahtar, payda) -> sahip tablosu; verilirse
+    başlıksız sayaç satırları ("Shadow Fragments: [870/4000].") sahibine yazılır ve
+    tablo güncellenir. None: başlıksız sayaçlar atlanır.
+
+    `bilinen_anilar`: önceki bölümlerden bilinen Anı adları. `Memory:` başlığı olmadan gelen
+    Anı satırı ("he found the description of Weaver’s Mask and read:" + efsunlar; 378, 456,
+    522) son `ANI_ANLATIM_PENCERESI` paragrafta adı geçen TEK bilinen Anıya yazılır.
     """
     out: list[tuple] = []
     blok_ozne: str | None = None
@@ -1058,8 +1125,19 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
     efsunlar: dict[str, int] = {}  # son Anının efsunları: ad -> `out` sırası
     son_ani: str | None = None     # anlatımla kapanmış son Anı bloğunun öznesi
     son_durum: str | None = None   # anlatımla kapanmış son durum bloğunun öznesi
+    son_esya: tuple | None = None  # anlatımla kapanmış son gölge/yankı bloğu: (özne, tür)
     anlatim = 0                    # o bloktan beri geçen düz paragraf
     gorunus: str | None = None     # durum bloğundaki Aspect (Aspect Rank'ın öznesi)
+    sahip = ana_karakter           # rünleri okunan kişi: bölümdeki son `Name:`/`Master:` öznesi
+    son_baslik: str | None = None  # bölümdeki son blok başlığının türü (durum/Memory/Shadow/Echo)
+    son_anlatim: deque = deque(maxlen=ANI_ANLATIM_PENCERESI)  # son düz paragraflar (Anı adı için)
+
+    def deger_ekle(ozne: str, anahtar: str, deger_metni: str, kanit: str) -> None:
+        out.append((ozne, DEGER, f"{anahtar}\t{deger_metni}", kanit))
+        p = payda(deger_metni)
+        if paydalar is not None and p is not None:
+            paydalar[(anahtar, p)] = ozne
+
     for paragraf in (p.strip() for p in metin.split("\n")):
         if not paragraf:
             continue
@@ -1078,7 +1156,11 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             # Evrim İŞARETİ: hangi ada dönüştüğü sonraki rün bloğunda görünür
             # (`evrim_baglari` bölümler arasında eşleştirir).
             out.append((m.group(1).strip(), "_evrim", "", paragraf))
-        satir = _RUN_SATIRI.match(paragraf)
+        koseli = _KOSELI_SATIR.match(paragraf)
+        if koseli and koseli.group(1) in _DEGER_ANAHTARLARI:
+            satir = _RUN_SATIRI.match(f"{koseli.group(1)}: [{koseli.group(2).strip()}]")
+        else:
+            satir = _RUN_SATIRI.match(paragraf)
         if not satir:
             ic = _SATIR_ICI_EFSUN.match(paragraf)
             if ic and ic.group(1).strip() in efsunlar:
@@ -1090,31 +1172,65 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
                 son_ani, anlatim = blok_ozne, 0
             elif blok_tur == "durum":
                 son_durum, anlatim = blok_ozne, 0
-            elif son_ani or son_durum:
+            elif blok_tur in _ESYA_DEVAM:
+                son_esya, anlatim = (blok_ozne, blok_tur), 0
+            elif son_ani or son_durum or son_esya:
                 anlatim += 1
+            son_anlatim.append(paragraf)
             blok_ozne = blok_tur = None
             continue
         anahtar, deger = satir.group(1).strip(), satir.group(2)
-        if blok_tur is None and anlatim < ANI_ANLATIM_PENCERESI:
-            if anahtar in _ANI_ANAHTARLARI and son_ani:
+        if blok_tur is None:
+            if anahtar in _ANI_ANAHTARLARI and son_ani and anlatim < ANI_ANLATIM_PENCERESI:
                 blok_ozne, blok_tur = son_ani, "Memory"
-            elif anahtar in _DURUM_DEVAM_ANAHTARLARI and son_durum:
+            elif anahtar in _DURUM_DEVAM_ANAHTARLARI and son_durum and anlatim < ANI_ANLATIM_PENCERESI:
                 blok_ozne, blok_tur = son_durum, "durum"
-        if anahtar == "Name":
+            elif son_esya and anahtar in _ESYA_DEVAM[son_esya[1]] and anlatim < ESYA_ANLATIM_PENCERESI:
+                blok_ozne, blok_tur = son_esya
+        if anahtar in ("Name", "Master"):
+            if deger.lstrip()[:1] in _TIRNAKLAR:
+                continue  # "Master: "Hello."" — sohbet satırı
             ad = _ogeler(deger)
             blok_ozne = ana_karakter if ad and ad[0] in ana_adlar else (ad[0] if ad else None)
             blok_tur = "durum"
-            son_ani, son_durum, gorunus, efsunlar, efsun_sirasi = None, None, None, {}, []
+            sahip, son_baslik = blok_ozne or ana_karakter, "durum"
+            son_ani, son_durum, son_esya, gorunus, efsunlar, efsun_sirasi = None, None, None, None, {}, []
             continue
         if anahtar in _BLOK_SAHIPLIK:
             ogeler = _ogeler(deger)
             if ogeler:
-                blok_ozne, blok_tur = ogeler[0], anahtar
+                blok_ozne, blok_tur, son_baslik = ogeler[0], anahtar, anahtar
                 efsun_sirasi, efsunlar = [], {}
-                son_ani = son_durum = None
-                out.append((ana_karakter, _BLOK_SAHIPLIK[anahtar], ogeler[0], paragraf))
+                son_ani = son_durum = son_esya = None
+                out.append((sahip, _BLOK_SAHIPLIK[anahtar], ogeler[0], paragraf))
                 out.append((ogeler[0], "turu", anahtar, paragraf))
             continue
+        if blok_tur is None:
+            # Açık blok yok: rün listesi açılmadan tek bir küme ya da sayaç okunuyor.
+            if anahtar in _DEGER_ANAHTARLARI:
+                ogeler = _ogeler(deger)
+                deger_metni = ogeler[0] if ogeler else ""
+                esya = son_esya[0] if son_esya and son_esya[1] == "Shadow" and anlatim < ESYA_ANLATIM_PENCERESI \
+                    and anahtar in _DEGER_SATIRLARI["Shadow"] else None
+                ozne = _sayac_sahibi(anahtar, deger_metni, paydalar, ana_karakter, esya)
+                if ozne is None and anahtar in _DEGER_SATIRLARI["durum"] and payda(deger_metni) is None:
+                    ozne = sahip  # "Shadow Core: Dormant." sayaç değil, okunan kişinin durumu
+                if ozne and deger_metni:
+                    deger_ekle(ozne, anahtar, deger_metni, paragraf)
+                continue
+            # Gölge/yankı rünlerinden sonra başlıksız "Attribute:" o gölgenindir (376: Saint'in
+            # [Stalwart]'ı Sunny'ye yazılıyordu); gölgenin niteliği zaten `Shadow Attributes`ta.
+            nitelik_golgenin = anahtar in ("Attribute", "Attributes") and son_baslik in _ESYA_DEVAM
+            if anahtar in _BASLIKSIZ_DURUM and "[" in deger and not nitelik_golgenin:
+                blok_ozne, blok_tur = sahip, "durum"
+            elif anahtar in _BLOK_ALT["Memory"] and bilinen_anilar:
+                # Satıra EN YAKIN, bilinen bir Anı adı geçen paragraf (456: önce Covetous Coffer,
+                # sonra "The runes of Weaver’s Mask..."); o paragrafta iki ad varsa belirsiz.
+                gecen = next((g for g in ({a for a in bilinen_anilar if a in p} for p in reversed(son_anlatim))
+                              if g), set())
+                if len(gecen) == 1:
+                    blok_ozne, blok_tur = gecen.pop(), "Memory"
+                    efsun_sirasi, efsunlar = [], {}
         if blok_tur == "Memory" and anahtar == "Enchantment Description" and efsun_sirasi:
             # Açıklamalar efsunlarla AYNI SIRADA gelir; efsunun ne yaptığı bağın kanıtı olur.
             i = efsun_sirasi.pop(0)
@@ -1127,7 +1243,7 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             ogeler = _ogeler(deger)
             deger_metni = ogeler[0] if ogeler else ""
             if deger_metni:
-                out.append((blok_ozne, DEGER, f"{anahtar}\t{deger_metni}", paragraf))
+                deger_ekle(blok_ozne, anahtar, deger_metni, paragraf)
             continue
         if blok_tur == "durum" and anahtar == "Aspect Rank" and gorunus:
             for oge in _ogeler(deger):
@@ -1162,11 +1278,12 @@ def bolumden_sistem_baglari(book_slug: str, chapter_no: int | None, metin: str) 
     p = profil(book_slug)
     if not p or not p.get("runler") or not metin:
         return 0
-    bulunan = sistem_baglarini_bul(metin, p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())))
+    cozucu = DugumCozucu(book_slug)
+    bulunan = sistem_baglarini_bul(metin, p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())),
+                                   _paydalari_oku(book_slug, cozucu))
     bulunan = evrimleri_esle(bulunan, {}, chapter_no)
     if not bulunan:
         return 0
-    cozucu = DugumCozucu(book_slug)
     eklenen = 0
     conn = _connect()
     try:
@@ -1184,6 +1301,24 @@ def bolumden_sistem_baglari(book_slug: str, chapter_no: int | None, metin: str) 
     finally:
         conn.close()
     return eklenen
+
+
+def _paydalari_oku(book_slug: str, cozucu: "DugumCozucu") -> dict:
+    """Tek bölüm akışı için (anahtar, payda) -> sahip: saklı değerlerden, bölüm sırasıyla."""
+    conn = _connect()
+    try:
+        satirlar = conn.execute(
+            "SELECT kimlik, anahtar, deger FROM varlik_deger WHERE book_slug = ? ORDER BY ilk_bolum",
+            (book_slug,),
+        ).fetchall()
+    finally:
+        conn.close()
+    out: dict = {}
+    for kimlik, anahtar, deger in satirlar:
+        p = payda(deger)
+        if p is not None:
+            out[(anahtar, p)] = cozucu.kaynak(kimlik)
+    return out
 
 
 EVRIM_PENCERESI = 60  # evrim işaretinden sonra yeni adın görülebileceği en çok bölüm
@@ -1321,6 +1456,7 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
             # yazmak, ayrıştırma düzeltildiğinde eski bozuk satırların kalmasını önler.
             conn.execute("DELETE FROM varlik_deger WHERE book_slug = ? AND origin = 'sistem'", (book_slug,))
         evrim_durumu: dict = {}  # bölümler arası: bekleyen evrim + görülen gölge adları
+        paydalar: dict = {}      # bölümler arası: başlıksız sayaçların sahibi
         # (özne, ilişki, nesne, aranan adlar, sabit bölüm | None). Sabit bölüm yoksa ilk
         # bölüm NESNENİN ilk geçişidir; varsa o bölümde önce ÖZNENİN, o yoksa NESNENİN
         # geçtiği cümle kanıttır (`Sunny's cohort -> lideri -> Sunny`: ekip adı metinde yok).
@@ -1336,7 +1472,7 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
         sabit_bekleyen = list(sabit)
         for bolum in sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0):
             bulunan = sistem_baglarini_bul(
-                bolum["source"] or "", p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())),
+                bolum["source"] or "", p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())), paydalar,
             )
             bulunan = evrimleri_esle(bulunan, evrim_durumu, bolum["chapter_no"])
             for s in list(sabit_bekleyen):

@@ -1673,6 +1673,20 @@ satır "kaldırıldı" işaretidir ve yeniden çıkarım onu diriltmez. Alanlar�
 spoiler süzgeci sunucudadır (`/api/book/{slug}/defter*`, varsayılan okuma konumu, `spoiler=true`
 tüm kitap). Elle bağ `manual`+`onaylandi`, bağ kaldırma `reddedildi` yazar.
 
+**BAŞLIKSIZ RÜN SATIRLARI** (2026-10-15, kullanıcı bildirimi: "848'den sonra gölge parçası
+güncellenmedi"). Sonraki bölümlerde Sunny rün listesini `Name:` başlığıyla AÇMADAN tek satıra
+bakıyor ("Shadow Fragments: [870/4000]."); çözücü bunları atıyordu. 995 bölümlük tarama ~120
+atlanan satır buldu. Kurallar (`varlik_grafigi.sistem_baglarini_bul`), hepsi "yanlış sahip, eksik
+kayıttan kötüdür" ilkesiyle: sayacın sahibini PAYDA söyler (`_sayac_sahibi`; Sunny 1000 x çekirdek,
+Saint 200, Nightmare 300) ve tablo bölümler arasında taşınır (`paydalar`; tek bölüm akışı onu
+defterden/`varlik_deger`den okur); başlıksız küme ("Aspect: [Shadow Slave].") bölümün son
+`Name:`/`Master:` öznesine, yoksa ana karaktere gider (`Rank`/`True Name`/`Class` hariç); Anı/
+gölge/yankı blokları da o özneye aittir (353: Nephis'in Nameless Sun'ı Sunny'ye yazılıyordu);
+başlıksız efsun satırı satıra EN YAKIN paragrafta adı geçen TEK bilinen Anıya gider. Gölge
+yetenekleri, Death Charge / Vanquished Foes / Nightmares required sayaçları ve köşeli
+"[Shadow Fragments: 14/1000]." biçimi de okunur. Tarama yeniden: `sistem_baglarini_bul`u her
+bölümde çalıştırıp `_RUN_SATIRI`na uyan satırın değerinin çıktıda olup olmadığına bakmak.
+
 `OPENROUTER_API_KEY` · `MISTRAL_API_KEY` · `GROQ_API_KEY` · `CEREBRAS_API_KEY` 2026-09-02'de
 ARTIK OKUNMUYOR (Gemini dışı sağlayıcılar kaldırıldı). `.env`'de kalmaları zararsızdır ama
 hiçbir işe yaramaz.
