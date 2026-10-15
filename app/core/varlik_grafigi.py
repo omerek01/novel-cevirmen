@@ -64,6 +64,9 @@ ILISKILER: dict[str, dict] = {
     "dusmani": {"simetrik": True, "etiket": "düşmanı", "ters": "düşmanı", "grup": "toplum",
                 "kapatir": ("yoldasi",)},
     "ogretmeni": {"etiket": "öğretmeni", "ters": "öğrencisi", "grup": "toplum"},
+    # Shadow Bond (Sunny'nin doğuştan yeteneği): Gerçek Adını bilen onun efendisi olur; rünlerde
+    # "Master: Changing Star." (352, 524); çözücü rün satırından kurar.
+    "efendisi": {"etiket": "efendisi", "ters": "hizmetkârı", "grup": "toplum"},
     # O DÖNEM yaşadığı/bulunduğu bölge (ilk_bolum dönemi gösterir); sahnelik anlık
     # konum değil. Ölçülen: `Kai -> Forgotten Shore` arc boyunca doğru bilgi.
     "bulundugu_yer": {"etiket": "bulunduğu yer (o dönem)", "ters": "orada bulunan", "grup": "mekan"},
@@ -1200,6 +1203,9 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
             ad = _ogeler(deger)
             blok_ozne = ana_karakter if ad and ad[0] in ana_adlar else (ad[0] if ad else None)
             blok_tur = "durum"
+            if anahtar == "Master" and blok_ozne and blok_ozne != sahip:
+                # Rünleri okunan kişinin efendisi; sonraki kısa küme efendinin durumudur.
+                out.append((sahip, "efendisi", blok_ozne, paragraf))
             sahip, son_baslik = blok_ozne or ana_karakter, "durum"
             son_ani, son_durum, son_esya, gorunus, efsunlar, efsun_sirasi = None, None, None, None, {}, []
             continue

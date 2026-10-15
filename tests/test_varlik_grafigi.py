@@ -690,3 +690,14 @@ def test_cekirdek_rutbesi_satiri_ayri_alan_olmaz():
     b = _uclu("Name: Sunless.\n\nRank: Dreamer.\n\nShadow Core: Dormant.\n\nHe sighed.\n\nShadow Core: Dormant.", {})
     assert not any(i == vg.DEGER and n.startswith(("Shadow Core\t", "Soul Core\t")) for _o, i, n in b)
     assert ("Sunny", "rutbesi", "Dreamer") in b
+
+
+def test_master_satiri_efendi_bagini_kurar():
+    # Shadow Bond: Gerçek Adını bilen Sunny'nin efendisi olur; rünlerde "Master: Changing Star."
+    # (352: Sunny'nin listesinin içinde; 524: başlıksız, kısa efendi kümesinden önce).
+    b = _uclu("\n\n".join(["Name: Sunless.", "Rank: Dreamer.", "Innate Ability: [Shadow Bond].",
+                          "He read further.", "Master: Changing Star.", "Class: Demon."]))
+    assert ("Sunny", "efendisi", "Changing Star") in b
+    assert ("Changing Star", "sinifi", "Demon") in b and ("Sunny", "sinifi", "Demon") not in b
+    assert ("Sunny", "efendisi", "Changing Star") in _uclu("He looked lower.\n\nMaster: Changing Star.")
+    assert "efendisi" in vg.ILISKILER
