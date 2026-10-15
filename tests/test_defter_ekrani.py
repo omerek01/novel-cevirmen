@@ -212,3 +212,15 @@ def test_takma_adla_gelen_tekil_run_alani_tek_deger_gosterir(kitap):
     sinif = [a for a in de.kart(KITAP, n, None)["run"] if a["ad"] == "sinifi"]
     assert [a["deger"] for a in sinif] == ["Devil"]
     assert [a["deger"] for a in de.kart(KITAP, n, 400)["run"] if a["ad"] == "sinifi"] == ["Demon"]
+
+
+def test_rutbe_gecmisi_sinif_ve_geri_giden_rutbe_tasimaz(kitap):
+    # Canlı kart (2026-10-15): Sunny "… Awakened → Devil → Ascended", Nephis "Dormant → Saint (98)
+    # → Dreamer (352)". Sınıf rütbe değildir; rütbe geri gitmez — sonra daha düşüğü gelen yanlıştır.
+    for ad in ("Dreamer", "Awakened", "Devil", "Ascended", "Master", "Saint"):
+        glossary.set_term(KITAP, ad, ad)
+    s = _kimlik("Sunny")
+    for ad, bolum in (("Dreamer", 15), ("Saint", 98), ("Dreamer", 352), ("Awakened", 400), ("Devil", 703),
+                      ("Ascended", 744), ("Master", 745)):
+        vg.bag_ekle(KITAP, s, "rutbesi", _kimlik(ad), bolum, None, "model", 1.0, durum="onaylandi")
+    assert [r["ad"] for r in de.kart(KITAP, s, None)["rutbeler"]] == ["Dreamer", "Awakened", "Ascended", "Master"]

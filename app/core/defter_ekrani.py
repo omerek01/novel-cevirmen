@@ -61,6 +61,20 @@ def _tekil_run(kayitlar: list[dict]) -> list[dict]:
     return coklu + list(secili.values())
 
 
+def _rutbe_gecmisi(book_slug: str, rutbeler) -> list[dict]:
+    """Anlatımdan gelen rütbe bağları, bölüm sırasıyla. Kitap profilinde basamaklar varsa yalnız
+    rütbeler kalır (canlı kart: Sunny "Awakened → Devil → Ascended" — Devil sınıftır) ve sonradan
+    daha DÜŞÜĞÜ gelen rütbe atılır (Nephis 98'de "Saint", 352'de "Dreamer": rütbe geri gitmez)."""
+    sirali = sorted(rutbeler, key=lambda r: (r["ilk_bolum"] or 0, r["ad"]))
+    basamak = {k.casefold(): v for k, v in ((varlik_grafigi.profil(book_slug) or {})
+                                            .get("rutbe_basamaklari") or {}).items()}
+    if not basamak:
+        return sirali
+    sirali = [r for r in sirali if r["ad"].casefold() in basamak]
+    return [r for i, r in enumerate(sirali)
+            if all(basamak[x["ad"].casefold()] >= basamak[r["ad"].casefold()] for x in sirali[i + 1:])]
+
+
 def _sinir(konum: int | None) -> int:
     return konum if konum is not None else 10**9
 
@@ -302,6 +316,6 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
             "bolum_sayisi": sayi.get(kimlik) or (sozluksuz.get(kimlik) or {}).get("bolum", 0), "ilk_bolum": ilk,
             "adlar": adlar, "oneriler": oneriler, "baglar": baglar, "hitaplar": hitaplar,
-            "rutbeler": sorted(rutbeler.values(), key=lambda r: (r["ilk_bolum"] or 0, r["ad"])),
+            "rutbeler": _rutbe_gecmisi(book_slug, rutbeler.values()),
             "run": run, "anilar": anilar, "yankilar": yankilar, "karsiliklar": karsiliklar,
             "nitelikler": sahibin("nitelik"), "yaratiklar": sahibin("yaratik")}
