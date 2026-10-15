@@ -1658,6 +1658,20 @@ Karakter defteri pilot/doldurma: `scripts/karakter_defteri.py` (`--kuru`, `--tab
 `--pilot N --calistir`, `--from/--to --es K --calistir`, `--uzlastir`, `--metrik`, `--ornek`).
 Bölümler bağımsız işlenir (N−1 zinciri yok), paralel koşar. Bağlar `varlik_bag`a yalnız
 `aday` yazılır; hitap tablosu geçmiş çeviriyi ölçer, elle karar (`defter_hitap_karar`) üstündür.
+`hitap_uyumu` (ölçüm) gruba hitabı (`cogul`/`belirsiz`) SAYMAZ: çoğul "siz" tekil çiftin "sen"iyle
+çelişki değildir (2026-10-15, eski işaretlerin ~%63'ü bu yanlış alarmdı). Kartlı istem ret
+alırsa parça önce aynı modelde KARTSIZ denenir (3.8 Flash SS 596'yı kartla telif gerekçesiyle
+reddediyordu).
+
+**Defter ekranı** (2026-10-15, `js/defter.js`, `core/defter_ekrani.py`): kişiler, gruplar,
+yaratıklar, anılar (efsunlarıyla), nitelikler, gölge/yankılar; karakter kartı; elle düzenleme.
+Rün mesajları `core/defter_kayit.py`nin `defter_kayit` tablosuna sözlükte OLMAYAN adlar dahil
+yazılır (`varlik_bag` yalnız sözlüklü adları tutar); çeviri akışı yeni bölümü katar
+(`pipeline._sozluge_isle`), `scripts/karakter_defteri.py --run-kayit` baştan kurar (API'siz,
+990 bölüm ~1,6 sn). Köken `sistem` | `elle`: aynı anahtarda elle kayıt kazanır, `silindi=1` elle
+satır "kaldırıldı" işaretidir ve yeniden çıkarım onu diriltmez. Alanların geçmişi tutulur;
+spoiler süzgeci sunucudadır (`/api/book/{slug}/defter*`, varsayılan okuma konumu, `spoiler=true`
+tüm kitap). Elle bağ `manual`+`onaylandi`, bağ kaldırma `reddedildi` yazar.
 
 `OPENROUTER_API_KEY` · `MISTRAL_API_KEY` · `GROQ_API_KEY` · `CEREBRAS_API_KEY` 2026-09-02'de
 ARTIK OKUNMUYOR (Gemini dışı sağlayıcılar kaldırıldı). `.env`'de kalmaları zararsızdır ama
