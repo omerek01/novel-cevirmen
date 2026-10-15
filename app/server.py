@@ -39,7 +39,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import api_durum, cache, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
+from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -288,6 +288,29 @@ class GlossaryKarar(BaseModel):
     source: str
     karar: str  # onayla | reddet
     taban_surum: int | None = None
+
+
+class DefterKayitIstegi(BaseModel):
+    kayit: dict
+    yerine: str | None = None  # düzeltilen kaydın anahtarı
+
+
+class DefterAnahtar(BaseModel):
+    anahtar: str
+
+
+class DefterBag(BaseModel):
+    kaynak: str
+    iliski: str
+    hedef: str
+    ilk_bolum: int | None = None
+
+
+class DefterHitap(BaseModel):
+    konusan: str
+    muhatap: str
+    hitap: str
+    ilk_bolum: int = 1
 
 
 class TakmaAdKarari(BaseModel):
@@ -963,6 +986,90 @@ def defter_takma_ad(slug: str, req: TakmaAdKarari) -> dict:
         raise _kayit_bulunamadi()
     try:
         karakter_defteri.takma_ad_karari(canonical, req.asil_kimlik, req.takma_kimlik, req.karar)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"ok": True}
+
+
+@app.get("/api/book/{slug}/defter")
+def defter_listesi(slug: str, konum: int | None = Query(None), spoiler: bool = Query(False)) -> dict:
+    """Defter ekranının sekmeleri (kişiler, gruplar, yaratıklar, anılar, nitelikler, yankılar).
+    SPOILER varsayılan GİZLİ: konum verilmezse kitabın okuma konumu kullanılır."""
+    canonical = library.resolve_slug(slug)
+    return defter_ekrani.liste(canonical, _okur_bolumu(canonical, konum, spoiler))
+
+
+@app.get("/api/book/{slug}/defter/kart")
+def defter_karti(slug: str, kimlik: str, konum: int | None = Query(None), spoiler: bool = Query(False)) -> dict:
+    canonical = library.resolve_slug(slug)
+    kart = defter_ekrani.kart(canonical, kimlik, _okur_bolumu(canonical, konum, spoiler))
+    if kart is None:
+        raise _kayit_bulunamadi()
+    return kart
+
+
+@app.post("/api/book/{slug}/defter/kayit")
+def defter_kayit_yaz(slug: str, req: DefterKayitIstegi) -> dict:
+    """Elle kayıt ekle ya da düzelt (anı, efsun, nitelik, gölge, yankı, yaratık, rün alanı).
+    Elle kayıt rünlerden gelen kaydı gölgeler; yeniden çıkarım onu değiştirmez."""
+    try:
+        anahtar = defter_kayit.elle_yaz(library.resolve_slug(slug), req.kayit, yerine=req.yerine)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return {"anahtar": anahtar}
+
+
+@app.delete("/api/book/{slug}/defter/kayit")
+def defter_kayit_kaldir(slug: str, req: DefterAnahtar) -> dict:
+    if not defter_kayit.kaldir(library.resolve_slug(slug), req.anahtar):
+        raise _kayit_bulunamadi()
+    return {"ok": True}
+
+
+@app.post("/api/book/{slug}/defter/kayit/geri")
+def defter_kayit_geri(slug: str, req: DefterAnahtar) -> dict:
+    """Elle düzeltmeyi ya da kaldırmayı geri al: rünlerden gelen kayıt yeniden görünür."""
+    if not defter_kayit.geri_al(library.resolve_slug(slug), req.anahtar):
+        raise _kayit_bulunamadi()
+    return {"ok": True}
+
+
+def _defter_bag_dogrula(canonical: str, req: DefterBag) -> None:
+    kimlikler = {r["kimlik"] for r in glossary.get_glossary_rows(canonical)}
+    if req.kaynak not in kimlikler or req.hedef not in kimlikler:
+        raise _kayit_bulunamadi()
+    if req.iliski not in karakter_defteri.DEFTER_ILISKILERI:
+        raise HTTPException(status_code=400, detail=f"Bilinmeyen ilişki: {req.iliski}")
+
+
+@app.post("/api/book/{slug}/defter/bag")
+def defter_bag_ekle(slug: str, req: DefterBag) -> dict:
+    """Elle bağ: onaylı ve `manual` kökenli yazılır; model ya da rün onu ezmez."""
+    canonical = library.resolve_slug(slug)
+    _defter_bag_dogrula(canonical, req)
+    varlik_grafigi.bag_ekle(canonical, req.kaynak, req.iliski, req.hedef,
+                            req.ilk_bolum if req.ilk_bolum is not None else _okuma_konumu(canonical),
+                            None, "manual", 1.0, durum="onaylandi")
+    return {"ok": True}
+
+
+@app.delete("/api/book/{slug}/defter/bag")
+def defter_bag_kaldir(slug: str, req: DefterBag) -> dict:
+    """Bağı reddet: bir daha otomatik önerilmez (elle yeniden eklenebilir)."""
+    canonical = library.resolve_slug(slug)
+    _defter_bag_dogrula(canonical, req)
+    if not (varlik_grafigi.bag_durumu(canonical, req.kaynak, req.iliski, req.hedef, "reddedildi")
+            or varlik_grafigi.bag_durumu(canonical, req.hedef, req.iliski, req.kaynak, "reddedildi")):
+        raise _kayit_bulunamadi()
+    return {"ok": True}
+
+
+@app.post("/api/book/{slug}/defter/hitap")
+def defter_hitap_karari(slug: str, req: DefterHitap) -> dict:
+    """Elle sen/siz kararı: otomatik sayımın önüne geçer ve çeviri kartı bunu kullanır."""
+    try:
+        karakter_defteri.hitap_karari_yaz(library.resolve_slug(slug), req.konusan, req.muhatap, req.hitap,
+                                          req.ilk_bolum)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
