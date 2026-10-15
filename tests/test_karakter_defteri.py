@@ -722,6 +722,35 @@ def test_bayrak_kapaliyken_ceviri_istemi_bayt_bayt_ayni(kitap, monkeypatch):
     assert yakalanan[2] == kd.kart_metni(_snap(), paras) + "\n\n" + yakalanan[0]
 
 
+def test_kartli_istem_ret_alirsa_parca_kartsiz_yeniden_denenir(kitap, monkeypatch):
+    # Faz 3: kartlı istemde 3.8 Flash SS 596'yı her denemede telif gerekçesiyle reddetti,
+    # kartsız istem aynı bölümü çevirdi. Kart en kötü durumda kartsız yola dönmeli.
+    ret = "Bu eserin satır satır çevirisini sağlayamıyorum; ancak özetleyebilirim."
+    tamam = json.dumps({"translation": "[[1]] Çeviri.", "detected_names": [], "detected_terms": []})
+    istemler = []
+
+    class _Y:
+        def __init__(self, metin):
+            self.text = metin
+
+    def sahte(client_factory, models, user, **kw):
+        istemler.append((tuple(models), user))
+        return _Y(ret if kd.KART_BASLIGI in user else tamam), models[0]
+
+    monkeypatch.setattr(translate, "_izli_uret", sahte)
+    paras = ["Changing Star nodded at Sunny."]
+    jeton = translate._DEFTER_KARTLARI.set(_snap())
+    try:
+        out = translate._translate_chunk(None, ("m1", "m2"), paras, {"Sunny": "Sunny"}, "")
+    finally:
+        translate._DEFTER_KARTLARI.reset(jeton)
+    assert out["translation"].startswith("[[1]]")
+    assert out["model"] == "m1"  # zincirde alta inmeden, aynı modelde kartsız
+    assert kd.KART_BASLIGI in istemler[0][1]
+    assert kd.KART_BASLIGI not in istemler[-1][1]
+    assert istemler[-1][1] in istemler[0][1]  # kartsız istem, kartlının kartsız hâli
+
+
 def test_pipeline_bayrak_kapaliyken_kart_kurmaz(kitap, monkeypatch):
     from core import pipeline
 

@@ -2839,28 +2839,33 @@ def _translate_chunk(
     ozet = _OZET_METNI.get()
     defter = _DEFTER_KARTLARI.get()
     system = None
+    kartsiz = user  # ret yedeği: kartın eklenmediği istem (önekler ikisine de eklenir)
     if defter:
         from . import karakter_defteri
         kart = karakter_defteri.kart_metni(defter, en_paras)
         if kart:
             user = kart + "\n\n" + user
-    if bellek:
-        user = bellek + "\n\n" + user
-    if ozet:
-        user = ozet + "\n\n" + user
+    for onek in (bellek, ozet):
+        if onek:
+            user, kartsiz = onek + "\n\n" + user, onek + "\n\n" + kartsiz
     if baglam is not None:
         from . import ceviri_baglam
         system = (SYSTEM_INSTRUCTION.split('- Yanıtı SADECE şu JSON ile ver:', 1)[0]
                   .replace(" ve detected_terms'te sözlükteki yazımı kullan", "")
                   + ceviri_baglam.CEVIRI_CIKTI_TALIMATI)
-        user = baglam + "\n\n" + user
+        user, kartsiz = baglam + "\n\n" + user, baglam + "\n\n" + kartsiz
     response, model = (_izli_uret(client_factory, models, user, system=system)
                        if system else _izli_uret(client_factory, models, user))
     out = _parse_response(response.text)
     if out.get("gecersiz"):
         ret = api_durum.ret_kaydet(model) or _ret_denemesi(model)
-        out, model = (_reti_asarak_uret(client_factory, models, model, user, [ret], system=system)
-                      if system else _reti_asarak_uret(client_factory, models, model, user, [ret]))
+        # Kartlı istem ret aldıysa parça KARTSIZ yeniden denenir (önce aynı model): Faz 3'te
+        # 3.8 Flash SS 596'yı kartla her denemede telif gerekçesiyle reddetti, kartsız
+        # çevirdi. Kart en kötü durumda bugünkü yola döner; kartsızda istem değişmez.
+        if kartsiz != user:
+            logging.getLogger(__name__).info("kartlı istem ret aldı (%s); parça kartsız deneniyor", model)
+        out, model = (_reti_asarak_uret(client_factory, models, model, kartsiz, [ret], system=system)
+                      if system else _reti_asarak_uret(client_factory, models, model, kartsiz, [ret]))
     out["model"] = model
     return out
 
