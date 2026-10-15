@@ -207,6 +207,11 @@ KITAP_PROFILLERI: dict[str, dict] = {
         # (ölçülen, 502 bağlık inceleme: Artisan, Chain Lord, Prince of War, Dream
         # Champion, Sorcerer of the East "rütbe" diye yazılmıştı — 20 bağ).
         "ek_rutbeler": ("Aspirant", "Sleeper", "Dreamer", "Master", "Saint", "Sovereign"),
+        # Kişi kartındaki "rütbe geçmişi" için basamak (unvan = rütbesi): yalnız bunlar rütbedir
+        # (sınıf değil) ve rütbe geri gitmez (`defter_ekrani._rutbe_gecmisi`).
+        "rutbe_basamaklari": {"Aspirant": 0, "Dormant": 1, "Sleeper": 1, "Dreamer": 1, "Awakened": 2,
+                              "Ascended": 3, "Master": 3, "Transcendent": 4, "Saint": 4, "Supreme": 5,
+                              "Sovereign": 5, "Sacred": 6, "Divine": 7},
     },
 }
 
@@ -1027,8 +1032,10 @@ _DURUM_SATIRLARI = {
 # Durum DEĞERİ satırları (bağ değil, `varlik_deger`): blok türü -> anahtarlar. Sayaçlar
 # (`Death Charge`, `Vanquished Foes`, `Nightmares required`) anının/gölgenin değeridir.
 _DEGER_SATIRLARI = {
+    # "Shadow Core: Dormant." BİLEREK yok: yalnız 2/16/189/310'da yazılıyor, sonra hiç; ayrı alan
+    # olunca Yükselmiş Şeytan Sunny'de "Çekirdek rütbesi: Uykuda" kalıyordu. Rütbeyi `Rank` taşır.
     "durum": frozenset(("Soul", "Shadow Cores", "Shadow Fragments", "Soul Cores", "Soul Fragments",
-                        "Shadow Core", "Soul Core", "Shadow Dance Mastery Level")),
+                        "Shadow Dance Mastery Level")),
     "Memory": frozenset(("Memory Tier", "Death Charge", "Vanquished Foes")),
     "Shadow": frozenset(("Shadow Fragments", "Nightmares required", "Dormant Nightmares")),
 }
@@ -1087,7 +1094,7 @@ _DURUM_DEVAM_ANAHTARLARI = frozenset(
     ("Class", "Soul", "Shadow Cores", "Shadow Fragments", "Memories", "Echoes", "Shadows",
      "Attributes", "Attribute Description", "Aspect", "Aspect Rank", "Aspect Description",
      "Aspect Abilities", "Ability Description", "Aspect Legacy", "Flaw", "Flaw Description",
-     "Dream Anchor", "Attribute", "Aspect Ability", "Innate Ability", "Shadow Core", "Soul Core",
+     "Dream Anchor", "Attribute", "Aspect Ability", "Innate Ability",
      "Shadow Dance Mastery Level", "Soul Cores", "Soul Fragments")
 )
 
@@ -1214,7 +1221,7 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
                     and anahtar in _DEGER_SATIRLARI["Shadow"] else None
                 ozne = _sayac_sahibi(anahtar, deger_metni, paydalar, ana_karakter, esya)
                 if ozne is None and anahtar in _DEGER_SATIRLARI["durum"] and payda(deger_metni) is None:
-                    ozne = sahip  # "Shadow Core: Dormant." sayaç değil, okunan kişinin durumu
+                    ozne = sahip  # "Soul: …" sayaç değil, okunan kişinin durumu
                 if ozne and deger_metni:
                     deger_ekle(ozne, anahtar, deger_metni, paragraf)
                 continue

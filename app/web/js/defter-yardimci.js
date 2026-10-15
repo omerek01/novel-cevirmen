@@ -16,7 +16,7 @@ const ALAN_ETIKETLERI = {
   gercek_adi: "Gerçek ad", rutbesi: "Rütbe", sinifi: "Sınıf", gorunusu: "Görünüş",
   gorunus_rutbesi: "Görünüş rütbesi", kusuru: "Kusur", ruya_capasi: "Rüya çapası", yetenegi: "Yetenekler",
   "Shadow Cores": "Gölge çekirdeği", "Shadow Fragments": "Gölge parçası", "Soul Cores": "Ruh çekirdeği",
-  "Soul Fragments": "Ruh parçası", Soul: "Ruh", "Shadow Core": "Çekirdek rütbesi", "Soul Core": "Çekirdek rütbesi",
+  "Soul Fragments": "Ruh parçası", Soul: "Ruh",
   "Shadow Dance Mastery Level": "Gölge Dansı ustalığı", "Death Charge": "Ölüm yükü",
   "Vanquished Foes": "Yenilen düşman", "Nightmares required": "Gereken kabus", "Dormant Nightmares": "Uykuda kabus",
   rutbe: "Rütbe", kademe: "Kademe", tur: "Tür", sinif: "Sınıf", aciklama: "Açıklama", nitelikler: "Nitelikler",

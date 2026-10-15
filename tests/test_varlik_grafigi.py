@@ -681,3 +681,12 @@ def test_basliksiz_efsun_satiri_anlatimda_gecen_tek_bilinen_aniya_gider():
     # Ad çok gerideyse (pencere dışı) kullanılmaz.
     uzak = ["Weaver’s Mask was quiet."] + [f"Anlatım {i}." for i in range(vg.ANI_ANLATIM_PENCERESI)]
     assert bul("\n\n".join(uzak + ["Memory Enchantments: [Mantle of Lies]."])) == set()
+
+
+def test_cekirdek_rutbesi_satiri_ayri_alan_olmaz():
+    # "Shadow Core: Dormant." yalnız 2/16/189/310'da var; sonra hiç yazılmıyor. Ayrı alan olunca
+    # Yükselmiş Şeytan Sunny'nin kartında "Çekirdek rütbesi: Uykuda" kalıyordu (kullanıcı bildirimi).
+    # Çekirdeğin rütbesi kişinin rütbesidir; `Rank` satırı onu zaten taşır.
+    b = _uclu("Name: Sunless.\n\nRank: Dreamer.\n\nShadow Core: Dormant.\n\nHe sighed.\n\nShadow Core: Dormant.", {})
+    assert not any(i == vg.DEGER and n.startswith(("Shadow Core\t", "Soul Core\t")) for _o, i, n in b)
+    assert ("Sunny", "rutbesi", "Dreamer") in b
