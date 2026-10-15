@@ -16,9 +16,20 @@ const ALAN_ETIKETLERI = {
   gercek_adi: "Gerçek ad", rutbesi: "Rütbe", sinifi: "Sınıf", gorunusu: "Görünüş",
   gorunus_rutbesi: "Görünüş rütbesi", kusuru: "Kusur", ruya_capasi: "Rüya çapası", yetenegi: "Yetenekler",
   "Shadow Cores": "Gölge çekirdeği", "Shadow Fragments": "Gölge parçası", "Soul Cores": "Ruh çekirdeği",
-  "Soul Fragments": "Ruh parçası", Soul: "Ruh",
+  "Soul Fragments": "Ruh parçası", Soul: "Ruh", "Shadow Core": "Çekirdek rütbesi", "Soul Core": "Çekirdek rütbesi",
+  "Shadow Dance Mastery Level": "Gölge Dansı ustalığı", "Death Charge": "Ölüm yükü",
+  "Vanquished Foes": "Yenilen düşman", "Nightmares required": "Gereken kabus", "Dormant Nightmares": "Uykuda kabus",
   rutbe: "Rütbe", kademe: "Kademe", tur: "Tür", sinif: "Sınıf", aciklama: "Açıklama", nitelikler: "Nitelikler",
+  yetenekler: "Yetenekler",
 };
+// Anı ve gölgelerin rün sayaçları (Dying Wish'in ölüm yükü, Saint'in gölge parçası…).
+const SAYAC_ALANLARI = ["Shadow Fragments", "Nightmares required", "Dormant Nightmares", "Death Charge",
+  "Vanquished Foes"];
+
+/* Kaydın sayaçları okunur metin olarak: ["Gölge parçası 146/200", …]. */
+export function sayacMetinleri(alanlar) {
+  return SAYAC_ALANLARI.filter((a) => alanlar && alanlar[a] != null).map((a) => `${alanEtiketi(a)} ${alanlar[a]}`);
+}
 export const RUN_ALANLARI = ["gercek_adi", "rutbesi", "sinifi", "gorunusu", "gorunus_rutbesi", "kusuru",
   "ruya_capasi", "yetenegi"];
 

@@ -9,6 +9,7 @@ import {
   formdanKayit,
   hitapNotu,
   kayitFormu,
+  sayacMetinleri,
   sekmeSatirlari,
   sinirMetni,
   tr,
@@ -118,4 +119,11 @@ test("kademeMetni Roma rakamını sıra sayısı yapar, bilinmeyeni gizler", asy
   assert.equal(kademeMetni("unknown"), "");
   assert.equal(kademeMetni("—"), "");
   assert.equal(kademeMetni(""), "");
+});
+
+test("sayacMetinleri anı ve gölge sayaçlarını Türkçe etiketle verir", () => {
+  assert.deepEqual(sayacMetinleri({ "Shadow Fragments": "146/200", rutbe: "Ascended", "Death Charge": "0/1000" }),
+    ["Gölge parçası 146/200", "Ölüm yükü 0/1000"]);
+  assert.deepEqual(sayacMetinleri({}), []);
+  assert.deepEqual(sayacMetinleri(undefined), []);
 });

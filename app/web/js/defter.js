@@ -11,8 +11,8 @@ import { showView } from "./gezinme.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { el } from "./temel.js";
 import {
-  SEKMELER, alanEtiketi, egoDugumleri, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari, sekmeSatirlari, sinirMetni,
-  tr,
+  SEKMELER, alanEtiketi, egoDugumleri, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari, sayacMetinleri,
+  sekmeSatirlari, sinirMetni, tr,
 } from "./defter-yardimci.js";
 import { fetchBooks } from "./kutuphane.js";
 
@@ -356,10 +356,11 @@ function aniSatiri(a, kars) {
   if (a.origin === "elle") baslik.append(oge("span", "defter-elle", "elle"));
   const al = a.alanlar || {};
   const alt = [a.tur === "golge" ? "gölge" : a.tur === "yanki" ? "yankı" : null, tr(al.tur, kars), tr(al.rutbe, kars),
-    tr(al.sinif, kars), kademeMetni(al.kademe)].filter(Boolean).join(" · ");
+    tr(al.sinif, kars), kademeMetni(al.kademe), ...sayacMetinleri(al)].filter(Boolean).join(" · ");
   kap.append(baslik, oge("span", "defter-bolum-no", a.ilk_bolum != null ? `bölüm ${a.ilk_bolum}` : ""));
   if (alt) kap.append(oge("span", "defter-ani-alt", alt));
-  const cipler = [...(a.efsunlar || []).map((e) => adMetni(e, kars)[0]), ...(al.nitelikler || []).map((n) => tr(n, kars))];
+  const cipler = [...(a.efsunlar || []).map((e) => adMetni(e, kars)[0]), ...(al.nitelikler || []).map((n) => tr(n, kars)),
+    ...(al.yetenekler || []).map((n) => tr(n, kars))];
   if (cipler.length) {
     const c = oge("span", "defter-efsunlar");
     for (const x of cipler) c.append(oge("span", "defter-efsun", x));
