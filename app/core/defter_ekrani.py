@@ -46,6 +46,21 @@ def _destek_anahtari(o, iliski: str, n) -> tuple:
     return (o, iliski, n)
 
 
+def _tekil_run(kayitlar: list[dict]) -> list[dict]:
+    """Kişinin takma adlarıyla gelen tekil alanlarda (sınıf, rütbe…) yalnız en son değer kalır:
+    353'te "Name: Nephis." Demon, 524'te "Master: Changing Star." Devil — ikisi aynı kişi."""
+    coklu, secili = [], {}
+    for k in kayitlar:
+        if k["ad"] in defter_kayit.COKLU_ALANLAR:
+            coklu.append(k)
+            continue
+        eski = secili.get(k["ad"])
+        if eski is None or ((k["ilk_bolum"] or 0), k["origin"] == "elle") > \
+                ((eski["ilk_bolum"] or 0), eski["origin"] == "elle"):
+            secili[k["ad"]] = k
+    return coklu + list(secili.values())
+
+
 def _sinir(konum: int | None) -> int:
     return konum if konum is not None else 10**9
 
@@ -282,7 +297,7 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
     for k in kayit["efsun"]:
         efsunlar[glossary.fold_term(k["sahip"])].append(k)
     anilar = [dict(k, efsunlar=efsunlar.get(glossary.fold_term(k["ad"]), [])) for k in sahibin("ani")]
-    run, yankilar = sahibin("alan"), sahibin("golge") + sahibin("yanki")
+    run, yankilar = _tekil_run(sahibin("alan")), sahibin("golge") + sahibin("yanki")
     karsiliklar = _karsiliklar(book_slug, [*run, *anilar, *yankilar, *sahibin("yaratik")])
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
             "bolum_sayisi": sayi.get(kimlik) or (sozluksuz.get(kimlik) or {}).get("bolum", 0), "ilk_bolum": ilk,

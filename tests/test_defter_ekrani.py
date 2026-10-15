@@ -200,3 +200,15 @@ def test_run_degerlerinin_sozluk_karsiliklari_gelir(kitap):
     assert "Awakened" not in k["karsiliklar"]  # sözlükte yok
     glossary.set_term(KITAP, "Awakened", "Uyanmış")
     assert de.liste(KITAP, 20)["karsiliklar"]["Awakened"] == "Uyanmış"  # anının rütbesi
+
+
+def test_takma_adla_gelen_tekil_run_alani_tek_deger_gosterir(kitap):
+    # 353'te "Name: Nephis." Demon; 524'te efendi kümesi "Master: Changing Star." Devil.
+    n, cs = _kimlik("Nephis"), _kimlik("Changing Star")
+    vg.bag_ekle(KITAP, n, "takma_adi", cs, 10, None, "model", 1.0, durum="onaylandi")
+    _bolum(353, ["Name: Nephis.", "Class: Demon."], ["x", "x"])
+    _bolum(524, ["He looked lower.", "Master: Changing Star.", "Class: Devil."], ["x", "x", "x"])
+    dk.cikar(KITAP)
+    sinif = [a for a in de.kart(KITAP, n, None)["run"] if a["ad"] == "sinifi"]
+    assert [a["deger"] for a in sinif] == ["Devil"]
+    assert [a["deger"] for a in de.kart(KITAP, n, 400)["run"] if a["ad"] == "sinifi"] == ["Demon"]
