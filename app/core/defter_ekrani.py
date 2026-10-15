@@ -77,6 +77,25 @@ def _baglar(book_slug: str, konum: int | None, kimlik: str | None = None) -> lis
             if "#" not in b["kaynak_kimlik"] and "#" not in b["hedef_kimlik"]]
 
 
+def _karsiliklar(book_slug: str, kayitlar) -> dict[str, str]:
+    """Kayıtlardaki rün DEĞERLERİNİN (Awakened, Weapon, Devil…) sözlük karşılıkları."""
+    cozucu = varlik_grafigi.DugumCozucu(book_slug)
+    degerler: set[str] = set()
+    for k in kayitlar:
+        if k.get("deger"):
+            degerler.add(k["deger"])
+        for v in (k.get("alanlar") or {}).values():
+            for x in (v if isinstance(v, list) else [v]):
+                if isinstance(x, str) and len(x) <= 60:
+                    degerler.add(x)
+    out = {}
+    for d in degerler:
+        kim = cozucu.coz(d)
+        if kim and cozucu.satirlar[kim].get("target"):
+            out[d] = cozucu.satirlar[kim]["target"]
+    return out
+
+
 def liste(book_slug: str, konum: int | None) -> dict:
     """Defter ekranının sekmeleri: kişiler, gruplar, yaratıklar, anılar, nitelikler, yankılar."""
     sozluk = _sozluk(book_slug)
@@ -163,6 +182,7 @@ def liste(book_slug: str, konum: int | None) -> dict:
     anilar = [dict(k, efsun_sayisi=efsun_sayisi[glossary.fold_term(k["ad"])]) for k in kayit["ani"]]
     return {"sinir": konum, "kisiler": kisiler, "gruplar": gruplar, "yaratiklar": yaratiklar,
             "anilar": anilar, "nitelikler": kayit["nitelik"], "yankilar": kayit["golge"] + kayit["yanki"],
+            "karsiliklar": _karsiliklar(book_slug, [*yaratiklar, *anilar, *kayit["golge"], *kayit["yanki"]]),
             "iliskiler": {k: v["etiket"] for k, v in varlik_grafigi.ILISKILER.items()
                           if k in karakter_defteri.DEFTER_ILISKILERI}}
 
@@ -255,9 +275,11 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
     for k in kayit["efsun"]:
         efsunlar[glossary.fold_term(k["sahip"])].append(k)
     anilar = [dict(k, efsunlar=efsunlar.get(glossary.fold_term(k["ad"]), [])) for k in sahibin("ani")]
+    run, yankilar = sahibin("alan"), sahibin("golge") + sahibin("yanki")
+    karsiliklar = _karsiliklar(book_slug, [*run, *anilar, *yankilar, *sahibin("yaratik")])
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
             "bolum_sayisi": sayi.get(kimlik) or (sozluksuz.get(kimlik) or {}).get("bolum", 0), "ilk_bolum": ilk,
             "adlar": adlar, "oneriler": oneriler, "baglar": baglar, "hitaplar": hitaplar,
             "rutbeler": sorted(rutbeler.values(), key=lambda r: (r["ilk_bolum"] or 0, r["ad"])),
-            "run": sahibin("alan"), "anilar": anilar, "yankilar": sahibin("golge") + sahibin("yanki"),
+            "run": run, "anilar": anilar, "yankilar": yankilar, "karsiliklar": karsiliklar,
             "nitelikler": sahibin("nitelik"), "yaratiklar": sahibin("yaratik")}

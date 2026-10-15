@@ -191,3 +191,12 @@ def test_takma_ad_olan_kisi_ayri_listelenmez_unvanli_sozluksuz_ad_elenir(kitap):
     assert "Mordret" in adlar
     kart = de.kart(KITAP, n, None)
     assert [a["ad"] for a in kart["adlar"]] == ["Changing Star"]
+
+
+def test_run_degerlerinin_sozluk_karsiliklari_gelir(kitap):
+    glossary.set_term(KITAP, "Dreamer", "Rüyacı")
+    k = de.kart(KITAP, _kimlik("Sunny"), 20)
+    assert k["karsiliklar"]["Dreamer"] == "Rüyacı"
+    assert "Awakened" not in k["karsiliklar"]  # sözlükte yok
+    glossary.set_term(KITAP, "Awakened", "Uyanmış")
+    assert de.liste(KITAP, 20)["karsiliklar"]["Awakened"] == "Uyanmış"  # anının rütbesi
