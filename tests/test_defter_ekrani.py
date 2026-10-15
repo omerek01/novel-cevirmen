@@ -146,3 +146,48 @@ def test_uc_hitap_karari(istemci):
     h = next(h for h in kart["hitaplar"] if h["konusan"] == "Nephis")
     assert (h["bicim"], h["elle"]) == ("siz", True)
     assert istemci.post(yol, json={**govde, "hitap": "biz"}).status_code == 400
+
+
+def test_yonlu_bag_destegi_ters_yonle_karismaz_ve_rutbe_ayri_gelir(kitap):
+    from core import varlik_grafigi as vg2
+
+    glossary.set_term(KITAP, "Julius", "Julius")
+    glossary.set_term(KITAP, "Dreamer", "Rüyacı")
+    s, j, d = _kimlik("Sunny"), _kimlik("Julius"), _kimlik("Dreamer")
+    vg2.bag_ekle(KITAP, s, "ogretmeni", j, 10, None, "model", 1.0, durum="onaylandi")
+    vg2.bag_ekle(KITAP, j, "ogretmeni", s, 11, None, "model", 0.5)
+    vg2.bag_ekle(KITAP, s, "rutbesi", d, 12, None, "model", 1.0, durum="onaylandi")
+    conn = kd._connect()
+    for b in (10, 11, 12):
+        conn.execute("INSERT INTO defter_iddia (book_slug, bolum, tur, ozne_ad, ozne_kimlik, iliski, nesne_ad, "
+                     "nesne_kimlik, gecerli, created_at) VALUES (?, ?, 'bag', 'Sunny', ?, 'ogretmeni', 'Julius', ?, 1, 0)",
+                     (KITAP, b, s, j))
+    conn.commit()
+    conn.close()
+    k = de.kart(KITAP, s, None)
+    ogretmen = {(b["yon"], b["destek"]) for b in k["baglar"] if b["iliski"] == "ogretmeni"}
+    assert ogretmen == {("giden", 3), ("gelen", 0)}
+    assert all(b["iliski"] != "rutbesi" for b in k["baglar"])
+    assert [r["ad"] for r in k["rutbeler"]] == ["Dreamer"]
+
+
+def test_takma_ad_olan_kisi_ayri_listelenmez_unvanli_sozluksuz_ad_elenir(kitap):
+    from core import varlik_grafigi as vg2
+
+    s, n, cs = _kimlik("Sunny"), _kimlik("Nephis"), _kimlik("Changing Star")
+    vg2.bag_ekle(KITAP, n, "takma_adi", cs, 10, None, "model", 1.0, durum="onaylandi")
+    vg2.bag_ekle(KITAP, cs, "takma_adi", n, 10, None, "model", 1.0, durum="onaylandi")
+    conn = kd._connect()
+    for b, ad in ((10, "Changing Star"), (11, "Lady Nephis"), (12, "Lady Nephis"), (13, "Lady Nephis"),
+                  (10, "Knight"), (11, "Knight"), (12, "Knight"), (10, "Mordret"), (11, "Mordret"), (12, "Mordret")):
+        kim = cs if ad == "Changing Star" else None
+        conn.execute("INSERT INTO defter_iddia (book_slug, bolum, tur, ozne_ad, ozne_kimlik, deger, gecerli, created_at) "
+                     "VALUES (?, ?, 'varlik', ?, ?, '{\"t\": \"kisi\"}', 1, 0)", (KITAP, b, ad, kim))
+    conn.commit()
+    conn.close()
+    adlar = [k["ad"] for k in de.liste(KITAP, None)["kisiler"]]
+    assert "Nephis" in adlar and "Changing Star" not in adlar
+    assert "Lady Nephis" not in adlar and "Knight" not in adlar
+    assert "Mordret" in adlar
+    kart = de.kart(KITAP, n, None)
+    assert [a["ad"] for a in kart["adlar"]] == ["Changing Star"]

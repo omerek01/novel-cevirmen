@@ -23,7 +23,27 @@ SOZLUKSUZ_EN_AZ = 3
 # Kartta gösterilmeyen bağlar: takma ad "Adları"nda, rün bağları rün listesinde gösterilir.
 _KART_DISI_ILISKILER = frozenset({"takma_adi", "gercek_adi", "anisi", "golgesi", "yanki", "efsunu",
                                   "niteligi", "gorunusu", "yetenegi", "turu", "esya_turu", "sinifi",
-                                  "kusuru", "ruya_capasi", "oldurdu", "kendi_golgesi", "ust_basamak"})
+                                  "kusuru", "ruya_capasi", "oldurdu", "kendi_golgesi", "ust_basamak",
+                                  "rutbesi"})
+# Sözlüksüz kişi adında unvan ya da cins sözcük: "Lady Nephis", "Captain Sunless" kayıtlı kişinin
+# unvanlı hâlidir, "Knight"/"Prince" cins addır (sunucu kopyasında listeyi bunlar dolduruyordu).
+_UNVANLAR = frozenset({
+    "lady", "lord", "captain", "professor", "sergeant", "master", "saint", "prince", "princess", "sir",
+    "knight", "teacher", "sister", "brother", "lieutenant", "colonel", "general", "doctor", "dr", "madam",
+    "miss", "mister", "mr", "mrs", "king", "queen", "young", "old", "elder", "sovereign", "the", "little",
+})
+
+
+def _unvanli(ad: str) -> bool:
+    sozcukler = [w.strip(".,").casefold() for w in (ad or "").split()]
+    return not sozcukler or sozcukler[0] in _UNVANLAR or all(w in _UNVANLAR for w in sozcukler)
+
+
+def _destek_anahtari(o, iliski: str, n) -> tuple:
+    """Simetrik ilişkide yön yoktur; ötekinde "Sunny'nin öğretmeni Julius" ile tersi ayrı iddiadır."""
+    if varlik_grafigi.ILISKILER.get(iliski, {}).get("simetrik"):
+        return (frozenset((o, n)), iliski)
+    return (o, iliski, n)
 
 
 def _sinir(konum: int | None) -> int:
@@ -46,7 +66,8 @@ def _bolum_sayilari(conn, book_slug: str, konum: int | None) -> tuple[Counter, d
     ):
         if kimlik:
             sayi[kimlik] += adet
-        elif ad and (json.loads(deger or "{}") or {}).get("t") == KISI_TURU and adet >= SOZLUKSUZ_EN_AZ:
+        elif (ad and (json.loads(deger or "{}") or {}).get("t") == KISI_TURU and adet >= SOZLUKSUZ_EN_AZ
+              and not _unvanli(ad)):
             sozluksuz["ad:" + glossary.fold_term(ad)] = {"ad": ad, "bolum": adet, "ilk": ilk}
     return sayi, sozluksuz
 
@@ -92,9 +113,32 @@ def liste(book_slug: str, konum: int | None) -> dict:
                 "ani_sayisi": sum(1 for k in kayit["ani"] if glossary.fold_term(k["sahip"]) in katli),
                 "run": any(run_sahipleri[x] for x in katli)}
 
+    # Takma adı olan kişi ayrı satır olmaz: aynı kişinin kayıtları tek satırda, en çok geçen adla.
+    gizli: set[str] = set()
+    kok: dict[str, str] = {}
+
+    def bul(x):
+        while kok.get(x, x) != x:
+            x = kok[x]
+        return x
+
+    for b in _baglar(book_slug, konum):
+        if (b["iliski"] == "takma_adi" and (b["durum"] == "onaylandi" or (b["guven"] or 0) >= 0.8)
+                and all((sozluk.get(u) or {}).get("tur") == KISI_TURU for u in (b["kaynak_kimlik"], b["hedef_kimlik"]))):
+            a, h = bul(b["kaynak_kimlik"]), bul(b["hedef_kimlik"])
+            if a != h:
+                ana, yan = sorted((a, h), key=lambda u: (-sayi[u], sozluk[u]["source"].casefold()))
+                kok[yan] = ana
+    for u in list(kok):
+        ana = bul(u)
+        if ana != u:
+            gizli.add(u)
+            ad_ = sozluk[u]["source"]
+            if ad_ not in takma[ana]:
+                takma[ana].append(ad_)
     kisiler, gruplar = [], []
     for kimlik, r in sozluk.items():
-        if not sayi[kimlik]:
+        if not sayi[kimlik] or kimlik in gizli:
             continue
         if r.get("tur") == KISI_TURU:
             kisiler.append(ozet(kimlik, r["source"], r.get("target"), sayi[kimlik]))
@@ -146,11 +190,11 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
             "SELECT ozne_kimlik, iliski, nesne_kimlik, COUNT(DISTINCT bolum) FROM defter_iddia WHERE book_slug = ? "
             "AND tur = 'bag' AND gecerli = 1 AND bolum <= ? AND (ozne_kimlik = ? OR nesne_kimlik = ?) "
             "GROUP BY ozne_kimlik, iliski, nesne_kimlik", (book_slug, _sinir(konum), kimlik, kimlik)):
-            destek[(frozenset((o, n)), i)] += adet
+            destek[_destek_anahtari(o, i, n)] += adet
         tablo = karakter_defteri.hitap_tablosu(book_slug, konum, conn)
     finally:
         conn.close()
-    adlar, oneriler, baglar = [], [], []
+    adlar, oneriler, baglar, rutbeler = [], [], [], {}
     for b in (_baglar(book_slug, konum, kimlik) if kimlik in sozluk else []):
         giden = b["kaynak_kimlik"] == kimlik
         diger_k, diger, diger_tr = ((b["hedef_kimlik"], b["hedef"], b["hedef_karsilik"]) if giden
@@ -160,8 +204,15 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
                 adlar.append({"ad": diger, "tr": diger_tr, "iliski": b["iliski"]})
             elif giden or b["iliski"] == "takma_adi":
                 oneriler.append({"asil_kimlik": b["kaynak_kimlik"], "takma_kimlik": b["hedef_kimlik"],
-                                 "ad": diger, "destek": destek[(frozenset((b["kaynak_kimlik"], b["hedef_kimlik"])),
-                                                                b["iliski"])]})
+                                 "ad": diger, "destek": destek[_destek_anahtari(
+                                     b["kaynak_kimlik"], b["iliski"], b["hedef_kimlik"])]})
+            continue
+        if b["iliski"] == "rutbesi":
+            # Rütbe bağları rün listesinde "rütbe geçmişi" olur (anlatımdan; rün mesajı seyrek).
+            if giden:
+                r = rutbeler.setdefault(diger_k, {"ad": diger, "tr": diger_tr, "ilk_bolum": b["ilk_bolum"],
+                                                  "destek": 0, "origin": b["origin"]})
+                r["destek"] = max(r["destek"], destek[_destek_anahtari(kimlik, "rutbesi", diger_k)])
             continue
         if b["iliski"] in _KART_DISI_ILISKILER:
             continue
@@ -171,7 +222,7 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
             "yon": "iki" if tanim.get("simetrik") else ("giden" if giden else "gelen"),
             "kaynak_kimlik": b["kaynak_kimlik"], "hedef_kimlik": b["hedef_kimlik"],
             "diger_kimlik": diger_k, "diger_ad": diger, "diger_tr": diger_tr, "ilk_bolum": b["ilk_bolum"],
-            "destek": destek[(frozenset((b["kaynak_kimlik"], b["hedef_kimlik"])), b["iliski"])],
+            "destek": destek[_destek_anahtari(b["kaynak_kimlik"], b["iliski"], b["hedef_kimlik"])],
             "durum": b["durum"], "origin": b["origin"], "guven": b["guven"],
         })
     baglar.sort(key=lambda x: (x["durum"] != "onaylandi" and (x["guven"] or 0) < 0.8, -x["destek"],
@@ -184,7 +235,17 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
                          "bicim": t["bicim"], "n": t["n"], "oran": t["oran"], "kararli": t["kararli"],
                          "elle": t["elle"], "son_bolum": t["son_bolum"]})
     hitaplar.sort(key=lambda h: (not h["elle"] and not h["kararli"], -h["n"]))
-    katli = {glossary.fold_term(x) for x in (ad, *(a["ad"] for a in adlar))}
+    tekil, gorulen = [], {glossary.fold_term(ad)}
+    for a in adlar:
+        if glossary.fold_term(a["ad"]) not in gorulen:
+            gorulen.add(glossary.fold_term(a["ad"]))
+            tekil.append(a)
+    adlar = tekil
+    oneri_tekil = {}
+    for o in sorted(oneriler, key=lambda o: -o["destek"]):
+        oneri_tekil.setdefault(glossary.fold_term(o["ad"]), o)
+    oneriler = [o for k, o in oneri_tekil.items() if k not in gorulen][:8]
+    katli = set(gorulen)
     kayit = defter_kayit.gorunum(book_slug, konum)["kayitlar"]
 
     def sahibin(tur):
@@ -197,5 +258,6 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
             "bolum_sayisi": sayi.get(kimlik) or (sozluksuz.get(kimlik) or {}).get("bolum", 0), "ilk_bolum": ilk,
             "adlar": adlar, "oneriler": oneriler, "baglar": baglar, "hitaplar": hitaplar,
+            "rutbeler": sorted(rutbeler.values(), key=lambda r: (r["ilk_bolum"] or 0, r["ad"])),
             "run": sahibin("alan"), "anilar": anilar, "yankilar": sahibin("golge") + sahibin("yanki"),
             "nitelikler": sahibin("nitelik"), "yaratiklar": sahibin("yaratik")}

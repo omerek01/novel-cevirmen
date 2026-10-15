@@ -36,7 +36,7 @@ _TIRNAK = "\"'“”‘’ "
 
 def _temiz(ad: str) -> str:
     """Rün değerinin kenar artıkları: "Cloud.." (yarım kalan mesaj), tırnaklar."""
-    return (ad or "").strip().strip(_TIRNAK).rstrip(".…").strip()
+    return (ad or "").strip().strip(_TIRNAK).strip(".…").strip()
 
 SEMA = """
 CREATE TABLE IF NOT EXISTS defter_kayit (
