@@ -990,8 +990,9 @@ _BLOK_ALT = {
     # tekil "Enchantment:" ve düz "Enchantments:" (923. bölüm, Bitter Cusp / Stifled Scream).
     "Memory": {"Memory Rank": "rutbesi", "Memory Type": "esya_turu", "Memory Enchantments": "efsunu",
                "Enchantments": "efsunu", "Enchantment": "efsunu"},
-    "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi"},
-    "Echo": {"Echo Type": "sinifi", "Echo Core": "rutbesi", "Echo Rank": "rutbesi"},
+    # Gölge/yankı nitelikleri (2026-10-15, defter): "Shadow Attributes: [Battle Master], [Stalwart]".
+    "Shadow": {"Shadow Rank": "rutbesi", "Shadow Class": "sinifi", "Shadow Attributes": "niteligi"},
+    "Echo": {"Echo Type": "sinifi", "Echo Core": "rutbesi", "Echo Rank": "rutbesi", "Echo Attributes": "niteligi"},
 }
 _BLOK_SAHIPLIK = {"Memory": "anisi", "Shadow": "golgesi", "Echo": "yanki"}
 # Sonraki bölümlerde Anı rünlerinin ARASINA anlatım giriyor ("He continued to study

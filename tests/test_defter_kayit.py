@@ -1,0 +1,212 @@
+"""Defter kayıtları (`core.defter_kayit`): rün mesajlarından anı/efsun/nitelik/gölge/yankı/
+yaratık/rün listesi ve kullanıcının elle düzeltmeleri — çevrimdışı.
+
+Rün metinleri Shadow Slave'in mesaj BİÇİMİNİ taklit eden kısa yapay örneklerdir."""
+from __future__ import annotations
+
+import time
+
+from core import cache, defter_kayit as dk, glossary
+
+KITAP = "shadow-slave"  # rün profili bu slug'a bağlı
+
+RUNLER = """He looked at the runes.
+
+Name: Sunless.
+
+True Name: Lost from Light.
+
+Rank: Dreamer.
+
+Memories: [Silver Bell], [Azure Blade].
+
+Attributes: [Fated].
+
+Aspect: [Shadow Slave].
+
+Aspect Rank: Divine.
+
+He smiled.
+
+Memory: [Azure Blade].
+
+Memory Rank: Awakened.
+
+Memory Tier: I.
+
+Memory Type: Weapon.
+
+Memory Enchantments: [Sharp], [Doubtless].
+
+Enchantment Description: [“The blade never dulls.”]
+
+Enchantment Description: [Protects the wielder from mind attacks.]
+
+Then the voice of the Spell came.
+
+[You have slain an awakened monster, Rolling Stone..]
+
+Shadow: [Stone Saint].
+
+Shadow Rank: Awakened.
+
+Shadow Class: Monster.
+
+Shadow Attributes: [Stalwart]."""
+
+SONRA = """Name: Sunless.
+
+Rank: Awakened.
+
+Memory: [Dark Wing].
+
+Memory Rank: Awakened.
+
+[You have slain an Ascended human, Hilde.]"""
+
+
+def _bolum(no, kaynak):
+    conn = cache._connect()
+    conn.execute(
+        "INSERT INTO chapters (url, book_slug, chapter_no, translation, source_text, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (f"https://x/{no}", KITAP, no, "çeviri", kaynak, time.time()),
+    )
+    conn.commit()
+    conn.close()
+
+
+def _kitap():
+    _bolum(16, RUNLER)
+    _bolum(30, SONRA)
+    return dk.cikar(KITAP)
+
+
+def _bul(gorunum, tur, ad, sahip=None):
+    for k in gorunum["kayitlar"][tur]:
+        if k["ad"] == ad and (sahip is None or k["sahip"] == sahip):
+            return k
+    return None
+
+
+def test_run_mesajlari_kayitlara_doner_sozlukte_olmasa_da():
+    _kitap()
+    g = dk.gorunum(KITAP, None)
+    azure = _bul(g, "ani", "Azure Blade", "Sunny")
+    assert azure and azure["ilk_bolum"] == 16
+    assert azure["alanlar"] == {"rutbe": "Awakened", "kademe": "I", "tur": "Weapon"}
+    assert _bul(g, "ani", "Silver Bell", "Sunny")
+    assert _bul(g, "efsun", "Sharp", "Azure Blade")["alanlar"]["aciklama"] == "The blade never dulls."
+    assert _bul(g, "efsun", "Doubtless", "Azure Blade")["alanlar"]["aciklama"] == "Protects the wielder from mind attacks."
+    saint = _bul(g, "golge", "Stone Saint", "Sunny")
+    assert saint["alanlar"]["rutbe"] == "Awakened" and saint["alanlar"]["sinif"] == "Monster"
+    assert saint["alanlar"]["nitelikler"] == ["Stalwart"]
+    tas = _bul(g, "yaratik", "Rolling Stone", "Sunny")
+    assert tas["alanlar"] == {"rutbe": "awakened", "sinif": "monster"}
+    assert _bul(g, "nitelik", "Fated", "Sunny")
+    assert _bul(g, "alan", "gercek_adi", "Sunny")["deger"] == "Lost from Light"
+    # İnsan öldürmek yaratık değildir; ayrı sınıfla tutulur ama yaratık listesine girmez.
+    assert _bul(g, "yaratik", "Hilde") is None
+
+
+def test_spoiler_konumdan_sonrasini_gizler_ve_rutbe_gecmisini_izler():
+    _kitap()
+    once = dk.gorunum(KITAP, 20)
+    assert _bul(once, "alan", "rutbesi", "Sunny")["deger"] == "Dreamer"
+    assert _bul(once, "ani", "Dark Wing") is None
+    sonra = dk.gorunum(KITAP, 30)
+    assert _bul(sonra, "alan", "rutbesi", "Sunny")["deger"] == "Awakened"
+    assert _bul(sonra, "ani", "Dark Wing", "Sunny")
+
+
+def test_cikarim_tekrarlaninca_ayni_kalir():
+    _kitap()
+    ilk = dk.gorunum(KITAP, None)
+    dk.cikar(KITAP)
+    assert dk.gorunum(KITAP, None) == ilk
+
+
+def test_tek_bolum_akisi_mevcut_kayitlarla_birlesir():
+    _bolum(16, RUNLER)
+    dk.bolumden(KITAP, 30, SONRA)
+    dk.bolumden(KITAP, 16, RUNLER)
+    g = dk.gorunum(KITAP, None)
+    assert _bul(g, "ani", "Dark Wing", "Sunny")["ilk_bolum"] == 30
+    assert _bul(g, "ani", "Azure Blade", "Sunny")["ilk_bolum"] == 16
+    assert _bul(g, "alan", "rutbesi", "Sunny")["deger"] == "Awakened"
+
+
+def test_sozluk_karsiligi_kayda_eklenir():
+    glossary.set_term(KITAP, "Azure Blade", "Gök Mavisi Bıçak")
+    _kitap()
+    assert _bul(dk.gorunum(KITAP, None), "ani", "Azure Blade")["tr"] == "Gök Mavisi Bıçak"
+    assert _bul(dk.gorunum(KITAP, None), "ani", "Silver Bell")["tr"] is None
+
+
+def test_elle_kayit_eklenir_ve_cikarim_onu_degistirmez():
+    _kitap()
+    dk.elle_yaz(KITAP, {"tur": "ani", "sahip": "Sunny", "ad": "Endless Spring", "ilk_bolum": 18,
+                        "alanlar": {"tur": "Tool"}})
+    dk.cikar(KITAP)
+    k = _bul(dk.gorunum(KITAP, None), "ani", "Endless Spring", "Sunny")
+    assert k["origin"] == "elle" and k["alanlar"] == {"tur": "Tool"}
+    assert _bul(dk.gorunum(KITAP, 17), "ani", "Endless Spring") is None
+
+
+def test_sistem_kaydini_elle_duzeltmek_yerini_alir_ve_geri_gelmez():
+    _kitap()
+    eski = _bul(dk.gorunum(KITAP, None), "ani", "Azure Blade")
+    dk.elle_yaz(KITAP, {"tur": "ani", "sahip": "Sunny", "ad": "Azure Blade",
+                        "alanlar": {"rutbe": "Dormant", "tur": "Weapon"}}, yerine=eski["anahtar"])
+    dk.cikar(KITAP)
+    k = _bul(dk.gorunum(KITAP, None), "ani", "Azure Blade")
+    assert k["origin"] == "elle" and k["alanlar"]["rutbe"] == "Dormant"
+    assert k["ilk_bolum"] == 16  # bölüm verilmezse eski kaydınki korunur
+    # Ad değişirse eski ad bir daha görünmez.
+    dk.elle_yaz(KITAP, {"tur": "ani", "sahip": "Sunny", "ad": "Azure Sword"}, yerine=k["anahtar"])
+    dk.cikar(KITAP)
+    g = dk.gorunum(KITAP, None)
+    assert _bul(g, "ani", "Azure Blade") is None and _bul(g, "ani", "Azure Sword")
+
+
+def test_kaldirilan_sistem_kaydi_cikarimla_dirilmez_geri_alinabilir():
+    _kitap()
+    k = _bul(dk.gorunum(KITAP, None), "ani", "Silver Bell")
+    dk.kaldir(KITAP, k["anahtar"])
+    dk.cikar(KITAP)
+    assert _bul(dk.gorunum(KITAP, None), "ani", "Silver Bell") is None
+    dk.geri_al(KITAP, k["anahtar"])
+    assert _bul(dk.gorunum(KITAP, None), "ani", "Silver Bell")["origin"] == "sistem"
+
+
+def test_elle_eklenen_kayit_kaldirilinca_tumden_silinir():
+    dk.elle_yaz(KITAP, {"tur": "yanki", "sahip": "Sunny", "ad": "Blackie"})
+    k = _bul(dk.gorunum(KITAP, None), "yanki", "Blackie")
+    dk.kaldir(KITAP, k["anahtar"])
+    assert _bul(dk.gorunum(KITAP, None), "yanki", "Blackie") is None
+
+
+def test_gecersiz_elle_kayit_reddedilir():
+    import pytest
+
+    with pytest.raises(ValueError):
+        dk.elle_yaz(KITAP, {"tur": "bilinmez", "ad": "X"})
+    with pytest.raises(ValueError):
+        dk.elle_yaz(KITAP, {"tur": "ani", "ad": "  "})
+
+
+def test_gorunus_rutbesi_sahibine_baglanir_ad_ve_aciklama_temizlenir():
+    _kitap()
+    g = dk.gorunum(KITAP, None)
+    assert _bul(g, "alan", "gorunusu", "Sunny")["deger"] == "Shadow Slave"
+    assert _bul(g, "alan", "gorunus_rutbesi", "Sunny")["deger"] == "Divine"
+    assert not [k for k in g["kayitlar"]["alan"] if k["sahip"] == "Shadow Slave"]
+    assert _bul(g, "efsun", "Sharp")["alanlar"]["aciklama"] == "The blade never dulls."
+    assert _bul(g, "yaratik", "Rolling Stone")
+
+
+def test_ceviri_akisi_bolumun_runlerini_deftere_katar():
+    from core import pipeline
+
+    pipeline._sozluge_isle(KITAP, {"detected_names": [], "detected_terms": []}, 16, RUNLER)
+    assert _bul(dk.gorunum(KITAP, None), "ani", "Azure Blade", "Sunny")

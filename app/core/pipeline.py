@@ -10,7 +10,7 @@ import os
 import sqlite3
 import threading
 
-from . import api_durum, bilgi_delta, budget, cache, glossary, karakter_defteri, library, sozluk_dogrulama, synthetic, varlik_grafigi
+from . import api_durum, bilgi_delta, budget, cache, defter_kayit, glossary, karakter_defteri, library, sozluk_dogrulama, synthetic, varlik_grafigi
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
 # `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
@@ -274,6 +274,12 @@ def _sozluge_isle(
     if kaynak_metin:
         try:
             varlik_grafigi.bolumden_sistem_baglari(slug, chapter_no, kaynak_metin)
+        except sqlite3.Error:
+            pass
+        # DEFTER KAYITLARI: aynı rünlerden anı/efsun/gölge/yaratık/rün listesi — sözlükte
+        # olmayan adlar dahil (defter ekranı). API'siz; hatası çeviriyi düşürmez.
+        try:
+            defter_kayit.bolumden(slug, chapter_no, kaynak_metin)
         except sqlite3.Error:
             pass
     return eklenen

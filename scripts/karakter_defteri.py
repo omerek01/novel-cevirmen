@@ -11,6 +11,8 @@ Kullanım (varsayılan hiçbir şey YAZMAZ, model ÇAĞIRMAZ):
   --kitap shadow-slave --from 1 --to 984 --es 4 --calistir    doldurma
   --kitap shadow-slave --uzlastir                          bağları varlik_bag'e aday yaz (API'siz)
   --kitap shadow-slave --metrik                            özet
+  --kitap shadow-slave --run-kayit                         rün kayıtlarını (anı, efsun, gölge, yaratık,
+                                                           rün listesi) baştan kur (API'siz; elle kayıtlar korunur)
   --kitap shadow-slave --ornek varlik=50,hitap=50,bag=30 --cikti denetim.json   elle denetim örneği
   --env /yol/.env   (Vertex proje ayarı; değer basılmaz)
 Güvenlik durdurmaları: art arda başarısızlık; son 10 bölümde geçersiz iddia oranı > %50.
@@ -195,6 +197,7 @@ def main() -> int:
     ap.add_argument("--calistir", action="store_true")
     ap.add_argument("--yeniden", action="store_true")
     ap.add_argument("--uzlastir", action="store_true")
+    ap.add_argument("--run-kayit", action="store_true", help="defter_kayit.cikar: rün kayıtlarını baştan kur")
     ap.add_argument("--metrik", action="store_true")
     ap.add_argument("--ornek")
     ap.add_argument("--cikti")
@@ -223,6 +226,11 @@ def main() -> int:
     if args.uzlastir:
         rapor["uzlastir"] = kd.uzlastir(args.kitap)
         print("uzlaştırma:", rapor["uzlastir"])
+    if args.run_kayit:
+        from core import defter_kayit
+
+        rapor["run_kayit"] = defter_kayit.cikar(args.kitap)
+        print("rün kayıtları:", rapor["run_kayit"])
     if args.metrik:
         rapor["metrik"] = kd.metrik(args.kitap)
         print(json.dumps(rapor["metrik"], ensure_ascii=False, indent=1))
