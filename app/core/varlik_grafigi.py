@@ -1627,9 +1627,15 @@ def ad_tutarsizliklari(book_slug: str) -> dict[str, dict]:
     Grafikte `takma_adi` ve `gercek_adi` bağları kişinin bütün adlarını toplar.
     Ölçülen: Sunny / Sunless İngilizce, Gerçek Adı `Lost from Light -> Işıktan
     Mahrum` Türkçe; Nephis İngilizce, `Changing Star -> Değişen Yıldız` Türkçe.
-    Proje kuralı kişiyi adlandıran ifadeyi İngilizce bırakır; Gerçek Ad bilerek
-    Türkçeleştirildiyse bu bir kategori politikasıyla (tür) açıkça söylenmeli.
+    Türkçe politikası açıkça tanımlanan türler (ör. Gerçek adı) bu karşılaştırmaya
+    girmez. Politika ihlali ayrı denetlenir; kişinin kendi adı ve takma adı için
+    İngilizce koruma denetimi sürer.
     """
+    politikalar = glossary.politikalar(book_slug)
+    turkce_turler = {
+        r["source"] for r in glossary.get_glossary_rows(book_slug)
+        if politikalar.get(r.get("tur")) == "turkce"
+    }
     gruplar: dict[str, dict[str, str]] = {}
     for b in baglar(book_slug):
         if b["iliski"] in ("takma_adi", "gercek_adi"):
@@ -1638,7 +1644,7 @@ def ad_tutarsizliklari(book_slug: str) -> dict[str, dict]:
     out: dict[str, dict] = {}
     for kisi, adlar in gruplar.items():
         korunan = {a for a, t in adlar.items() if glossary.fold_term(a) == glossary.fold_term(t or "")}
-        turkce = set(adlar) - korunan
+        turkce = set(adlar) - korunan - turkce_turler
         if not korunan or not turkce:
             continue
         ozet = ", ".join(f"{a} ({'İngilizce' if a in korunan else '→ ' + adlar[a]})" for a in sorted(adlar))

@@ -1,15 +1,16 @@
 """Gerçek Ad (True Name) politikası (2026-10-15, kullanıcı kararı: "gerçek adlar Türkçe yazılacak").
 
 Büyü'nün verdiği anlamlı ad (Lost from Light, Changing Star) kişiyi adlandırsa da İngilizce
-kalmaz; kişinin kendi adı (Sunny, Nephis) kalır. Üç istem de aynı kuralı taşımalı: çeviri,
-okurken terim önerisi ve sözlük sınıflaması — biri ayrışırsa aynı kitapta iki politika oluşur."""
+kalmaz; kişinin kendi adı (Sunny, Nephis) kalır. Çeviri, terim önerisi, sözlük sınıflaması
+ve otomatik doğrulama aynı kuralı taşımalı; biri ayrışırsa aynı kitapta iki politika oluşur."""
 from __future__ import annotations
 
-from core import translate
+from core import sozluk_dogrulama, translate
 
 
-def test_uc_istem_gercek_ad_kuralini_tasir():
-    for istem in (translate.SYSTEM_INSTRUCTION, translate.SUGGEST_INSTRUCTION, translate.CLASSIFY_INSTRUCTION):
+def test_dort_istem_gercek_ad_kuralini_tasir():
+    for istem in (translate.SYSTEM_INSTRUCTION, translate.SUGGEST_INSTRUCTION,
+                  translate.CLASSIFY_INSTRUCTION, sozluk_dogrulama.DOGRULAMA_INSTRUCTION):
         assert translate.GERCEK_AD_KURALI in istem
     assert "Işıktan Mahrum" in translate.GERCEK_AD_KURALI
 

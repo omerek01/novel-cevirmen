@@ -1022,8 +1022,8 @@ LAKAP_KURALI = (
 )
 
 # GERÇEK AD politikası (2026-10-15, kullanıcı kararı: "gerçek adlar Türkçe yazılacak"). Kişi adı
-# istisnası yalnız kişinin KENDİ adıdır; Büyü'nün verdiği anlamlı ad çevrilir. Üç istem de bunu
-# taşır (çeviri, terim önerisi, sözlük sınıflama): biri ayrışırsa aynı kitapta iki politika oluşur.
+# istisnası yalnız kişinin KENDİ adıdır; Büyü'nün verdiği anlamlı ad çevrilir. Çeviri, terim önerisi,
+# sözlük sınıflama ve otomatik doğrulama bunu taşır; ayrışırlarsa aynı kitapta iki politika oluşur.
 GERCEK_AD_KURALI = (
     "- GERÇEK AD (True Name): Büyü'nün/sistemin bir kişiye verdiği, anlamı olan ad "
     "(rünlerde 'True Name: Lost from Light'; Changing Star, Song of the Fallen) kişiyi "

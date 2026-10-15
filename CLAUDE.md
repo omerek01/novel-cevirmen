@@ -957,6 +957,19 @@ eklenemez — o tarayıcının menüsü, sayfaya kapalı), modal açılır ve ka
 yazılmaz; sözlük prompt'ta KURALdır, yanlış karşılık kitap boyunca birebir uygulanırdı.
 Sözlük YALNIZ yeni çevrilen bölümde etkilidir.
 
+**GERÇEK AD TÜRKÇE, KİŞİNİN KENDİ ADI İNGİLİZCE** (2026-10-15, kullanıcı kararı).
+Yukarıdaki kişi adı istisnası Büyü'nün verdiği anlamlı `True Name`i kapsamaz:
+`Lost from Light -> Işıktan Mahrum`, `Changing Star -> Değişen Yıldız`,
+`Nightingale -> Bülbül`, `Sky Tide -> Gök Gelgiti`. Sunny, Sunless, Nephis ve Kai
+gibi kişinin kendi adları İngilizce kalır. Ortak `translate.GERCEK_AD_KURALI`
+çeviri, terim önerisi, sözlük sınıflama ve otomatik doğrulama istemine girer.
+Gerçek Ad `detected_names` değil, Türkçe karşılığıyla `detected_terms` olur.
+Shadow Slave'de sözlük türü `Gerçek adı`, kategori politikası `turkce`dir;
+`ad_tutarsizliklari` açık Türkçe politikası olan kaydı karma ad uyarısından çıkarır.
+Bu muafiyet kişinin kendi adını veya başka türdeki lakabı denetimden çıkarmaz;
+kategori politikasına aykırı karşılık ayrıca `politika_ihlali` ile denetlenir.
+Sözlük değişikliği eski bölüm çevirilerini kendiliğinden değiştirmez.
+
 **KOŞULLU SÖZLÜK KARŞILIĞI** (2026-09-06, kullanıcı isteği + ölçüm). Sözlük düz bir
 `kaynak -> karşılık` eşlemesiydi ve aynı İngilizce sözcüğün BAĞLAMA göre iki farklı
 Türkçe karşılığı olduğu durumu İFADE EDEMİYORDU. Ölçülen vaka: Shadow Slave'de

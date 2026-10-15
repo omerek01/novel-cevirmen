@@ -174,6 +174,52 @@ def test_inceleme_listesi_grafik_nedenlerini_gosterir():
     assert vg.AD_TUTARLILIGI in tur["Lost from Light"]
 
 
+def test_turkce_gercek_ad_politikasi_karisik_ad_uyarisi_vermez():
+    _sozluk()
+    tur = glossary.tur_ekle(KITAP, "Gerçek adı")
+    glossary.terimi_yaz(KITAP, "Lost from Light", "Işıktan Mahrum", tur=tur)
+    glossary.politikalari_yaz(KITAP, {tur: "turkce"})
+    vg.bolumden_sistem_baglari(KITAP, 16, RUNLER)
+
+    assert vg.ad_tutarsizliklari(KITAP) == {}
+    assert vg.AD_TUTARLILIGI not in {
+        n["tur"] for n in vg.kalite_nedenleri(KITAP).get("Lost from Light", [])
+    }
+
+
+def test_gercek_ad_politikasi_turkcelesmis_kisi_adini_gizlemez():
+    _sozluk()
+    tur = glossary.tur_ekle(KITAP, "Gerçek adı")
+    glossary.terimi_yaz(KITAP, "Lost from Light", "Işıktan Mahrum", tur=tur)
+    glossary.politikalari_yaz(KITAP, {tur: "turkce"})
+    glossary.set_term(KITAP, "Sunless", "Güneşsiz")
+    vg.bolumden_sistem_baglari(KITAP, 16, RUNLER)
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Sunny"), "takma_adi", k("Sunless"), 1, None, "manual")
+
+    assert set(vg.ad_tutarsizliklari(KITAP)) == {"Sunless"}
+
+
+def test_gercek_ad_politikasi_degisiminde_inceleme_onbellegi_yenilenir():
+    _sozluk()
+    tur = glossary.tur_ekle(KITAP, "Gerçek adı")
+    glossary.terimi_yaz(KITAP, "Lost from Light", "Işıktan Mahrum", tur=tur, origin=None)
+    vg.bolumden_sistem_baglari(KITAP, 16, RUNLER)
+
+    def ad_uyarisi_var():
+        return any(
+            n["tur"] == vg.AD_TUTARLILIGI
+            for r in glossary.inceleme_listesi(KITAP) if r["source"] == "Lost from Light"
+            for n in r["nedenler"]
+        )
+
+    assert ad_uyarisi_var()
+    glossary.politikalari_yaz(KITAP, {tur: "turkce"})
+    assert not ad_uyarisi_var()
+    glossary.politikalari_yaz(KITAP, {tur: None})
+    assert ad_uyarisi_var()
+
+
 def test_simetrik_iliski_tek_bagdir():
     _sozluk()
     glossary.set_term(KITAP, "Kai", "Kai")

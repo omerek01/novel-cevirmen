@@ -2259,7 +2259,7 @@ def reddi_kaldir(book_slug: str, source: str) -> bool:
 # 12.9 sn'nin 9.6'sı ihlal ölçümü, 2.1'i grafik kuralları). Arayüz isteği 8 sn'de
 # vazgeçtiği için liste telefonda HİÇ açılmıyordu; her "Doğru"dan sonraki tazeleme de
 # aynı hesabı baştan yapıyordu. Sonuç girdilerin imzasıyla saklanır: sözlük satırları
-# (karşılık/koşul/durum/tür), bölüm çevirileri ve varlık bağları. İnceleme KARARI
+# (karşılık/koşul/durum/tür), bölüm çevirileri, varlık bağları ve kategori politikaları. İnceleme KARARI
 # imzaya girmez — onaylanan kayıt `ekle` süzgecinde canlı olarak düşer.
 # SİLME (inceleme ekranında "Reddet") kalan kayıtların sonucunu değiştirmez: saklanan
 # sözlük kümesi bugünkünü KAPSIYORSA hesap tekrarlanmaz, sonuç süzülür. İki parça AYRI
@@ -2346,7 +2346,10 @@ def _agir_nedenler(
         # İki imza AYRI sorgu: defter tablosu yoksa grafik imzası yine çalışmalı.
         (_imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at), MAX(created_at) "
                        "FROM varlik_bag WHERE book_slug = ?"),
-         _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at) FROM defter_isleme WHERE book_slug = ?")),
+         _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(updated_at) FROM defter_isleme WHERE book_slug = ?"),
+         # Ad tutarlılığı açık kategori politikasına bağlıdır; ekleme/silme/değiştirme
+         # sözlük sürümünü artırmaz, bu yüzden politika ayrıca imzaya girer.
+         tuple(sorted(politikalar(book_slug).items()))),
         kaynaklar, grafik_hesapla, bayat_kabul,
     )
     return ihlaller, grafik, ihlal_taze and grafik_taze
