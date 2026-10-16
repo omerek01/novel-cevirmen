@@ -116,27 +116,46 @@ def adaylari_suz(oneriler: list[dict], parcalar: list[dict], satirlar: list[dict
     return out
 
 
-def tara(book_slug: str, tohum: int, api_key: str = "", parca: int = PARCA, toplam: int = TOPLAM_KARAKTER) -> dict:
-    """Bir tarama turu (bir model isteği). DB'ye YAZMAZ."""
+def ucretsiz_cagir(user: str, system: str, api_key: str = "") -> tuple[str, str]:
+    """Tek model isteği, YALNIZ ücretsiz zincirden: (ham metin, model). Testler bunu taklit eder."""
     api_key = api_key or os.getenv("GEMINI_API_KEY", "")
     if not translate.ceviri_anahtari_var_mi(api_key):
         raise translate.TranslateError(translate.ANAHTAR_YOK_MESAJI)
-    bolumler = [b for b in cache.kaynak_bolumleri(book_slug) if b.get("source")]
-    parcalar = ornekle(bolumler, tohum, parca, toplam)
-    kitap = (library.get_book(book_slug) or {}).get("title") or ""
-    user = (f"KİTAP: {kitap}\n\n" if kitap else "") + "\n\n".join(
-        f"[PARÇA — bölüm {p['chapter_no']}]\n{p['text']}" for p in parcalar)
     response, model = translate._generate_with_fallback(
         translate._gemini_fabrikasi(api_key), sozluk_dogrulama.ucretsiz_zincir(), user,
-        system=TARAMA_INSTRUCTION, max_tokens=translate.MAX_OUTPUT_TOKENS)
-    ham = (getattr(response, "text", None) or "").strip()
+        system=system, max_tokens=translate.MAX_OUTPUT_TOKENS)
+    return (getattr(response, "text", None) or "").strip(), model
+
+
+def json_coz(ham: str):
+    """Modelin JSON yanıtı (``` çitli olabilir); çözülemezse None."""
+    ham = (ham or "").strip()
     if ham.startswith("```"):
         ham = ham.strip("`").removeprefix("json").strip()
     try:
-        veri = json.loads(ham)
-        oneriler = [x for x in (veri.get("terms") if isinstance(veri, dict) else veri) or [] if isinstance(x, dict)]
-    except (json.JSONDecodeError, TypeError, AttributeError):
-        oneriler = []
+        return json.loads(ham)
+    except (json.JSONDecodeError, TypeError):
+        return None
+
+
+def _parca_metni(book_slug: str, parcalar: list[dict]) -> str:
+    kitap = (library.get_book(book_slug) or {}).get("title") or ""
+    return (f"KİTAP: {kitap}\n\n" if kitap else "") + "\n\n".join(
+        f"[PARÇA — bölüm {p['chapter_no']}]\n{p['text']}" for p in parcalar)
+
+
+def tara(book_slug: str, tohum: int, api_key: str = "", parca: int = PARCA, toplam: int = TOPLAM_KARAKTER,
+         bolumler: list[dict] | None = None, cagir=None) -> dict:
+    """Bir tarama turu (bir model isteği). DB'ye YAZMAZ.
+
+    `bolumler` verilmezse kitabın kaynağı olan bütün bölümleri; ön tarama ilk bölümleri verir."""
+    if bolumler is None:
+        bolumler = [b for b in cache.kaynak_bolumleri(book_slug) if b.get("source")]
+    parcalar = ornekle(bolumler, tohum, parca, toplam)
+    ham, model = (cagir or ucretsiz_cagir)(_parca_metni(book_slug, parcalar), TARAMA_INSTRUCTION, api_key)
+    veri = json_coz(ham)
+    oneriler = [x for x in ((veri.get("terms") if isinstance(veri, dict) else veri) or [])
+                if isinstance(x, dict)] if isinstance(veri, (dict, list)) else []
     _t, _k, korpus = cache.kaynak_kapsamasi(book_slug)
     adaylar = adaylari_suz(oneriler, parcalar, glossary.get_glossary_rows(book_slug),
                            [b["source"] for b in bolumler], korpus,
@@ -144,6 +163,77 @@ def tara(book_slug: str, tohum: int, api_key: str = "", parca: int = PARCA, topl
     return dict(tohum=tohum, model=model, parcalar=[dict(chapter_no=p["chapter_no"], karakter=len(p["text"]))
                                                    for p in parcalar],
                 oneri=len(oneriler), adaylar=adaylar)
+
+
+# İKİNCİ GEÇİŞ (TransAgents, TACL 2025: "ekle, sonra genel sözcükleri çıkar" iki ayrı ajan). Birinci
+# istem hem bulur hem süzer; ayrı bir denetçi sıradan sözcüğü ve betimleyici öbeği daha iyi görür.
+ELEME_INSTRUCTION = (
+    "Sen İngilizce→Türkçe web roman sözlüğü denetçisisin. Sana bir terim çıkarıcının önerdiği sözlük "
+    "adayları kanıt cümleleriyle verilecek. Sözlüğe GİRMEMESİ gerekenleri seç: sıradan sözcükler, "
+    "betimleyici öbekler, tek seferlik ifadeler, çevirmenin her seferinde bağlama göre çevirmesi gereken "
+    "genel kavramlar (ör. 'the Guard', 'Old Man', 'Main Hall'). Kitap boyunca tutarlı kalması gereken özel "
+    "ad, adlandırılmış kavram, rütbe, yetenek ya da sistem terimi ise ELEME.\n"
+    "Emin değilsen eleme. Yanıtı SADECE şu JSON ile ver: "
+    '{"ele": [{"source": "...", "neden": "kısa Türkçe gerekçe"}]}'
+)
+
+
+def genel_olanlari_ele(book_slug: str, adaylar: list[dict], api_key: str = "", cagir=None) -> list[dict]:
+    """`aday` durumundakileri ikinci bir model isteğiyle süz; elenenler `elendi` olur. Yeni liste döner."""
+    bekleyen = [a for a in adaylar if a.get("durum") == "aday"]
+    if not bekleyen:
+        return adaylar
+    user = json.dumps([{"source": a["source"], "target": a["target"], "tur": a.get("tur"), "kanit": a.get("kanit")}
+                       for a in bekleyen], ensure_ascii=False)
+    ham, _model = (cagir or ucretsiz_cagir)(user, ELEME_INSTRUCTION, api_key)
+    veri = json_coz(ham)
+    ele = {}
+    for x in (veri.get("ele") if isinstance(veri, dict) else None) or []:
+        if isinstance(x, dict) and x.get("source"):
+            ele[glossary.fold_term(str(x["source"]))] = str(x.get("neden") or "").strip()
+    out = []
+    for a in adaylar:
+        neden = ele.get(glossary.fold_term(a["source"])) if a.get("durum") == "aday" else None
+        if neden is not None:
+            a = {**a, "durum": "elendi", "nedenler": [*a.get("nedenler", []), "ikinci geçiş: " + (neden or "genel")]}
+        out.append(a)
+    return out
+
+
+ON_TARAMA_BOLUM = 10  # soğuk başlangıçta örneklenen ilk bölüm sayısı
+ON_TARAMA_KARAKTER = 9000
+
+
+def on_tara(book_slug: str, bolumler: list[dict], api_key: str = "", ikinci_gecis: bool = True,
+            yaz: bool = True, cagir=None) -> dict:
+    """YENİ kitabın ilk bölümlerinden sözlük ön taraması (plan Faz 3, soğuk başlangıç).
+
+    Bugün ilk bölümler sözlüksüz çevriliyor: aday ancak çeviri sırasında algılanınca girer ve
+    doğrulanana kadar bekler. Ön tarama aynı adayları ÇEVİRİDEN ÖNCE önerir. Kural değişmez:
+    `yaz` ise kalan adaylar `origin='auto'` ile yazma kapısından geçer, ÖNCE BEKLEME kuralıyla
+    tutulur ve arka plan model doğrulamasından geçmeden prompt'a girmez. Kayıt, adayın ilk
+    geçtiği bölümle yazılır (köken)."""
+    bolumler = [b for b in bolumler if b.get("source")]
+    sonuc = tara(book_slug, 0, api_key, parca=min(PARCA, max(1, len(bolumler))), toplam=ON_TARAMA_KARAKTER,
+                 bolumler=bolumler, cagir=cagir)
+    adaylar = sonuc["adaylar"]
+    if ikinci_gecis:
+        adaylar = genel_olanlari_ele(book_slug, adaylar, api_key, cagir)
+    yazilan = []
+    if yaz:
+        for a in adaylar:
+            if a.get("durum") != "aday":
+                continue
+            desen = re.compile(r"(?<!\w)" + re.escape(a["source"]) + r"(?!\w)")
+            ilk = next((b.get("chapter_no") for b in bolumler if desen.search(b["source"])), None)
+            if a["source"].casefold() == a["target"].casefold():
+                glossary.merge_names(book_slug, [a["source"]], "auto", ilk)
+            else:
+                glossary.merge_terms(book_slug, {a["source"]: a["target"]}, "auto", ilk)
+            yazilan.append(a["source"])
+        if yazilan:
+            sozluk_dogrulama.arka_planda_dogrula(book_slug)
+    return {**sonuc, "adaylar": adaylar, "yazilan": yazilan}
 
 
 def onaylananlari_ekle(book_slug: str, adaylar: list[dict]) -> dict[str, str]:
