@@ -55,8 +55,8 @@ DEFTER_ILISKILERI = (
 # `cogul`: birden çok kişiye hitap. Türkçede çoğul "siz" resmiyet DEĞİLDİR; tabloya girerse
 # "Sunny -> Kai: siz" gibi sahte bir resmiyet üretir (pilotta 50 hitabın ~5'i böyleydi).
 HITAP_BICIMLERI = ("sen", "siz", "cogul", "belirsiz")
-# Sistem sesi: sözlükte kayıtlı olmasa da konuşan olabilir (Spell'in rün mesajları).
-SISTEM_KONUSANLARI = frozenset({"spell"})
+# Sistem sesi (sözlükte olmasa da konuşabilen) ve Gerçek Ad kanıt sözcüğü kitap profilindedir:
+# `sistem_sesi`, `gercek_ad_sozcugu` (`_Cozucu`).
 _YER_TUTUCULAR = frozenset({
     "", "?", "-", "—", "unknown", "someone", "somebody", "he", "she", "they", "him", "her",
     "it", "you", "i", "we", "narrator", "anlatıcı", "bilinmiyor",
@@ -182,6 +182,11 @@ def kitap_acik(book_slug: str) -> bool:
     if liste is not None:
         return book_slug in liste
     return varlik_grafigi.profil(book_slug) is not None
+
+
+def sistem_sesi(p: dict | None) -> frozenset[str]:
+    """Profilin sistem sesleri (küçük harf): sözlükte olmasa da konuşabilen (Spell)."""
+    return frozenset(x.casefold() for x in (p or {}).get("sistem_sesi", ()))
 
 
 def model_adi() -> str:
@@ -366,6 +371,9 @@ class _Cozucu:
         self.rutbeler = {x.casefold() for dizi in p.get("diziler", {}).values() for x in dizi}
         self.rutbeler |= {x.casefold() for x in p.get("ek_rutbeler", ())}
         self.rutbeler |= {r["source"].casefold() for r in self._dugum.satirlar.values() if r.get("tur") == "rutbe"}
+        self.sistem_sesi = sistem_sesi(p)
+        # Alan yoksa Gerçek Ad bağı hiç kabul edilmez: kavram kitaba özgü (Spell'in verdiği ad).
+        self.gercek_ad_sozcukleri = tuple(x.casefold() for x in p.get("gercek_ad_sozcugu", ()))
 
     def coz(self, ref) -> tuple[str | None, str, list[str]]:
         ref = ad_temizle(str(ref or "")).strip()
@@ -482,7 +490,7 @@ def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozu
             return red("alinti_yok")
         if iliski == "rutbesi" and nad.casefold() not in cozucu.rutbeler:
             return red("rutbe_degil")
-        if iliski == "gercek_adi" and "true name" not in pencere.casefold():
+        if iliski == "gercek_adi" and not any(s in pencere.casefold() for s in cozucu.gercek_ad_sozcukleri):
             return red("gercek_ad_kanitsiz")
     elif tur == "hitap":
         kk, kad, kadlar = cozucu.coz(oge.get("ko"))
@@ -501,7 +509,7 @@ def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozu
         # Konuşan/muhatap BÖLÜMDE geçmeli (uydurma kişi olmasın). Pencere değil: iki kişilik uzun
         # diyalogda konuşanın adı onlarca paragraf geçmeyebilir — pilotta doğru hitapları eliyordu.
         bolum = "\n".join(en_p)
-        sistem = kad.casefold() in SISTEM_KONUSANLARI
+        sistem = kad.casefold() in cozucu.sistem_sesi
         if not ((sistem or _geciyor(kadlar, bolum)) and (cogul or _geciyor(madlar, bolum))):
             return red("ad_yok")
         if not _tr_var(kayit["tr_alinti"], tr_p[p - 1]):
@@ -1252,7 +1260,8 @@ def ceviri_kartlari(book_slug: str, en_cok_bolum: int | None, conn=None) -> dict
                 varlik(uc)
         hitap.append({"ko": ko, "mu": mu, "ko_ad": t["konusan"], "mu_ad": t["muhatap"], "bicim": t["bicim"],
                       "n": t["n"], "son_bolum": t["son_bolum"], "elle": t["elle"]})
-    return {"bolum": en_cok_bolum, "varliklar": varliklar, "iliskiler": iliskiler, "hitap": hitap}
+    return {"bolum": en_cok_bolum, "varliklar": varliklar, "iliskiler": iliskiler, "hitap": hitap,
+            "sistem_sesi": sorted(sistem_sesi(varlik_grafigi.profil(book_slug)))}
 
 
 def kart_metni(snap: dict | None, en_paras: list[str]) -> str:
@@ -1263,10 +1272,11 @@ def kart_metni(snap: dict | None, en_paras: list[str]) -> str:
     varliklar = snap.get("varliklar") or {}
     gorulen = {k for k, v in varliklar.items() if _geciyor(v["adlar"], metin, buyuk=True)}
     sistem_var = any(p.lstrip().startswith("[") for p in en_paras)
+    sesler = set(snap.get("sistem_sesi") or ())
 
     def var(uc):
         if uc.startswith("ad:"):
-            return uc[3:] in SISTEM_KONUSANLARI and sistem_var
+            return uc[3:] in sesler and sistem_var
         return uc in gorulen
 
     satirlar = []

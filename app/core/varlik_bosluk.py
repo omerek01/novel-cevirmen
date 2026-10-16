@@ -186,27 +186,23 @@ def ortak_gecisler(book_slug: str, en_az: int = EN_AZ_ORTAK, korpus: str | None 
     return out
 
 
-# Şema: türü belirleyen bağ -> taşıması gereken GELEN bağ (sahiplik).
-SEMA = {
-    # "X turu Memory" olan X'in bir sahibi (anisi) olmalı.
-    "Memory": "anisi", "Memories": "anisi",
-    "Echo": "yanki", "Echoes": "yanki",
-    "Attribute": "niteligi",
-}
-
 
 def sema_eksikleri(book_slug: str) -> list[dict]:
     """Türü belli olup sahiplik bağı OLMAYAN varlıklar: [{"kimlik", "kaynak", "beklenen"}].
 
     Ölçüt grafikten: `X -> turu -> Memory` varsa X'e gelen bir `anisi` bağı beklenir.
-    Sahipsiz Anı, okurun "bu kimin?" sorusuna cevapsız kalır."""
+    Sahipsiz Anı, okurun "bu kimin?" sorusuna cevapsız kalır. Şema (tür -> beklenen gelen
+    bağ) kitap profilinin `kategori_iliskileri` alanıdır; yoksa denetim boş döner."""
+    sema = (varlik_grafigi.profil(book_slug) or {}).get("kategori_iliskileri") or {}
+    if not sema:
+        return []
     baglar = varlik_grafigi.baglar(book_slug)
     gelen: dict[str, set[str]] = defaultdict(set)
     for b in baglar:
         gelen[b["hedef_kimlik"]].add(b["iliski"])
     out, gorulen = [], set()
     for b in baglar:
-        beklenen = SEMA.get(b["hedef"]) if b["iliski"] == "turu" else None
+        beklenen = sema.get(b["hedef"]) if b["iliski"] == "turu" else None
         if beklenen and beklenen not in gelen[b["kaynak_kimlik"]] and b["kaynak_kimlik"] not in gorulen:
             gorulen.add(b["kaynak_kimlik"])
             out.append({"kimlik": b["kaynak_kimlik"], "kaynak": b["kaynak"], "beklenen": beklenen})

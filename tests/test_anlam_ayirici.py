@@ -3,7 +3,9 @@ from __future__ import annotations
 
 from core import anlam_ayirici as aa, varlik_grafigi as vg
 
-KURAL = vg.KITAP_PROFILLERI["shadow-slave"]["anlam_dugumleri"]["Saint"]["ayirici"]
+_SS = vg.KITAP_PROFILLERI["shadow-slave"]
+# Üretimdeki gibi: `ceviri_anlamlari` kitap düzeyindeki rütbe sayımını her ayırıcıya ekler.
+KURAL = {**_SS["anlam_dugumleri"]["Saint"]["ayirici"], "sayim_rutbeleri": _SS["rutbe_sayimi"]}
 
 
 def _sinif(par, bolum=400):
@@ -20,6 +22,13 @@ def test_rutbe_kaliplari():
     assert _sinif("He reached the rank of Saint.") == ["taban"]
     assert _sinif("Every Awakened, Master, and Saint felt it.") == ["taban"]
     assert _sinif("They would become Masters, maybe even Saint.") == ["taban"]
+
+
+def test_rutbe_sayimi_profilden_gelir():
+    # Sayım listesi kitaba özgüdür: listesiz kuralda (profilsiz kitap) sayım tabanı kesinleştirmez.
+    kural = {k: v for k, v in KURAL.items() if k != "sayim_rutbeleri"}
+    par = "Every Awakened, Master, and Saint felt it."
+    assert [s for _b, s in aa.gecisleri_siniflandir(par, "Saint", 400, kural)] == ["anlam"]
 
 
 def test_golge_ve_belirsiz():
@@ -81,6 +90,10 @@ def test_ceviri_anlamlari_rutbe_sozcuklerini_grafikten_alir():
     assert a["taban_karsilik"] == "Aziz" and a["anlam_karsilik"] == "Saint"
     assert "Paragon" in a["ayirici"]["taban_oncesi"]  # grafikteki rütbe, kodda yok
     assert [s for _b, s in aa.gecisleri_siniflandir("Every Paragon and Saint knelt.", "Saint", 400,
+                                                  a["ayirici"])] == ["taban"]
+    # Kitap düzeyindeki rütbe sayımı (profil `rutbe_sayimi`) ayırıcıya eklenir: virgüllü sayım.
+    assert a["ayirici"]["sayim_rutbeleri"] == vg.KITAP_PROFILLERI["shadow-slave"]["rutbe_sayimi"]
+    assert [s for _b, s in aa.gecisleri_siniflandir("Every Awakened, Master, and Saint felt it.", "Saint", 400,
                                                   a["ayirici"])] == ["taban"]
 
 

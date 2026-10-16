@@ -265,6 +265,17 @@ def test_unvanli_ad_asil_kisiye_baglanir_kategori_baglanmaz():
     assert ("Roan", "bulundugu_yer", "Chained Isles") in {(b["kaynak"], b["iliski"], b["hedef"]) for b in vg.baglar(KITAP)}
 
 
+def test_rutbe_onekleri_profilden_gelir():
+    # Profilsiz kitapta rütbe öneki yok: "Ascended Dale" bağlanmaz, hitap unvanı yine bağlanır.
+    diger = "profilsiz-kitap"
+    for k, v in {"Roan": "Roan", "Master Roan": "Master Roan", "Dale": "Dale",
+                 "Ascended Dale": "Ascended Dale"}.items():
+        glossary.set_term(diger, k, v)
+    assert vg.unvanli_adlari_bagla(diger) == 1
+    assert {(b["kaynak"], b["iliski"], b["hedef"]) for b in vg.baglar(diger)} == {
+        ("Roan", "takma_adi", "Master Roan")}
+
+
 def test_evrim_ve_golge_alma_runleri():
     b1 = vg.sistem_baglarini_bul("[You have received an Echo: Stone Saint.]\n\n[You have created a Shadow Monster: Stone Saint.]",
                                  "Sunny", ("Sunless",))

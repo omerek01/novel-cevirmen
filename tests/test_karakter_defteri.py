@@ -479,11 +479,16 @@ def test_rutbe_yalniz_rutbe_adina_baglanir(kitap):
 
 
 def test_gercek_ad_true_name_kaniti_ister(kitap):
+    from core import kitap_profili
+
     tr = ["x"]
+    oge = {"o": "Sunny", "r": "gercek_adi", "n": "Nephis", "p": 1, "a": "True Name was Nephis"}
+    # Profilde Gerçek Ad sözcüğü yoksa kavram bu kitapta yok: kanıt olsa da bağ reddedilir.
+    assert _dogrula("bag", oge, ["Sunny's True Name was Nephis."], tr)["red_nedeni"] == "gercek_ad_kanitsiz"
+    kitap_profili.yaz(KITAP, "gercek_ad_sozcugu", ["True Name"])
     yok = _dogrula("bag", {"o": "Sunny", "r": "gercek_adi", "n": "Nephis", "p": 1, "a": "Sunny met Nephis"},
                    ["Sunny met Nephis."], tr)
-    var = _dogrula("bag", {"o": "Sunny", "r": "gercek_adi", "n": "Nephis", "p": 1, "a": "True Name was Nephis"},
-                   ["Sunny's True Name was Nephis."], tr)
+    var = _dogrula("bag", oge, ["Sunny's True Name was Nephis."], tr)
     assert yok["red_nedeni"] == "gercek_ad_kanitsiz" and var["gecerli"] == 1
 
 
@@ -671,7 +676,8 @@ def _snap():
         "hitap": [{"ko": k["Sunny"], "mu": k["Nephis"], "ko_ad": "Sunny", "mu_ad": "Nephis", "bicim": "sen",
                    "n": 5, "son_bolum": 8, "elle": False},
                   {"ko": "ad:spell", "mu": k["Sunny"], "ko_ad": "Spell", "mu_ad": "Sunny", "bicim": "siz",
-                   "n": 9, "son_bolum": 8, "elle": False}]}
+                   "n": 9, "son_bolum": 8, "elle": False}],
+        "sistem_sesi": ["spell"]}
 
 
 def test_kart_yalniz_parcadaki_kisileri_ve_iki_ucu_gorulen_hitabi_tasir(kitap):
@@ -684,6 +690,17 @@ def test_kart_yalniz_parcadaki_kisileri_ve_iki_ucu_gorulen_hitabi_tasir(kitap):
     assert "Julius: Sunny'in öğretmeni" in kd.kart_metni(snap, ["Sunny thanked Julius."])
     assert kd.kart_metni(snap, ["Nobody is here."]) == "" and kd.kart_metni(None, ["Sunny"]) == ""
     assert kd.kart_metni(snap, ["the sunny day"]) == ""  # küçük harf: ad değil
+    sessiz = dict(snap, sistem_sesi=[])  # profilinde sistem sesi olmayan kitap
+    assert "Spell" not in kd.kart_metni(sessiz, ["[You have received a Memory.]", "Sunny smiled."])
+
+
+def test_ceviri_kartlari_sistem_sesini_profilden_tasir(kitap):
+    from core import kitap_profili
+
+    assert kd.ceviri_kartlari(KITAP, 10)["sistem_sesi"] == []
+    kitap_profili.yaz(KITAP, "sistem_sesi", ["Spell"])
+    assert kd.ceviri_kartlari(KITAP, 10)["sistem_sesi"] == ["spell"]
+    assert kd.ceviri_kartlari("shadow-slave", 10)["sistem_sesi"] == ["spell"]  # kod profili
 
 
 def test_kart_tavani_asilmaz(kitap):

@@ -215,6 +215,25 @@ KITAP_PROFILLERI: dict[str, dict] = {
         "rutbe_basamaklari": {"Aspirant": 0, "Dormant": 1, "Sleeper": 1, "Dreamer": 1, "Awakened": 2,
                               "Ascended": 3, "Master": 3, "Transcendent": 4, "Saint": 4, "Supreme": 5,
                               "Sovereign": 5, "Sacred": 6, "Divine": 7},
+        # Rütbe sözcükleri de ad önüne gelir ("Ascended Dale") ama kategorilerle de birleşir
+        # ("Ascended Demon"); YALNIZ arkasından İngilizce korunan bir KİŞİ adı gelirse unvandır
+        # (`unvanli_adlari_bagla`).
+        "rutbe_onekleri": ("Ascended", "Awakened", "Transcendent", "Sleeper", "Dreamer"),
+        # Rütbe SAYIMINDA ("every Awakened, Master, and Saint") bağlaçtan önce gelince çift
+        # anlamlı adın TABAN anlamını kesinleştiren rütbeler (`anlam_ayirici`; her ayırıcıya
+        # `ceviri_anlamlari` ekler).
+        "rutbe_sayimi": ("Sleeper", "Awakened", "Master", "Ascended", "Transcendent", "Sovereign",
+                         "Supreme"),
+        # Sistem sesi: sözlükte kayıtlı olmasa da konuşan olabilir (Spell'in rün mesajları;
+        # `karakter_defteri` hitap doğrulaması ve kartı).
+        "sistem_sesi": ("Spell",),
+        # `gercek_adi` bağı yalnız bu sözcük kanıt penceresinde geçerse kabul edilir. Alan
+        # yoksa Gerçek Ad bağı hiç kabul edilmez (kavram kitaba özgü).
+        "gercek_ad_sozcugu": ("True Name",),
+        # Türü belirleyen bağ -> taşıması gereken GELEN bağ (`varlik_bosluk.sema_eksikleri`):
+        # "X turu Memory" olan X'in bir sahibi (anisi) olmalı.
+        "kategori_iliskileri": {"Memory": "anisi", "Memories": "anisi", "Echo": "yanki",
+                                "Echoes": "yanki", "Attribute": "niteligi"},
     },
 }
 
@@ -419,6 +438,7 @@ def ceviri_anlamlari(book_slug: str) -> list[dict]:
         return []
     satirlar = {r["kimlik"]: r for r in glossary.get_glossary_rows(book_slug)}
     rutbeler = rutbe_sozcukleri(book_slug)
+    sayim = tuple((profil(book_slug) or {}).get("rutbe_sayimi", ()))
     out = []
     for kimlik, kural in kurallar.items():
         r = satirlar.get(kimlik)
@@ -428,6 +448,7 @@ def ceviri_anlamlari(book_slug: str) -> list[dict]:
         ayirici["taban_oncesi"] = tuple(dict.fromkeys(
             (*ayirici.get("taban_oncesi", ()), *rutbeler, *(f"{x}s" for x in rutbeler))
         ))
+        ayirici.setdefault("sayim_rutbeleri", sayim)
         out.append({
             "kayit": r["source"], "taban_karsilik": r["target"], "anlam_karsilik": kural["karsilik"],
             "anlam_aciklama": kural.get("etiket", kural["anlam"]), "ayirici": ayirici,
@@ -882,9 +903,6 @@ def nesneler(book_slug: str, iliski: str, en_az: int = 1) -> set[str]:
 # Kişi adının önüne gelen HİTAP unvanları ("Master Roan" = Roan).
 HITAP_UNVANLARI = ("Master", "Saint", "Lord", "Lady", "Sir", "Prince", "Princess", "Queen",
                    "King", "Teacher", "Instructor", "Sovereign")
-# Rütbe sözcükleri de ad önüne gelir ("Ascended Dale") ama kategorilerle de birleşir
-# ("Ascended Demon"); YALNIZ arkasından İngilizce korunan bir KİŞİ adı gelirse unvandır.
-RUTBE_ONEKLERI = ("Ascended", "Awakened", "Transcendent", "Sleeper", "Dreamer")
 
 
 def unvanli_adlari_bagla(book_slug: str) -> int:
@@ -902,6 +920,7 @@ def unvanli_adlari_bagla(book_slug: str) -> int:
     """
     satirlar = glossary.get_glossary_rows(book_slug)
     katlanmis = {glossary.fold_term(r["source"]): r for r in satirlar}
+    rutbe_onekleri = tuple((profil(book_slug) or {}).get("rutbe_onekleri", ()))
     eklenen = 0
     conn = _connect()
     try:
@@ -919,7 +938,7 @@ def unvanli_adlari_bagla(book_slug: str) -> int:
                     r.get("target") or ""
                 ):
                     continue
-            elif onek in RUTBE_ONEKLERI:
+            elif onek in rutbe_onekleri:
                 if not korunan:
                     continue
             else:

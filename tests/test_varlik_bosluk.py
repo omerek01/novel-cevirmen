@@ -40,6 +40,19 @@ def test_ortak_gecis_ayrik_anmalari_sayar_ic_ice_adi_saymaz():
     assert frozenset(("Jet", "Master Jet")) not in _ciftler(en_az=1)
 
 
+def test_sema_eksikleri_profilin_kategori_iliskilerinden():
+    for slug in (KITAP, "profilsiz-kitap"):
+        for k, v in {"Sunny": "Sunny", "Dawn Shard": "Şafak Kırığı", "Memory": "Anı"}.items():
+            glossary.set_term(slug, k, v)
+        k = vg.DugumCozucu(slug).coz
+        vg.bag_ekle(slug, k("Dawn Shard"), "turu", k("Memory"), 10, "x", "manual")
+    assert [e["kaynak"] for e in vb.sema_eksikleri(KITAP)] == ["Dawn Shard"]  # sahibi (anisi) yok
+    assert vb.sema_eksikleri("profilsiz-kitap") == []  # şema profilde: profilsiz kitapta denetim yok
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Sunny"), "anisi", k("Dawn Shard"), 11, "y", "manual")
+    assert vb.sema_eksikleri(KITAP) == []
+
+
 def test_bagi_olan_cift_atlanir():
     _hazirla()
     k = vg.DugumCozucu(KITAP).coz

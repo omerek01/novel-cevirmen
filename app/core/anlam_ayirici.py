@@ -10,12 +10,12 @@ koyar:
   * `anlam`    — ikinci anlam (gölgenin ADI: "summoned Saint", "Saint and Nightmare"),
   * `belirsiz` — kural karar veremiyor ("the Saint"); model ve künye bilgisine kalır.
 
-Kurallar kitap profilindedir (`varlik_grafigi.KITAP_PROFILLERI[...]["anlam_dugumleri"]
-[kayıt]["ayirici"]`) ve ölçülerek kondu: Saint kitapta 1.099 kez geçiyor; artikelsiz
-yalın kullanım (505) 106. bölümden sonra rastgele 40 örnekte ~%88 gölge, belirsiz
-artikelli kullanım rütbe; "the Saint" iki anlama da gidiyor. Sınıflayıcı ölçümü
-(2026-10-07, sınıf başına 25 rastgele örnek): rütbe 281 geçiş 25/25, gölge 450 geçiş
-23/25 (iki hata rütbe sayımıydı, `_RUTBE_SAYIMI` ile kapandı), belirsiz 80.
+Kurallar kitap profilindedir (`varlik_grafigi.profil(...)["anlam_dugumleri"][kayıt]
+["ayirici"]`, sayım rütbeleri `rutbe_sayimi`) ve ölçülerek kondu: Saint kitapta 1.099 kez
+geçiyor; artikelsiz yalın kullanım (505) 106. bölümden sonra rastgele 40 örnekte ~%88
+gölge, belirsiz artikelli kullanım rütbe; "the Saint" iki anlama da gidiyor. Sınıflayıcı
+ölçümü (2026-10-07, sınıf başına 25 rastgele örnek): rütbe 281 geçiş 25/25, gölge 450
+geçiş 23/25 (iki hata rütbe sayımıydı, sayım kuralı `_rutbe_sayimi` ile kapandı), belirsiz 80.
 """
 from __future__ import annotations
 
@@ -38,13 +38,16 @@ _UNVAN_TEKRARI = r"\W{1,6}{kayit}\s+(?!(?:The|He|She|It|They|But|And|Then)\b)[A-
 # Saint" rütbeli bir KİŞİYDİ, gölge değil.
 _BELIRLI_ARTIKEL = re.compile(r"\b(?:the|that|this|those|these)\s+(?:[a-z]+\s+)?$", re.IGNORECASE)
 _SONRAKI_SOZCUK = re.compile(r"\s+([A-Z][a-z]+)")
-# Rütbe SAYIMI: "every Awakened, Master, and Saint", "Masters, maybe even Saint".
-# Bağlaç ŞART: yalnız virgül yetmez — ölçülen: "Ascended, Saint was now Ascended!"
-# gölgeyi anlatıyor (rütbe sözcüğü önceki cümlenin sonu).
-_RUTBE_SAYIMI = re.compile(
-    r"\b(?:Sleeper|Awakened|Master|Ascended|Transcendent|Sovereign|Supreme)s?,?\s+"
-    r"(?:and|or|nor|(?:maybe\s+)?even)\s+$"
-)
+
+
+def _rutbe_sayimi(rutbeler) -> re.Pattern | None:
+    """Rütbe SAYIMI: "every Awakened, Master, and Saint", "Masters, maybe even Saint".
+    Bağlaç ŞART: yalnız virgül yetmez — ölçülen: "Ascended, Saint was now Ascended!"
+    gölgeyi anlatıyor (rütbe sözcüğü önceki cümlenin sonu)."""
+    if not rutbeler:
+        return None
+    return re.compile(r"\b(?:" + "|".join(map(re.escape, rutbeler)) + r")s?,?\s+"
+                      r"(?:and|or|nor|(?:maybe\s+)?even)\s+$")
 
 
 def gecisleri_siniflandir(paragraf: str, kayit: str, bolum_no: int | None, kural: dict) -> list[tuple[int, str]]:
@@ -52,13 +55,15 @@ def gecisleri_siniflandir(paragraf: str, kayit: str, bolum_no: int | None, kural
 
     `kural` (profil): {"baslangic_bolumu": ikinci anlamın ilk bölümü,
     "bicim_onekleri": ayrı kayıt olan bileşikler ("Stone" -> "Stone Saint" atlanır),
-    "taban_oncesi": tabanı kesinleştiren önceki sözcükler (rank, Masters...)}."""
+    "taban_oncesi": tabanı kesinleştiren önceki sözcükler (rank, Masters...),
+    "sayim_rutbeleri": sayımda (bağlaçla) öne gelince tabanı kesinleştiren rütbeler}."""
     desen = re.compile(rf"\b{re.escape(kayit)}(s)?\b")
     onekler = tuple(kural.get("bicim_onekleri", ()))
     taban_oncesi = re.compile(
         r"\b(?:" + "|".join(map(re.escape, kural.get("taban_oncesi", ()))) + r")\s+(?:of\s+|and\s+|or\s+)?(?:a\s+)?$",
         re.IGNORECASE,
     ) if kural.get("taban_oncesi") else None
+    rutbe_sayimi = _rutbe_sayimi(kural.get("sayim_rutbeleri"))
     out: list[tuple[int, str]] = []
     for m in desen.finditer(paragraf):
         once, sonra = paragraf[:m.start()], paragraf[m.end():]
@@ -77,7 +82,7 @@ def gecisleri_siniflandir(paragraf: str, kayit: str, bolum_no: int | None, kural
         if re.match(_UNVAN_TEKRARI.replace("{kayit}", re.escape(kayit)), sonra):
             out.append((m.start(), "taban"))  # kekeleme: "Saint... Saint Tyris"
             continue
-        if _BELIRSIZ_ARTIKEL.search(once) or _RUTBE_SAYIMI.search(once) \
+        if _BELIRSIZ_ARTIKEL.search(once) or (rutbe_sayimi and rutbe_sayimi.search(once)) \
                 or (taban_oncesi and taban_oncesi.search(once)):
             out.append((m.start(), "taban"))
             continue
