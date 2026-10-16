@@ -14,6 +14,7 @@ import { resolveResume } from "./konum.js";
 import { bookKind, fetchBookJob, fetchBooks, spineColor } from "./kutuphane.js";
 import { chapterListPrev, pickNextTarget } from "./okuyucu.js";
 import { el, escapeHtml, isSyntheticSlug, markSegment } from "./temel.js";
+import { openKitapProfili, profilRozeti } from "./kitap-profili.js";
 
 export let bulkPollTimer = null;
 
@@ -54,6 +55,7 @@ export async function openBook(slug, gorununce) {
   window.scrollTo(0, 0);
   gorununce?.(); // kapak geçişi bölüm listesinin ağ yanıtını beklemez
   discoverBulkJob(slug);
+  profilRozeti(slug);
 
   try {
     const res = await fetch(`/api/book/${encodeURIComponent(slug)}/chapters`);
@@ -505,6 +507,9 @@ export function kur() {
   });
   el("openDefterBtn").addEventListener("click", () => {
     if (durum.currentBookSlug) navigate({ view: "defter", slug: durum.currentBookSlug });
+  });
+  el("openProfilBtn").addEventListener("click", () => {
+    if (durum.currentBookSlug) openKitapProfili(durum.currentBookSlug);
   });
 
   el("chapterSearch").addEventListener("input", applyChapterFilter);

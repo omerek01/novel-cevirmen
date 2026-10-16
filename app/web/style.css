@@ -2648,6 +2648,63 @@ button.defter-ad { cursor: pointer; }
 }
 body:has(#defterKart[open]) .okuyucu-alt, body:has(#defterForm[open]) .okuyucu-alt { display: none; }
 
+/* ---------- KİTAP PROFİLİ kartı (js/kitap-profili.js) ----------
+   Her alan bir katalog fişi: üstte ad + durum damgası, altta değer; öneride kanıt alıntısı
+   kenarında bölüm numarasıyla (kütüphane fişindeki raf numarası gibi). Onaysız öneri kesik
+   çizgili kenarla durur: "henüz kural değil". */
+.profil-durum-satiri { min-height: 1.4em; margin: 0 0 4px; font-size: 14px; color: var(--accent); }
+.profil-ozet { padding: 4px 0 14px; border-bottom: 1px solid var(--border); }
+.profil-ozet-baslik { margin: 0 0 4px; font: 400 19px/1.3 var(--book); color: var(--ink); }
+.profil-alan {
+  margin-top: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: var(--r);
+  background: var(--surface);
+}
+.profil-alan.durum-aday { border-style: dashed; border-color: var(--brass); }
+.profil-alan.durum-reddedildi { opacity: .72; }
+.profil-alan-ust { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; }
+.profil-alan-ad { margin: 0; font: 500 13px/1.3 var(--caps); letter-spacing: .08em; text-transform: lowercase; color: var(--ink-soft); }
+.profil-durum {
+  flex: none; padding: 2px 8px; border: 1px solid currentColor; border-radius: var(--r-sm);
+  font: 700 11px/1.4 var(--caps); letter-spacing: .06em; text-transform: lowercase;
+}
+.profil-durum.durum-aday { color: var(--brass); }
+.profil-durum.durum-onayli, .profil-durum.durum-elle { color: var(--accent); }
+.profil-durum.durum-reddedildi { color: var(--stamp); }
+.profil-durum.durum-kod, .profil-durum.durum-bos { color: var(--ink-dim); }
+.profil-deger { margin: 8px 0 0; font: 400 18px/1.4 var(--book); color: var(--ink); overflow-wrap: anywhere; }
+.profil-deger.cok-satir { white-space: pre-line; font-size: 16px; }
+.profil-bos { margin: 8px 0 0; font: italic 400 15px/1.4 var(--book); color: var(--ink-dim); }
+.profil-not { margin: 4px 0 0; font-size: 14px; line-height: 1.4; color: var(--ink-dim); }
+.profil-fis {
+  display: grid; grid-template-columns: 44px minmax(0, 1fr); margin: 10px 0 0; border: 1px solid var(--border);
+  border-radius: var(--r-sm); background: var(--surface-2); overflow: hidden;
+}
+.profil-fis-bolum {
+  display: grid; place-items: center; border-right: 1px solid var(--border);
+  font: 700 12px/1 var(--caps); color: var(--brass); font-variant-numeric: tabular-nums; writing-mode: vertical-rl;
+  transform: rotate(180deg); letter-spacing: .08em;
+}
+.profil-fis blockquote { margin: 0; padding: 10px 12px; font: italic 400 15px/1.5 var(--reading-font); overflow-wrap: anywhere; }
+.profil-fis figcaption {
+  grid-column: 2; padding: 0 12px 8px; font: 500 12px/1.3 var(--caps); letter-spacing: .05em; color: var(--ink-dim);
+}
+.profil-eylem { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 12px; }
+.profil-eylem .pill, .profil-eylem .next-btn, .profil-oner .pill { min-height: 44px; }
+.profil-eylem .profil-duzelt { margin-right: auto; }
+.profil-duzelt-form { margin-top: 10px; }
+.profil-duzelt-girdi {
+  width: 100%; min-height: 44px; padding: 10px 12px; border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--bg); color: var(--ink); font: 400 16px/1.4 var(--sans);
+}
+.profil-duzelt-girdi:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.profil-hata { min-height: 1.2em; margin: 6px 0 0; font-size: 14px; color: var(--stamp); }
+.profil-hata:empty { min-height: 0; }
+.profil-oner { margin-top: 22px; padding-top: 14px; border-top: 1px solid var(--border); display: grid; gap: 10px; }
+.profil-cikarim { margin: 0; font-size: 14px; color: var(--ink-dim); }
+.profil-secim { display: flex; gap: 10px; align-items: flex-start; min-height: 44px; font-size: 15px; line-height: 1.4; cursor: pointer; }
+.profil-secim input { flex: none; width: 22px; height: 22px; margin: 1px 0 0; accent-color: var(--accent); }
+body:has(#kitapProfili[open]) .okuyucu-alt { display: none; }
+
 /* Defter — ui-ux-pro-max denetimi: dokunma hedefi ≥44 px, masaüstünde üzerine gelme, yaprakta
    kaydırma zinciri yok. frontend-design: rün listesi ödünç kartı gibi katalog fişidir; satırlar
    raftaki kitaplar gibi kademeli yerleşir (hareketi azalt tercihinde kapalı). */

@@ -19,6 +19,7 @@ import { kur as sozluk_secimKur } from "./js/sozluk-secim.js";
 import { kur as terimPaneliKur } from "./js/terim-paneli.js";
 import { kur as apiDurumKur } from "./js/api-durum.js";
 import { kur as defterKur } from "./js/defter.js";
+import { kur as kitapProfiliKur } from "./js/kitap-profili.js";
 
 diyalogKur();
 // `gezinme`den ÖNCE: panelin popstate dinleyicisi görünüm DEĞİŞMEDEN önce koşmalı
@@ -30,6 +31,7 @@ kitapKur();
 ayarlarKur();
 sozlukKur();
 defterKur();
+kitapProfiliKur();
 okuyucuKur();
 cevrimdisiKur();
 ekleKur();

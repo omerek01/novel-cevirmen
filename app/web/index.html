@@ -89,6 +89,7 @@
       <div class="book-actions" role="group" aria-label="Kitap işlemleri">
         <button id="openGlossaryBtn" class="book-action"><b>Sözlük</b><small>terimler</small></button>
         <button id="openDefterBtn" class="book-action"><b>Defter</b><small>karakterler</small></button>
+        <button id="openProfilBtn" class="book-action"><b>Profil</b><small id="openProfilAlt">kitap bilgisi</small></button>
         <button id="offlineBtn" class="book-action"><b>İndir</b><small>telefona</small></button>
         <button id="bulkBtn" class="book-action"><b>Toplu çevir</b><small>önden</small></button>
       </div>
@@ -611,6 +612,18 @@
       </div>
       <section id="terimEtki" class="terim-etki" hidden></section>
       <section id="terimGecmis" class="terim-gecmis" hidden></section>
+    </div>
+  </dialog>
+
+  <!-- KİTAP PROFİLİ: ilk bölümlerden önerilen alanlar, kanıt fişleri, onay (js/kitap-profili.js). -->
+  <dialog id="kitapProfili" class="modal terim-paneli kitap-profili" aria-labelledby="kitapProfili-baslik">
+    <div class="modal-card terim-kart">
+      <div class="terim-ust">
+        <h3 id="kitapProfili-baslik" class="modal-title">Kitap profili</h3>
+        <button id="kitapProfiliKapat" type="button" class="ghost-btn" aria-label="Profili kapat">×</button>
+      </div>
+      <p id="kitapProfiliDurum" class="profil-durum-satiri" role="status" aria-live="polite"></p>
+      <div id="kitapProfiliIcerik"></div>
     </div>
   </dialog>
 
