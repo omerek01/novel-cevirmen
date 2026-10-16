@@ -6,7 +6,8 @@ sistem bağı, kalite kurallarında 19 bulgu.
 """
 from __future__ import annotations
 
-from core import cache, glossary, library, varlik_grafigi as vg
+from core import cache, glossary, library, runler, varlik_grafigi as vg
+from core.runler import shadow_slave as ss
 
 KITAP = "shadow-slave"  # profil bu slug'a bağlı
 
@@ -54,7 +55,7 @@ def _bag_kumesi(**kw):
 
 
 def test_run_bloklari_dogru_ozneye_baglanir():
-    bulunan = {(o, i, n) for o, i, n, _k in vg.sistem_baglarini_bul(RUNLER, "Sunny", ("Sunless",))}
+    bulunan = {(o, i, n) for o, i, n, _k in ss.sistem_baglarini_bul(RUNLER, "Sunny", ("Sunless",))}
     assert {
         ("Sunny", "gercek_adi", "Lost from Light"), ("Sunny", "rutbesi", "Dreamer"),
         ("Sunny", "anisi", "Silver Bell"), ("Sunny", "anisi", "Azure Blade"),
@@ -70,7 +71,7 @@ def test_duz_paragraf_run_blogunu_kapatir():
     # Düz paragraftan sonra gelen rün biçimli satır önceki bloğun öznesine
     # bağlanmamalı (başka bir şeyin rünü ya da diyalog olabilir).
     metin = "Name: Sunless.\n\nRank: Dreamer.\n\nHe thought for a while.\n\nRank: Awakened."
-    bulunan = {(o, i, n) for o, i, n, _k in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
+    bulunan = {(o, i, n) for o, i, n, _k in ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
     assert bulunan == {("Sunny", "rutbesi", "Dreamer")}
 
 
@@ -277,24 +278,24 @@ def test_rutbe_onekleri_profilden_gelir():
 
 
 def test_evrim_ve_golge_alma_runleri():
-    b1 = vg.sistem_baglarini_bul("[You have received an Echo: Stone Saint.]\n\n[You have created a Shadow Monster: Stone Saint.]",
+    b1 = ss.sistem_baglarini_bul("[You have received an Echo: Stone Saint.]\n\n[You have created a Shadow Monster: Stone Saint.]",
                                  "Sunny", ("Sunless",))
     assert ("Sunny", "yanki", "Stone Saint") in [x[:3] for x in b1]
     assert ("Sunny", "golgesi", "Stone Saint") in [x[:3] for x in b1]
     # 106 gölge, 273 evrim işareti, 278 bir ANI bloğu (eşleşmemeli), 310 yeni gölge adı.
     durum: dict = {}
-    vg.evrimleri_esle([("Sunny", "golgesi", "Stone Saint", "")], durum, 106)
-    vg.evrimleri_esle(vg.sistem_baglarini_bul("[...The Stone Saint is evolving.]", "Sunny", ()), durum, 273)
-    s278 = vg.evrimleri_esle([("Sunny", "anisi", "Weaver's Mask", "")], durum, 278)
+    ss.evrimleri_esle([("Sunny", "golgesi", "Stone Saint", "")], durum, 106)
+    ss.evrimleri_esle(ss.sistem_baglarini_bul("[...The Stone Saint is evolving.]", "Sunny", ()), durum, 273)
+    s278 = ss.evrimleri_esle([("Sunny", "anisi", "Weaver's Mask", "")], durum, 278)
     assert all(x[1] != "donustu" for x in s278)
-    b310 = vg.sistem_baglarini_bul("Shadow: [Marble Saint].\n\nShadow Rank: Awakened.", "Sunny", ("Sunless",))
-    s310 = vg.evrimleri_esle(b310, durum, 310)
+    b310 = ss.sistem_baglarini_bul("Shadow: [Marble Saint].\n\nShadow Rank: Awakened.", "Sunny", ("Sunless",))
+    s310 = ss.evrimleri_esle(b310, durum, 310)
     assert ("Stone Saint", "donustu", "Marble Saint") in [x[:3] for x in s310]
     # Eski gölgenin yeniden listelenmesi evrim sonucu sayılmaz.
     durum2: dict = {}
-    vg.evrimleri_esle([("Sunny", "golgesi", "Soul Serpent", "")], durum2, 358)
-    vg.evrimleri_esle(vg.sistem_baglarini_bul("[...Marble Saint is evolving.]", "Sunny", ()), durum2, 400)
-    s = vg.evrimleri_esle([("Sunny", "golgesi", "Soul Serpent", "")], durum2, 401)
+    ss.evrimleri_esle([("Sunny", "golgesi", "Soul Serpent", "")], durum2, 358)
+    ss.evrimleri_esle(ss.sistem_baglarini_bul("[...Marble Saint is evolving.]", "Sunny", ()), durum2, 400)
+    s = ss.evrimleri_esle([("Sunny", "golgesi", "Soul Serpent", "")], durum2, 401)
     assert all(x[1] != "donustu" for x in s)
 
 
@@ -315,7 +316,7 @@ def test_ani_blogu_efsun_ve_esya_turu_baglarini_kurar():
         "Enchantment Description: [Kırılmazlık açıklaması.]\n\n"
         "Sunny sighed."
     )
-    b = vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
+    b = ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
     uclu = {x[:3]: x[3] for x in b}
     assert ("Sunny", "anisi", "Bitter Peak") in uclu
     assert ("Bitter Peak", "turu", "Memory") in uclu
@@ -357,7 +358,7 @@ def test_anlatimla_bolunmus_ani_blogu_ve_efsun_bicimleri():
         "He tilted his head.",
         "[Word of Power] Enchantment Description: Söz.",
     ])
-    b = {x[:3]: x[3] for x in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
+    b = {x[:3]: x[3] for x in ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
     assert "Zehir" in b[("Bitter Cusp", "efsunu", "Black Venom")]
     assert ("Bitter Cusp", "esya_turu", "Tool") in b
     assert "Sessizlik" in b[("Stifled Scream", "efsunu", "Echoing Silence")]
@@ -368,9 +369,9 @@ def test_anlatimla_bolunmus_ani_blogu_ve_efsun_bicimleri():
 
 def test_ani_blogu_pencere_disinda_yeniden_acilmaz():
     metin = "\n\n".join(["Memory: [Bitter Cusp].", "Memory Rank: Ascended."]
-                          + [f"Anlatım {i}." for i in range(vg.ANI_ANLATIM_PENCERESI + 1)]
+                          + [f"Anlatım {i}." for i in range(ss.ANI_ANLATIM_PENCERESI + 1)]
                           + ["Enchantment: [Black Venom]."])
-    assert all(x[1] != "efsunu" for x in vg.sistem_baglarini_bul(metin, "Sunny", ()))
+    assert all(x[1] != "efsunu" for x in ss.sistem_baglarini_bul(metin, "Sunny", ()))
 
 
 def test_aninin_niteligi_efsune_cevrilir():
@@ -400,7 +401,7 @@ def test_durum_blogu_anlatimdan_sonra_devam_eder_rank_etmez():
         "Flaw: [Clear Conscience].", "Dream Anchor: [Tower of Longing].",
         "Someone else spoke.", "Rank: Dreamer.",
     ])
-    b = {x[:3] for x in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
+    b = {x[:3] for x in ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))}
     assert {
         ("Sunny", "sinifi", "Devil"), ("Sunny", "niteligi", "Flame of Divinity"),
         ("Sunny", "gorunusu", "Shadow Slave"), ("Shadow Slave", "rutbesi", "Divine"),
@@ -418,8 +419,8 @@ def test_durum_degerleri_bag_degil_degisimle_saklanir():
     metin = "\n\n".join(["Name: Sunless.", "Shadow Cores: [4/7].", "He frowned.",
                           "Shadow Fragments: [777/4000]. filigran.example", "Memory: [Bitter Cusp].",
                           "Memory Tier: I."])
-    bulunan = vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
-    assert ("Sunny", vg.DEGER, "Shadow Fragments\t777/4000") in {x[:3] for x in bulunan}
+    bulunan = ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
+    assert ("Sunny", runler.DEGER, "Shadow Fragments\t777/4000") in {x[:3] for x in bulunan}
     vg.bolumden_sistem_baglari(KITAP, 848, metin)
     vg.bolumden_sistem_baglari(KITAP, 900, metin)  # değişmedi: yeni satır yok
     vg.bolumden_sistem_baglari(KITAP, 950, metin.replace("4/7", "5/7"))
@@ -429,7 +430,7 @@ def test_durum_degerleri_bag_degil_degisimle_saklanir():
     assert vg.degerler(KITAP)[k("Bitter Cusp")]["Memory Tier"]["deger"] == "I"
     assert vg.degerler(KITAP, 800) == {}  # spoiler: konumdan önce değer yok
     # Değer bir bağ değildir.
-    assert all(b["iliski"] != vg.DEGER for b in vg.baglar(KITAP))
+    assert all(b["iliski"] != runler.DEGER for b in vg.baglar(KITAP))
     # Kayıt silinince değerleri de gider.
     glossary.delete_term(KITAP, "Bitter Cusp")
     assert k("Bitter Cusp") not in vg.degerler(KITAP)
@@ -598,14 +599,14 @@ def test_tekil_efsun_satiri_aciklamanin_hangi_efsuna_ait_oldugunu_soyler():
     # açıklama YALNIZ o efsunundur; sıradaki ilk efsuna (Enhanced Durability) verilmemeli.
     metin = ("Memory: [Shroud].\n\nMemory Enchantments: [Enhanced Durability], [Doubtless].\n\n"
              "Enchantment: [Doubtless].\n\nEnchantment Description: [Protects against mind attacks.]")
-    bulunan = [(o, i, n, k) for o, i, n, k in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
+    bulunan = [(o, i, n, k) for o, i, n, k in ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",))
                if i == "efsunu"]
     assert [(n, "mind" in k) for _o, _i, n, k in bulunan] == [("Enhanced Durability", False), ("Doubtless", True)]
 
 
 # ---------- başlıksız rün satırları (2026-10-15, 995 bölümlük tarama) ----------
 def _uclu(metin, paydalar=None):
-    return {x[:3] for x in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",), paydalar)}
+    return {x[:3] for x in ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",), paydalar)}
 
 
 def test_basliksiz_sayac_paydasindan_sahibine_gider():
@@ -619,21 +620,21 @@ def test_basliksiz_sayac_paydasindan_sahibine_gider():
         "Then, Sunny concentrated on his Shadows, starting with Saint.", "Shadow Fragments: [101/200].",
         "Finally, he read the runes describing Nightmare.", "Shadow Fragments: [14/300].",
     ]), paydalar)
-    assert ("Sunny", vg.DEGER, "Shadow Fragments\t870/4000") in b
-    assert ("Marble Saint", vg.DEGER, "Shadow Fragments\t101/200") in b
+    assert ("Sunny", runler.DEGER, "Shadow Fragments\t870/4000") in b
+    assert ("Marble Saint", runler.DEGER, "Shadow Fragments\t101/200") in b
     # Paydası hiç görülmemiş sayaç kimseye yazılmaz (yanlış sahip, eksik kayıttan kötüdür).
     assert not any(n.endswith("14/300") for _o, _i, n in b)
     # Yeni çekirdekle büyüyen payda ana karakterindir; gölgelerin paydası ondan küçüktür.
-    assert ("Sunny", vg.DEGER, "Shadow Fragments\t0/5000") in _uclu("Shadow Fragments: [0/5000].", paydalar)
+    assert ("Sunny", runler.DEGER, "Shadow Fragments\t0/5000") in _uclu("Shadow Fragments: [0/5000].", paydalar)
     # Bölümler arası durum verilmezse eski davranış: başlıksız sayaç atlanır.
-    assert not any(i == vg.DEGER for _o, i, _n in _uclu("He looked.\n\nShadow Fragments: [870/4000]."))
+    assert not any(i == runler.DEGER for _o, i, _n in _uclu("He looked.\n\nShadow Fragments: [870/4000]."))
 
 
 def test_koseli_parantez_icindeki_sayac_okunur():
     # Erken bölümlerin biçimi: "[Shadow Fragments: 14/1000]." (34, 41, 106, 511. bölümler)
     b = _uclu("Name: Sunless.\n\n[Shadow Fragments: 14/1000].\n\nShadow: [Saint].\n\n[Shadow Fragments: 0/200.]", {})
-    assert ("Sunny", vg.DEGER, "Shadow Fragments\t14/1000") in b
-    assert ("Saint", vg.DEGER, "Shadow Fragments\t0/200") in b
+    assert ("Sunny", runler.DEGER, "Shadow Fragments\t14/1000") in b
+    assert ("Saint", runler.DEGER, "Shadow Fragments\t0/200") in b
 
 
 def test_basliksiz_durum_kumesi_bolumun_son_oznesine_gider():
@@ -646,7 +647,7 @@ def test_basliksiz_durum_kumesi_bolumun_son_oznesine_gider():
             ("Sunny", "kusuru", "Clear Conscience")} <= b
     # 353. bölüm: Sunny, Nephis'in rünlerini okuyor; küme ve anı bloğu Nephis'indir.
     b = _uclu("\n\n".join(["Name: Nephis.", "Rank: Dreamer."]
-                           + [f"Anlatım {i}." for i in range(vg.ANI_ANLATIM_PENCERESI + 2)]
+                           + [f"Anlatım {i}." for i in range(ss.ANI_ANLATIM_PENCERESI + 2)]
                            + ["Attributes: [The Fire].", "Memory: [Nameless Sun].", "Memory Rank: Ascended."]))
     assert {("Nephis", "niteligi", "The Fire"), ("Nephis", "anisi", "Nameless Sun")} <= b
     assert not any(o == "Sunny" for o, _i, _n in b)
@@ -659,7 +660,7 @@ def test_efendi_kumesi_efendinin_durumudur():
     b = _uclu("\n\n".join(["Shadow Fragments: [1958/2000].", "He looked lower.", "Master: Changing Star.",
                             "Class: Devil.", "Soul Cores: [4/7].", "Soul Fragments: [399/4000]."]), {})
     assert ("Changing Star", "sinifi", "Devil") in b
-    assert ("Changing Star", vg.DEGER, "Soul Fragments\t399/4000") in b
+    assert ("Changing Star", runler.DEGER, "Soul Fragments\t399/4000") in b
     assert ("Sunny", "sinifi", "Devil") not in b
 
 
@@ -675,12 +676,12 @@ def test_golge_ve_yanki_blogu_anlatimdan_sonra_devam_eder():
         "Echo Rank: Awakened.", "Echo Class: Monster.", "Echo Abilities: [Shadow Strike].",
     ]), paydalar)
     assert {("Nightmare", "niteligi", "Dreamwalker"), ("Nightmare", "yetenegi", "Dream Curse"),
-            ("Nightmare", vg.DEGER, "Nightmares required\t0/1000"),
+            ("Nightmare", runler.DEGER, "Nightmares required\t0/1000"),
             ("Shadow Blade Kurt", "rutbesi", "Awakened"), ("Shadow Blade Kurt", "sinifi", "Monster"),
             ("Shadow Blade Kurt", "yetenegi", "Shadow Strike")} <= b
     # Sonraki bölümde başlıksız "Nightmares required" aynı gölgeye gider.
     b = _uclu("Next, Sunny checked on Nightmare.\n\nNightmares required: [333/1000].", paydalar)
-    assert ("Nightmare", vg.DEGER, "Nightmares required\t333/1000") in b
+    assert ("Nightmare", runler.DEGER, "Nightmares required\t333/1000") in b
 
 
 def test_ani_sayaclari_ve_tekil_efsun_satiri():
@@ -689,18 +690,18 @@ def test_ani_sayaclari_ve_tekil_efsun_satiri():
     b = _uclu("\n\n".join(["Memory: [Dying Wish].", "Memory Type: Charm.",
                             "Memory Enchantments: [Death Wish].", "Death Charge: [0/1000].",
                             "Memory: [Weaver’s Mask].", "Memory Enchantment: [Where is my eye?]."]), paydalar)
-    assert {("Dying Wish", vg.DEGER, "Death Charge\t0/1000"),
+    assert {("Dying Wish", runler.DEGER, "Death Charge\t0/1000"),
             ("Weaver’s Mask", "efsunu", "Where is my eye?")} <= b
     b = _uclu("He read the description.\n\nDeath Charge: [1000/1000].", paydalar)
-    assert ("Dying Wish", vg.DEGER, "Death Charge\t1000/1000") in b
+    assert ("Dying Wish", runler.DEGER, "Death Charge\t1000/1000") in b
 
 
 def test_golge_bloguna_uzun_anlatimdan_sonra_donulur_nitelik_sunnye_yazilmaz():
     # 655. bölüm: Nightmare'ın rünleri arasında 13 paragraf anlatım var.
-    anlatim = [f"Anlatım {i}." for i in range(vg.ANI_ANLATIM_PENCERESI + 1)]
+    anlatim = [f"Anlatım {i}." for i in range(ss.ANI_ANLATIM_PENCERESI + 1)]
     b = _uclu("\n\n".join(["Shadow: [Nightmare].", "Shadow Class: Terror."] + anlatim
                           + ["Shadow Abilities: [Dream Curse]."] + anlatim + ["Nightmares required: [0/1000]."]), {})
-    assert {("Nightmare", "yetenegi", "Dream Curse"), ("Nightmare", vg.DEGER, "Nightmares required\t0/1000")} <= b
+    assert {("Nightmare", "yetenegi", "Dream Curse"), ("Nightmare", runler.DEGER, "Nightmares required\t0/1000")} <= b
     # 376. bölüm: gölge bloğundan sonra başlıksız "Attribute:" gölgenindir, Sunny'nin değil.
     b = _uclu("\n\n".join(["Shadow: [Marble Saint].", "Shadow Class: Demon.", "Looking a bit higher, he read:",
                           "Attribute: [Stalwart].", "Attribute Description: [The Stone Saint is resistant.]"]))
@@ -714,8 +715,8 @@ def test_golge_blogundan_sonra_kucuk_paydali_sayac_golgenindir():
     _uclu("Name: Sunless.\n\nShadow Fragments: [14/1000].", paydalar)
     b = _uclu("\n\n".join(["Shadow: Stone Saint.", "Shadow Rank: Awakened.", "Shadow Description: [Uzun.]",
                           "Sunny looked at the last line.", "[Shadow Fragments: 0/200.]"]), paydalar)
-    assert ("Stone Saint", vg.DEGER, "Shadow Fragments\t0/200") in b
-    assert ("Stone Saint", vg.DEGER, "Shadow Fragments\t2/200") in _uclu("He checked.\n\nShadow Fragments: [2/200].", paydalar)
+    assert ("Stone Saint", runler.DEGER, "Shadow Fragments\t0/200") in b
+    assert ("Stone Saint", runler.DEGER, "Shadow Fragments\t2/200") in _uclu("He checked.\n\nShadow Fragments: [2/200].", paydalar)
 
 
 def test_basliksiz_efsun_satiri_anlatimda_gecen_tek_bilinen_aniya_gider():
@@ -723,7 +724,7 @@ def test_basliksiz_efsun_satiri_anlatimda_gecen_tek_bilinen_aniya_gider():
     bilinen = {"Weaver’s Mask", "Midnight Shard", "Covetous Coffer"}
 
     def bul(metin, anilar=bilinen):
-        return {x[:3] for x in vg.sistem_baglarini_bul(metin, "Sunny", ("Sunless",), None, anilar)}
+        return {x[:3] for x in ss.sistem_baglarini_bul(metin, "Sunny", ("Sunless",), None, anilar)}
 
     b = bul("Summoning the runes, he found the description of Weaver’s Mask and read:\n\n"
             "Memory Enchantments: [Mantle of Lies], [Simple Trick].")
@@ -736,7 +737,7 @@ def test_basliksiz_efsun_satiri_anlatimda_gecen_tek_bilinen_aniya_gider():
     assert bul("Weaver’s Mask and Midnight Shard glowed.\n\nMemory Enchantments: [Unbroken].") == set()
     assert bul("He continued reading the runes:\n\nMemory Enchantments: [Gates of Shadow].") == set()
     # Ad çok gerideyse (pencere dışı) kullanılmaz.
-    uzak = ["Weaver’s Mask was quiet."] + [f"Anlatım {i}." for i in range(vg.ANI_ANLATIM_PENCERESI)]
+    uzak = ["Weaver’s Mask was quiet."] + [f"Anlatım {i}." for i in range(ss.ANI_ANLATIM_PENCERESI)]
     assert bul("\n\n".join(uzak + ["Memory Enchantments: [Mantle of Lies]."])) == set()
 
 
@@ -745,7 +746,7 @@ def test_cekirdek_rutbesi_satiri_ayri_alan_olmaz():
     # Yükselmiş Şeytan Sunny'nin kartında "Çekirdek rütbesi: Uykuda" kalıyordu (kullanıcı bildirimi).
     # Çekirdeğin rütbesi kişinin rütbesidir; `Rank` satırı onu zaten taşır.
     b = _uclu("Name: Sunless.\n\nRank: Dreamer.\n\nShadow Core: Dormant.\n\nHe sighed.\n\nShadow Core: Dormant.", {})
-    assert not any(i == vg.DEGER and n.startswith(("Shadow Core\t", "Soul Core\t")) for _o, i, n in b)
+    assert not any(i == runler.DEGER and n.startswith(("Shadow Core\t", "Soul Core\t")) for _o, i, n in b)
     assert ("Sunny", "rutbesi", "Dreamer") in b
 
 

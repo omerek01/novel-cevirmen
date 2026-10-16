@@ -7,7 +7,7 @@ da SÖZLÜKTE kayıtlı olan bağları; sunucu kopyasında 990 bölümden 297 si
 olmayan anılar (Puppeteer's Shroud…) hiç tutulmadı. Defter sözlüğe otomatik kayıt AÇMAZ (karar
 kullanıcının), bu yüzden kayıtlar burada ADIYLA tutulur; sözlükte karşılığı varsa okunurken eklenir.
 
-Ayrıştırıcı yeniden yazılmadı: `varlik_grafigi.sistem_baglarini_bul` dörtlülerini kayda çevirir.
+Ayrıştırıcı yeniden yazılmadı: profilin rün biçimi modülünün (`runler.bicim`) dörtlülerini kayda çevirir.
 Kayıt kimliği `anahtar` = tür|sahip|ad|değer (katlanmış). İki köken: `sistem` (rünlerden,
 `cikar` her koşuda baştan kurar) ve `elle` (kullanıcı). Aynı anahtarda elle kayıt sistem kaydını
 gölgeler; `silindi=1` elle kayıt "kaldırıldı" demektir ve çıkarım onu diriltmez.
@@ -20,7 +20,7 @@ import json
 import re
 import time
 
-from . import cache, db, glossary, varlik_grafigi
+from . import cache, db, glossary, runler, varlik_grafigi
 
 TURLER = ("ani", "efsun", "nitelik", "golge", "yanki", "yaratik", "alan")
 # Rün listesi satırları (`Name: X` bloğu) -> alan adı. Tekil alanlarda konumdaki son değer,
@@ -74,7 +74,8 @@ def anahtar(tur: str, sahip: str, ad: str, deger: str = "") -> str:
 class _Toplayici:
     """Dörtlüleri kayda çevirir; bölümler arasında anı/gölge adlarını hatırlar."""
 
-    def __init__(self, esyalar: dict[str, str] | None = None, paydalar: dict | None = None):
+    def __init__(self, bicim, esyalar: dict[str, str] | None = None, paydalar: dict | None = None):
+        self.bicim = bicim  # rün biçimi modülü (`runler.bicim`)
         self.kayitlar: dict[str, dict] = {}
         self.esyalar = dict(esyalar or {})  # katlanmış ad -> ani|golge|yanki
         self.gorunusler: dict[str, str] = {}  # katlanmış Görünüş (Aspect) adı -> sahibi
@@ -102,13 +103,13 @@ class _Toplayici:
 
     def bolum(self, no: int | None, metin: str, ana: str, ana_adlar: tuple[str, ...]) -> None:
         anilar = {k["ad"] for k in self.kayitlar.values() if k["tur"] == "ani"}
-        dortluler = varlik_grafigi.sistem_baglarini_bul(metin, ana, ana_adlar, self.paydalar, anilar)
+        dortluler = self.bicim.sistem_baglarini_bul(metin, ana, ana_adlar, self.paydalar, anilar)
         olduruldu: dict[str, dict] = {}
         for ozne, iliski, nesne, kanit in dortluler:
             if iliski in ("_evrim", "donustu", "turu") or not nesne:
                 continue
             ozne = _temiz(ozne)
-            if iliski != varlik_grafigi.DEGER:
+            if iliski != runler.DEGER:
                 nesne = _temiz(nesne)
             if iliski == "gorunusu":
                 self.gorunusler[glossary.fold_term(nesne)] = ozne
@@ -126,7 +127,7 @@ class _Toplayici:
                 olduruldu[glossary.fold_term(nesne)] = {"sahip": ozne, "ad": nesne, "kanit": kanit, "alan": {}}
                 continue
             esya = self._esya(ozne)
-            if iliski == varlik_grafigi.DEGER:
+            if iliski == runler.DEGER:
                 ad, deger = nesne.split("\t", 1)
                 if esya is not None:
                     # Anının/gölgenin değeri: kademe ya da sayaç (Death Charge, Shadow Fragments…).
@@ -174,7 +175,7 @@ def _alan_ekle(kayit: dict, alan: str, deger: str, bolum: int | None) -> None:
 
 def _profil(book_slug: str) -> dict | None:
     p = varlik_grafigi.profil(book_slug)
-    return p if p and p.get("runler") else None
+    return p if runler.bicim(p) is not None else None
 
 
 def _yaz_sistem(conn, book_slug: str, kayitlar, birlestir: bool) -> None:
@@ -222,7 +223,7 @@ def cikar(book_slug: str) -> dict:
     p = _profil(book_slug)
     if p is None:
         return {"kayit": 0, "bolum": 0}
-    t = _Toplayici()
+    t = _Toplayici(runler.bicim(p))
     bolumler = sorted(cache.kaynak_bolumleri(book_slug), key=lambda b: b["chapter_no"] or 0)
     for b in bolumler:
         t.bolum(b["chapter_no"], b["source"] or "", p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())))
@@ -250,7 +251,7 @@ def _paydalari_oku(conn, book_slug: str) -> dict:
             gorulen.extend((b or 0, alan, d, ad) for d, b in gecmis if isinstance(d, str))
     out: dict = {}
     for _bolum, anahtar, deger, sahip in sorted(gorulen, key=lambda x: x[0]):
-        p = varlik_grafigi.payda(deger)
+        p = runler.payda(deger)
         if p is not None:
             out[(anahtar, p)] = sahip
     return out
@@ -266,7 +267,7 @@ def bolumden(book_slug: str, bolum: int | None, metin: str) -> int:
         esyalar = {glossary.fold_term(ad): tur for ad, tur in conn.execute(
             "SELECT ad, tur FROM defter_kayit WHERE book_slug = ? AND tur IN ('ani', 'golge', 'yanki')",
             (book_slug,))}
-        t = _Toplayici(esyalar, _paydalari_oku(conn, book_slug))
+        t = _Toplayici(runler.bicim(p), esyalar, _paydalari_oku(conn, book_slug))
         # Önceki bölümlerde görülen anının sahibini bilmek için mevcut kayıtlar tohumlanır.
         for satir in conn.execute(
             "SELECT anahtar, tur, sahip, ad, deger FROM defter_kayit WHERE book_slug = ? AND origin = 'sistem' "

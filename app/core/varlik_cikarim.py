@@ -1,6 +1,6 @@
 """Varlık grafiği — MODEL çıkarımı (`PLAN-varlik-grafigi.md` aşama 3).
 
-Sistem katmanı (`varlik_grafigi.sistem_baglarini_bul`) yalnız rün mesajlarını
+Sistem katmanı (`runler` biçim modülü, ör. `runler.shadow_slave`) yalnız rün mesajlarını
 okur: sunucu kopyasında 189 bağ. Kişiler arası ilişkiler, klanlar, yerler, takma
 adlar düz anlatıda geçer ve ancak model çıkarabilir.
 
