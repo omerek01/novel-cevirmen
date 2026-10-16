@@ -110,6 +110,8 @@ def test_okudugum_bolumde_suzgeci(sayfa):
 def test_etkilenen_bolumler_ornekli_listelenir_secilenler_ise_gider(sayfa):
     urller = tohum.kitap(bolum_sayisi=2)
     tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
+    # Karşılık düzeltildi: bölümler ESKİ adı taşıyor, varsayılan olarak seçili gelmeli.
+    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Burç"})
     istekler = []
 
     def retranslate(route):
@@ -134,6 +136,7 @@ def test_etkilenen_bolumler_ornekli_listelenir_secilenler_ise_gider(sayfa):
     expect(satirlar).to_have_count(2)
     expect(satirlar.first.locator(".terim-etki-ornek[lang=en]")).to_contain_text("Silver Tower")
     expect(satirlar.first.locator(".terim-etki-ornek[lang=tr]")).to_contain_text("Gümüş Kule")
+    expect(satirlar.first.locator(".terim-etki-zaman")).to_contain_text("ESKİ karşılık duruyor")
     # İkinci bölümün işaretini kaldır: yalnız seçilen gider.
     sayfa.locator(f"#terimEtki li[data-url='{urller[1]}'] input[type=checkbox]").uncheck()
     sayfa.get_by_role("button", name="Seçilenleri yeniden çevir").click()
@@ -141,3 +144,18 @@ def test_etkilenen_bolumler_ornekli_listelenir_secilenler_ise_gider(sayfa):
         "YENİLENDİ"
     )
     assert istekler == [{"urls": [urller[0]]}]
+
+
+def test_guncel_karsiligi_tasiyan_bolum_varsayilan_secilmez(sayfa):
+    """Etki listesi bölümün BUGÜNKÜ çevirisine bakar: güncel karşılığı taşıyan bölümü
+    yeniden çevirmek boşa istek harcar (Faz A4)."""
+    tohum.kitap(bolum_sayisi=2)
+    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
+    _sozluge_git(sayfa)
+    sayfa.locator("#glossList .gloss-row").first.click()
+    sayfa.locator("#terimEtkiBtn").click()
+    satirlar = sayfa.locator("#terimEtki .terim-etki-satir")
+    expect(satirlar).to_have_count(2)
+    expect(satirlar.first.locator(".terim-etki-zaman")).to_contain_text("güncel karşılık kullanılmış")
+    for kutucuk in satirlar.locator("input[type=checkbox]").all():
+        expect(kutucuk).not_to_be_checked()

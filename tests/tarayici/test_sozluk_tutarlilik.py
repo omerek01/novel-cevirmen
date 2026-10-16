@@ -101,6 +101,7 @@ def test_gecmis_listelenir_onceki_hal_forma_alinir(sayfa):
 def test_yeniden_ceviri_sonucu_eski_ceviriye_donulebilir(sayfa):
     urller = tohum.kitap(bolum_sayisi=1)
     tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
+    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Burç"})  # bölüm eski adı taşır: seçili gelir
     geri = []
     sayfa.route("**/api/book/*/retranslate", lambda r: r.fulfill(
         status=200, content_type="application/json", body='{"job_id": "is-2"}'))

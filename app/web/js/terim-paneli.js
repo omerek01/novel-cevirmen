@@ -705,14 +705,33 @@ async function etkiyiGoster() {
   etkiListesiCiz(kutu, slug, veri);
 }
 
+// Sunucunun `karsilik_durumu` değerleri (pipeline._karsilik_durumu) -> satır etiketi.
+const ETKI_DURUMLARI = {
+  guncel: "güncel karşılık kullanılmış",
+  eski: "ESKİ karşılık duruyor",
+  ingilizce: "terim İngilizce kalmış",
+  farkli: "kayıttan farklı çevrilmiş",
+};
+
+function etkiDurumOzeti(veri) {
+  const s = veri.durum_sayilari;
+  if (!s) return "";
+  const parca = [];
+  if (s.eski) parca.push(`${s.eski} bölümde eski karşılık`);
+  if (s.farkli) parca.push(`${s.farkli} bölümde farklı karşılık`);
+  if (s.ingilizce) parca.push(`${s.ingilizce} bölümde İngilizce`);
+  return parca.length ? ` (${parca.join(", ")})` : "";
+}
+
 function etkiListesiCiz(kutu, slug, veri) {
   kutu.replaceChildren();
   const [kapsanan, toplam] = veri.kapsama || [0, 0];
   const ozet = document.createElement("p");
   ozet.className = "modal-hint";
   ozet.textContent = veri.count
-    ? `Terim çevrilmiş ${veri.count} bölümde geçiyor. Kayıt yeni çevrilecek bölümlerde zaten ` +
-      "geçerli; eskilerde görünmesi için seçtiklerini yeniden çevir. Her bölüm bir çeviri isteği harcar."
+    ? `Terim çevrilmiş ${veri.count} bölümde geçiyor${etkiDurumOzeti(veri)}. Kayıt yeni çevrilecek ` +
+      "bölümlerde zaten geçerli; eskilerde görünmesi için seçtiklerini yeniden çevir. Güncel " +
+      "karşılığı taşıyan bölümler seçilmez. Her bölüm bir çeviri isteği harcar."
     : kapsanan < toplam
       ? `Çevrilmiş bölümlerde bulunamadı (yalnız ${kapsanan}/${toplam} bölümün kaynak metni saklı — kesin değil).`
       : "Çevrilmiş hiçbir bölümde geçmiyor; yalnız yeni bölümleri etkiler.";
@@ -723,9 +742,12 @@ function etkiListesiCiz(kutu, slug, veri) {
   liste.className = "terim-etki-liste";
   const kayit = glossRows[panel && panel.kayitli] || {};
   for (const b of veri.chapters) {
-    // Terimin son değişikliğinden SONRA çevrilmiş bölüm zaten güncel sözlükle
-    // çevrildi: varsayılan olarak seçilmez (boşa çeviri isteği harcanmasın).
-    const guncel = !!(b.ceviri_zamani && kayit.updated_at && b.ceviri_zamani > kayit.updated_at);
+    // Varsayılan seçim bölümün BUGÜNKÜ çevirisine göre (sunucu ölçer): güncel karşılığı
+    // taşıyan bölüm seçilmez. Durum bilinmiyorsa (kayıt silinmiş) eski zaman kuralı:
+    // terimin son değişikliğinden SONRA çevrilmiş bölüm güncel sayılır.
+    const guncel = b.karsilik_durumu
+      ? b.karsilik_durumu === "guncel"
+      : !!(b.ceviri_zamani && kayit.updated_at && b.ceviri_zamani > kayit.updated_at);
     const li = document.createElement("li");
     li.className = "terim-etki-satir";
     li.dataset.url = b.url;
@@ -740,12 +762,14 @@ function etkiListesiCiz(kutu, slug, veri) {
       (b.chapter_no != null ? `Bölüm ${b.chapter_no}` : "Bölüm") + (b.title ? " — " + b.title : "");
     etiket.append(kutucuk, ad);
     li.appendChild(etiket);
-    if (b.ceviri_zamani) {
+    const durumMetni = ETKI_DURUMLARI[b.karsilik_durumu];
+    if (b.ceviri_zamani || durumMetni) {
       const z = document.createElement("span");
       z.className = "terim-etki-zaman";
-      z.textContent =
-        "çeviri: " + new Date(b.ceviri_zamani * 1000).toLocaleDateString("tr-TR") +
-        (guncel ? " · düzeltmeden sonra çevrilmiş (güncel)" : "");
+      z.textContent = [
+        b.ceviri_zamani ? "çeviri: " + new Date(b.ceviri_zamani * 1000).toLocaleDateString("tr-TR") : "",
+        durumMetni || (guncel ? "düzeltmeden sonra çevrilmiş (güncel)" : ""),
+      ].filter(Boolean).join(" · ");
       li.appendChild(z);
     }
     for (const [alan, dil] of [["ornek_en", "en"], ["ornek_tr", "tr"]]) {
