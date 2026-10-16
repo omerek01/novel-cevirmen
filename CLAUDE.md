@@ -1458,7 +1458,12 @@ türleri denetimli sözlükten (`ILISKILER`, yön özne -> nesne); `tekil` iliş
 (rütbe, sınıf — gölgeler evrimleşir) güncel değer konumdan önceki EN SON bağdır.
 
 Üç kaynak, güven sırasıyla: **sistem** (Spell rünleri, deterministik, API'siz;
-kitap profili `KITAP_PROFILLERI` — yeni kitap = yeni kayıt, profilsiz kitapta
+kitap profili `varlik_grafigi.profil()` — kod kaydı `KITAP_PROFILLERI` + `kitap_profili`
+tablosunun ONAYLI satırları (manual > model > kod; model adayı onaysız girmez). Kitaba özel
+her kural profilin alanıdır: diziler, `sistem_sesi`, `gercek_ad_sozcugu`, `rutbe_sayimi`,
+`rutbe_onekleri`, `kategori_iliskileri`, istemlerdeki ad örnekleri `istem_ornekleri`.
+`tests/test_kitap_izi_tuzagi.py` davranış koduna sızan SS izini yakalar; SS istemlerinin
+bayt eşitliği `tests/test_kitap_profili.py`de sha256 ile sabit. Profilsiz kitapta
 sessiz), **model** (`app/core/varlik_cikarim.py`, `aday`), **manual**. Sistem
 bağları her yeni bölümde `pipeline._sozluge_isle` sonunda eklenir (sözlük
 işlendikten SONRA: yeni kayıt aynı bölümde düğüm olsun); grafik hatası çeviriyi
@@ -1712,7 +1717,7 @@ sapma yok, paragraf kısalmamış) düzeltilir; aksi hâlde özgün metin kalır
 | `CEVIRI_OZET` | Hayır | `1` → bölüm özeti zinciri (`core/ozet_zinciri.py`, AI Novel Translation yöntemi): çeviriden önce tek çağrıyla bu bölümün kısa Türkçe özeti çıkarılır (girdi: önceki bölümün kayıtlı özeti + ilgili sözlük + bölüm); çeviri istemine yalnız bu bölümün özeti eklenir, özet `ozet_zinciri` tablosuna yazılıp sonraki bölüme gider. Yeni adlar sözlüğe otomatik yazılmaz. Varsayılan kapalı; ölçülmeden açılmaz |
 | `SOZLUK_SIRADAN` | Hayır | `1` → büyük harfli sözlük kaydı parçada cümle ortasında hiç büyük harfle geçmiyorsa satırına `translate.SIRADAN_ISARETI` konur; model sıradan kelimeye büyük harfli terim basmaz ("armor" → "Zırhları" sınıfı). Varsayılan kapalı; bayrak kapalıyken prompt bayt bayt aynıdır |
 | `CEVIRI_GRAFIK` | Hayır | `1` → çeviri isteğine karakter defteri kartı (`karakter_defteri.kart_metni`): yalnız parçada geçen kişilerin takma adı, hitabı belirleyen ilişkisi (lideri/öğretmeni/akrabası) ve kararlı sen/siz çifti; "KURAL DEĞİLDİR" başlıklı bağlam. Yalnız N−1'e kadarki bilgi. Varsayılan kapalı; kapalıyken istem bayt bayt aynı. Ölçüm kolu `anlam_kiyas.py` J (H + kart), gürültü tabanı H2 |
-| `KARAKTER_DEFTERI` | Hayır | `1` → karakter defteri canlı kuyruğu (`core/karakter_defteri.py`): kaydedilen her bölüm için ARKA PLANDA tek çağrı (hizalı EN+TR → varlık, bağ, sen/siz hitabı, sıradan sözcük). Okuma süren çeviri varken bekler (`budget.etkilesimli_var`), hata çeviriyi etkilemez. Varsayılan kapalı. Kitap listesi `KARAKTER_DEFTERI_KITAPLAR` (varsayılan `shadow-slave`), model `DEFTER_MODELI` (varsayılan `vertex/gemini-3.8-flash`, tek halka, düşme yok), düşünme `DEFTER_DUSUNME` (boş = model varsayılanı; `low`/`high` düzey, sayı bütçe) |
+| `KARAKTER_DEFTERI` | Hayır | `1` → karakter defteri canlı kuyruğu (`core/karakter_defteri.py`): kaydedilen her bölüm için ARKA PLANDA tek çağrı (hizalı EN+TR → varlık, bağ, sen/siz hitabı, sıradan sözcük). Okuma süren çeviri varken bekler (`budget.etkilesimli_var`), hata çeviriyi etkilemez. Varsayılan kapalı. Kitap listesi `KARAKTER_DEFTERI_KITAPLAR` (boş/verilmemiş = profili olan her kitap: kod kaydı ya da onaylı DB satırı), model `DEFTER_MODELI` (varsayılan `vertex/gemini-3.8-flash`, tek halka, düşme yok), düşünme `DEFTER_DUSUNME` (boş = model varsayılanı; `low`/`high` düzey, sayı bütçe) |
 
 Sunucuda bu bayraklar `.env` yerine systemd ek dosyasıyla verilir
 (`/etc/systemd/system/novel-cevirmen.service.d/*.conf`, `Environment=AD=değer`):
