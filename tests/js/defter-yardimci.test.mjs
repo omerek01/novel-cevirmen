@@ -4,6 +4,10 @@ import assert from "node:assert/strict";
 
 import {
   SEKMELER,
+  SISTEM_SEKMESI,
+  gorunenSekmeler,
+  sistemAltMetni,
+  sistemSatirlari,
   alanEtiketi,
   egoDugumleri,
   formdanKayit,
@@ -126,4 +130,30 @@ test("sayacMetinleri anı ve gölge sayaçlarını Türkçe etiketle verir", () 
     ["Gölge parçası 146/200", "Ölüm yükü 0/1000"]);
   assert.deepEqual(sayacMetinleri({}), []);
   assert.deepEqual(sayacMetinleri(undefined), []);
+});
+
+test("gorunenSekmeler sistem sekmesini yalnız sunucu isterse ekler", () => {
+  assert.equal(gorunenSekmeler(null), SEKMELER);
+  assert.equal(gorunenSekmeler({ sistem_sekmesi: false }), SEKMELER);
+  assert.deepEqual(gorunenSekmeler({ sistem_sekmesi: true }).at(-1), SISTEM_SEKMESI);
+  assert.equal(SISTEM_SEKMESI.tur, null); // elle eklenecek kayıt türü yok
+});
+
+test("sistemSatirlari en yeni bölümü üste alır, bölüm içi sırayı korur, üç alanda arar", () => {
+  const m = [
+    { bolum: 3, metin: "[Görev kabul edildi.]", en: "[Quest accepted.]", anahtarlar: [] },
+    { bolum: 3, metin: "Ödül: 200 Altın", en: "Reward: 200 Gold", anahtarlar: ["Reward"] },
+    { bolum: 9, metin: "[Seviye atladın!]", en: "[Level up!]", anahtarlar: [] },
+  ];
+  assert.deepEqual(sistemSatirlari(m, "").map((x) => x.en), ["[Level up!]", "[Quest accepted.]", "Reward: 200 Gold"]);
+  assert.deepEqual(sistemSatirlari(m, "GÖREV").map((x) => x.bolum), [3]);
+  assert.deepEqual(sistemSatirlari(m, "level").map((x) => x.bolum), [9]);
+  assert.deepEqual(sistemSatirlari(m, "reward").map((x) => x.metin), ["Ödül: 200 Altın"]);
+  assert.deepEqual(sistemSatirlari(null, "x"), []);
+});
+
+test("sistemAltMetni bölüm, anahtarlar ve hizasız çeviri notu", () => {
+  assert.equal(sistemAltMetni({ bolum: 12, anahtarlar: ["Cooldown", "Mana"], turkce: false }),
+    "Bölüm 12 · Cooldown, Mana · İngilizce");
+  assert.equal(sistemAltMetni({ bolum: 4, anahtarlar: [], turkce: true }), "Bölüm 4");
 });

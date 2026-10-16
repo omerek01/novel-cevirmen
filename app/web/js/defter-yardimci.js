@@ -11,6 +11,12 @@ export const SEKMELER = [
   { anahtar: "yankilar", etiket: "Gölge ve yankılar", tekil: "gölge/yankı", tur: "yanki" },
   { anahtar: "gruplar", etiket: "Klan ve gruplar", tekil: "grup", tur: null },
 ];
+// Rün biçimi olmayan kitapta (sunucu `sistem_sekmesi`) ham sistem mesajları; veri `/defter/sistem`ten.
+export const SISTEM_SEKMESI = { anahtar: "sistem", etiket: "Sistem mesajları", tekil: "mesaj", tur: null };
+
+export function gorunenSekmeler(veri) {
+  return veri && veri.sistem_sekmesi ? [...SEKMELER, SISTEM_SEKMESI] : SEKMELER;
+}
 
 const ALAN_ETIKETLERI = {
   gercek_adi: "Gerçek ad", rutbesi: "Rütbe", sinifi: "Sınıf", gorunusu: "Görünüş",
@@ -77,6 +83,19 @@ export function sekmeSatirlari(veri, sekme, sorgu) {
   if (!q) return satirlar;
   return satirlar.filter((k) => [k.ad, k.tr, ...(k.takma || []), ...(k.takma_tr || [])]
     .some((x) => kucuk(x).includes(q)));
+}
+
+/* Sistem mesajları en yeni bölüm üstte; arama Türkçe metinde, İngilizcesinde ve anahtarlarda. */
+export function sistemSatirlari(mesajlar, sorgu) {
+  const q = kucuk(sorgu).trim();
+  const liste = (mesajlar || []).filter((m) => !q || [m.metin, m.en, ...(m.anahtarlar || [])]
+    .some((x) => kucuk(x).includes(q)));
+  return liste.map((m, i) => [m, i]).sort(([a, i], [b, j]) => b.bolum - a.bolum || i - j).map(([m]) => m);
+}
+
+/* Mesajın alt satırı: "Bölüm 12 · Cooldown, Mana · İngilizce" (çeviri hizasızsa İngilizce gösterilir). */
+export function sistemAltMetni(m) {
+  return [`Bölüm ${m.bolum}`, (m.anahtarlar || []).join(", "), !m.turkce && "İngilizce"].filter(Boolean).join(" · ");
 }
 
 /* ---------- Türkçe sayı ekleri (983'e, 30'a; 15'i, 4'ü) ---------- */

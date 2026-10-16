@@ -11,15 +11,15 @@ import { showView } from "./gezinme.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { el } from "./temel.js";
 import {
-  SEKMELER, alanEtiketi, egoDugumleri, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari, sayacMetinleri,
-  sekmeSatirlari, sinirMetni, tr,
+  alanEtiketi, egoDugumleri, gorunenSekmeler, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
+  sayacMetinleri, sekmeSatirlari, sinirMetni, sistemAltMetni, sistemSatirlari, tr,
 } from "./defter-yardimci.js";
 import { fetchBooks } from "./kutuphane.js";
 
 const ZAMAN_ASIMI_MS = 15000;
 const HITAP_SINIRI = 12;
 const LISTE_SINIRI = 6; // kartta anı/yankı listesinin ilk görünen sayısı (Sunny'de 41 anı)
-const p = { slug: null, tum: false, sekme: "kisiler", sorgu: "", veri: null, kart: null, kartKimlik: null,
+const p = { slug: null, tum: false, sekme: "kisiler", sorgu: "", veri: null, sistem: null, kart: null, kartKimlik: null,
             form: null, tumHitap: false, acik: new Set() };
 
 /* ---------- küçük DOM yardımcıları ---------- */
@@ -73,6 +73,7 @@ export async function openDefter(slug, tum = false) {
 
 async function yukle() {
   el("defterDurum").textContent = "Yükleniyor…";
+  p.sistem = null; // sistem mesajları sekme açılınca (ve spoiler sınırı değişince) yeniden alınır
   try {
     p.veri = await istek(sorgu());
     el("defterDurum").textContent = "";
@@ -83,20 +84,41 @@ async function yukle() {
   ciz();
 }
 
+async function sistemYukle() {
+  const slug = p.slug, tum = p.tum;
+  el("defterDurum").textContent = "Sistem mesajları yükleniyor…";
+  try {
+    const veri = await istek("/sistem" + sorgu());
+    if (p.slug !== slug || p.tum !== tum) return; // yanıt gelmeden kitap ya da spoiler sınırı değişti
+    p.sistem = veri;
+    el("defterDurum").textContent = "";
+  } catch (e) {
+    p.sistem = { mesajlar: [], hata: true };
+    el("defterDurum").textContent = "Sistem mesajları açılamadı: " + e.message;
+  }
+  if (p.sekme === "sistem") ciz();
+}
+
 function ciz() {
   const v = p.veri;
   el("defterSinirMetin").textContent = v ? sinirMetni(v.sinir) : "…";
   el("defterSinirNot").textContent = p.tum ? "İlerideki bölümler de görünüyor" : "Okuma konumun · ilerisi gizli";
   el("defterSinirBtn").textContent = p.tum ? "Okuma konumuna dön" : "Tüm kitap";
   el("defterSinirBtn").setAttribute("aria-pressed", p.tum ? "true" : "false");
+  const gorunen = gorunenSekmeler(v);
+  if (!gorunen.some((s) => s.anahtar === p.sekme)) p.sekme = "kisiler"; // başka kitaptan kalan sekme
   const sekmeler = el("defterSekmeler");
-  sekmeler.replaceChildren(...SEKMELER.map((s) => {
+  sekmeler.replaceChildren(...gorunen.map((s) => {
     const b = dugme(s.etiket, "chip", () => { p.sekme = s.anahtar; ciz(); });
     b.dataset.defterSekme = s.anahtar;
     b.setAttribute("aria-pressed", s.anahtar === p.sekme ? "true" : "false");
     return b;
   }));
-  const sekme = SEKMELER.find((s) => s.anahtar === p.sekme);
+  const sekme = gorunen.find((s) => s.anahtar === p.sekme);
+  const ara = el("defterAra");
+  ara.dataset.ilk ??= ara.placeholder;
+  ara.placeholder = sekme.anahtar === "sistem" ? "Mesajda ya da anahtarda ara" : ara.dataset.ilk;
+  if (sekme.anahtar === "sistem") return sistemCiz(sekme);
   const satirlar = v ? sekmeSatirlari(v, p.sekme, p.sorgu) : [];
   el("defterSayi").textContent = v ? `${satirlar.length} ${sekme.tekil}` : "";
   el("defterEkleBtn").hidden = !v || !sekme.tur;
@@ -104,6 +126,27 @@ function ciz() {
   const liste = el("defterListe");
   liste.replaceChildren(...satirlar.slice(0, 300).map((k) => satir(k, v.karsiliklar || {})));
   if (v && !satirlar.length) liste.append(oge("li", "defter-bos", p.sorgu ? "Aramaya uyan kayıt yok." : "Bu bölümde henüz kayıt yok."));
+}
+
+function sistemCiz(sekme) {
+  el("defterEkleBtn").hidden = true;
+  const liste = el("defterListe");
+  if (!p.sistem) {
+    el("defterSayi").textContent = "";
+    liste.replaceChildren();
+    sistemYukle();
+    return;
+  }
+  const satirlar = sistemSatirlari(p.sistem.mesajlar, p.sorgu);
+  el("defterSayi").textContent = `${satirlar.length} ${sekme.tekil}`;
+  liste.replaceChildren(...satirlar.slice(0, 300).map((m) => {
+    const li = oge("li", "defter-satir defter-sistem");
+    li.append(oge("p", "defter-sistem-metin", m.metin), oge("p", "defter-satir-alt", sistemAltMetni(m)));
+    return li;
+  }));
+  if (!satirlar.length && !p.sistem.hata) {
+    liste.append(oge("li", "defter-bos", p.sorgu ? "Aramaya uyan mesaj yok." : "Bu bölüme kadar sistem mesajı bulunmadı."));
+  }
 }
 
 function satir(k, karsiliklar) {
@@ -585,7 +628,7 @@ export function kur() {
   el("defterSinirBtn").addEventListener("click", () => { p.tum = !p.tum; yukle(); });
   el("defterAra").addEventListener("input", (e) => { p.sorgu = e.target.value; ciz(); });
   el("defterEkleBtn").addEventListener("click", () => {
-    const sekme = SEKMELER.find((s) => s.anahtar === p.sekme);
+    const sekme = gorunenSekmeler(p.veri).find((s) => s.anahtar === p.sekme);
     if (sekme && sekme.tur) kayitFormuAc(sekme.tur, sekme.tur === "yaratik" ? "" : null);
   });
   el("defterKartKapat").addEventListener("click", () => diyalogKapat("defterKart"));

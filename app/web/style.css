@@ -2561,6 +2561,8 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 .defter-satir-ad { display: block; font: 400 18px/1.25 var(--book); overflow-wrap: anywhere; }
 .defter-satir-ad small, .defter-ani-ad small { margin-left: 6px; font: 400 13px var(--sans); color: var(--ink-dim); }
 .defter-satir-alt { display: block; margin-top: 3px; font-size: 14px; color: var(--ink-dim); overflow-wrap: anywhere; }
+.defter-sistem { padding: 12px 0; }
+.defter-sistem-metin { margin: 0; font: 400 16px/1.45 var(--book); white-space: pre-line; overflow-wrap: anywhere; }
 .defter-satir-sag { text-align: right; font-size: 13px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
 .defter-satir-sag b { display: block; font-size: 16px; color: var(--ink); }
 .defter-kart .modal-title { overflow-wrap: anywhere; }
