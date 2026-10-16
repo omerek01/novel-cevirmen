@@ -39,6 +39,7 @@ const NEDEN_ETIKETI = {
   politika: "POLİTİKA",
   kalip_tutarsizligi: "KALIP",
   ihlal_suphesi: "MODELLER UYMUYOR",
+  karsilik_suphesi: "FARKLI KARŞILIK",
   dogrulama: "DOĞRULAMA",
   sozcuk_karismasi: "SINIF SÖZCÜĞÜ",
   ad_tutarliligi: "AD POLİTİKASI",
