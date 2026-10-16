@@ -21,6 +21,8 @@ from __future__ import annotations
 
 import re
 
+from . import turkce_eslesme
+
 # Büyük harfle başlayıp AD sayılmayacak sözcükler ("Saint. The..." değil, "Saint Tyris").
 _AD_DEGIL = frozenset(("The", "He", "She", "It", "They", "But", "And", "Then", "His", "Her", "I", "A", "An"))
 # Aradaki isteğe bağlı sözcük SIFATTIR, edat değil. Ölçülen (Vertex A/B, 585. bölüm):
@@ -98,8 +100,8 @@ def paragraf_isaretleri(paragraflar: list[str], kayit: str, bolum_no: int | None
 
 def _karsilik_deseni(karsilik: str) -> re.Pattern:
     """Karşılığın Türkçe ekli hâllerini de yakalayan desen ("Aziz" -> Azizin, Azizler;
-    "Saint" -> Saint'e)."""
-    return re.compile(rf"\b{re.escape(karsilik)}\w*", re.IGNORECASE)
+    "Saint" -> Saint'e). Kural `turkce_eslesme`de: yumuşama ve Türkçe büyük-küçük harf."""
+    return turkce_eslesme.karsilik_deseni(karsilik)
 
 
 def anlam_ihlalleri(

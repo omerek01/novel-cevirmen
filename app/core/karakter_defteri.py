@@ -32,7 +32,7 @@ import threading
 import time
 from collections import Counter, defaultdict
 
-from . import api_durum, budget, db, glossary, translate, varlik_grafigi
+from . import api_durum, budget, db, glossary, translate, turkce_eslesme, varlik_grafigi
 from .varlik_cikarim import _normal, ad_temizle
 
 # v2 (2026-10-14, pilot elle denetimi): çoğul hitap ayrı (`cogul`), rütbe yalnız rütbe
@@ -865,9 +865,8 @@ def _tr_govde(metin: str) -> str:
 
 
 def _ayni_karsilik(form: str, hedef: str) -> bool:
-    if not form or not hedef:
-        return True
-    return form == hedef or form.startswith(hedef[: max(4, len(hedef) - 2)]) or hedef.startswith(form)
+    """Kural `turkce_eslesme.ayni_karsilik`te (çeviri denetimiyle ORTAK)."""
+    return turkce_eslesme.ayni_karsilik(form, hedef)
 
 
 def _bolum_ornegi(bolumler) -> str:
