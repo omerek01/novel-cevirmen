@@ -234,6 +234,23 @@ KITAP_PROFILLERI: dict[str, dict] = {
         # "X turu Memory" olan X'in bir sahibi (anisi) olmalı.
         "kategori_iliskileri": {"Memory": "anisi", "Memories": "anisi", "Echo": "yanki",
                                 "Echoes": "yanki", "Attribute": "niteligi"},
+        # Model istemlerindeki ad içeren örnekler (`karakter_defteri.defter_talimati`,
+        # `varlik_cikarim`). Eksik anahtar o modülün nötr örneğiyle dolar.
+        "istem_ornekleri": {
+            "defter_bag": "Sunny ogretmeni Julius (Julius, Sunny'nin öğretmeni);\n Nephis klani Immortal "
+                          "Flame; Sunny rutbesi Master; Nephis takma_adi Changing Star; Kai lideri Nephis\n "
+                          "(Nephis, Kai'nin lideri ya da amiri)",
+            "defter_rutbe": "Sleeper, Awakened, Master, Saint…",
+            "defter_hitap": "sir, Lady Nephis, Master, Captain",
+            "cikarim_nitelik": "Spell'in [Attribute] olarak adlandırdığı şeyler içindir (Fated, "
+                               "Mark of Divinity)",
+            "cikarim_gercek_ad": "Spell'in verdiği True Name içindir (rünlerde 'True Name: X' "
+                                 "ya da 'You have been bestowed a True Name')",
+            "cikarim_lakap": "Auro of the Nine -> takma_adi -> Hero",
+            "cikarim_yon": "Sunny -> anisi -> Azure Blade; Cassie -> yoldasi -> Sunny; Crimson Spire "
+                           "-> parcasi -> Forgotten Shore; Saint -> turu -> Shadow",
+            "cift_gercek_ad": "Spell'in True Name'idir",
+        },
     },
 }
 

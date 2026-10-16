@@ -319,6 +319,22 @@ def test_kitap_acik_env_yoksa_profil_karar_verir(monkeypatch):
     assert kd.kitap_acik("shadow-slave") is False  # env verilince yalnız o liste
 
 
+def test_model_cagrisi_kitabin_talimatini_alir(kitap, monkeypatch):
+    from core import kitap_profili
+
+    kitap_profili.yaz(KITAP, "sistem_sesi", ["System"])
+    gorulen = []
+
+    def sahte_uret(_fab, _modeller, _user, system=None, max_tokens=None):
+        gorulen.append(system)
+        raise RuntimeError("durdur")
+
+    monkeypatch.setattr(translate, "_generate_with_fallback", sahte_uret)
+    assert kd.bolum_isle(KITAP, 1)["durum"] == "hata"
+    assert gorulen == [kd.defter_talimati(KITAP)] and 'konuşan "System"' in gorulen[0]
+    assert kd._TALIMAT.get() is None  # bağlam sızmaz
+
+
 def test_kuyruk_asla_firlatmaz(monkeypatch):
     monkeypatch.setenv("KARAKTER_DEFTERI", "1")
     monkeypatch.setenv("KARAKTER_DEFTERI_KITAPLAR", KITAP)

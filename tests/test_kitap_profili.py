@@ -46,3 +46,46 @@ def test_dbdeki_dizi_sozluk_kapisina_ulasir():
     kitap_profili.yaz("yeni-kitap", "diziler", {"insan_rutbesi": ["Novice"], "yaratik_sinifi": ["Wolf"]})
     assert sozluk_kapi.rutbe_sinif_birlesimi("Novice Wolf", "Acemi Kurt", mevcut, "yeni-kitap")
     assert not sozluk_kapi.rutbe_sinif_birlesimi("Novice Wolf", "Acemi Ayı", mevcut, "yeni-kitap")
+
+
+# Faz 1 öncesindeki sabit istemlerin (DEFTER_TALIMATI, CIKARIM_INSTRUCTION, CIFT_INSTRUCTION)
+# sha256'sı. SS istemi profilden kurulunca bayt bayt aynı kalmalı; SS istemini BİLEREK
+# değiştiren iş bu özetleri günceller (ve istem sürümünü düşünür).
+_SS_ISTEM_OZETLERI = {
+    "defter": "4f0fdea02ea24395cc2ab3da3193858c074b0a86d3df58dada8ff54bc3e8cf7d",
+    "cikarim": "65fd351d3f47f98bfac7b6aa31a13d0c90cb811cfb00276270020bc3e9a3e1fa",
+    "cift": "b0a39c99a89ed7c39c1d8ec3fd5f9086a9784b2440b41b589424385bff38bdce",
+}
+
+
+def _istemler(slug):
+    from core import karakter_defteri, varlik_cikarim
+
+    return {"defter": karakter_defteri.defter_talimati(slug),
+            "cikarim": varlik_cikarim.cikarim_talimati(slug),
+            "cift": varlik_cikarim.cift_talimati(slug)}
+
+
+def test_ss_istemleri_profilden_bayt_bayt_ayni():
+    import hashlib
+
+    ozet = {k: hashlib.sha256(v.encode()).hexdigest() for k, v in _istemler(SS).items()}
+    assert ozet == _SS_ISTEM_OZETLERI
+
+
+def test_profilsiz_kitap_isteminde_ss_izi_yok():
+    for ad, metin in _istemler("yeni-kitap").items():
+        for iz in ("Sunny", "Nephis", "Spell", "True Name", "Saint", "$"):
+            assert iz not in metin, (ad, iz)
+    assert "gercek_adi KULLANMA" in _istemler("yeni-kitap")["defter"]
+
+
+def test_istem_ornekleri_ve_iddialar_dbdeki_profilden():
+    kitap_profili.yaz("yeni-kitap", "istem_ornekleri", {"defter_rutbe": "Novice, Adept…"})
+    kitap_profili.yaz("yeni-kitap", "sistem_sesi", ["System"])
+    kitap_profili.yaz("yeni-kitap", "gercek_ad_sozcugu", ["Soul Name"])
+    ist = _istemler("yeni-kitap")
+    assert "(Novice, Adept…)" in ist["defter"] and "Ada ogretmeni Marcus" in ist["defter"]  # eksik: nötr
+    assert 'konuşan "System"' in ist["defter"] and 'metin "Soul Name" dediğinde' in ist["defter"]
+    assert "Gerçek Adı (Soul Name)" in ist["cikarim"] and "metnin 'Soul Name' dediği ad" in ist["cikarim"]
+    assert "gercek_adi yalnız metnin 'Soul Name' dediği addır" in ist["cift"]

@@ -36,57 +36,80 @@ YENIDEN_DENEME_SN = (30.0, 90.0, 180.0)
 # (`Echo`, `scavengers`, `Transcendents`), anlık konum kalıcı bağ sanıldı (Saint o
 # sahnede bir katedraldeydi), "parçası" grup üyeliğine kullanıldı, kişiler arası
 # ilişki HİÇ çıkmadı. Aşağıdaki öncelik listesi ve dışlama kuralları bunlara karşı.
-CIKARIM_INSTRUCTION = (
-    "Sen bir roman için bilgi grafiği çıkaran bir analistsin. Sana bir bölümün "
-    "İngilizce metni ve bu bölümde geçen VARLIKLARIN listesi verilecek. Görevin: "
-    "listedeki varlıklar arasındaki KALICI ilişkileri bulmak — okurun 'bu kim, kime "
-    "bağlı, neyin parçası' sorusuna cevap veren bağları.\n"
-    "ÖNCELİK (en değerliden): 1) kimlik: takma adı, Gerçek Adı (True Name), unvanı; "
-    "2) kişiler arası: yoldaşı (aynı grupta birlikte savaşan/yaşayan), akrabası, "
-    "düşmanı, öğretmeni, klanı, lideri; 3) sahiplik: Anısı (Memory), gölgesi, "
-    "Yankısı (Echo), yeteneği, Görünüşü (Aspect); 4) mekân: bir yerin başka bir yerin "
-    "parçası olması, bir kişinin bağlı olduğu/yönettiği yer; 5) düzen: türü, rütbesi.\n"
-    "Kurallar:\n"
-    "- YALNIZ listedeki varlıkları kullan; ad yazımını listedeki gibi AYNEN ver.\n"
-    "- Özne ve nesne BELİRLİ bir varlık olmalı (kişi, yer, örgüt, eşya, yetenek). "
-    "Genel sınıf/grup adları ÖZNE OLAMAZ ('Echo', 'scavengers', 'Transcendents', "
-    "'horde' gibi). Genel ad yalnız türü/rütbesi/sınıfı ilişkisinin NESNESİ olabilir.\n"
-    "- bulundugu_yer: bir DÖNEM boyunca yaşadığı, ait olduğu ya da hapsolduğu BÖLGE "
-    "(şehir, ada, diyar). Bir sahnede bir odada durmak, yürümek, savaşmak "
-    "bulundugu_yer DEĞİLDİR.\n"
-    "- parcasi YALNIZ yer -> daha büyük yer içindir (bir kule bir adanın parçası); "
-    "kişi/grup üyeliği için klani ya da yoldasi kullan.\n"
-    "- unvani: unvan o kişiye METİNDE AÇIKÇA atfedilmeli ('X, the Y' / 'Y known as X').\n"
-    # Ölçülen (16-35. bölümler): `Hero -> gercek_adi -> Auro of the Nine`. Hero bir
-    # lakap, Auro of the Nine kişinin ADI; True Name ise Spell'in verdiği ayrı bir ad.
-    "- niteligi YALNIZ Spell'in [Attribute] olarak adlandırdığı şeyler içindir (Fated, "
-    "Mark of Divinity); toplanan kaynaklar, sayılar, yetenekler nitelik DEĞİLDİR.\n"
-    "- gercek_adi YALNIZ Spell'in verdiği True Name içindir (rünlerde 'True Name: X' "
-    "ya da 'You have been bestowed a True Name'). Bir kişinin asıl adı ile lakabı "
-    "arasındaki bağ takma_adi'dır: özne ASIL ad, nesne lakap (Auro of the Nine -> "
-    "takma_adi -> Hero).\n"
-    "- YALNIZ metinde açıkça söylenen ya da tek cümleden kesin anlaşılan ilişkiyi "
-    "yaz. Tahmin, yorum, dış bilgi YOK. Emin değilsen yazma.\n"
-    "- Her ilişki için 'kanit': ilişkiyi gösteren cümleyi metinden KELİMESİ KELİMESİNE "
-    "kopyala (tek cümle; iki varlığın adı da o cümlede geçmeli).\n"
-    "- Listede '(kategori)' işaretli adlar BELİRLİ bir varlık değil, genel sistem "
-    "terimidir (Abilities, Aspect Ability, Attribute, Lord, Fallen Terror gibi). "
-    "Kategori YALNIZ turu / rutbesi / sinifi ilişkisinin NESNESİ olabilir; hiçbir "
-    "ilişkinin öznesi ya da sahiplik/öldürme/düşmanlık/konum nesnesi OLAMAZ.\n"
-    "- BİLİNEN BAĞLAR verilirse onlarla ÇELİŞME: bir şey bilinen bağlarda gölge "
-    "(golgesi) ise ona Anı (anisi) deme. Bilinen bağı tekrar yazmana gerek yok; YENİ "
-    "olanları yaz.\n"
-    "- 'iliski' şu listeden biri olmalı (özne -> nesne yönünde):\n"
-    + "".join(f"    {k}: {v['etiket']}\n" for k, v in varlik_grafigi.ILISKILER.items())
-    + "- Yön: özne ilişkinin SAHİBİ ya da ETKENİDİR (Sunny -> anisi -> Azure Blade; "
-    "Cassie -> yoldasi -> Sunny; Crimson Spire -> parcasi -> Forgotten Shore; "
-    "Saint -> turu -> Shadow).\n"
-    "- 'guven': 0-1 arası; metin ilişkiyi ne kadar açık söylüyor.\n"
-    "- Listede OLMAYAN ama bir kişiyi/yeri/örgütü adlandıran özel ad görürsen "
-    "'yeni_adlar' listesine yaz (ilişki kurma).\n"
-    '- Yanıtı SADECE şu JSON ile ver: {"baglar": [{"ozne": "...", "iliski": "...", '
-    '"nesne": "...", "kanit": "...", "guven": 0.9}], "yeni_adlar": ["..."]}'
-)
+#
+# Kitaba özgü parçalar profilden (`cikarim_talimati`): ad içeren örnekler `istem_ornekleri`,
+# Gerçek Ad iddiası `gercek_ad_sozcugu` alanından. Shadow Slave'de metin bayt bayt aynıdır.
+_NOTR_ORNEKLER = {
+    "cikarim_nitelik": "metnin açıkça nitelik/özellik olarak adlandırdığı şeyler içindir",
+    "cikarim_gercek_ad": "",
+    "cikarim_lakap": "Marcus Vale -> takma_adi -> Old Wolf",
+    "cikarim_yon": "Ada -> yoldasi -> Marcus; Black Tower -> parcasi -> Iron City; Lena -> klani -> Iron Hall",
+    "cift_gercek_ad": "",
+}
+
+
+def _parcalar(book_slug: str) -> tuple[dict[str, str], tuple[str, ...]]:
+    from .karakter_defteri import istem_ornekleri
+
+    p = varlik_grafigi.profil(book_slug) or {}
+    return istem_ornekleri(p, _NOTR_ORNEKLER), tuple(p.get("gercek_ad_sozcugu") or ())
+
+
+def cikarim_talimati(book_slug: str) -> str:
+    """Kitabın bağ çıkarım talimatı (sistem istemi)."""
+    o, sozcukler = _parcalar(book_slug)
+    kimlik = f"Gerçek Adı ({sozcukler[0]}), " if sozcukler else ""
+    if not sozcukler:  # doğrulama da reddeder: kavram bu kitapta yok
+        gercek_ad = "- gercek_adi KULLANMA. "
+    else:
+        gercek_ad = "- gercek_adi YALNIZ " + (o["cikarim_gercek_ad"] or "metnin " + " ya da ".join(
+            f"'{s}'" for s in sozcukler) + " dediği ad içindir") + ". "
+    return (
+        "Sen bir roman için bilgi grafiği çıkaran bir analistsin. Sana bir bölümün "
+        "İngilizce metni ve bu bölümde geçen VARLIKLARIN listesi verilecek. Görevin: "
+        "listedeki varlıklar arasındaki KALICI ilişkileri bulmak — okurun 'bu kim, kime "
+        "bağlı, neyin parçası' sorusuna cevap veren bağları.\n"
+        f"ÖNCELİK (en değerliden): 1) kimlik: takma adı, {kimlik}unvanı; "
+        "2) kişiler arası: yoldaşı (aynı grupta birlikte savaşan/yaşayan), akrabası, "
+        "düşmanı, öğretmeni, klanı, lideri; 3) sahiplik: Anısı (Memory), gölgesi, "
+        "Yankısı (Echo), yeteneği, Görünüşü (Aspect); 4) mekân: bir yerin başka bir yerin "
+        "parçası olması, bir kişinin bağlı olduğu/yönettiği yer; 5) düzen: türü, rütbesi.\n"
+        "Kurallar:\n"
+        "- YALNIZ listedeki varlıkları kullan; ad yazımını listedeki gibi AYNEN ver.\n"
+        "- Özne ve nesne BELİRLİ bir varlık olmalı (kişi, yer, örgüt, eşya, yetenek). "
+        "Genel sınıf/grup adları ÖZNE OLAMAZ ('Echo', 'scavengers', 'Transcendents', "
+        "'horde' gibi). Genel ad yalnız türü/rütbesi/sınıfı ilişkisinin NESNESİ olabilir.\n"
+        "- bulundugu_yer: bir DÖNEM boyunca yaşadığı, ait olduğu ya da hapsolduğu BÖLGE "
+        "(şehir, ada, diyar). Bir sahnede bir odada durmak, yürümek, savaşmak "
+        "bulundugu_yer DEĞİLDİR.\n"
+        "- parcasi YALNIZ yer -> daha büyük yer içindir (bir kule bir adanın parçası); "
+        "kişi/grup üyeliği için klani ya da yoldasi kullan.\n"
+        "- unvani: unvan o kişiye METİNDE AÇIKÇA atfedilmeli ('X, the Y' / 'Y known as X').\n"
+        # Ölçülen (16-35. bölümler): `Hero -> gercek_adi -> Auro of the Nine`. Hero bir
+        # lakap, Auro of the Nine kişinin ADI; True Name ise Spell'in verdiği ayrı bir ad.
+        f"- niteligi YALNIZ {o['cikarim_nitelik']}; toplanan kaynaklar, sayılar, yetenekler nitelik DEĞİLDİR.\n"
+        f"{gercek_ad}Bir kişinin asıl adı ile lakabı "
+        f"arasındaki bağ takma_adi'dır: özne ASIL ad, nesne lakap ({o['cikarim_lakap']}).\n"
+        "- YALNIZ metinde açıkça söylenen ya da tek cümleden kesin anlaşılan ilişkiyi "
+        "yaz. Tahmin, yorum, dış bilgi YOK. Emin değilsen yazma.\n"
+        "- Her ilişki için 'kanit': ilişkiyi gösteren cümleyi metinden KELİMESİ KELİMESİNE "
+        "kopyala (tek cümle; iki varlığın adı da o cümlede geçmeli).\n"
+        "- Listede '(kategori)' işaretli adlar BELİRLİ bir varlık değil, genel sistem "
+        "terimidir (Abilities, Aspect Ability, Attribute, Lord, Fallen Terror gibi). "
+        "Kategori YALNIZ turu / rutbesi / sinifi ilişkisinin NESNESİ olabilir; hiçbir "
+        "ilişkinin öznesi ya da sahiplik/öldürme/düşmanlık/konum nesnesi OLAMAZ.\n"
+        "- BİLİNEN BAĞLAR verilirse onlarla ÇELİŞME: bir şey bilinen bağlarda gölge "
+        "(golgesi) ise ona Anı (anisi) deme. Bilinen bağı tekrar yazmana gerek yok; YENİ "
+        "olanları yaz.\n"
+        "- 'iliski' şu listeden biri olmalı (özne -> nesne yönünde):\n"
+        + "".join(f"    {k}: {v['etiket']}\n" for k, v in varlik_grafigi.ILISKILER.items())
+        + f"- Yön: özne ilişkinin SAHİBİ ya da ETKENİDİR ({o['cikarim_yon']}).\n"
+        "- 'guven': 0-1 arası; metin ilişkiyi ne kadar açık söylüyor.\n"
+        "- Listede OLMAYAN ama bir kişiyi/yeri/örgütü adlandıran özel ad görürsen "
+        "'yeni_adlar' listesine yaz (ilişki kurma).\n"
+        '- Yanıtı SADECE şu JSON ile ver: {"baglar": [{"ozne": "...", "iliski": "...", '
+        '"nesne": "...", "kanit": "...", "guven": 0.9}], "yeni_adlar": ["..."]}'
+    )
 
 
 def _normal(metin: str) -> str:
@@ -276,7 +299,7 @@ def bolum_cikar(
             asil[b["hedef_kimlik"]] = b["kaynak_kimlik"]
     response, model = translate._generate_with_fallback(
         translate._gemini_fabrikasi(api_key), models or sozluk_dogrulama.ucretsiz_zincir(), user,
-        system=CIKARIM_INSTRUCTION, max_tokens=translate.MAX_OUTPUT_TOKENS,
+        system=cikarim_talimati(book_slug), max_tokens=translate.MAX_OUTPUT_TOKENS,
     )
     veri = _ayristir(getattr(response, "text", None))
     ekler = glossary.ekler(book_slug)
@@ -372,21 +395,29 @@ def kitabi_cikar(
 
 
 # ---------- hedefli soru (boşluk doldurma, `varlik_bosluk`) ----------
-CIFT_INSTRUCTION = (
-    "Sen bir roman için bilgi grafiğini tamamlayan bir analistsin. Sana varlık "
-    "ÇİFTLERİ ve her çiftin birlikte geçtiği cümleler verilecek. Her çift için bu "
-    "cümlelerin AÇIKÇA söylediği kalıcı ilişkiyi bul; söylemiyorsa o çift için "
-    "hiçbir şey yazma.\n"
-    "Kurallar ÇIKARIM kurallarıyla aynıdır: yalnız açıkça söyleneni yaz; varsayım "
-    "cümlesi kanıt değildir; kategori yalnız tür/rütbe/sınıf nesnesi olabilir; "
-    "bulundugu_yer bir dönem boyunca bulunulan BÖLGE'dir; gercek_adi yalnız Spell'in "
-    "True Name'idir; lakap için takma_adi (özne asıl ad).\n"
-    "- 'kanit': VERİLEN cümlelerden birini KELİMESİ KELİMESİNE kopyala.\n"
-    "- 'iliski' şu listeden biri (özne -> nesne):\n"
-    + "".join(f"    {k}: {v['etiket']}\n" for k, v in varlik_grafigi.ILISKILER.items())
-    + '- Yanıtı SADECE şu JSON ile ver: {"baglar": [{"ozne": "...", "iliski": "...", '
-    '"nesne": "...", "kanit": "...", "guven": 0.9}]}'
-)
+def cift_talimati(book_slug: str) -> str:
+    """Hedefli soru (çift) talimatı (sistem istemi); kitaba özgü parça `cikarim_talimati` gibi."""
+    o, sozcukler = _parcalar(book_slug)
+    if not sozcukler:
+        gercek_ad = "gercek_adi kullanma; "
+    else:
+        gercek_ad = "gercek_adi yalnız " + (o["cift_gercek_ad"] or "metnin " + " ya da ".join(
+            f"'{s}'" for s in sozcukler) + " dediği addır") + "; "
+    return (
+        "Sen bir roman için bilgi grafiğini tamamlayan bir analistsin. Sana varlık "
+        "ÇİFTLERİ ve her çiftin birlikte geçtiği cümleler verilecek. Her çift için bu "
+        "cümlelerin AÇIKÇA söylediği kalıcı ilişkiyi bul; söylemiyorsa o çift için "
+        "hiçbir şey yazma.\n"
+        "Kurallar ÇIKARIM kurallarıyla aynıdır: yalnız açıkça söyleneni yaz; varsayım "
+        "cümlesi kanıt değildir; kategori yalnız tür/rütbe/sınıf nesnesi olabilir; "
+        f"bulundugu_yer bir dönem boyunca bulunulan BÖLGE'dir; {gercek_ad}"
+        "lakap için takma_adi (özne asıl ad).\n"
+        "- 'kanit': VERİLEN cümlelerden birini KELİMESİ KELİMESİNE kopyala.\n"
+        "- 'iliski' şu listeden biri (özne -> nesne):\n"
+        + "".join(f"    {k}: {v['etiket']}\n" for k, v in varlik_grafigi.ILISKILER.items())
+        + '- Yanıtı SADECE şu JSON ile ver: {"baglar": [{"ozne": "...", "iliski": "...", '
+        '"nesne": "...", "kanit": "...", "guven": 0.9}]}'
+    )
 CIFT_PARTI = 6
 
 
@@ -408,7 +439,7 @@ def ciftleri_sor(
         bloklar.append(f"ÇİFT {i}: {c['a']} | {c['b']}\n{cumleler}")
     response, model = translate._generate_with_fallback(
         translate._gemini_fabrikasi(api_key), models or sozluk_dogrulama.ucretsiz_zincir(),
-        "\n\n".join(bloklar), system=CIFT_INSTRUCTION, max_tokens=translate.MAX_OUTPUT_TOKENS,
+        "\n\n".join(bloklar), system=cift_talimati(book_slug), max_tokens=translate.MAX_OUTPUT_TOKENS,
     )
     veri = _ayristir(getattr(response, "text", None))
     havuz = [(no, s, _normal(s)) for c in ciftler for no, s in c["ornekler"]]

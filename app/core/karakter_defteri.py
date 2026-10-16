@@ -25,9 +25,11 @@ Bu modül sözlüğü DEĞİŞTİRMEZ; sözlüğe katkısı inceleme listesine g
 """
 from __future__ import annotations
 
+import contextvars
 import json
 import os
 import re
+import string
 import threading
 import time
 from collections import Counter, defaultdict
@@ -115,7 +117,10 @@ CREATE TABLE IF NOT EXISTS defter_hitap_karar (
 );
 """
 
-DEFTER_TALIMATI = """Bir web romanının TEK bölümünden "karakter defteri" kaydı çıkarıyorsun.
+# Talimat kitap profilinden doldurulur (`defter_talimati`): ad içeren örnekler `istem_ornekleri`
+# alanından, kitaba özgü iddialar (Gerçek Ad sözcüğü, sistem sesi) yapısal alanlardan gelir.
+# Profil boşsa nötr örnekler; Shadow Slave'de metin eski sabitle bayt bayt aynıdır (test).
+_DEFTER_SABLONU = string.Template("""Bir web romanının TEK bölümünden "karakter defteri" kaydı çıkarıyorsun.
 Girdi: İngilizce kaynak paragrafları ve Türkçe çevirileri (aynı numara = aynı paragraf), bu
 bölümde geçen kayıtlı adlar (`kayitli`; kimlikleri e1, e2…) ve hitap aranacak paragraf
 numaraları (`hitap_adaylari`).
@@ -136,24 +141,53 @@ g — `kayitli` listesinde olup bu bölümde AD olarak değil SIRADAN SÖZCÜK o
 b — metnin AÇIKÇA söylediği ilişkiler; tahmin yok:
  {"o":"özne","r":"akrabasi|lideri|ogretmeni|yoldasi|dusmani|klani|grubu|rutbesi|takma_adi|gercek_adi|unvani",
   "n":"nesne","p":paragraf_no,"a":"ilişkiyi gösteren İngilizce alıntı, AYNEN","s":"anlatici|konusma"}
- Yön: "o r n" = "o'nun r'si n". Örnekler: Sunny ogretmeni Julius (Julius, Sunny'nin öğretmeni);
- Nephis klani Immortal Flame; Sunny rutbesi Master; Nephis takma_adi Changing Star; Kai lideri Nephis
- (Nephis, Kai'nin lideri ya da amiri). s: ilişkiyi anlatıcı mı söylüyor, bir karakterin sözünde mi geçiyor.
- rutbesi YALNIZ resmî rütbe/basamak adı içindir (Sleeper, Awakened, Master, Saint…); görev ya da rol
- (archer, healer), yaratık sınıfı ve betimleme ("the ruthless tyrant") rütbe değildir. gercek_adi YALNIZ
- metin "True Name" dediğinde; başka ad ya da lakap takma_adi'dir.
+ Yön: "o r n" = "o'nun r'si n". Örnekler: $defter_bag. s: ilişkiyi anlatıcı mı söylüyor, bir karakterin sözünde mi geçiyor.
+ rutbesi YALNIZ resmî rütbe/basamak adı içindir ($defter_rutbe); görev ya da rol
+ (archer, healer), yaratık sınıfı ve betimleme ("the ruthless tyrant") rütbe değildir. $gercek_ad
 
 h — yalnız `hitap_adaylari` paragraflarında, konuşanın karşısındakine DOĞRUDAN hitabı:
  {"p":paragraf_no,"ko":"konuşan","mu":"muhatap","f":"sen|siz|cogul|belirsiz",
   "tra":"TÜRKÇE paragraftan hitabı gösteren AYNEN alıntı (Türkçe harfleriyle), en çok 8 sözcük",
-  "en":"İngilizce hitap sözcüğü varsa (sir, Lady Nephis, Master, Captain), yoksa boş"}
+  "en":"İngilizce hitap sözcüğü varsa ($defter_hitap), yoksa boş"}
  f: Türkçe çevirinin FİİLEN kullandığı biçim (sen/siz zamiri ya da kişi eki). Konuşan BİRDEN ÇOK kişiye
  hitap ediyorsa ("both of you", gruba konuşma) f="cogul" ve mu o kişilerden biri. Konuşan ya da muhatap
- metinden kesin anlaşılmıyorsa o paragrafı ATLA. Sistemin (Spell) mesajlarında konuşan "Spell".
+ metinden kesin anlaşılmıyorsa o paragrafı ATLA.$sistem
 
 Kurallar: ad/o/n/ko/mu alanlarında kayıtlı id varsa id'yi yaz. Her öğenin paragraf numarası ve
 alıntısı o paragraftan BİREBİR olmalı. Emin olmadığını yazma; boş liste geçerli bir cevaptır.
-Açıklama yazma, yalnız JSON."""
+Açıklama yazma, yalnız JSON.""")
+# Profilinde `istem_ornekleri` olmayan kitap için (kitaptan bağımsız, uydurma adlar).
+_NOTR_ORNEKLER = {
+    "defter_bag": "Ada ogretmeni Marcus (Marcus, Ada'nın öğretmeni);\n Ada klani Iron Hall; Ada rutbesi "
+                  "Captain; Marcus takma_adi Old Wolf; Lena lideri Ada\n (Ada, Lena'nın lideri ya da amiri)",
+    "defter_rutbe": "Captain, General, Elder…",
+    "defter_hitap": "sir, Lady Ada, Master, Captain",
+}
+_TALIMAT: contextvars.ContextVar[str | None] = contextvars.ContextVar("defter_talimati", default=None)
+
+
+def istem_ornekleri(p: dict | None, notr: dict[str, str]) -> dict[str, str]:
+    """Profilin istem örnekleri; eksik anahtar nötr örnekle dolar."""
+    return {**notr, **((p or {}).get("istem_ornekleri") or {})}
+
+
+def defter_talimati(book_slug: str) -> str:
+    """Kitabın defter talimatı (sistem istemi)."""
+    p = varlik_grafigi.profil(book_slug) or {}
+    o = istem_ornekleri(p, _NOTR_ORNEKLER)
+    sozcukler = p.get("gercek_ad_sozcugu") or ()
+    if sozcukler:
+        gercek_ad = ("gercek_adi YALNIZ\n metin " + " ya da ".join(f'"{s}"' for s in sozcukler)
+                     + " dediğinde; başka ad ya da lakap takma_adi'dir.")
+    else:  # doğrulama da bu bağı reddeder (`_Cozucu.gercek_ad_sozcukleri`)
+        gercek_ad = "gercek_adi KULLANMA;\n başka ad ya da lakap takma_adi'dir."
+    sesler = list(p.get("sistem_sesi") or ())
+    sistem = ""
+    if len(sesler) == 1:
+        sistem = f' Sistemin ({sesler[0]}) mesajlarında konuşan "{sesler[0]}".'
+    elif sesler:
+        sistem = " Sistem mesajlarında konuşan, mesajı veren sistem sesidir (" + ", ".join(sesler) + ")."
+    return _DEFTER_SABLONU.substitute(o, gercek_ad=gercek_ad, sistem=sistem)
 
 
 # ---------- ayarlar ----------
@@ -554,7 +588,7 @@ def _model_cagir(user: str, model: str) -> tuple[str, dict]:
     try:
         response, kullanilan = translate._generate_with_fallback(
             translate._gemini_fabrikasi(os.getenv("GEMINI_API_KEY", "")), (model,), user,
-            system=DEFTER_TALIMATI, max_tokens=CIKIS_TAVANI,
+            system=_TALIMAT.get() or defter_talimati(""), max_tokens=CIKIS_TAVANI,
         )
     finally:
         translate._DUSUNME_AYARI.reset(jeton)
@@ -616,9 +650,10 @@ def bolum_isle(book_slug: str, bolum: int, *, cagir=None, kuru: bool = False, mo
                                 _takma_adlar(book_slug, bolum, conn))
         adaylar = hitap_adaylari(en_p, tr_p)
         user = istem_kur(bolum, kayitli, en_p, tr_p, adaylar)
+        talimat = defter_talimati(book_slug)
         if kuru:
-            return {"bolum": bolum, "durum": "kuru", "istem_karakter": len(user) + len(DEFTER_TALIMATI),
-                    "tahmini_giris": round((len(user) + len(DEFTER_TALIMATI)) / 3.5),
+            return {"bolum": bolum, "durum": "kuru", "istem_karakter": len(user) + len(talimat),
+                    "tahmini_giris": round((len(user) + len(talimat)) / 3.5),
                     "kayitli": len(kayitli), "hitap_adayi": len(adaylar)}
         onceki = conn.execute("SELECT deneme FROM defter_isleme WHERE book_slug = ? AND bolum = ?",
                               (book_slug, bolum)).fetchone()
@@ -629,6 +664,7 @@ def bolum_isle(book_slug: str, bolum: int, *, cagir=None, kuru: bool = False, mo
         conn.close()
 
     basla = time.time()
+    jeton = _TALIMAT.set(talimat)  # `cagir(user, model)` imzası değişmesin diye bağlamla taşınır
     try:
         ham, kullanim = (cagir or _model_cagir)(user, model)
         veri = ayristir(ham)
@@ -642,6 +678,8 @@ def bolum_isle(book_slug: str, bolum: int, *, cagir=None, kuru: bool = False, mo
         finally:
             conn.close()
         return {"bolum": bolum, "durum": "hata", "hata": str(hata)[:400], "deneme": deneme}
+    finally:
+        _TALIMAT.reset(jeton)
 
     cozucu = _Cozucu(book_slug, kayitli)
     kayitlar = (
