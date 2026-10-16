@@ -1636,6 +1636,59 @@ grafik bağlamının çeviriye girmesi) Faz 1 ÖLÇÜLMEDEN başlamaz.
   sunucu okuma konumunu o bölüme taşır. `tests/test_konum_izleme_js.py` tutar.
 - Commit'i pytest ÇIKIŞ KODUNA bağla; `| tail` zincirinde kod kaybolur.
 
+## Kör nokta denetimleri (2026-10-16, plan `s-zl-k-defter-ve-eviri-snappy-wigderson.md` Faz A)
+
+Mevcut denetimler (İngilizce kalan terim, kalıntı, kısalma, ret, kalite) kanıtlı
+dokuz hata sınıfını GÖRMÜYORDU. Hepsi kitaptan bağımsız, API'siz ölçülür; kalibrasyon
+sunucu DB kopyasında (SS 991 + RSSG 170 hizalı bölüm) yapıldı. Ham roman metni
+raporlara girmez.
+
+* **Ortak Türkçe eşleştirici** (`core/turkce_eslesme.py`): karşılığın çekimli hâli
+  (ünsüz yumuşaması Kitap->Kitabı, Türkçe I/ı-İ/i katlama, tamlama çoğulu Oyuk Dağı ->
+  Oyuk Dağları ve iyelik düşünce sertleşme Yaratığı -> Yaratıkları, "Kademe 2" ->
+  "2. Kademe"). Karşılık arayan HER denetim bunu kullanır (anlam ayırıcı, defter,
+  karşılık sapması, terim etkisi). Ünlü düşmesi (ağız -> ağzı) bilerek kapsam dışı.
+* **Karşılık sapması** (`translate.karsilik_sapmalari`, künye `chapters.karsilik_sapmasi`):
+  terim çevrilmiş ama kayıttan FARKLI Türkçeyle; İngilizce korunan çok sözcüklü adın
+  Türkçeleşmesi de. İngilizce kalan terim BURADA sayılmaz (o `glossary_leaks`). Elenen
+  sahte sınıflar: tek sözcüklü kaydın sıradan/cümle başı kullanımı, fiil kullanımı
+  (`had Awakened`), daha uzun kayıt içinde geçiş (`Battle Master` içindeki `Master`),
+  tek sözcüklü korunan kişi adı (zamirle anılabilir). Ham 2648 -> 702 paragraf (SS).
+  Cilalama ve kalite onarımı YENİ sapma getiremez. Hedefli onarım VARSAYILAN KAPALI
+  (`CEVIRI_KARSILIK_ONARIM=1`): sapmaların bir kısmı yanlış kayıttan geliyor, onarım
+  hatalı kuralı metne basardı. **Hız:** paragraf x kayıt döngüsü desen önbelleği + ucuz
+  alt dize ön süzgeci ister; onsuz SS'de dakikalar sürüyordu (şimdi bölüm başı ~0,02 sn).
+* **"Farklı karşılık" şüphesi** (`sozluk_kapi.karsilik_supheleri`, inceleme nedeni
+  `karsilik_suphesi`): künye aday seçer, bugünkü ölçütle yeniden ölçülür; ağır hesap
+  önbelleğinde AYRI parça ve imza.
+* **Sayı/ölçek** (`core/sayi_denetimi.py`, künye `chapters.sayi_uyumsuzlugu`): 10+ rakam,
+  hundred/thousand/million/billion, belirsiz çokluk. Onarım VARSAYILAN AÇIK
+  (`CEVIRI_SAYI_ONARIM=0` kapatır), kabul katı. Elenen sahte sınıflar: `dozen` (yaklaşık
+  ifadeye döner), ekli sayı sözcükleri (yüzden, milyarımız), "bin bir" kalıbı, abartı
+  (a thousand times -> binlerce kez), binlik virgül, aralık (altmış yetmiş milyon),
+  rakam + ölçek. SS 147 -> 8, RSSG 79 -> 5. Ad (künye) çakışması YOK: inceleme nedeni
+  `sayi_uyumsuzlugu` tekil/çoğul anlamındadır, künye sütunu sayı anlamında — ayrı ad alanı.
+* **Terim etkisi bölüm durumu** (`pipeline._karsilik_durumu`): `guncel | eski | ingilizce |
+  farkli`; eski karşılıklar sözlük geçmişinden. Arayüz varsayılan seçimi buna bakar.
+* **Hizalama onarımı** (`CEVIRI_HIZALAMA_ONARIM=0` kapatır): hizalanmayan parça bir kez
+  daha çevrilir; yeni hâl ancak hizalanır VE kısalmamışsa alınır.
+* **Hitap onarımı** (`karakter_defteri.hitap_onar`, defter işçisi): VARSAYILAN KAPALI
+  (`CEVIRI_HITAP_ONARIM=1`). Yalnız kararlı/elle çiftler, model "değişiklik yok"
+  diyebilir, benzerlik >= 0,75.
+* **Zamir belirsizliği** (`core/zamir_denetimi.py`): YALNIZ ÖLÇÜM, akışa bağlı değil.
+  SS 145 paragraf (%0,26), RSSG 0; isabet örneklenmeden onarım yazılmaz.
+* **Sözlük dışı kayma** (`core/sozluk_kayma.py`, `scripts/sozluk_kayma.py`): çekimler
+  köke toplanır, ikinci karşılık >= %8 VE >= 3 geçiş. SS: Captain, Teacher, Knight,
+  Description; RSSG: Domain, Inheritance, Hall. `--uygula` otomatik ADAY yazar (kapı +
+  bekleme + doğrulama).
+* **Kart destek kapısı** (`CEVIRI_KART_MIN_DESTEK=N`, varsayılan 0 = bugünkü davranış):
+  incelenmemiş model bağı N ayrı bölüm desteği olmadan karta girmez. Karta giren 101
+  model adayı bağın 42'si desteksiz, 26'sı tek bölümlük.
+
+Onarımların ortak kabul ilkesi MQM-APE'dir (Lu ve ark. 2025): hata ancak düzeltilmiş
+hâl gerçekten iyileşmişse (ölçülen kusur azalmış, yeni sözlük ihlali / kalıntı /
+sapma yok, paragraf kısalmamış) düzeltilir; aksi hâlde özgün metin kalır.
+
 ## Ortam değişkenleri (`.env`, kök dizinde)
 
 | Değişken | Zorunlu | Ne işe yarar |
