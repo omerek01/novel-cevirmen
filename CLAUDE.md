@@ -1471,6 +1471,22 @@ düşürmez. Ölçüm (sunucu kopyası): 189 tekil sistem bağı. Rün bloğu ar
 satırlarıdır; DÜZ PARAGRAF bloğu kapatır (yoksa sonraki rün biçimli satır önceki
 öznenin sayılırdı — testte mutasyonla tutuldu).
 
+**Rün biçimi ve yeni kitap (2026-10-16, Faz 2–3).** Ayrıntılı rün ayrıştırıcısı kitaba
+özgüdür: `app/core/runler/<bicim>.py`, profil `run_bicimi` ile seçer (`runler.bicim(p)`;
+SS = `shadow_slave`). Biçimi olmayan kitapta `runler/genel.py` yalnız HAM sistem satırı +
+anahtar sözlüğü üretir, bağ kurmaz; Defter'de "Sistem mesajları" sekmesi (`/defter/sistem`).
+Yeni kitapta profil boş başlar: `app/core/profil_cikarim.py` ilk 10 bölümden tek ücretsiz
+istekle ADAY alanlar çıkarır (her öneri örnekte birebir alıntı + yerel sayım; tutmayan
+atılır), satırlar `model/aday` — kullanıcı "Kitap profili" kartında onaylamadan hiçbir şey
+değişmez. Onaylı profil o kitapta defter işçisini AÇAR (bölüm başına model çağrısı).
+Otomatik tetik `pipeline._sozluge_isle` sonunda: kodda profili olmayan, kaynaklı bölümü
+3..30 olan ve daha önce çıkarım koşmamış kitapta bir kez (`KITAP_PROFIL_OTOMATIK=0`
+kapatır; iş kaydı `kitap_profili_cikarim`). Üst sınır canlıdaki eski kitapları kendiliğinden
+taramamak içindir. Sözlük ön taraması (`sozluk_tarama.on_tara`, ikinci geçişli) adayları
+`auto` + önce-bekleme ile yazar; çeviriye etkisi ölçülmediği için `SOZLUK_ON_TARAMA`
+varsayılan KAPALI (vekil ölçüm: RSSG ilk 10 bölümde adayların %65–77'si oturmuş sözlükle
+aynı, ama "Blackwater -> Karusu" gibi yanlışlar da var).
+
 **Model çıkarımında kanıt şarttır:** kanıt cümlesi kaynakta birebir (tırnak/boşluk
 normalize) geçmeli VE iki ad da o cümlede olmalı; değilse bağ atılır. Model yalnız
 bölümde geçen sözlük kayıtları arasında bağ kurar; yeni adlar sözlüğe girmez,
