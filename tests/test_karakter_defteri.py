@@ -303,6 +303,22 @@ def test_kuyruk_bayrak_kapaliyken_hicbir_sey_yapmaz(kitap, monkeypatch):
     assert kd.durum(KITAP)["bolumler"] == {"pending": 1}
 
 
+def test_kitap_acik_env_yoksa_profil_karar_verir(monkeypatch):
+    from core import kitap_profili
+
+    monkeypatch.delenv("KARAKTER_DEFTERI_KITAPLAR", raising=False)
+    assert kd.kitap_acik("shadow-slave") is True  # kod profili: bugünkü varsayılan korunur
+    assert kd.kitap_acik(KITAP) is False  # profilsiz kitap: harcama açılmaz
+    monkeypatch.setenv("KARAKTER_DEFTERI_KITAPLAR", "  ")  # .env.example boş satırı
+    assert kd.kitap_acik("shadow-slave") is True
+    kitap_profili.yaz(KITAP, "ana_karakter", "Ada", origin="model", durum="aday")
+    assert kd.kitap_acik(KITAP) is False  # aday profil yetmez
+    kitap_profili.durum_yaz(KITAP, "ana_karakter", "model", "onayli")
+    assert kd.kitap_acik(KITAP) is True
+    monkeypatch.setenv("KARAKTER_DEFTERI_KITAPLAR", "baska")
+    assert kd.kitap_acik("shadow-slave") is False  # env verilince yalnız o liste
+
+
 def test_kuyruk_asla_firlatmaz(monkeypatch):
     monkeypatch.setenv("KARAKTER_DEFTERI", "1")
     monkeypatch.setenv("KARAKTER_DEFTERI_KITAPLAR", KITAP)

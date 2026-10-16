@@ -162,8 +162,26 @@ def acik_mi() -> bool:
     return os.getenv("KARAKTER_DEFTERI", "0") == "1"
 
 
-def kitaplar() -> set[str]:
-    return {s.strip() for s in os.getenv("KARAKTER_DEFTERI_KITAPLAR", "shadow-slave").split(",") if s.strip()}
+def kitaplar() -> set[str] | None:
+    """`KARAKTER_DEFTERI_KITAPLAR` açıkça verildiyse o liste; verilmediyse ya da boşsa None
+    (= profil karar verir). `.env.example` satırı boş geldiği için boş da "verilmedi" sayılır."""
+    ham = (os.getenv("KARAKTER_DEFTERI_KITAPLAR") or "").strip()
+    if not ham:
+        return None
+    return {s.strip() for s in ham.split(",") if s.strip()}
+
+
+def kitap_acik(book_slug: str) -> bool:
+    """Canlı defter kuyruğu bu kitapta çalışır mı.
+
+    Eskiden varsayılan `"shadow-slave"` idi: başka kitapta defter HİÇ çalışmıyordu (Faz 1).
+    Şimdi env verilmediyse kitabın ONAYLI profili olması yeter. Bilerek "her kitap" değil:
+    işçi bölüm başına model çağırır (~0,012 $), harcamayı kullanıcının profil onayı açar.
+    Shadow Slave'in kod profili olduğu için bugünkü davranış aynı kalır."""
+    liste = kitaplar()
+    if liste is not None:
+        return book_slug in liste
+    return varlik_grafigi.profil(book_slug) is not None
 
 
 def model_adi() -> str:
@@ -1454,7 +1472,7 @@ def kuyruga_ekle(book_slug: str, bolum) -> bool:
     """Çevrilen (ya da yeniden çevrilen) bölümü kuyruğa al ve işçiyi uyandır. ASLA fırlatmaz:
     defter çeviriyi geri almamalı."""
     try:
-        if not acik_mi() or book_slug not in kitaplar() or type(bolum) is not int:
+        if not acik_mi() or not kitap_acik(book_slug) or type(bolum) is not int:
             return False
         conn = _connect()
         try:
