@@ -152,8 +152,8 @@ def rutbe_sinif_birlesimi(kaynak: str, hedef: str, mevcut: list[dict], book_slug
     """
     if tur and tur not in ("rutbe", "diger"):
         return False
-    from .varlik_grafigi import KITAP_PROFILLERI
-    diziler = KITAP_PROFILLERI.get(book_slug, {}).get("diziler", {})
+    from . import varlik_grafigi  # tek okuma noktası: profil DB'den (Faz 1)
+    diziler = (varlik_grafigi.profil(book_slug) or {}).get("diziler", {})
     rutbeler = {glossary.fold_term(x) for ad, dizi in diziler.items() if "rutbe" in ad for x in dizi}
     siniflar = {glossary.fold_term(x) for ad, dizi in diziler.items() if "sinif" in ad for x in dizi}
     parcalar = kaynak.split()

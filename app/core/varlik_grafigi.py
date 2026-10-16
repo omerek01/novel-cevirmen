@@ -220,7 +220,9 @@ KITAP_PROFILLERI: dict[str, dict] = {
 
 
 def profil(book_slug: str) -> dict | None:
-    return KITAP_PROFILLERI.get(book_slug)
+    """Kitabın onaylı profili (`kitap_profili`; koddaki kayıt yalnız TOHUM). Tek okuma noktası."""
+    from . import kitap_profili
+    return kitap_profili.profil(book_slug, KITAP_PROFILLERI)
 
 
 # ---------- şema ----------
