@@ -798,6 +798,8 @@ def terim_etkisi(book_slug: str, source: str) -> dict:
     if not terim:
         return {"count": 0, "chapters": [], "kapsama": [kapsanan, toplam]}
     desen = _translate_mod._term_regex(terim)
+    guncel, eskiler = _karsilik_gecmisi(book_slug, terim)
+    sayac = {"guncel": 0, "eski": 0, "ingilizce": 0, "farkli": 0}
     eslesen = []
     for b in bolumler:
         if not desen.search(b["source"]):
@@ -812,7 +814,11 @@ def terim_etkisi(book_slug: str, source: str) -> dict:
         ornek_tr = None
         if idx is not None and len(tr_paras) == len(en_paras):
             ornek_tr = tr_paras[idx].strip()[:ETKI_ORNEK_MAX] or None
+        durum = _karsilik_durumu(terim, guncel, eskiler, desen, en_paras, tr_paras)
+        if durum:
+            sayac[durum] += 1
         eslesen.append({
+            "karsilik_durumu": durum,
             "url": b["url"],
             "chapter_no": b["chapter_no"],
             "title": b["title"],
@@ -822,7 +828,52 @@ def terim_etkisi(book_slug: str, source: str) -> dict:
             "ornek_tr": ornek_tr,
             "ceviri_zamani": b.get("ceviri_zamani"),
         })
-    return {"count": len(eslesen), "chapters": eslesen, "kapsama": [kapsanan, toplam]}
+    return {"count": len(eslesen), "chapters": eslesen, "kapsama": [kapsanan, toplam],
+            "karsilik": guncel, "eski_karsiliklar": eskiler, "durum_sayilari": sayac}
+
+
+def _karsilik_gecmisi(book_slug: str, source: str) -> tuple[str | None, list[str]]:
+    """(bugünkü karşılık, sözlük geçmişindeki ESKİ karşılıklar — yeniden eskiye, tekrarsız).
+
+    Faz A4 (kör nokta K6): karşılık değişince eski bölümler eski adla kalıyordu ve etki
+    listesi bunu göremiyordu — yalnız terimin GEÇTİĞİ bölümleri sayıyordu. Geçmiş kimlikle
+    okunur (`glossary.gecmis`), yeniden adlandırma zinciri kopmaz."""
+    from . import glossary as _sozluk
+    guncel = None
+    for s, t in _sozluk.get_glossary(book_slug).items():
+        if s == source or _sozluk.fold_term(s) == _sozluk.fold_term(source):
+            guncel = t
+            break
+    eskiler: list[str] = []
+    for kayit in _sozluk.gecmis(book_slug, source):
+        for taraf in (kayit.get("onceki"), kayit.get("sonraki")):
+            t = (taraf or {}).get("target")
+            if t and t != guncel and t not in eskiler:
+                eskiler.append(t)
+    return guncel, eskiler
+
+
+def _karsilik_durumu(source, guncel, eskiler, desen, en_paras, tr_paras) -> str | None:
+    """Bölümün bugünkü çevirisi terimi nasıl taşıyor: guncel | eski | ingilizce | farkli.
+
+    Hizalıysa yalnız terimin geçtiği paragraflara, değilse çevirinin tamamına bakılır.
+    Öncelik: eski karşılık görünüyorsa "eski" (düzeltme gerçekten gerekiyor), sonra güncel.
+    Karşılık bilinmiyorsa (kayıt silinmiş) None — tahmin yürütülmez."""
+    from . import turkce_eslesme
+    if not guncel:
+        return None
+    if len(tr_paras) == len(en_paras):
+        metin = "\n\n".join(t for e, t in zip(en_paras, tr_paras) if desen.search(e))
+    else:
+        metin = "\n\n".join(tr_paras)
+    korunan = _translate_mod._ingilizce_korunan(source, guncel)
+    if any(turkce_eslesme.karsilik_gecer(e, metin) for e in eskiler):
+        return "eski"
+    if turkce_eslesme.karsilik_gecer(guncel, metin):
+        return "guncel"
+    if not korunan and desen.search(metin):
+        return "ingilizce"
+    return "farkli"
 
 
 # Etki listesindeki Türkçe örnek paragrafın üst sınırı: liste satırı bir alıntı değil,

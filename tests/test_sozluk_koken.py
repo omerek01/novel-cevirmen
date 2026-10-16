@@ -351,3 +351,37 @@ def test_bolumdeki_sozluk_bolum_no_yoksa_tamamini_verir():
         "Erken": "Erkenci", "Sonra": "Sonraki",
     }
 
+
+
+# ---------- etki listesi: bölüm ESKİ karşılığı mı taşıyor? (Faz A4) ----------
+def _cevrili(url, no, kaynak, ceviri):
+    cache.save_chapter(
+        url, {"book_slug": "k", "book_title": "K", "title": f"B{no}", "chapter_no": no,
+              "translation": ceviri, "source": kaynak, "next_url": None, "prev_url": None,
+              "detected_names": [], "chunk_count": 1},
+    )
+
+
+def test_impact_eski_karsiligi_tasiyan_bolumu_ayirir():
+    glossary.set_term("k", "Hollow Peak", "Kovan Tepesi")
+    glossary.set_term("k", "Hollow Peak", "Oyuk Tepe")   # düzeltme: eski karşılık geçmişte
+    _cevrili("u1", 1, "They reached Hollow Peak.", "Kovan Tepesi'ne vardılar.")
+    _cevrili("u2", 2, "They left Hollow Peak.", "Oyuk Tepe'den ayrıldılar.")
+    _cevrili("u3", 3, "Hollow Peak burned.", "Hollow Peak yandı.")
+    _cevrili("u4", 4, "Hollow Peak fell.", "Boş Doruk düştü.")
+    with TestClient(server.app) as client:
+        veri = client.get("/api/book/k/glossary/impact", params={"source": "Hollow Peak"}).json()
+    durum = {b["chapter_no"]: b["karsilik_durumu"] for b in veri["chapters"]}
+    assert durum == {1: "eski", 2: "guncel", 3: "ingilizce", 4: "farkli"}
+    assert veri["karsilik"] == "Oyuk Tepe" and veri["eski_karsiliklar"] == ["Kovan Tepesi"]
+    assert veri["durum_sayilari"] == {"guncel": 1, "eski": 1, "ingilizce": 1, "farkli": 1}
+
+
+def test_impact_hizali_bolumde_yalniz_terimin_paragrafina_bakar():
+    glossary.set_term("k", "Hollow Peak", "Kovan Tepesi")
+    glossary.set_term("k", "Hollow Peak", "Oyuk Tepe")
+    # Eski ad başka paragrafta (başka bir anlamda) geçiyor: terimin paragrafı güncel.
+    _cevrili("u1", 1, "Hollow Peak stood.\n\nA hive.", "Oyuk Tepe duruyordu.\n\nKovan Tepesi gibiydi.")
+    with TestClient(server.app) as client:
+        veri = client.get("/api/book/k/glossary/impact", params={"source": "Hollow Peak"}).json()
+    assert veri["chapters"][0]["karsilik_durumu"] == "guncel"
