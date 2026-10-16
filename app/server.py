@@ -40,6 +40,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
+from core import profil_cikarim  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -311,6 +312,16 @@ class DefterHitap(BaseModel):
     muhatap: str
     hitap: str
     ilk_bolum: int = 1
+
+
+class ProfilKarar(BaseModel):
+    alan: str
+    karar: str  # onayla | reddet | duzelt
+    deger: dict | list | str | None = None
+
+
+class ProfilOner(BaseModel):
+    on_tarama: bool = False
 
 
 class TakmaAdKarari(BaseModel):
@@ -1080,6 +1091,32 @@ def defter_hitap_karari(slug: str, req: DefterHitap) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@app.get("/api/book/{slug}/profil")
+def kitap_profili_ekrani(slug: str) -> dict:
+    """Kitap profili kartı: önerilen/onaylanan alanlar, kanıtları ve son çıkarım işi (plan Faz 3)."""
+    return profil_cikarim.ekran(library.resolve_slug(slug))
+
+
+@app.post("/api/book/{slug}/profil/karar")
+def kitap_profili_karari(slug: str, req: ProfilKarar) -> dict:
+    """Aday alanı onayla / reddet ya da elle düzelt. Onaylı profil defter işçisini de açar."""
+    canonical = library.resolve_slug(slug)
+    try:
+        bulundu = profil_cikarim.karar_ver(canonical, req.alan, req.karar, req.deger)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if not bulundu:
+        raise _kayit_bulunamadi()
+    return profil_cikarim.ekran(canonical)
+
+
+@app.post("/api/book/{slug}/profil/oner")
+def kitap_profili_oner(slug: str, req: ProfilOner) -> dict:
+    """İlk bölümlerden profil önerisini (isteğe bağlı sözlük ön taramasıyla) arka planda başlat."""
+    canonical = library.resolve_slug(slug)
+    return {"basladi": profil_cikarim.arka_planda(canonical, req.on_tarama), **profil_cikarim.ekran(canonical)}
 
 
 @app.put("/api/book/{slug}/glossary/yasak")

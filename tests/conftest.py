@@ -33,6 +33,9 @@ def temp_db(tmp_path, monkeypatch):
     # Karakter defteri işçisi gerçek model çağırır ve thread açar; kendi testleri açar.
     monkeypatch.setenv("KARAKTER_DEFTERI", "0")
     monkeypatch.setenv("CEVIRI_GRAFIK", "0")
+    # Yeni kitapta otomatik profil çıkarımı thread açıp gerçek model çağırır; kendi testleri açar.
+    monkeypatch.setenv("KITAP_PROFIL_OTOMATIK", "0")
+    monkeypatch.setenv("SOZLUK_ON_TARAMA", "0")
     yield
 
 
