@@ -1233,6 +1233,8 @@ _BELLEK_METNI = ContextVar("bellek_metni", default=None)
 _OZET_METNI = ContextVar("ozet_metni", default=None)
 # Karakter defteri anlık görüntüsü (`CEVIRI_GRAFIK`); kart parça başına `_translate_chunk`ta kurulur.
 _DEFTER_KARTLARI = ContextVar("defter_kartlari", default=None)
+# Terim kullanım örnekleri (`terim_ornek`, CEVIRI_TERIM_ORNEK=1); blok parça başına kurulur.
+_TERIM_ORNEKLERI = ContextVar("terim_ornekleri", default=None)
 
 
 def _izli_uret(*args, **kwargs):
@@ -1267,11 +1269,12 @@ def _izli_uret(*args, **kwargs):
 def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_context="",
                       kosullar=None, anlamlar=None, bolum_no=None, anlam_denetimi=None,
                       *, book_slug=None, bolum_url=None, onceki_bolum=None,
-                      bellek_havuzu=None, defter=None) -> dict:
+                      bellek_havuzu=None, defter=None, terim_ornekleri=None) -> dict:
     """Çeviri denemesini izler; başarısız deneme eski chapter kaydını değiştirmez.
 
     `defter`: karakter defteri anlık görüntüsü (`karakter_defteri.ceviri_kartlari`); verilirse
-    her parçaya yalnız o parçada geçen kişilerin kartı eklenir. None -> istem aynen kalır."""
+    her parçaya yalnız o parçada geçen kişilerin kartı eklenir. None -> istem aynen kalır.
+    `terim_ornekleri`: `terim_ornek.hazirla` çıktısı; aynı kuralla parça başına eklenir."""
     from . import ceviri_baglam, ceviri_izleri
     acik = (os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
             or os.getenv("CEVIRI_OZET", "0") == "1")
@@ -1283,6 +1286,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
     bellek_token = _BELLEK_METNI.set(None)
     ozet_token = _OZET_METNI.set(None)
     defter_token = _DEFTER_KARTLARI.set(defter or None)
+    ornek_token = _TERIM_ORNEKLERI.set(terim_ornekleri or None)
     try:
         sonuc = _translate_chapter_impl(text, api_key, glossary, models, prev_context,
                     kosullar, anlamlar, bolum_no, anlam_denetimi,
@@ -1299,6 +1303,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
             raise KaliteKontrolHatasi(str(exc)) from exc
         raise
     finally:
+        _TERIM_ORNEKLERI.reset(ornek_token)
         _DEFTER_KARTLARI.reset(defter_token)
         _OZET_METNI.reset(ozet_token)
         _BELLEK_METNI.reset(bellek_token)
@@ -3145,6 +3150,12 @@ def _translate_chunk(
         kart = karakter_defteri.kart_metni(defter, en_paras)
         if kart:
             user = kart + "\n\n" + user
+    ornekler = _TERIM_ORNEKLERI.get()
+    if ornekler:
+        from . import terim_ornek
+        blok = terim_ornek.metin(ornekler, en_paras)
+        if blok:
+            user = blok + "\n\n" + user  # kart gibi: ret alırsa parça örneksiz denenir
     for onek in (bellek, ozet):
         if onek:
             user, kartsiz = onek + "\n\n" + user, onek + "\n\n" + kartsiz

@@ -11,7 +11,7 @@ import sqlite3
 import threading
 
 from . import api_durum, bilgi_delta, budget, cache, defter_kayit, glossary, karakter_defteri, library, sozluk_dogrulama, synthetic, varlik_grafigi
-from . import profil_cikarim
+from . import profil_cikarim, terim_ornek
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
 # `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
@@ -425,6 +425,15 @@ def _defter_kartlari(book_slug: str, chapter_no) -> dict | None:
         return None
 
 
+def _terim_ornekleri(book_slug: str, chapter_no, kaynak: str | None, glossary, kosullar) -> list[dict] | None:
+    """`CEVIRI_TERIM_ORNEK=1` ise sorunlu terimler için önceki bölümlerden kullanım örneği (Faz 4).
+    Varsayılan kapalı: kapalıyken istem bayt bayt aynıdır. Hata çeviriyi düşürmez."""
+    try:
+        return terim_ornek.hazirla(book_slug, chapter_no, kaynak or "", glossary, kosullar)
+    except Exception:  # noqa: BLE001
+        return None
+
+
 def _do_fetch_translate_save(
     url: str, api_key: str, background: bool, ticket, refetch: bool = False
 ) -> dict:
@@ -499,6 +508,8 @@ def _do_fetch_translate_save(
     # zincir DENENDİ ve kaldırıldı (2026-08-17, kullanıcı kararı) — okumanın gövdesi
     # prefetch'ten geldiği için ucuz zincir pratikte çevirinin ÇOĞUNU belirliyordu.
     defter = _defter_kartlari(book_slug, chapter.get("chapter_no"))
+    terim_ornekleri = _terim_ornekleri(book_slug, chapter.get("chapter_no"), chapter.get("text"),
+                                       book_glossary, book_kosullar)
     if background:
         # Karar #13 / E-12: aynı anda en fazla 1 arka plan çevirisi — kapı yalnız
         # çekimi serileştiriyordu; çeviri aşaması da Gemini kotasını korur.
@@ -507,6 +518,7 @@ def _do_fetch_translate_save(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
                 prev_context=prev_context, kosullar=book_kosullar,
                 anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"), defter=defter,
+                terim_ornekleri=terim_ornekleri,
                 **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
             )
     else:
@@ -516,6 +528,7 @@ def _do_fetch_translate_save(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
                 prev_context=prev_context, kosullar=book_kosullar,
                 anlam_denetimi=_anlam_tanimlari(book_slug), bolum_no=chapter.get("chapter_no"), defter=defter,
+                terim_ornekleri=terim_ornekleri,
                 **_roman_baglami(book_slug, url, chapter.get("prev_url"), chapter.get("chapter_no")),
             )
 
@@ -569,6 +582,8 @@ def _do_fetch_translate_save(
         "kisalmis": _translate_mod.kisalmis_mi(result.get("uzunluk_orani")),
         # Bu çeviride kullanılan sözlüğün sürümü (künye).
         "sozluk_surumu": sozluk_surumu,
+        # Kullanım örneği verilen terimler (CEVIRI_TERIM_ORNEK=1); künye/ölçüm için, saklanmaz.
+        "terim_ornekleri": [o["source"] for o in terim_ornekleri or ()],
         "cached": False,
     }
     cache.save_chapter(url, payload)
