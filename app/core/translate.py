@@ -1540,6 +1540,17 @@ def _translate_chapter_impl(
                     client_factory, models, tr_paras, en_paras, sorted(ihlalli),
                     glossary, used_models, new_names, new_terms, kosullar,
                 )
+        # KARŞILIK SAPMASI (Faz A2): terim çevrilmiş ama kayıttan FARKLI karşılıkla.
+        # Sözlük onarımından SONRA: o tur paragrafı zaten düzeltmiş olabilir.
+        # Onarım VARSAYILAN KAPALI (`CEVIRI_KARSILIK_ONARIM=1` açar): kalibrasyonda
+        # sapmaların bir kısmı YANLIŞ KAYITTAN geliyordu (`The seven -> Yediler` sayı
+        # anlamında da) ve onarım hatalı kuralı metne zorla basardı — Saint dersi.
+        # Ölçüm ve künye bayrağı her zaman açık; onarım gerçek koşuyla ölçülmeden açılmaz.
+        sapmali = karsilik_sapmasi_paragraflari(glossary, tr_paras, en_paras, kosullar)
+        if sapmali and os.getenv("CEVIRI_KARSILIK_ONARIM", "0") == "1":
+            with api_durum.baglam(asama="karsilik_onarimi"):
+                _sapmayi_onar(client_factory, models, tr_paras, en_paras, sapmali,
+                              glossary, used_models, new_names, new_terms, kosullar)
     # ÇİFT ANLAMLI AD denetimi (Saint gölge/rütbe, Faz 1H). Terminoloji onarımından
     # SONRA: o tur paragrafı zaten yenilemiş olabilir. Hizalama şart (paragraf eşlemesi).
     anlam_metrik = None
@@ -1563,9 +1574,14 @@ def _translate_chapter_impl(
             with api_durum.baglam(asama=asama):
                 return _izli_uret(client_factory, models, user, system=system,
                                   max_tokens=MAX_OUTPUT_TOKENS)
+        sapma_oncesi = karsilik_sapmasi_paragraflari(glossary, tr_paras, en_paras, kosullar)
         def cilala_ihlalleri(paragraflar):
+            # Karşılık sapması: yalnız cilalamanın YENİ getirdiği sayılır (önceden olan
+            # sapma cilalamanın kusuru değil, onu reddettirmemeli).
+            yeni_sapma = karsilik_sapmasi_paragraflari(glossary, paragraflar, en_paras, kosullar)
             return (set(sozluk_ihlali_paragraflari(glossary, paragraflar, en_paras, kosullar))
-                    | set(ingilizce_kalinti(paragraflar, en_paras, glossary)))
+                    | set(ingilizce_kalinti(paragraflar, en_paras, glossary))
+                    | {i for i, s in yeni_sapma.items() if len(s) > len(sapma_oncesi.get(i, {}))})
         # Henüz sözlüğe yazılmamış yeni adlar da metinde korunur. Mevcut kullanıcı
         # karşılıkları önceliklidir; bu geçici liste kalıcı sözlük kuralı olmaz.
         cilalama_sozlugu = {**dict.fromkeys(new_names, ""), **(glossary or {})}
@@ -1600,6 +1616,11 @@ def _translate_chapter_impl(
             ihlal = sozluk_ihlali_paragraflari(glossary, yeni, en_paras, kosullar)
             kalan = ingilizce_kalinti(yeni, en_paras, glossary)
             if degisen.intersection(ihlal) or degisen.intersection(kalan):
+                return False
+            # Onarım, değiştirdiği paragrafa YENİ karşılık sapması getiremez.
+            simdi = karsilik_sapmasi_paragraflari(glossary, tr_paras, en_paras, kosullar)
+            sonra = karsilik_sapmasi_paragraflari(glossary, yeni, en_paras, kosullar)
+            if any(len(sonra.get(i, {})) > len(simdi.get(i, {})) for i in degisen):
                 return False
             if anlam_denetimi:
                 from . import anlam_ayirici
@@ -1678,6 +1699,9 @@ def _translate_chapter_impl(
             translation,
             kosullar,
         ),
+        # KARŞILIK SAPMASI, bütün onarımlardan SONRA: {kaynak: karşılık}. Paragraf
+        # eşlemesi ister; hizalama tutmadıysa None (ölçülmedi), {} = temiz.
+        "karsilik_sapmasi": _bolum_sapmasi(glossary, tr_paras, en_paras, kosullar) if aligned else None,
         # KISALMA ölçümü, onarım turundan SONRA. ORANIN KENDİSİ saklanır, "kısa mı"
         # KARARI değil: eşik ileride kalibre edilirse kaydedilmiş bir karar sessizce
         # yanlışa dönerdi (aynı ders `kullanim.py`de token/maliyet ayrımıyla ödendi).
@@ -2316,6 +2340,201 @@ def sozluk_ihlalleri(
         if _terim_metinde(source, target, ceviri, tekili_kayitli):
             ihlal[source] = target
     return ihlal
+
+
+# ---------------------------------------------------------------------------
+# KARŞILIK SAPMASI (2026-10-16, kör nokta taraması, plan Faz A2)
+# ---------------------------------------------------------------------------
+# `sozluk_ihlalleri` yalnız İngilizce KALAN terimi görür. Model terimi çevirip
+# kayıttan FARKLI bir Türkçe karşılık yazdığında hiçbir denetim bunu görmüyordu.
+# Ölçüm (SS sunucu kopyası, 991 hizalı bölüm): kayıt "Oyuk Dağı" iken 64 paragrafın
+# 64'ünde başka karşılık; `Weaver's Mask` 50/50; İngilizce korunması kullanıcı
+# kararı olan `Stone Saint` 79 bölümde Türkçeleşmiş. Bunları yalnız sonradan defter
+# görüyordu ve o da öneri olarak.
+#
+# Kalibrasyonla elenen üç sahte sınıf (aynı ölçümde ham 2648 paragraf -> 630):
+#   * Tek sözcüklü kaydın SIRADAN kullanımı (`lost`, cümle başı `Night`): tek
+#     sözcük ancak cümle ORTASINDA büyük harfle geçince ad sayılır.
+#   * Fiil kullanımı (`had Awakened`, `when I Ascended`): Türkçede doğal olarak fiil
+#     olur; önündeki yardımcı/zamir sözcüğü bunu ayırır (`_FIIL_ONCESI`).
+#   * Daha UZUN bir kaydın içinde geçiş (`Battle Master` içindeki `Master`, `Soul
+#     Reaper` içindeki `Reaper`): sahibi uzun kayıttır.
+# İngilizce korunan TEK sözcüklü adlar (kişi adları) denetim dışıdır: adın yerine
+# zamir kullanmak meşru bir çeviri tercihidir (ölçümde `Sunny` dağınık 19 bölüm).
+# Koşullu kayıtlar `_denetlenebilir_terimler` ile aynı gerekçeyle dışarıdadır.
+_FIIL_ONCESI = frozenset("""
+had have has having been being be to will would could should might must can did do
+does i you he she we they it who that when once after before just finally never
+already not
+""".split())
+
+
+@lru_cache(maxsize=16384)
+def _kayit_deseni(source: str) -> re.Pattern:
+    # Önbellek ŞART: denetim onarım kabulünde de koşuyor (paragraf x kayıt); `re`'nin
+    # kendi 512'lik önbelleği ~1100 kayıtlı sözlükte sürekli boşalıyordu.
+    return re.compile(rf"(?<!\w){re.escape(source)}(?!\w)", re.IGNORECASE)
+
+
+@lru_cache(maxsize=8)
+def _kapsayan_tablosu(kaynaklar: tuple[str, ...]) -> dict[str, tuple[re.Pattern, ...]]:
+    sozcuk_dizini: dict[str, list[str]] = {}
+    for o in kaynaklar:
+        for w in set(o.lower().split()):
+            sozcuk_dizini.setdefault(w, []).append(o)
+    out: dict[str, tuple[re.Pattern, ...]] = {}
+    for s in kaynaklar:
+        ilk = s.lower().split()[0] if s.split() else ""
+        sd = _kayit_deseni(s)
+        uzun = [o for o in sozcuk_dizini.get(ilk, ()) if len(o) > len(s) and sd.search(o)]
+        if uzun:
+            out[s] = tuple(_kayit_deseni(o) for o in uzun)
+    return out
+
+
+def _kapsayan_kayitlar(glossary: dict[str, str]) -> dict[str, tuple[re.Pattern, ...]]:
+    """{kaynak: [kaynağı İÇEREN daha uzun kayıtların desenleri]} — sözlük başına bir kez."""
+    return _kapsayan_tablosu(tuple(sorted(s for s in glossary if s)))
+
+
+def _ad_olarak_geciyor(source: str, en: str, kapsayanlar, en_kucuk: str | None = None) -> bool:
+    """Kayıt bu İngilizce paragrafta AD/TERİM olarak geçiyor mu (karşılık sapması ölçütü)."""
+    if source.lower() not in (en_kucuk if en_kucuk is not None else en.lower()):
+        return False  # ucuz ön süzgeç: regex'e yalnız aday kalan kayıt girer
+    ortu = [m.span() for d in (kapsayanlar or ()) for m in d.finditer(en)]
+    cok_sozcuk = len(source.split()) > 1
+    for m in _kayit_deseni(source).finditer(en):
+        if any(a <= m.start() and m.end() <= b for a, b in ortu):
+            continue
+        if cok_sozcuk:
+            return True
+        if not m.group(0)[:1].isupper():
+            continue
+        once = en[: m.start()].rstrip(" \"'“‘(*[")
+        if not once or once[-1] in ".!?:…":
+            continue  # cümle başı: büyük harf ad kanıtı değil
+        onceki = re.findall(r"[A-Za-z]+", once[-20:])
+        if onceki and onceki[-1].lower() in _FIIL_ONCESI:
+            continue
+        return True
+    return False
+
+
+def karsilik_sapmalari(
+    glossary: dict[str, str] | None,
+    kaynak: str | None,
+    ceviri: str | None,
+    kosullar: dict[str, str] | None = None,
+    tekili_kayitli: frozenset[str] | None = None,
+    kapsayan: dict[str, list[re.Pattern]] | None = None,
+    adaylar: tuple[list, list] | None = None,
+) -> dict[str, str]:
+    """Kaynakta AD olarak geçen kayıt, çeviride ne kayıtlı karşılığıyla ne İngilizce var.
+
+    Paragraf düzeyinde anlamlıdır (bölüm düzeyinde aynı terimin başka paragraftaki
+    doğru geçişi sapmayı maskeler). İngilizce kalmış terim BURADA sayılmaz — o
+    `sozluk_ihlalleri`nin sınıfı; iki bayrak aynı geçişi iki kez saymaz.
+    ``adaylar``: `_sapma_adaylari` çıktısı; paragraf döngüsünde bir kez hesaplanır.
+    Döner {kaynak: karşılık}; boş = uyumlu.
+    """
+    from . import turkce_eslesme
+
+    if not glossary or not kaynak or not ceviri:
+        return {}
+    if tekili_kayitli is None:
+        tekili_kayitli = _tekili_kayitli_cogullar(glossary)
+    if kapsayan is None:
+        kapsayan = _kapsayan_kayitlar(glossary)
+    terimler, korunanlar = adaylar or _sapma_adaylari(glossary, kosullar, tekili_kayitli)
+    sapma: dict[str, str] = {}
+    en_kucuk = kaynak.lower()
+    for source, target in terimler:
+        if not _ad_olarak_geciyor(source, kaynak, kapsayan.get(source), en_kucuk):
+            continue
+        if _terim_metinde(source, target, ceviri, tekili_kayitli):
+            continue  # İngilizce kalmış: sozluk_ihlalleri'nin işi
+        if not turkce_eslesme.karsilik_gecer(target, ceviri):
+            sapma[source] = target
+    for source, target in korunanlar:
+        if not _ad_olarak_geciyor(source, kaynak, kapsayan.get(source), en_kucuk):
+            continue
+        if not turkce_eslesme.karsilik_gecer(target, ceviri):
+            sapma[source] = target
+    return sapma
+
+
+def _sapma_adaylari(glossary, kosullar, tekili_kayitli) -> tuple[list, list]:
+    """(Türkçe karşılıklı denetlenebilir kayıtlar, İngilizce KORUNAN çok sözcüklü adlar)."""
+    terimler = list(_denetlenebilir_terimler(glossary, kosullar, tekili_kayitli))
+    # İngilizce KORUNAN çok sözcüklü ad Türkçeleşmiş mi (Stone Saint vakası).
+    korunanlar = [(s, t) for s, t in glossary.items()
+                  if s and len(s.split()) >= 2 and not s.islower()
+                  and _ingilizce_korunan(s, t or "")
+                  and not _gercek_kosul((kosullar or {}).get(s))]
+    return terimler, korunanlar
+
+
+def karsilik_sapmasi_paragraflari(
+    glossary: dict[str, str] | None,
+    tr_paras: list[str],
+    en_paras: list[str],
+    kosullar: dict[str, str] | None = None,
+) -> dict[int, dict[str, str]]:
+    """{paragraf: {kaynak: karşılık}} — hizalı çeviride karşılık sapması olan paragraflar."""
+    if not glossary or not tr_paras or not en_paras or len(tr_paras) != len(en_paras):
+        return {}
+    tekili = _tekili_kayitli_cogullar(glossary)
+    kapsayan = _kapsayan_kayitlar(glossary)
+    adaylar = _sapma_adaylari(glossary, kosullar, tekili)
+    out: dict[int, dict[str, str]] = {}
+    for i, (tr, en) in enumerate(zip(tr_paras, en_paras)):
+        s = karsilik_sapmalari(glossary, en, tr, kosullar, tekili, kapsayan, adaylar)
+        if s:
+            out[i] = s
+    return out
+
+
+def _bolum_sapmasi(glossary, tr_paras, en_paras, kosullar) -> dict[str, str]:
+    """Paragraf sapmalarının bölüm düzeyi birleşimi (künye alanı)."""
+    out: dict[str, str] = {}
+    for s in karsilik_sapmasi_paragraflari(glossary, tr_paras, en_paras, kosullar).values():
+        out.update(s)
+    return out
+
+
+def _sapmayi_onar(
+    client_factory, models, tr_paras: list[str], en_paras: list[str], sapmali: dict[int, dict],
+    glossary, used_models, new_names, new_terms, kosullar,
+) -> dict[int, dict[str, str]]:
+    """Sapmalı paragrafları TEK turda yeniden çevir; yeni hâli YALNIZ doğrulanırsa kabul et.
+
+    MQM-APE ilkesi (Lu ve ark., 2025): bir hata ancak düzeltilmiş hâl gerçekten daha
+    iyiyse düzeltilir. Ölçüt: o paragrafın sapması azalmış, yeni sözlük ihlali ya da
+    İngilizce kalıntı gelmemiş ve paragraf belirgin kısalmamış. Aksi hâlde özgün
+    paragraf kalır (sapma künyede görünür). Onarım sözlüğe yazmaz. Döner: kalan sapma."""
+    deneme = list(tr_paras)
+    if not _paragraflari_yeniden_cevir(client_factory, models, deneme, en_paras, sorted(sapmali),
+                                       glossary, used_models, new_names, new_terms, kosullar):
+        return sapmali
+    ihlal = sozluk_ihlali_paragraflari(glossary, deneme, en_paras, kosullar)
+    kalinti = ingilizce_kalinti(deneme, en_paras, glossary)
+    yeni_sapma = karsilik_sapmasi_paragraflari(glossary, deneme, en_paras, kosullar)
+    kalan: dict[int, dict[str, str]] = {}
+    for i, eski in sapmali.items():
+        yeni = yeni_sapma.get(i, {})
+        if (len(yeni) < len(eski) and i not in ihlal and i not in kalinti
+                and len(deneme[i]) >= KARSILIK_ONARIM_MIN_UZUNLUK * len(tr_paras[i])):
+            tr_paras[i] = deneme[i]
+            if yeni:
+                kalan[i] = yeni
+        else:
+            kalan[i] = eski
+    return kalan
+
+
+# Onarılan paragraf özgününün en az bu oranı kadar uzun olmalı: tek terimi düzeltirken
+# paragrafı özetleyen bir onarım (aynı model, aynı dikkat kayması) kabul edilmez.
+KARSILIK_ONARIM_MIN_UZUNLUK = 0.85
 
 
 # Türkçe'de KARŞILIĞI OLMAYAN İngilizce işlev sözcükleri. Çeviride birinin geçmesi

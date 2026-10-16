@@ -21,6 +21,9 @@ def test_tr_kucuk_turkce_harfler():
     ("Oyuk Dağı", "Oyuk Dağları"),       # tamlama çoğulu
     ("Oyuk Dağı", "oyuk  dağının"),      # esnek boşluk + küçük harf
     ("Gölge Rütbesi", "Gölge Rütbeleri"),
+    ("Kabus Yaratığı", "Kabus Yaratıkları'nın"),   # iyelik düşer, ğ -> k geri döner
+    ("Gölge Çekirdeği", "GÖLGE ÇEKİRDEKLERİ"),
+    ("Kademe 2", "2. Kademe'ye ulaştı"),           # Türkçe sıra-sayı dizilişi
 ])
 def test_cekimli_hal_bulunur(karsilik, metin):
     assert karsilik_gecer(karsilik, metin)

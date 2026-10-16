@@ -28,6 +28,7 @@ from functools import lru_cache
 
 # Ünsüz yumuşaması: sözcük sonu -> ek önündeki hâli (yalnız ünlüyle başlayan ekte).
 _YUMUSAMA = {"p": "b", "ç": "c", "t": "d", "k": "ğ"}
+_SERTLESME = {v: k for k, v in _YUMUSAMA.items()}
 # Tamlamada iyelik eki (3. tekil): -ı/-i/-u/-ü, ünlüden sonra -sı/-si/-su/-sü.
 _IYELIK = re.compile(r"(s?[ıiuü])$")
 _KESME = "'’`"
@@ -81,16 +82,41 @@ def karsilik_deseni(karsilik: str, gevsek: bool = False) -> re.Pattern:
                         + r"(?=[aeıioöuüâîûAEIİOÖUÜÂÎÛ])")
     m = _IYELIK.search(son)
     if len(sozcukler) > 1 and m and len(son) - len(m.group(1)) >= 2:
-        govdeler.append(_sozcuk(son[: m.start()], gevsek) + "l[ae]r")
+        # İyelik düşünce yumuşama da geri döner: Kabus Yaratığı -> Kabus Yaratıkları
+        # (kalibrasyonda 989 geçişin 567'si bu yüzden sahte "karşılık yok" çıkmıştı).
+        govde = son[: m.start()]
+        sert = _SERTLESME.get(govde[-1])
+        govde_d = _sozcuk(govde, gevsek)
+        if sert:
+            govde_d = f"(?:{govde_d}|{_sozcuk(govde[:-1] + sert, gevsek)})"
+        govdeler.append(govde_d + _harf_sinifi("l", gevsek)
+                        + "[" + "".join(_harf_sinifi(c, gevsek)[1:-1] for c in "ae") + "]"
+                        + _harf_sinifi("r", gevsek))
     onceki = [_sozcuk(tr_kucuk(s), gevsek) for s in sozcukler[:-1]]
     son_desen = "(?:" + "|".join(govdeler) + ")"
     tam = r"\s+".join(onceki + [son_desen])
     return re.compile(rf"(?<!\w){tam}(?:[{_KESME}]?\w*)")
 
 
+def _sayi_sirasi_varyantlari(karsilik: str) -> list[str]:
+    """Sayılı karşılığın Türkçe sıra-sayı dizilişi: "Kademe 2" -> "2. Kademe".
+
+    Kalibrasyon (RSSG): kayıt "Kademe 2" iken çevirilerin bir kısmı doğru biçimde
+    "2. Kademe" yazıyordu ve sahte sapma sayılıyordu."""
+    sozcukler = karsilik.split()
+    sayilar = [s for s in sozcukler if s.isdigit()]
+    if len(sayilar) != 1 or len(sozcukler) < 2:
+        return []
+    geri = [s for s in sozcukler if not s.isdigit()]
+    return [f"{sayilar[0]}. {' '.join(geri)}"]
+
+
 def karsilik_gecer(karsilik: str, metin: str, gevsek: bool = False) -> bool:
-    """Karşılık (çekimli hâlleri dahil) metinde geçiyor mu."""
-    return bool(karsilik and metin and karsilik_deseni(karsilik, gevsek).search(metin))
+    """Karşılık (çekimli hâlleri ve sayı sırası varyantı dahil) metinde geçiyor mu."""
+    if not karsilik or not metin:
+        return False
+    return any(karsilik_deseni(k, gevsek).search(metin)
+               for k in [karsilik, *_sayi_sirasi_varyantlari(karsilik)])
 
 
 def ayni_karsilik(bicim: str, karsilik: str) -> bool:

@@ -544,6 +544,8 @@ def _do_fetch_translate_save(
         # İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş
         # paragraflar. Boş = temiz.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        # Karşılık sapması: terim kayıttan FARKLI Türkçeyle çevrilmiş. None = ölçülmedi.
+        "karsilik_sapmasi": result.get("karsilik_sapmasi"),
         "anlam_denetimi": result.get("anlam_denetimi"),
         "ceviri_kalitesi": result.get("ceviri_kalitesi"),
         # KISALMA ölçümü: Türkçe/İngilizce karakter oranı. Modelin çevirmek yerine
@@ -732,6 +734,8 @@ def fetch_into_book(
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        # Karşılık sapması da `_fetch_translate_save` ile AYNI (künye kuralı).
+        "karsilik_sapmasi": result.get("karsilik_sapmasi"),
         "anlam_denetimi": result.get("anlam_denetimi"),
         "ceviri_kalitesi": result.get("ceviri_kalitesi"),
         # Kısalma ölçümü de `_fetch_translate_save` ile AYNI: bayrağı üreten
