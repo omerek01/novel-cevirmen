@@ -9,7 +9,8 @@ def test_adlar_zamire_inince_isaretlenir():
 
 
 def test_adlar_korunursa_isaretlenmez():
-    assert not belirsiz_mi(EN, "Mara kapıya vardığında Tomas ona anahtarı verdi; Mara teşekkür etti.")
+    # İki zamir var ama iki ad da korunmuş: kimin ne yaptığı belli.
+    assert not belirsiz_mi(EN, "Mara kapıya vardığında Tomas ona anahtarı verdi; Mara da ona teşekkür etti.")
 
 
 def test_tek_cinsiyetli_paragraf_isaretlenmez():
