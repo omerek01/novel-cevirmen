@@ -334,6 +334,9 @@ def test_hizalama_tutmazsa_onarim_denenmez(monkeypatch):
     hizalamadan BAĞIMSIZ koşar ve kısa bir taslak onu haklı olarak tetiklerdi.
     Bu test yalnız SÖZLÜK onarımını ölçüyor; `Saint` bilerek çevrilmeden kalıyor.
     """
+    # Hizalama onarımı (Faz A5) ayrı aşamadır ve kendi testinde ölçülür; burada
+    # yalnız bu onarım yolunun çağrı sayısı sayılıyor.
+    monkeypatch.setenv("CEVIRI_HIZALAMA_ONARIM", "0")
     cagrilar: list[str] = []
     _kur(monkeypatch, [
         "Saint elini kaldırdı. Sunny boş gökyüzünü izledi. "

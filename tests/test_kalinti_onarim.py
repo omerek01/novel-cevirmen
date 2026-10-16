@@ -120,6 +120,9 @@ def test_hizalama_tutmazsa_onarim_denenmez(monkeypatch):
     hizalamadan BAĞIMSIZ koşar ve kısa bir taslak onu haklı olarak tetiklerdi.
     İki denetim ayrı arıza sınıfıdır; bu test yalnız KALINTI onarımını ölçüyor.
     """
+    # Hizalama onarımı (Faz A5) ayrı aşamadır ve kendi testinde ölçülür; burada
+    # yalnız bu onarım yolunun çağrı sayısı sayılıyor.
+    monkeypatch.setenv("CEVIRI_HIZALAMA_ONARIM", "0")
     cagrilar: list[str] = []
     _kur(monkeypatch, [
         "Sunny yavaşça başını salladı. Ama bana göre orası bir cennet sayılırdı. "

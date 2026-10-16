@@ -1496,6 +1496,32 @@ def _translate_chapter_impl(
             if kaynak and hedef and kaynak not in glossary:
                 new_terms.setdefault(kaynak, hedef)
         chunk_tr = _split_by_markers(result["translation"], len(chunk_en))
+        if chunk_tr is None and os.getenv("CEVIRI_HIZALAMA_ONARIM", "1") != "0":
+            # HİZALAMA ONARIMI (2026-10-16, Faz A5; kör nokta K7): hizalama tutmayan
+            # parça bütün paragraf denetimlerinden (sözlük, kalıntı, karşılık, sayı,
+            # kalite) KAÇIYORDU — en bozuk çeviri, hiç denetlenmeyen çeviriydi. Bir kez
+            # daha denenir; yeni hâl ancak hizalanır VE kısalmamışsa alınır. Tek tur:
+            # kısalma onarımıyla aynı gerekçe (döngü maliyeti katlar).
+            try:
+                with api_durum.baglam(asama="hizalama_onarimi"):
+                    yeniden = _translate_chunk(
+                        client_factory, models, chunk_en, glossary, prev_tail, kosullar, ipucu,
+                    )
+            except Exception:  # noqa: BLE001 — best-effort: ilk çeviri elde, onu kaybetme
+                yeniden = None
+            if yeniden:
+                yeni_tr = _split_by_markers(yeniden.get("translation") or "", len(chunk_en))
+                yeni_oran = uzunluk_orani(_strip_markers(yeniden.get("translation") or ""), chunk)
+                if yeni_tr is not None and not kisalmis_mi(yeni_oran):
+                    result, chunk_tr = yeniden, yeni_tr
+                    if yeniden.get("model"):
+                        used_models[yeniden["model"]] = None
+                    for name in yeniden.get("detected_names") or []:
+                        if name and name not in glossary:
+                            new_names.add(name)
+                    for kaynak, hedef in (yeniden.get("detected_terms") or {}).items():
+                        if kaynak and hedef and kaynak not in glossary:
+                            new_terms.setdefault(kaynak, hedef)
         if chunk_tr is not None:
             tr_paras.extend(chunk_tr)
             en_paras.extend(chunk_en)
