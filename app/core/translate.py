@@ -1551,6 +1551,16 @@ def _translate_chapter_impl(
             with api_durum.baglam(asama="karsilik_onarimi"):
                 _sapmayi_onar(client_factory, models, tr_paras, en_paras, sapmali,
                               glossary, used_models, new_names, new_terms, kosullar)
+        # SAYI/ÖLÇEK (Faz A3): "two thousand" -> "iki yüz". Onarım VARSAYILAN AÇIK
+        # (`CEVIRI_SAYI_ONARIM=0` kapatır): sözlüğe kural yazmaz ve kabul kapısı katı —
+        # yeni hâl değeri taşımıyorsa özgün paragraf kalır, yani sahte bulgu yalnız bir
+        # istek harcar. Kalibrasyonda bulgu nadir (SS 991 bölümde 8 paragraf).
+        from . import sayi_denetimi
+        sayisiz = sayi_denetimi.paragraf_uyumsuzluklari(tr_paras, en_paras)
+        if sayisiz and os.getenv("CEVIRI_SAYI_ONARIM", "1") != "0":
+            with api_durum.baglam(asama="sayi_onarimi"):
+                _sayiyi_onar(client_factory, models, tr_paras, en_paras, sayisiz,
+                             glossary, used_models, new_names, new_terms, kosullar)
     # ÇİFT ANLAMLI AD denetimi (Saint gölge/rütbe, Faz 1H). Terminoloji onarımından
     # SONRA: o tur paragrafı zaten yenilemiş olabilir. Hizalama şart (paragraf eşlemesi).
     anlam_metrik = None
@@ -1702,6 +1712,8 @@ def _translate_chapter_impl(
         # KARŞILIK SAPMASI, bütün onarımlardan SONRA: {kaynak: karşılık}. Paragraf
         # eşlemesi ister; hizalama tutmadıysa None (ölçülmedi), {} = temiz.
         "karsilik_sapmasi": _bolum_sapmasi(glossary, tr_paras, en_paras, kosullar) if aligned else None,
+        # SAYI/ÖLÇEK uyumsuzluğu, onarımdan SONRA: {paragraf no (str): [eksik değerler]}.
+        "sayi_uyumsuzlugu": _sayi_kunyesi(tr_paras, en_paras) if aligned else None,
         # KISALMA ölçümü, onarım turundan SONRA. ORANIN KENDİSİ saklanır, "kısa mı"
         # KARARI değil: eşik ileride kalibre edilirse kaydedilmiş bir karar sessizce
         # yanlışa dönerdi (aynı ders `kullanim.py`de token/maliyet ayrımıyla ödendi).
@@ -2492,6 +2504,37 @@ def karsilik_sapmasi_paragraflari(
         if s:
             out[i] = s
     return out
+
+
+def _sayiyi_onar(
+    client_factory, models, tr_paras, en_paras, sayisiz: dict[int, list[str]],
+    glossary, used_models, new_names, new_terms, kosullar,
+) -> None:
+    """Sayı/ölçek uyumsuz paragrafları TEK turda yeniden çevir; `_sapmayi_onar` ile aynı
+    kabul ilkesi (MQM-APE): uyumsuzluk azalmış, yeni sözlük ihlali / kalıntı / karşılık
+    sapması gelmemiş, paragraf belirgin kısalmamış olmalı."""
+    from . import sayi_denetimi
+
+    deneme = list(tr_paras)
+    if not _paragraflari_yeniden_cevir(client_factory, models, deneme, en_paras, sorted(sayisiz),
+                                       glossary, used_models, new_names, new_terms, kosullar):
+        return
+    ihlal = sozluk_ihlali_paragraflari(glossary, deneme, en_paras, kosullar)
+    kalinti = ingilizce_kalinti(deneme, en_paras, glossary)
+    sapma_once = karsilik_sapmasi_paragraflari(glossary, tr_paras, en_paras, kosullar)
+    sapma_sonra = karsilik_sapmasi_paragraflari(glossary, deneme, en_paras, kosullar)
+    for i, eski in sayisiz.items():
+        yeni = sayi_denetimi.uyumsuzluk(en_paras[i], deneme[i])
+        if (len(yeni) < len(eski) and i not in ihlal and i not in kalinti
+                and len(sapma_sonra.get(i, {})) <= len(sapma_once.get(i, {}))
+                and len(deneme[i]) >= KARSILIK_ONARIM_MIN_UZUNLUK * len(tr_paras[i])):
+            tr_paras[i] = deneme[i]
+
+
+def _sayi_kunyesi(tr_paras, en_paras) -> dict[str, list[str]]:
+    """Künye alanı; JSON anahtarı metin olsun diye paragraf no str (1'den başlar, künye dili)."""
+    from . import sayi_denetimi
+    return {str(i + 1): e for i, e in sayi_denetimi.paragraf_uyumsuzluklari(tr_paras, en_paras).items()}
 
 
 def _bolum_sapmasi(glossary, tr_paras, en_paras, kosullar) -> dict[str, str]:

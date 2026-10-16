@@ -546,6 +546,7 @@ def _do_fetch_translate_save(
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
         # Karşılık sapması: terim kayıttan FARKLI Türkçeyle çevrilmiş. None = ölçülmedi.
         "karsilik_sapmasi": result.get("karsilik_sapmasi"),
+        "sayi_uyumsuzlugu": result.get("sayi_uyumsuzlugu"),
         "anlam_denetimi": result.get("anlam_denetimi"),
         "ceviri_kalitesi": result.get("ceviri_kalitesi"),
         # KISALMA ölçümü: Türkçe/İngilizce karakter oranı. Modelin çevirmek yerine
@@ -736,6 +737,7 @@ def fetch_into_book(
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
         # Karşılık sapması da `_fetch_translate_save` ile AYNI (künye kuralı).
         "karsilik_sapmasi": result.get("karsilik_sapmasi"),
+        "sayi_uyumsuzlugu": result.get("sayi_uyumsuzlugu"),
         "anlam_denetimi": result.get("anlam_denetimi"),
         "ceviri_kalitesi": result.get("ceviri_kalitesi"),
         # Kısalma ölçümü de `_fetch_translate_save` ile AYNI: bayrağı üreten

@@ -80,6 +80,9 @@ def _connect() -> sqlite3.Connection:
     # çevrilmiş ama kayıttan FARKLI karşılıkla. `glossary_leaks` yalnız İngilizce
     # KALANI görür. NULL = ölçülmedi (eski satır / hizalama yok), "{}" = temiz.
     db.ensure_column(conn, "chapters", "karsilik_sapmasi", "karsilik_sapmasi TEXT")
+    # SAYI/ÖLÇEK uyumsuzluğu (Faz A3): JSON {paragraf no: [eksik değerler]}, onarımdan SONRA.
+    # Aynı NULL / "{}" ayrımı.
+    db.ensure_column(conn, "chapters", "sayi_uyumsuzlugu", "sayi_uyumsuzlugu TEXT")
     # KISALMA ÖLÇÜMÜ (2026-09-28): Türkçe çıktı / İngilizce kaynak KARAKTER oranı.
     # Model çevirmek yerine ÖZETLEDİĞİNDE (gerçek vaka: shadow-slave #787) bunu
     # gören başka hiçbir denetim yok — hizalama yalnız YAPIYI, glossary_leaks
@@ -251,7 +254,7 @@ def get_chapter(url: str) -> dict | None:
             "SELECT book_slug, book_title, title, chapter_no, translation, "
             "next_url, detected_names, chunk_count, prev_url, source_text, content_type, "
             "engine, added_terms, model, glossary_leaks, ingilizce_kalinti, sozluk_surumu, "
-            "created_at, uzunluk_orani, ceviri_kalitesi, karsilik_sapmasi "
+            "created_at, uzunluk_orani, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -289,6 +292,7 @@ def get_chapter(url: str) -> dict | None:
         "ceviri_kalitesi": json.loads(row[19]) if row[19] else None,
         # glossary_leaks kuralı: NULL da "{}" da okuyucuya boş gelir.
         "karsilik_sapmasi": json.loads(row[20] or "{}"),
+        "sayi_uyumsuzlugu": json.loads(row[21] or "{}"),
         "cached": True,
     }
 
@@ -726,8 +730,8 @@ def save_chapter(url: str, data: dict) -> None:
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text, content_type, engine, added_terms, model,
                  glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu, anlam_denetimi,
-                 onerilen_terimler, ceviri_kalitesi, karsilik_sapmasi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 onerilen_terimler, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -747,6 +751,7 @@ def save_chapter(url: str, data: dict) -> None:
                 anlam_denetimi = COALESCE(excluded.anlam_denetimi, anlam_denetimi),
                 onerilen_terimler = COALESCE(excluded.onerilen_terimler, onerilen_terimler),
                 karsilik_sapmasi = COALESCE(excluded.karsilik_sapmasi, karsilik_sapmasi),
+                sayi_uyumsuzlugu = COALESCE(excluded.sayi_uyumsuzlugu, sayi_uyumsuzlugu),
                 ceviri_kalitesi = CASE
                     WHEN excluded.ceviri_kalitesi IS NOT NULL THEN excluded.ceviri_kalitesi
                     WHEN excluded.translation IS translation AND excluded.source_text IS source_text
@@ -801,6 +806,8 @@ def save_chapter(url: str, data: dict) -> None:
                 # glossary_leaks ile AYNI kural (None vs boş dict ayrımı).
                 json.dumps(data["karsilik_sapmasi"], ensure_ascii=False)
                 if data.get("karsilik_sapmasi") is not None else None,
+                json.dumps(data["sayi_uyumsuzlugu"], ensure_ascii=False)
+                if data.get("sayi_uyumsuzlugu") is not None else None,
             ),
         )
         conn.commit()
