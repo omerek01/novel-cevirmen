@@ -999,6 +999,13 @@ def defter_listesi(slug: str, konum: int | None = Query(None), spoiler: bool = Q
     return defter_ekrani.liste(canonical, _okur_bolumu(canonical, konum, spoiler))
 
 
+@app.get("/api/book/{slug}/defter/sistem")
+def defter_sistem_mesajlari(slug: str, konum: int | None = Query(None), spoiler: bool = Query(False)) -> dict:
+    """Rün biçimi olmayan kitabın ham sistem mesajları ("Sistem mesajları" sekmesi). Spoiler kuralı defterle aynı."""
+    canonical = library.resolve_slug(slug)
+    return defter_ekrani.sistem_mesajlari(canonical, _okur_bolumu(canonical, konum, spoiler))
+
+
 @app.get("/api/book/{slug}/defter/kart")
 def defter_karti(slug: str, kimlik: str, konum: int | None = Query(None), spoiler: bool = Query(False)) -> dict:
     canonical = library.resolve_slug(slug)

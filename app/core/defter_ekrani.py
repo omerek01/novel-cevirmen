@@ -12,7 +12,8 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 
-from . import defter_kayit, glossary, karakter_defteri, varlik_grafigi
+from . import db, defter_kayit, glossary, karakter_defteri, runler, varlik_grafigi
+from .runler import genel
 
 KISI_TURU = "kisi"
 GRUP_TURU = "orgut"
@@ -220,7 +221,52 @@ def liste(book_slug: str, konum: int | None) -> dict:
             "anilar": anilar, "nitelikler": kayit["nitelik"], "yankilar": kayit["golge"] + kayit["yanki"],
             "karsiliklar": _karsiliklar(book_slug, [*yaratiklar, *anilar, *kayit["golge"], *kayit["yanki"]]),
             "iliskiler": {k: v["etiket"] for k, v in varlik_grafigi.ILISKILER.items()
-                          if k in karakter_defteri.DEFTER_ILISKILERI}}
+                          if k in karakter_defteri.DEFTER_ILISKILERI},
+            # Rün biçimi olmayan kitapta "Sistem mesajları" sekmesi (veri ayrı uçtan: `sistem_mesajlari`).
+            "sistem_sekmesi": runler.bicim(varlik_grafigi.profil(book_slug)) is None}
+
+
+SISTEM_EN_COK = 500
+
+
+def sistem_mesajlari(book_slug: str, konum: int | None) -> dict:
+    """Rün biçimi olmayan kitabın HAM sistem mesajları (`runler.genel`), paragraf başına bir kayıt.
+
+    Bölüm hizalıysa okurun gördüğü TÜRKÇE paragraf, değilse İngilizce satırlar gösterilir. Spoiler:
+    yalnız `konum`a kadarki bölümler. En yeni `SISTEM_EN_COK` kayıt döner (bölüm sırasıyla).
+    Biçimi olan kitapta (SS) ayrıntılı rün listesi kullanılır; burada boş döner."""
+    p = varlik_grafigi.profil(book_slug) or {}
+    if runler.bicim(p) is not None:
+        return {"sinir": konum, "mesajlar": [], "anahtarlar": {}}
+    sesler, anahtarlar = tuple(p.get("sistem_sesi") or ()), tuple(p.get("sistem_anahtarlari") or ())
+    conn = db.connect()
+    try:
+        satirlar = conn.execute(
+            "SELECT chapter_no, source_text, translation FROM chapters WHERE book_slug = ? AND chapter_no IS NOT NULL "
+            "AND source_text IS NOT NULL AND IFNULL(content_type, 'text') != 'html' AND (? IS NULL OR chapter_no <= ?) "
+            "ORDER BY chapter_no, created_at DESC", (book_slug, konum, konum)).fetchall()
+    finally:
+        conn.close()
+    mesajlar, gorulen, sozluk = [], set(), Counter()
+    for no, kaynak, ceviri in satirlar:
+        if no in gorulen:
+            continue  # aynı bölümün eski kaydı
+        gorulen.add(no)
+        bulunan = genel.sistem_satirlari(kaynak, sesler, anahtarlar)
+        if not bulunan:
+            continue
+        sozluk.update(genel.anahtar_sozlugu(bulunan))
+        en_p = [x.strip() for x in kaynak.split("\n\n")]
+        tr_p = [x.strip() for x in (ceviri or "").split("\n\n")]
+        hizali = bool(ceviri) and len(en_p) == len(tr_p)
+        paragraflar: dict[int, list[dict]] = {}
+        for s in bulunan:
+            paragraflar.setdefault(s["paragraf"], []).append(s)
+        for i, ss in paragraflar.items():
+            en = "\n".join(s["satir"] for s in ss)
+            mesajlar.append({"bolum": no, "tur": ss[0]["tur"], "anahtarlar": [s["anahtar"] for s in ss if s["anahtar"]],
+                             "metin": tr_p[i] if hizali else en, "en": en, "turkce": hizali})
+    return {"sinir": konum, "mesajlar": mesajlar[-SISTEM_EN_COK:], "anahtarlar": dict(sozluk.most_common(30))}
 
 
 def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:

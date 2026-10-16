@@ -224,3 +224,66 @@ def test_rutbe_gecmisi_sinif_ve_geri_giden_rutbe_tasimaz(kitap):
                       ("Ascended", 744), ("Master", 745)):
         vg.bag_ekle(KITAP, s, "rutbesi", _kimlik(ad), bolum, None, "model", 1.0, durum="onaylandi")
     assert [r["ad"] for r in de.kart(KITAP, s, None)["rutbeler"]] == ["Dreamer", "Awakened", "Ascended", "Master"]
+
+
+# ---------- Sistem mesajları sekmesi (rün biçimi olmayan kitap; plan Faz 2) ----------
+YENI = "deneme-kitap"
+
+
+def _yeni_bolum(no, en, tr, zaman=None, url=None):
+    conn = cache._connect()
+    conn.execute(
+        "INSERT INTO chapters (url, book_slug, chapter_no, translation, source_text, created_at) "
+        "VALUES (?, ?, ?, ?, ?, ?)",
+        (url or f"https://y/{no}", YENI, no, "\n\n".join(tr) if tr else None, "\n\n".join(en), zaman or time.time()),
+    )
+    conn.commit()
+    conn.close()
+
+
+def test_sistem_mesajlari_hizaliysa_turkce_degilse_ingilizce_ve_spoiler_sinirli():
+    _yeni_bolum(3, ["He walked on.", "[Quest accepted: Clear the Ruins.]", "Reward: 200 Gold"],
+                ["Yürüdü.", "[Görev kabul edildi: Harabeleri Temizle.]", "Ödül: 200 Altın"])
+    _yeni_bolum(7, ["Rain fell.", "[Level up!]"], ["Yağmur yağdı. [Seviye atladın!]"])  # hizasız
+    _yeni_bolum(9, ["[Hidden quest found.]"], ["[Gizli görev bulundu.]"])
+
+    assert de.liste(YENI, None)["sistem_sekmesi"] is True
+    v = de.sistem_mesajlari(YENI, 8)
+    assert v["sinir"] == 8 and [m["bolum"] for m in v["mesajlar"]] == [3, 3, 7]
+    ilk, odul, hizasiz = v["mesajlar"]
+    # Köşeli satır ile ardındaki anahtar satırı ayrı paragraf: her paragraf ayrı kayıt, anlatım alınmaz.
+    assert ilk["turkce"] is True and ilk["metin"] == "[Görev kabul edildi: Harabeleri Temizle.]"
+    assert odul["tur"] == "anahtar" and odul["anahtarlar"] == ["Reward"] and odul["metin"] == "Ödül: 200 Altın"
+    assert hizasiz["turkce"] is False and hizasiz["metin"] == "[Level up!]" == hizasiz["en"]
+    assert [m["bolum"] for m in de.sistem_mesajlari(YENI, None)["mesajlar"]] == [3, 3, 7, 9]
+    assert v["anahtarlar"] == {"Reward": 1}
+
+
+def test_sistem_mesajlari_bolumun_yalniz_en_yeni_kaydini_okur():
+    _yeni_bolum(4, ["[Old message.]"], ["[Eski.]"], zaman=1.0, url="https://y/4-eski")
+    _yeni_bolum(4, ["[New message.]"], ["[Yeni.]"], zaman=2.0, url="https://y/4-yeni")
+    assert [m["en"] for m in de.sistem_mesajlari(YENI, None)["mesajlar"]] == ["[New message.]"]
+
+
+def test_sistem_mesajlari_profildeki_sistem_sesini_ve_anahtarlari_kullanir():
+    from core import kitap_profili
+
+    metin = ["System: You gained a new title.", "Cooldown: 5 minutes"]
+    _yeni_bolum(2, metin, ["Sistem: Yeni bir unvan kazandın.", "Bekleme: 5 dakika"])
+    assert de.sistem_mesajlari(YENI, None)["mesajlar"] == []  # ses bilinmiyor, köşeli satır yok
+    kitap_profili.yaz(YENI, "sistem_sesi", ["System"])
+    v = de.sistem_mesajlari(YENI, None)
+    assert [(m["tur"], m["metin"]) for m in v["mesajlar"]] == [
+        ("ses", "Sistem: Yeni bir unvan kazandın."), ("anahtar", "Bekleme: 5 dakika")]
+    assert v["anahtarlar"] == {"System": 1, "Cooldown": 1}
+
+
+def test_run_bicimi_olan_kitapta_sistem_sekmesi_yok(kitap):
+    assert de.liste(KITAP, None)["sistem_sekmesi"] is False
+    assert de.sistem_mesajlari(KITAP, None)["mesajlar"] == []
+
+
+def test_uc_sistem_mesajlari(istemci):
+    _yeni_bolum(1, ["[Welcome.]"], ["[Hoş geldin.]"])
+    r = istemci.get(f"/api/book/{YENI}/defter/sistem", params={"spoiler": True})
+    assert r.status_code == 200 and r.json()["mesajlar"][0]["metin"] == "[Hoş geldin.]"
