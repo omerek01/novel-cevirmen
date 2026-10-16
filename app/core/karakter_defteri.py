@@ -1144,6 +1144,40 @@ KART_BASLIGI = ("KARAKTER KARTLARI (önceki bölümlerden çıkarıldı; KURAL D
                 "farklı gösteriyorsa metne uy):")
 
 
+def kart_min_destek() -> int:
+    """İncelenmemiş MODEL bağının karta girmesi için gereken en az ayrı bölüm desteği.
+
+    2026-10-16 (Faz A9; kör nokta K11): kart, pilotta ~%5'i geçersiz çıkan model iddialarını
+    inceleme görmeden çeviriye KURAL olarak sokuyordu. Ölçüm (SS sunucu kopyası): karta giren
+    101 incelenmemiş model bağının 42'si defterde hiç bölüm desteği taşımıyor (eski çıkarım
+    hattı), 26'sı tek bölüme dayanıyor. VARSAYILAN 0 = bugünkü davranış: kartın hitapta ölçülen
+    %58'lik kazancı bu bağlar dahilken ölçüldü; kesmek ölçülmeden yapılmaz."""
+    try:
+        return max(0, int(os.getenv("CEVIRI_KART_MIN_DESTEK", "0")))
+    except ValueError:
+        return 0
+
+
+def _destekli_baglar(conn, book_slug: str, sinir: int, baglar) -> list[tuple]:
+    """(kaynak, ilişki, hedef) — onaylı/elle/sistem bağ hep girer; incelenmemiş model bağı
+    ancak `kart_min_destek()` kadar AYRI bölümde geçerli defter iddiasıyla desteklenirse."""
+    en_az = kart_min_destek()
+    out = []
+    destek: dict[tuple, set] | None = None
+    for kaynak, iliski, hedef, origin, durum in baglar:
+        if en_az and origin == "model" and durum != "onaylandi":
+            if destek is None:
+                destek = defaultdict(set)
+                for o, i, n, b in conn.execute(
+                        "SELECT ozne_kimlik, iliski, nesne_kimlik, bolum FROM defter_iddia WHERE book_slug = ? "
+                        "AND tur = 'bag' AND gecerli = 1 AND bolum <= ?", (book_slug, sinir)):
+                    destek[(o, i, n)].add(b)
+            if len(destek[(kaynak, iliski, hedef)] | destek[(hedef, iliski, kaynak)]) < en_az:
+                continue
+        out.append((kaynak, iliski, hedef))
+    return out
+
+
 def ceviri_kartlari(book_slug: str, en_cok_bolum: int | None, conn=None) -> dict:
     """Bölüm N'nin çevirisi için anlık görüntü (yalnız N−1'e kadarki bilgi). Saf veri: ölçüm
     aracının geçici veritabanında da çalışsın diye parametreyle taşınır (`conn` salt okunur olabilir).
@@ -1161,12 +1195,13 @@ def ceviri_kartlari(book_slug: str, en_cok_bolum: int | None, conn=None) -> dict
             for k, y in conn.execute("SELECT kimlik, yazim FROM sozluk_yazim WHERE book_slug = ?", (book_slug,)):
                 yazimlar[k].append(y)
             baglar = conn.execute(
-                "SELECT kaynak_kimlik, iliski, hedef_kimlik FROM varlik_bag WHERE book_slug = ? "
+                "SELECT kaynak_kimlik, iliski, hedef_kimlik, origin, durum FROM varlik_bag WHERE book_slug = ? "
                 "AND durum != 'reddedildi' AND (durum = 'onaylandi' OR IFNULL(guven, 0) >= 0.8) "
                 "AND IFNULL(ilk_bolum, 0) <= ? AND iliski IN ('takma_adi', 'gercek_adi', 'lideri', "
                 "'ogretmeni', 'akrabasi') AND instr(kaynak_kimlik, '#') = 0 AND instr(hedef_kimlik, '#') = 0",
                 (book_slug, sinir),
             ).fetchall()
+            baglar = _destekli_baglar(conn, book_slug, sinir, baglar)
         except Exception:  # noqa: BLE001 — tablo yoksa yalnız hitap
             baglar = []
         tablo = hitap_tablosu(book_slug, en_cok_bolum, conn)

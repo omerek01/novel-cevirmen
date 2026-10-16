@@ -799,3 +799,30 @@ def test_kucuk_harfli_cins_sozcuk_kaydi_genel_sozcuk_onerisi_almaz(kitap):
     for b in (1, 2, 3):
         _iddia_yaz("genel", "beast", b)
     assert _nedenler("beast") == []
+
+
+def test_kart_min_destek_incelenmemis_model_bagini_suzer(kitap, monkeypatch):
+    """Faz A9: `CEVIRI_KART_MIN_DESTEK=N` iken incelenmemiş model bağı ancak N ayrı bölümde
+    geçerli defter iddiasıyla desteklenirse karta girer; elle/onaylı bağ etkilenmez."""
+    k = _kimlik()
+    vg.bag_ekle(KITAP, k["Nephis"], "takma_adi", k["Changing Star"], 3, "x", "model", guven=1.0, durum="aday")
+    vg.bag_ekle(KITAP, k["Sunny"], "lideri", k["Kai"], 3, "x", "manual")
+    conn = kd._connect()
+    try:
+        for bolum in (4, 6):
+            conn.execute(
+                "INSERT INTO defter_iddia (book_slug, bolum, tur, ozne_kimlik, iliski, nesne_kimlik, gecerli, "
+                "created_at) VALUES (?, ?, 'bag', ?, 'takma_adi', ?, 1, 0)",
+                (KITAP, bolum, k["Nephis"], k["Changing Star"]))
+        conn.commit()
+    finally:
+        conn.close()
+    # Varsayılan (0): bugünkü davranış — destek aranmaz.
+    assert kd.ceviri_kartlari(KITAP, 10)["varliklar"][k["Nephis"]]["takma"] == ["Changing Star"]
+    monkeypatch.setenv("CEVIRI_KART_MIN_DESTEK", "2")
+    assert kd.ceviri_kartlari(KITAP, 10)["varliklar"][k["Nephis"]]["takma"] == ["Changing Star"]
+    assert kd.ceviri_kartlari(KITAP, 5)["varliklar"].get(k["Nephis"], {}).get("takma", []) == []  # 5'e kadar tek destek
+    monkeypatch.setenv("CEVIRI_KART_MIN_DESTEK", "3")
+    snap = kd.ceviri_kartlari(KITAP, 10)
+    assert snap["varliklar"].get(k["Nephis"], {}).get("takma", []) == []
+    assert snap["iliskiler"] == [{"o": k["Sunny"], "r": "lideri", "n": k["Kai"]}]  # elle bağ kalır
