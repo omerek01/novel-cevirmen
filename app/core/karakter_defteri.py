@@ -846,6 +846,113 @@ def hitap_denetle(book_slug: str, bolum: int) -> list[dict]:
         conn.close()
 
 
+# ---------- hitap onarımı (2026-10-16, Faz A6; kör nokta K8) ----------
+# Sapma yalnız ölçülüyor, metin olduğu gibi okura gidiyordu. Onarım VARSAYILAN KAPALI
+# (`CEVIRI_HITAP_ONARIM=1`): hitap tablosu model çıkarımından gelir ve yanılabilir (Saint
+# dersi). Bu yüzden yalnız ELLE onaylanmış ya da kararlı çiftlerin sapması hedeflenir, kararı
+# model verir ("değişiklik yok" = korunur) ve yeni hâl ancak kapıdan geçerse yazılır.
+HITAP_ONARIM_INSTRUCTION = (
+    "Sen bir İngilizce -> Türkçe roman çevirisinin DÜZELTMENİSİN. Sana bir paragrafın "
+    "İngilizce aslı, çevresindeki paragraflar ve mevcut Türkçe çevirisi verilecek. Paragrafta "
+    "KONUŞAN kişinin MUHATABA hitabı kitap boyunca tutarlı biçimde belirtilen biçimdedir "
+    "(sen = senli, siz = sizli; zamirler ve fiil çekimleri).\n"
+    "- Bağlama bakarak bu paragrafta hitabın gerçekten o ikili arasında olup olmadığına KENDİN "
+    "karar ver. Paragrafta başka biri konuşuyorsa, hitap bilinçli olarak değişmişse ya da çeviri "
+    "zaten doğruysa HİÇBİR şeyi değiştirme ve {\"degisiklik\": false} döndür.\n"
+    "- Düzeltirken YALNIZ o konuşmadaki hitap biçimini (zamir ve fiil ekleri) değiştir; geri "
+    "kalanı HARFİ HARFİNE koru, yeniden çevirme, kısaltma, üslubu değiştirme.\n"
+    "- Yanıtı SADECE şu JSON ile ver: {\"degisiklik\": true, \"ceviri\": \"...\"} ya da "
+    "{\"degisiklik\": false}."
+)
+# Hitap birden çok sözcüğün ekini değiştirir; benzerlik eşiği anlam onarımından düşüktür.
+HITAP_ONARIM_MIN_BENZERLIK = 0.75
+
+
+def _hitap_istemi(s: dict, en_p: list[str], tr_p: list[str], i: int) -> str:
+    return (
+        f"KONUŞAN: {s['konusan']}\nMUHATAP: {s['muhatap']}\n"
+        f"KİTAPTAKİ HİTAP: {s['beklenen']}\n\n"
+        f"ÖNCEKİ PARAGRAF: {en_p[i - 1] if i > 0 else '(yok)'}\n\n"
+        f"DENETLENECEK PARAGRAF (İngilizce): {en_p[i]}\n\n"
+        f"SONRAKİ PARAGRAF: {en_p[i + 1] if i + 1 < len(en_p) else '(yok)'}\n\n"
+        f"MEVCUT TÜRKÇE ÇEVİRİ: {tr_p[i]}"
+    )
+
+
+def _hitap_uret(istem: str) -> tuple[str, str | None]:
+    """Seçili çeviri zinciri (okuma ile aynı tercih; ücretsiz seçim ücretliye geçmez)."""
+    yanit, model = translate._generate_with_fallback(
+        translate._gemini_fabrikasi(os.getenv("GEMINI_API_KEY", "")), translate.secili_zincir(),
+        istem, system=HITAP_ONARIM_INSTRUCTION, max_tokens=translate.MAX_OUTPUT_TOKENS,
+    )
+    return getattr(yanit, "text", None) or "", model
+
+
+def hitap_onar(book_slug: str, bolum: int, sapma: list[dict], *, uret=None) -> dict:
+    """Kararlı/elle çiftlerin sapmalı paragraflarını hedefli onar; bölümü önbellekte güncelle.
+
+    Kabul kapısı (MQM-APE ilkesi): model değişiklik önermiş olmalı, paragrafın geri kalanı
+    korunmuş olmalı (benzerlik), paragraf kısalmamış olmalı ve yeni hâl sözlük ihlali /
+    İngilizce kalıntı / karşılık sapması getirmemeli. Döner sayaç: {"denenen", "kabul"}."""
+    import difflib
+
+    sayac = {"denenen": 0, "kabul": 0}
+    hedef = [s for s in sapma if s.get("paragraf") and (s.get("elle") or s.get("beklenen"))]
+    if not hedef:
+        return sayac
+    metin = bolum_metni(book_slug, bolum)
+    if isinstance(metin, str):
+        return sayac
+    en_p, tr_p = metin
+    soz = glossary.ceviri_sozlugu(book_slug)
+    kos = glossary.ceviri_kosullari(book_slug)
+    uret = uret or _hitap_uret
+    yeni_p = list(tr_p)
+    modeller: list[str] = []
+    for s in {s["paragraf"]: s for s in hedef}.values():  # paragraf başına bir istek
+        i = s["paragraf"] - 1
+        sayac["denenen"] += 1
+        try:
+            with api_durum.baglam(asama="hitap_onarimi"):
+                ham, model = uret(_hitap_istemi(s, en_p, yeni_p, i))
+        except Exception:  # noqa: BLE001 — best-effort: bölüm zaten çevrildi
+            continue
+        veri = translate._onarim_yaniti(ham)
+        aday = (veri or {}).get("ceviri") if (veri or {}).get("degisiklik") else None
+        if not isinstance(aday, str) or not aday.strip():
+            continue
+        gecici = list(yeni_p)
+        gecici[i] = aday.strip()
+        benzer = difflib.SequenceMatcher(None, yeni_p[i], gecici[i]).ratio()
+        yeni_sorun = (
+            i in translate.sozluk_ihlali_paragraflari(soz, gecici, en_p, kos)
+            or i in translate.ingilizce_kalinti(gecici, en_p, soz)
+            or len(translate.karsilik_sapmasi_paragraflari(soz, gecici, en_p, kos).get(i, {}))
+            > len(translate.karsilik_sapmasi_paragraflari(soz, yeni_p, en_p, kos).get(i, {}))
+        )
+        if (benzer < HITAP_ONARIM_MIN_BENZERLIK or yeni_sorun
+                or len(gecici[i]) < translate.KARSILIK_ONARIM_MIN_UZUNLUK * len(yeni_p[i])):
+            continue
+        yeni_p = gecici
+        sayac["kabul"] += 1
+        if model:
+            modeller.append(model)
+    if sayac["kabul"]:
+        conn = db.connect()
+        try:
+            url = conn.execute(
+                "SELECT url, model FROM chapters WHERE book_slug = ? AND chapter_no = ? "
+                "AND IFNULL(content_type, 'text') != 'html' ORDER BY created_at DESC LIMIT 1",
+                (book_slug, bolum)).fetchone()
+        finally:
+            conn.close()
+        if url:
+            kunye = " + ".join(dict.fromkeys([m for m in (url[1] or "").split(" + ") if m] + modeller))
+            from . import cache
+            cache.set_translation(url[0], "\n\n".join(yeni_p), model=kunye or None)
+    return sayac
+
+
 # ---------- sözlüğe katkı (Faz 2) ----------
 # Defter sözlüğü DEĞİŞTİRMEZ (tek istisna: boş `tur`, `tur_doldur`). Katkısı inceleme listesine
 # giden nedenlerdir; karar kullanıcınındır. Eşikler tek bölümlük gürültüyü eler: v11'in
@@ -1367,7 +1474,10 @@ def arka_planda_isle(book_slug: str) -> bool:
                     sonuc = bolum_isle(book_slug, bolum)
                 if sonuc["durum"] == "completed":
                     islenen += 1
-                    hitap_denetle(book_slug, bolum)
+                    sapma = hitap_denetle(book_slug, bolum)
+                    if sapma and os.getenv("CEVIRI_HITAP_ONARIM", "0") == "1":
+                        with budget.DEFTER_SEM, api_durum.islem("hitap_onarimi"):
+                            hitap_onar(book_slug, bolum, sapma)
                 elif sonuc["durum"] == "hata":
                     time.sleep(60)  # kota/geçici arıza: geri çekil, sonra kalan denemeyle sür
             if islenen:
