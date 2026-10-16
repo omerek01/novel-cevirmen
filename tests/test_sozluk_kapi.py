@@ -294,6 +294,41 @@ def test_ihlal_suphesi_bugunku_olcutle_yeniden_olcer():
     assert sonuc["Fool"]["bolumler"] == [1, 2]
 
 
+
+# ---------- karşılık sapması şüphesi (Faz A2/A10) ----------
+def _sapmali_bolum(no, ceviri, model="gemini-3.6-flash", kunye=True):
+    cache.save_chapter(f"https://x/{no}", {
+        "book_slug": KITAP, "book_title": "K", "title": f"B{no}", "chapter_no": no,
+        "translation": ceviri, "source": "They climbed the Iron Ridge at dawn.", "model": model,
+        "karsilik_sapmasi": {"Iron Ridge": "Demir Sırt"} if kunye else {},
+    })
+
+
+def test_karsilik_suphesi_israrli_farkli_karsiligi_raporlar():
+    glossary.set_term(KITAP, "Iron Ridge", "Demir Sırt")
+    _sapmali_bolum(1, "Şafakta Demir Tepe'ye tırmandılar.")
+    _sapmali_bolum(2, "Şafakta Demir Tepe'ye tırmandılar.")
+    _sapmali_bolum(3, "Şafakta Demir Tepe'ye tırmandılar.", model="gemini-3.5-flash-lite")
+    sonuc = sozluk_kapi.karsilik_supheleri(KITAP)
+    assert set(sonuc) == {"Iron Ridge"} and sonuc["Iron Ridge"]["bolumler"] == [1, 2]
+    assert sonuc["Iron Ridge"]["tur"] == sozluk_kapi.KARSILIK_SUPHESI
+
+
+def test_karsilik_suphesi_bugunku_olcutle_yeniden_olcer():
+    # Künye "sapma" diyor ama çeviri kayıtlı karşılığı taşıyor: bugünkü ölçüt düşürür.
+    glossary.set_term(KITAP, "Iron Ridge", "Demir Sırt")
+    _sapmali_bolum(1, "Şafakta Demir Sırt'a tırmandılar.")
+    _sapmali_bolum(2, "Şafakta Demir Sırt'a tırmandılar.")
+    assert sozluk_kapi.karsilik_supheleri(KITAP) == {}
+
+
+def test_karsilik_suphesi_inceleme_listesine_girer():
+    glossary.set_term(KITAP, "Iron Ridge", "Demir Sırt")
+    _sapmali_bolum(1, "Şafakta Demir Tepe'ye tırmandılar.")
+    _sapmali_bolum(2, "Şafakta Demir Tepe'ye tırmandılar.")
+    liste = {x["source"]: x for x in glossary.inceleme_listesi(KITAP)}
+    assert any(n["tur"] == "karsilik_suphesi" for n in liste["Iron Ridge"]["nedenler"])
+
 def test_sozlugu_denetle_geriye_donuk_birlestirme_ve_bicim():
     satirlar = [_m("Fire", "Ateş"), _m("The Fire", "Ateş"), _m("Weaver", "Weaver’s"),
                 _m("Devil", "Şeytan"), _m("daemon", "Şeytan")]

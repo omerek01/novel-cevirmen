@@ -2340,6 +2340,17 @@ def _agir_nedenler(
                       "SUM(LENGTH(COALESCE(glossary_leaks, ''))) FROM chapters WHERE book_slug = ?"),
         kaynaklar, lambda: sozluk_kapi.ihlal_supheleri(book_slug, kaynaklar), bayat_kabul,
     )
+    # Karşılık sapması şüphesi (Faz A2/A10) AYRI parça: kendi künye sütununa bakar, imzası
+    # da o sütundan; bir kayıt hem ihlal hem sapma şüphesi taşıyabilir (iki ayrı neden).
+    karsilik, karsilik_taze = _onbellekli(
+        book_slug, "karsilik", ozet,
+        _imza_sorgusu(book_slug, "SELECT COUNT(*), MAX(created_at), "
+                      "SUM(LENGTH(COALESCE(karsilik_sapmasi, ''))) FROM chapters WHERE book_slug = ?"),
+        kaynaklar, lambda: sozluk_kapi.karsilik_supheleri(book_slug, kaynaklar), bayat_kabul,
+    )
+    for kaynak, n in karsilik.items():
+        ihlaller = {**ihlaller, f"{kaynak}\x00karsilik": {**n, "kaynak": kaynak}}
+    ihlal_taze = ihlal_taze and karsilik_taze
     grafik, grafik_taze = _onbellekli(
         book_slug, "grafik", ozet,
         # Karakter defteri de grafik nedeni üretir: işlenen bölüm değişince liste bayat kalmasın.
@@ -2444,7 +2455,8 @@ def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict
     if not taze:
         _arka_planda_tazele(book_slug)
     for kaynak, n in ihlaller.items():
-        ekle(kaynak, n["tur"], n["aciklama"], (), bolumler=n.get("bolumler"))
+        # Karşılık şüphesi anahtarı "kaynak\0karsilik" taşır (aynı kayıtta iki neden olabilir).
+        ekle(n.get("kaynak", kaynak), n["tur"], n["aciklama"], (), bolumler=n.get("bolumler"))
     # VARLIK GRAFİĞİ kuralları (sınıf sözcüğü karışması, aynı kişinin adları).
     for kaynak, liste in grafik.items():
         for n in liste:
@@ -2477,7 +2489,7 @@ def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict
         "bicim": 0, "yasak_karsilik": 0, "karsilik_cakismasi": 1, "dogrulama": 1,
         "sozcuk_karismasi": 1, "ad_tutarliligi": 2, "grafik_celiski": 1,
         "grafik_takma_ad": 2, "grafik_kosul_onerisi": 2, "grafik_genel_sozcuk": 2,
-        "ihlal_suphesi": 2, "sayi_uyumsuzlugu": 2, "politika": 2, "yakin_yazim": 3,
+        "ihlal_suphesi": 2, "karsilik_suphesi": 2, "sayi_uyumsuzlugu": 2, "politika": 2, "yakin_yazim": 3,
         "kalip_tutarsizligi": 4, "kardes_tutarsizligi": 4, "yeni_otomatik": 5,
     }
     liste = [{**satirlar[k], "nedenler": n} for k, n in nedenler.items()]

@@ -607,6 +607,64 @@ def ihlal_supheleri(
     return out
 
 
+KARSILIK_SUPHESI = "karsilik_suphesi"
+
+
+def karsilik_supheleri(
+    book_slug: str, kaynaklar: set[str] | None = None, tam: bool = False
+) -> dict[str, dict]:
+    """İyi modellerin ısrarla FARKLI Türkçe karşılık kullandığı kayıtlar: {kaynak: neden}.
+
+    `ihlal_supheleri`nin karşılık sapması (Faz A2) eşi: o yalnız İngilizce KALAN terime
+    bakar. Ölçülen vaka (SS sunucu kopyası): `Hollow Mountain -> Oyuk Dağı` 46 bölümde
+    hiç kullanılmamış, çeviriler hep başka karşılık yazmış — kayıt mı yanlış, çeviri mi,
+    kullanıcı karar verir. Kuralı DEĞİŞTİRMEZ.
+
+    Hızlı kip künyesi dolu bölümlere bakar (`chapters.karsilik_sapmasi`) ve onları BUGÜNKÜ
+    ölçütle yeniden ölçer (aynı gerekçe: saklı bayrak eski ölçütle yazılmış olabilir).
+    Künye yalnız 2026-10-16 sonrası çevrilen bölümlerde dolu; eski bölümler `tam=True` ile."""
+    from . import translate  # döngüsel içe aktarmayı önle
+
+    conn = db.connect()
+    try:
+        satirlar = conn.execute(
+            "SELECT chapter_no, model, source_text, translation FROM chapters "
+            "WHERE book_slug = ? AND source_text IS NOT NULL AND translation IS NOT NULL"
+            + ("" if tam else " AND karsilik_sapmasi IS NOT NULL AND karsilik_sapmasi NOT IN ('', '{}')"),
+            (book_slug,),
+        ).fetchall()
+    except sqlite3.OperationalError:  # tablo ya da sütun yoksa şüphe de yok
+        return {}
+    finally:
+        conn.close()
+    if not satirlar:
+        return {}
+    kosullar = glossary.ceviri_kosullari(book_slug)
+    bolumler: dict[str, set] = defaultdict(set)
+    for no, model, kaynak_metin, ceviri in satirlar:
+        if not _guvenilir_model(model):
+            continue
+        en = [p for p in kaynak_metin.split("\n\n") if p.strip()]
+        tr = [p for p in ceviri.split("\n\n") if p.strip()]
+        sozluk = glossary.bolumdeki_sozluk(book_slug, no)
+        for sapma in translate.karsilik_sapmasi_paragraflari(sozluk, tr, en, kosullar).values():
+            for kaynak in sapma:
+                bolumler[kaynak].add(no)
+    out: dict[str, dict] = {}
+    for kaynak, nolar in bolumler.items():
+        if len(nolar) < SUPHE_MIN_BOLUM or (kaynaklar is not None and kaynak not in kaynaklar):
+            continue
+        out[kaynak] = {
+            "tur": KARSILIK_SUPHESI,
+            "aciklama": (f"Kayıtlı karşılık {len(nolar)} bölümde kullanılmamış; çeviriler başka "
+                         "bir Türkçe karşılık yazmış. Kayıt mı yanlış, çeviri mi? Kayıt doğruysa "
+                         "etkilenen bölümleri yeniden çevir; değilse karşılığı düzelt."),
+            "ilgili": [],
+            "bolumler": sorted(n for n in nolar if n is not None)[:10],
+        }
+    return out
+
+
 # ---------- sıradan sözcük sıklığı (bilgi) ----------
 def genel_sozcuk_sikligi(kaynak: str, korpus: str) -> tuple[int, int] | None:
     """Tek sözcüklü kaynağın korpusta (küçük harfli, cümle içi büyük harfli) sayısı.
