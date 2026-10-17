@@ -1722,6 +1722,13 @@ def _translate_chapter_impl(
             iz["kalite"] = kalite_metrik
         kalite_metrik = {k: v for k, v in kalite_metrik.items()
                          if k not in {"bulgular", "onarim_kaniti"}}
+        if aligned:
+            # Paragraf tekrarı (Ö5): deterministik, model çağrısı yok; künyede şüphe olur.
+            tekrar = ceviri_kalite.paragraf_tekrarlari(tr_paras, en_paras)
+            if tekrar:
+                kalite_metrik["supheli"] = sorted(
+                    (kalite_metrik.get("supheli") or []) + tekrar, key=lambda x: x["paragraf"])
+                kalite_metrik["durum"] = "supheli"
 
     new_terms = ayikla_terim_anahtarlari(new_terms, text)
     translation = "\n\n".join(tr_paras)

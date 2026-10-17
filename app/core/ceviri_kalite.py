@@ -418,3 +418,39 @@ düşük güvenli bulgu onarılmaz, işaretlenir. Yalnız denetimin kendisi tama
             "onarim_modeli": onarim_modelleri[-1] if onarim_modelleri else son_onarim_modeli,
             "kaynak_sha256": hashlib.sha256("\n\n".join(en).encode()).hexdigest(),
             "ceviri_sha256": hashlib.sha256("\n\n".join(tr).encode()).hexdigest()}
+
+
+TEKRAR_ESIGI = 0.85
+TEKRAR_MIN_UZUNLUK = 40
+
+
+def _tekrar_normal(metin: str) -> str:
+    return re.sub(r"\W+", " ", (metin or "").lower()).strip()
+
+
+def paragraf_tekrarlari(tr: list[str], en: list[str]) -> list[dict]:
+    """Bir önceki paragrafın tekrarı gibi duran Türkçe paragraflar (kaynakta tekrar yok).
+
+    Parça sınırında taşınan bağlam cümlesinin yeniden çevrilmesi gibi model kaynaklı
+    yinelemeyi yakalar (benzer sistemler Ö5; novel-v1 aynı denetimi yapıyor). Kaynakta
+    da ardışık benzer paragraf varsa (yinelenen büyü/rün satırları) tekrar sayılmaz.
+    Ölçüm (2026-10-18, canlı DB kopyası, 1.290 bölüm): 5 aday, hizalı yalnız 2 —
+    seyrek, ama deterministik ve ücretsiz. Dönüş künyedeki şüphe biçimindedir; böylece
+    okuyucunun onarım önerisi düğmesi (Ö4) aynen çalışır."""
+    if len(tr) != len(en):
+        return []
+    bulgular = []
+    for i in range(1, len(tr)):
+        a, b = _tekrar_normal(tr[i - 1]), _tekrar_normal(tr[i])
+        if len(b) < TEKRAR_MIN_UZUNLUK:
+            continue
+        oran = difflib.SequenceMatcher(None, a, b, autojunk=False).ratio()
+        if oran < TEKRAR_ESIGI:
+            continue
+        kaynak = difflib.SequenceMatcher(
+            None, _tekrar_normal(en[i - 1]), _tekrar_normal(en[i]), autojunk=False).ratio()
+        if kaynak >= TEKRAR_ESIGI:
+            continue
+        bulgular.append({"paragraf": i, "tur": "tekrar", "guven": round(oran, 2),
+                         "aciklama": "Önceki paragrafın tekrarı gibi görünüyor; kaynakta tekrar yok."})
+    return bulgular
