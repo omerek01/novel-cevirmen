@@ -11,7 +11,8 @@ def test_kaynakta_gecen_paragrafta_ek_yeni_koke_uyar():
     tr = ["Kovan Dağı'na tırmandılar.", "Kovan Dağında rüzgâr vardı."]
     en = ["They climbed Hollow Mountain.", "There was wind on Hollow Mountain."]
     cikti, oz = _yaz(tr, en, "Hollow Mountain", "Kovan Dağı", "Oyuk Dağı")
-    assert cikti == ["Oyuk Dağı'na tırmandılar.", "Oyuk Dağında rüzgâr vardı."]
+    # Özel ada gelen ek kesmeyle ayrılır (TDK): özgün kesmesiz yazım yeni adda düzelir.
+    assert cikti == ["Oyuk Dağı'na tırmandılar.", "Oyuk Dağı'nda rüzgâr vardı."]
     assert oz.degisen == 2 and not oz.belirsiz
 
 
@@ -62,7 +63,7 @@ def test_yer_tutucu_geri_doldurma_birebir():
 def test_yer_tutucu_yeni_karsilikla_dolar():
     tr = ["Kovan Dağına vardılar."]
     sab, _ = _sablon(tr, ["They reached Hollow Mountain."], [("Hollow Mountain", "Kovan Dağı")])
-    assert sy.doldur(sab[0], {0: "Oyuk Kale"}) == "Oyuk Kaleye vardılar."
+    assert sy.doldur(sab[0], {0: "Oyuk Kale"}) == "Oyuk Kale'ye vardılar."
 
 
 def test_yer_tutucu_siradan_sozcugu_belirtece_cevirmez():
@@ -70,3 +71,29 @@ def test_yer_tutucu_siradan_sozcugu_belirtece_cevirmez():
     tr = ["Güçlü bir rüzgâr esti."]
     sab, say = _sablon(tr, ["A strong wind blew."], [("Mighty", "Güçlü")])
     assert sab == tr and say["belirtec"] == 0
+
+
+def test_turkce_karsiliktan_ingilizce_ada_gecis_kesme_ve_soylenis():
+    # Hakem ölçümünde yanlış çıkan sınıf: Şövalye -> Knight (Knight'ı, Knight'lardan).
+    tr = ["Şövalyeyi gördü.", "Şövalyelerden kaçtı."]
+    en = ["He saw the Knight.", "He fled from the Knights."]
+    cikti, oz = _yaz(tr, en, "Knight", "Şövalye", "Knight")
+    assert cikti == ["Knight'ı gördü.", "Knight'lardan kaçtı."] and oz.degisen == 2
+
+
+def test_kitaptan_ogrenilen_uyum_kuraldan_once_gelir():
+    uyum = sy.Uyum(["Reaper'ı gördü. Reaper'ın sesi. Reaper'a gitti."])
+    assert uyum.unlu("Reaper") == "ı"
+    cikti, _ = sy.yeniden_yaz(["Biçici'ye gitti."], ["He went to the Reaper."],
+                              translate._term_regex("Reaper"), "Biçici", "Reaper", uyum=uyum)
+    assert cikti == ["Reaper'a gitti."]
+
+
+def test_tek_taniktan_uyum_ogrenilmez():
+    assert sy.Uyum(["Reaper'e."]).unlu("Reaper") is None
+
+
+def test_baslik_bicimi_korunur():
+    cikti, _ = _yaz(["Kasvetli Gölgeyle döndü."], ["He returned with the gloomy shadow."],
+                    "gloomy shadow", "kasvetli gölge", "karanlık gölge")
+    assert cikti == ["Karanlık Gölgeyle döndü."]

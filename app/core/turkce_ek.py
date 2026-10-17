@@ -70,11 +70,15 @@ class Kok:
     ``iyelikli``: çok sözcüklü tamlama ve son sözcük 3. kişi iyelikle bitiyor
     (Oyuk Dağı). Çoğulda iyelik düşer (Dağları), durum ekleri "n" alır (Dağına).
     ``kesmeli``: yüzeyde ek kesmeyle ayrılmış (özel ad) — yumuşama yazılmaz.
+    ``unlu``: ünlü uyumunun söylenişe göre okunacağı ünlü (yabancı ad: Knight -> "ı",
+    Reaper -> "ı"). None = yazımdaki son ünlü. Kaynaştırma harfi ve ünsüz benzeşmesi
+    yine yazımın son harfine bakar.
     """
 
     sozcuk: str
     iyelikli: bool = False
     kesmeli: bool = False
+    unlu: str | None = None
 
 
 def _son_unlu(metin: str) -> str | None:
@@ -91,13 +95,17 @@ def _kalin_mi(metin: str, kok_sozcuk: str | None = None) -> bool:
     return u in _KALIN if u else False
 
 
-def _gerceklestir(soyut: str, onceki: str, kok_sozcuk: str) -> str:
-    """Tek soyut eki, önceki metne (kök + önceki ekler) göre yüzeye çevirir."""
+def _gerceklestir(soyut: str, onceki: str, kok_sozcuk: str, unlu: str | None = None) -> str:
+    """Tek soyut eki, önceki metne (kök + önceki ekler) göre yüzeye çevirir.
+
+    ``unlu``: önceki metinde henüz ek ünlüsü yoksa uyumun okunacağı ünlü (yabancı ad)."""
     out = ""
     i = 0
     while i < len(soyut):
         c = soyut[i]
         metin = uyum_metni(onceki) + out
+        # Uyum kaynağı: ek ünlüsü çıkana dek söyleniş ünlüsü, sonra eklerin kendisi.
+        uyum = (onceki + unlu) if unlu and not any(x in _UNLU for x in out) else metin
         son = metin[-1] if metin else ""
         if c == "(":
             j = soyut.index(")", i)
@@ -105,16 +113,17 @@ def _gerceklestir(soyut: str, onceki: str, kok_sozcuk: str) -> str:
             unlu_sonra = son in _UNLU
             if harf == "I":
                 if not unlu_sonra:
-                    out += _gerceklestir("I", onceki + out, kok_sozcuk)
+                    out += _gerceklestir("I", onceki + out, kok_sozcuk,
+                                         unlu if not any(x in _UNLU for x in out) else None)
             elif unlu_sonra:
                 out += harf
             i = j + 1
             continue
         if c == "A":
-            out += "a" if _kalin_mi(metin, kok_sozcuk) else "e"
+            out += "a" if _kalin_mi(uyum, kok_sozcuk) else "e"
         elif c == "I":
-            kalin = _kalin_mi(metin, kok_sozcuk)
-            yuv = (_son_unlu(metin) or "a") in _YUVARLAK
+            kalin = _kalin_mi(uyum, kok_sozcuk)
+            yuv = (_son_unlu(uyum) or "a") in _YUVARLAK
             out += ("u" if yuv else "ı") if kalin else ("ü" if yuv else "i")
         elif c == "D":
             out += "t" if son in _SERT else "d"
@@ -157,15 +166,40 @@ def kur(kok: Kok, ekler: tuple[str, ...]) -> str:
     for k, e in enumerate(ekler):
         if iyelik3_once and e in _ZAMIRSEL_N:
             e = _ZAMIRSEL_N[e]
-        parca = _gerceklestir(e, govde + yuzey_ek, kok.sozcuk)
+        unlu = kok.unlu if not any(x in _UNLU for x in yuzey_ek) else None
+        parca = _gerceklestir(e, govde + yuzey_ek, kok.sozcuk, unlu)
         if k == 0 and _yumusar(Kok(govde, kesmeli=kok.kesmeli), parca):
             s = govde
             govde = s[:-2] + "ng" if s.endswith("nk") else s[:-1] + _YUMUSAMA[s[-1]]
         yuzey_ek += parca
         iyelik3_once = e == IYELIK3
-    if kok.kesmeli and yuzey_ek:
+    # Özel ada YAPIM eki kesmesiz yazılır (Ankaralı, Nightingale'li değil Bülbüllü).
+    if kok.kesmeli and yuzey_ek and not (ekler and ekler[0] in _TUREM):
         return govde + "'" + yuzey_ek
     return govde + yuzey_ek
+
+
+# İngilizce adın son hecesinin Türkçe söylenişteki ünlüsü (yalnız yazımın yanılttığı
+# kalıplar; gerisi yazımdaki son ünlüye bırakılır). Hakem ölçümünde (2026-10-18) yanlış
+# çıkan biçimlerin çoğu bunlardı: Knight'ı, Reaper'a, Abomination'ı.
+_INGILIZCE_SONLAR = (
+    (("tion", "sion"), "ı"),
+    (("ight", "ite", "ice", "ime", "ine", "ide", "ire"), "ı"),
+    (("er", "or", "ar", "ur", "our", "ure"), "ı"),
+    (("ee", "ea", "ey", "ie"), "i"),
+    (("oo", "ue"), "u"),
+)
+
+
+def ingilizce_unlu(sozcuk: str) -> str | None:
+    """Yazımın uyumu yanıltabileceği İngilizce sonlar için söyleniş ünlüsü; yoksa None."""
+    s = tr_kucuk(sozcuk)
+    if len(s) < 3:
+        return None
+    for sonlar, unlu in _INGILIZCE_SONLAR:
+        if any(s.endswith(x) for x in sonlar):
+            return unlu
+    return None
 
 
 def _iyeliksiz(sozcuk: str) -> str:

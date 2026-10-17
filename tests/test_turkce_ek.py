@@ -58,3 +58,14 @@ def test_kur_tek_belirsizde_karar_vermez():
     assert kur_tek(Kok("kovan"), "kovanı", Kok("kale")) is None
     # Ünsüzle biten yeni kökte ikisi aynı yüzeyi verir -> karar verilir.
     assert kur_tek(Kok("kovan"), "kovanı", Kok("oyuk")) == "oyuğu"
+
+
+def test_ozel_ada_yapim_eki_kesmesiz():
+    assert kur(Kok("bülbül", kesmeli=True), ("lI",)) == "bülbüllü"
+
+
+def test_soylenis_unlusu_uyumu_belirler_kaynastirmayi_degil():
+    knight = Kok("knight", kesmeli=True, unlu="ı")
+    assert kur(knight, ("(y)I",)) == "knight'ı"
+    assert kur(knight, ("lAr", "DAn")) == "knight'lardan"
+    assert kur(Kok("reaper", kesmeli=True, unlu="ı"), ("(y)A",)) == "reaper'a"

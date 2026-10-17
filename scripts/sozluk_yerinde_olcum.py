@@ -71,7 +71,7 @@ def _cumle(paragraf: str, aranan: str) -> str:
     return paragraf[bas:(min(sonlar) + 1 if sonlar else len(paragraf))].strip()
 
 
-def yerinde_olc(bols, degs, tanik):
+def yerinde_olc(bols, degs, tanik, uyum=None):
     satirlar, ornekler = [], []
     for kaynak, eski, yeni in degs:
         desen = translate._term_regex(kaynak)
@@ -83,7 +83,7 @@ def yerinde_olc(bols, degs, tanik):
             bolum_say += 1
             tr_p = b["tr"].split("\n\n")
             en_p = b["en"].split("\n\n") if b["en"] else None
-            yeni_p, oz = sy.yeniden_yaz(tr_p, en_p, desen, eski, yeni)
+            yeni_p, oz = sy.yeniden_yaz(tr_p, en_p, desen, eski, yeni, kaynak=kaynak, uyum=uyum)
             say["degisen"] += oz.degisen
             for neden in oz.belirsiz:
                 say[neden] += 1
@@ -107,7 +107,7 @@ def yerinde_olc(bols, degs, tanik):
     return satirlar, ornekler
 
 
-def yer_tutucu_olc(bols, sozluk):
+def yer_tutucu_olc(bols, sozluk, uyum=None):
     kayitlar = {i: (s, t) for i, (s, t) in enumerate(sorted(sozluk.items()))}
     desenler = {i: translate._term_regex(s) for i, (s, _t) in kayitlar.items()}
     karsiliklar = {i: t for i, (_s, t) in kayitlar.items()}
@@ -118,7 +118,7 @@ def yer_tutucu_olc(bols, sozluk):
         say["bolum"] += 1
         tr_p = b["tr"].split("\n\n")
         en_p = b["en"].split("\n\n") if b["en"] else None
-        sab, s = sy.sablon_bolum(tr_p, en_p, kayitlar, desenler)
+        sab, s = sy.sablon_bolum(tr_p, en_p, kayitlar, desenler, uyum)
         say.update(s)
         geri = [sy.doldur(p, karsiliklar) for p in sab]
         if geri == tr_p:
@@ -220,12 +220,14 @@ def main():
     bols = bolumler(conn, a.kitap)
     tanik = {tr_kucuk(w) for b in bols for w in _SOZCUK.findall(b["tr"])}
     t0 = time.monotonic()
-    satirlar, ornekler = yerinde_olc(bols, degisiklikler(conn, a.kitap), tanik)
+    # Söyleniş uyumu kitabın kendi çevirilerinden öğrenilir (canlıda da aynı kaynak).
+    uyum = sy.Uyum(b["tr"] for b in bols)
+    satirlar, ornekler = yerinde_olc(bols, degisiklikler(conn, a.kitap), tanik, uyum)
     t1 = time.monotonic()
     sozluk = {s: t for s, t in conn.execute(
         "SELECT source, target FROM glossary WHERE book_slug = ? AND target IS NOT NULL "
         "AND target != ''", (a.kitap,))}
-    yt = yer_tutucu_olc(bols, sozluk)
+    yt = yer_tutucu_olc(bols, sozluk, uyum)
     t2 = time.monotonic()
     toplam = Counter()
     for s in satirlar:
