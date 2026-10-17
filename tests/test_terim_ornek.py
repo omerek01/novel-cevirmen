@@ -15,12 +15,15 @@ SOZLUK = {"Iron Gate": "Demir Kapı", "Mira": "Mira", "Red Moon": "Kızıl Ay", 
 KOSULLAR = {"Red Moon": "ay olarak gökte ise Kızıl Ay; tarikatsa Kızıl Ay Tarikatı"}
 
 
-def _bolum(no, ciftler, zaman=None):
+def _bolum(no, ciftler, zaman=None, sapma=None, sizinti=None):
     conn = cache._connect()
     conn.execute(
-        "INSERT INTO chapters (url, book_slug, chapter_no, translation, source_text, created_at) VALUES (?, ?, ?, ?, ?, ?)",
-        (f"https://y/{no}-{zaman or 0}", KITAP, no, "\n\n".join(t for _e, t in ciftler), "\n\n".join(e for e, _t in ciftler),
-         zaman or time.time()),
+        "INSERT INTO chapters (url, book_slug, chapter_no, translation, source_text, created_at, karsilik_sapmasi, "
+        "glossary_leaks) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        (f"https://y/{no}-{zaman or 0}", KITAP, no, "\n\n".join(t for _e, t in ciftler),
+         "\n\n".join(e for e, _t in ciftler),
+         zaman or time.time(), json.dumps(sapma) if sapma is not None else None,
+         json.dumps(sizinti) if sizinti is not None else None),
     )
     conn.commit()
     conn.close()
@@ -28,39 +31,73 @@ def _bolum(no, ciftler, zaman=None):
 
 def _havuz():
     _bolum(8, [("Mira stood at the Iron Gate.", "Mira Demir Kapı'nın önünde durdu."),
-               ("The Old Tower was silent.", "Eski Kule sessizdi.")])
+               ("The Old Tower was silent.", "Eski Kule sessizdi.")], sapma={}, sizinti={})
     _bolum(9, [("She left the Iron Gate behind.", "Demir Kapı'yı geride bıraktı."),
                ("Red Moon rose.", "Kızıl Ay yükseldi.")])
-    # 10 ve 11: model Iron Gate'i iki kez "Demir Geçit" yaptı (sapma), Old Tower bir kez İngilizce kaldı.
+    # 10 ve 11: künyede Iron Gate iki bölümde sapmış ("Demir Geçit"), Old Tower iki bölümde İngilizce
+    # kalmış; Mira (korunan ad) tek bölümde.
     _bolum(10, [("The Iron Gate opened.", "Demir Geçit açıldı."),
                 ("Old Tower bells rang.", "Old Tower çanları çaldı."),
-                ("Red Moon faded.", "Kızıl Ay soldu.")])
-    _bolum(11, [("Guards held the Iron Gate.", "Muhafızlar Demir Geçit'i tuttu.")])
-    _bolum(13, [("The Iron Gate fell.", "Demir Kapı yıkıldı.")])  # GELECEK bölüm: örnek olamaz
+                ("Red Moon faded.", "Kızıl Ay soldu.")],
+           sapma={"Iron Gate": "Demir Kapı"}, sizinti={"Old Tower": "Eski Kule", "Mira": "Mira"})
+    _bolum(11, [("Guards held the Iron Gate.", "Muhafızlar Demir Geçit'i tuttu.")],
+           sapma={"Iron Gate": "Demir Kapı"}, sizinti={"Old Tower": "Eski Kule"})
+    # GELECEK bölüm: künyesi de örneği de sayılmaz.
+    _bolum(13, [("The Iron Gate fell.", "Demir Kapı yıkıldı.")], sapma={"Mira": "Mira", "Iron Gate": "Demir Kapı"})
+
+
+def _sec(metin, kosullar=None, no=12):
+    return to.secim(metin, SOZLUK, kosullar or {}, cache.bellek_havuzu(KITAP, no),
+                    to.sorunlu_terimler(KITAP, no, SOZLUK))
+
+
+def test_sorunlu_terimler_kunyeden_okur_gelecegi_ve_eski_kaydi_saymaz():
+    _havuz()
+    assert to.sorunlu_terimler(KITAP, 12, SOZLUK) == {"Iron Gate": 2, "Old Tower": 2}
+    # Aynı bölümün yeni kaydı eskisinin yerine geçer; bozuk künye atlanır; pencere dışı sayılmaz.
+    _bolum(11, [("Guards.", "Muhafızlar.")], zaman=time.time() + 5, sapma={})
+    _bolum(7, [("x", "y")], sapma="bozuk")
+    conn = cache._connect()
+    conn.execute("UPDATE chapters SET karsilik_sapmasi = '{oops' WHERE book_slug = ? AND chapter_no = 7", (KITAP,))
+    conn.commit()
+    conn.close()
+    assert to.sorunlu_terimler(KITAP, 12, SOZLUK) == {}  # her terim artık tek bölümde
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setattr(to, "MIN_BOLUM", 1)
+        assert to.sorunlu_terimler(KITAP, 12, SOZLUK) == {"Iron Gate": 1, "Old Tower": 1, "Mira": 1}
+        assert to.sorunlu_terimler(KITAP, 12, SOZLUK, geri=1) == {}
+
+
+def test_tek_bolumluk_ve_karsiligi_degismis_bulgu_sayilmaz():
+    # Canlı vaka: tek bölümün bayat künyesi 30 bölüme yayılıyordu; sözlük sonradan değişen
+    # terimin eski bulgusu da bugünkü karşılık için kanıt değildir.
+    _bolum(5, [("a", "b")], sapma={"Iron Gate": "Demir Kapı"})
+    _bolum(6, [("a", "b")], sizinti={"Iron Gate": "Demir Kapı"}, sapma={"Iron Gate": "Demir Kapı"})
+    assert to.sorunlu_terimler(KITAP, 12, SOZLUK) == {"Iron Gate": 2}  # aynı bölümde iki alan bir sayılır
+    assert to.sorunlu_terimler(KITAP, 12, dict(SOZLUK, **{"Iron Gate": "Demir Geçit"})) == {}
+    assert to.sorunlu_terimler(KITAP, 6, SOZLUK) == {}  # 6 dahil değil: tek bölüm kaldı
 
 
 def test_secim_sapan_terimi_en_yeni_dogru_ornekle_verir_ve_sirali():
     _havuz()
-    out = to.secim("At dawn the Iron Gate and the Old Tower and Mira.", SOZLUK, KOSULLAR, cache.bellek_havuzu(KITAP, 12))
-    assert [(o["source"], o["sapma"], o["bolum"]) for o in out] == [("Iron Gate", 2, 9), ("Old Tower", 1, 8)]
+    out = _sec("At dawn the Iron Gate and the Old Tower and Mira.", KOSULLAR)
+    assert [(o["source"], o["sapma"], o["bolum"]) for o in out] == [("Iron Gate", 2, 9), ("Old Tower", 2, 8)]
     assert out[0]["tr"] == "Demir Kapı'yı geride bıraktı."  # yumuşamış/ekli karşılık da sayılır
 
 
-def test_kosullu_korunan_ad_ve_bolumde_gecmeyen_terim_alinmaz():
+def test_bolumde_gecmeyen_terim_ve_korunan_ad_alinmaz():
     _havuz()
-    _bolum(11, [("Red Moon sect came.", "Kızıl Kamer Tarikatı geldi.")], zaman=time.time() + 5)
-    havuz = cache.bellek_havuzu(KITAP, 12)
-    assert to.secim("Red Moon and Mira.", SOZLUK, KOSULLAR, havuz) == []
-    assert to.secim("Nothing here.", SOZLUK, KOSULLAR, havuz) == []
+    assert _sec("Nothing here.") == []
+    from collections import Counter
+    assert to.secim("Mira ran.", SOZLUK, {}, cache.bellek_havuzu(KITAP, 12), Counter({"Mira": 5})) == []
 
 
-def test_kosullu_kayit_sorunlu_sayilsa_da_ornek_almaz(monkeypatch):
-    # Sapma denetimi koşullu kaydı zaten saymıyor; seçim yine de kendisi dışlar (ihlal yolu sayabilir).
+def test_kosullu_kayit_sorunlu_sayilsa_da_ornek_almaz():
+    from collections import Counter
     _havuz()
-    monkeypatch.setattr(to, "sorunlu_terimler", lambda *a: __import__("collections").Counter({"Red Moon": 3}))
     havuz = cache.bellek_havuzu(KITAP, 12)
-    assert to.secim("Red Moon rose.", SOZLUK, KOSULLAR, havuz) == []
-    assert [o["source"] for o in to.secim("Red Moon rose.", SOZLUK, {}, havuz)] == ["Red Moon"]
+    assert to.secim("Red Moon rose.", SOZLUK, KOSULLAR, havuz, Counter({"Red Moon": 3})) == []
+    assert [o["source"] for o in to.secim("Red Moon rose.", SOZLUK, {}, havuz, Counter({"Red Moon": 3}))] == ["Red Moon"]
 
 
 def test_ornek_bul_havuz_sirasindan_bagimsiz_en_yeniyi_secer():
@@ -71,18 +108,26 @@ def test_ornek_bul_havuz_sirasindan_bagimsiz_en_yeniyi_secer():
 
 
 def test_ornek_yoksa_ya_da_uzunsa_terim_atlanir(monkeypatch):
-    _bolum(10, [("The Iron Gate opened.", "Demir Geçit açıldı.")])
-    assert to.secim("Iron Gate.", SOZLUK, {}, cache.bellek_havuzu(KITAP, 12)) == []  # doğru kullanım yok
+    _bolum(10, [("The Iron Gate opened.", "Demir Geçit açıldı.")], sapma={"Iron Gate": "Demir Kapı"})
+    _bolum(11, [("The Iron Gate shut.", "Demir Geçit kapandı.")], sapma={"Iron Gate": "Demir Kapı"})
+    assert _sec("Iron Gate.") == []  # doğru kullanım yok
     _bolum(9, [("The Iron Gate stood " + "very " * 100 + "tall.", "Demir Kapı çok uzundu.")])
-    assert to.secim("Iron Gate.", SOZLUK, {}, cache.bellek_havuzu(KITAP, 12)) == []
+    assert _sec("Iron Gate.") == []
     monkeypatch.setattr(to, "ORNEK_UST_KARAKTER", 10_000)
-    assert to.secim("Iron Gate.", SOZLUK, {}, cache.bellek_havuzu(KITAP, 12))[0]["bolum"] == 9
+    assert _sec("Iron Gate.")[0]["bolum"] == 9
 
 
 def test_en_cok_terim_siniri(monkeypatch):
     _havuz()
     monkeypatch.setattr(to, "EN_COK_TERIM", 1)
-    assert len(to.secim("Iron Gate, Old Tower.", SOZLUK, {}, cache.bellek_havuzu(KITAP, 12))) == 1
+    assert len(_sec("Iron Gate, Old Tower.")) == 1
+
+
+def test_hazirla_sorunlu_terim_yoksa_havuzu_hic_okumaz(monkeypatch):
+    monkeypatch.setenv("CEVIRI_TERIM_ORNEK", "1")
+    _bolum(10, [("The Iron Gate opened.", "Demir Kapı açıldı.")], sapma={}, sizinti={})
+    monkeypatch.setattr(cache, "bellek_havuzu", lambda *a, **k: pytest.fail("havuz okundu"))
+    assert to.hazirla(KITAP, 12, "Iron Gate", SOZLUK, {}) is None
 
 
 def test_metin_yalniz_parcada_gecen_terimleri_yazar():
