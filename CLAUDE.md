@@ -1693,6 +1693,13 @@ raporlara girmez.
   farkli`; eski karşılıklar sözlük geçmişinden. Arayüz varsayılan seçimi buna bakar.
 * **Hizalama onarımı** (`CEVIRI_HIZALAMA_ONARIM=0` kapatır): hizalanmayan parça bir kez
   daha çevrilir; yeni hâl ancak hizalanır VE kısalmamışsa alınır.
+* **Terim alanı onarımı** (`CEVIRI_TERIM_ALANI_ONARIM=0` kapatır, 2026-10-17): yanıtta
+  `detected_names`/`detected_terms` alanları HİÇ yoksa (`_parse_response` → `alan_eksik`)
+  parça bir kez daha çevrilir. Yeni hâl ancak alanları taşır, kısalmamış ve ilkinden kötü
+  hizalanmamışsa alınır: terim ile metin aynı yanıttan gelmeli. "Alan var ama boş" meşrudur.
+  Vaka: SS #1021'de alanlar yoktu, öldürülen Dehşet'in adı sözlüğe hiç önerilmedi. Kalan
+  eksik parça sayısı sonuçta `terim_alani_eksik`, çeviri izinde ve günlükte (uyarı).
+  Analiz yolu (`CEVIRI_ANALIZ`) terim listesini zaten istemez; orada işaret düşürülür.
 * **Hitap onarımı** (`karakter_defteri.hitap_onar`, defter işçisi): VARSAYILAN KAPALI
   (`CEVIRI_HITAP_ONARIM=1`). Yalnız kararlı/elle çiftler, model "değişiklik yok"
   diyebilir, benzerlik >= 0,75.

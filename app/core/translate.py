@@ -1454,6 +1454,7 @@ def _translate_chapter_impl(
     used_models: dict[str, None] = {}
     prev_tail = _tail_words(prev_context, PREV_CHAPTER_CONTEXT_WORDS)
     aligned = True
+    terim_alani_eksik = 0  # onarımdan sonra hâlâ ad/terim alanı gelmeyen parça sayısı
 
     for chunk in chunks:
         chunk_en = [p.strip() for p in chunk.split("\n\n") if p.strip()]
@@ -1490,6 +1491,32 @@ def _translate_chapter_impl(
                 oran = yeni_oran
                 if yeniden.get("model"):
                     used_models[yeniden["model"]] = None
+        # TERİM ALANI onarımı (2026-10-17, shadow-slave #1021): model yanıtta ad/terim
+        # alanlarını HİÇ yazmadıysa o parçada geçen yeni adlar sessizce kaybolur ve
+        # bir daha önerilmeyebilir (önbellek isabeti yeniden çeviri tetiklemez). Tek
+        # tur, kısalma onarımıyla aynı gerekçe. Yeni hâl ancak alanları taşıyor,
+        # kısalmamış ve ilk hâlden daha kötü hizalanmamışsa alınır: terimler ile metin
+        # aynı yanıttan gelmeli, yoksa önerilen karşılık metindekiyle ayrışırdı.
+        if result.get("alan_eksik") and os.getenv("CEVIRI_TERIM_ALANI_ONARIM", "1") != "0":
+            try:
+                with api_durum.baglam(asama="terim_alani_onarimi"):
+                    yeniden = _translate_chunk(
+                        client_factory, models, chunk_en, glossary, prev_tail, kosullar, ipucu,
+                    )
+            except Exception:  # noqa: BLE001 — best-effort: ilk çeviri elde, onu kaybetme
+                yeniden = None
+            if (yeniden and not yeniden.get("alan_eksik")
+                    and not kisalmis_mi(uzunluk_orani(
+                        _strip_markers(yeniden.get("translation") or ""), chunk))
+                    and (_split_by_markers(yeniden.get("translation") or "", len(chunk_en))
+                         is not None
+                         or _split_by_markers(result["translation"], len(chunk_en)) is None)):
+                result = yeniden
+        if result.get("alan_eksik"):
+            terim_alani_eksik += 1
+            logging.getLogger(__name__).warning(
+                "çeviri yanıtında ad/terim alanları yok; bu parçadaki yeni adlar önerilmedi"
+                " (bölüm %s, model %s)", bolum_no, result.get("model"))
         if result.get("model"):
             used_models[result["model"]] = None
         for name in result["detected_names"]:
@@ -1541,6 +1568,8 @@ def _translate_chapter_impl(
 
     if iz is not None:
         iz["ham_ceviri"] = "\n\n".join(tr_paras)
+        if terim_alani_eksik:
+            iz["terim_alani_eksik"] = terim_alani_eksik
         iz["asamalar"].append({"asama": "ham_ceviri", "metin": list(tr_paras)})
     # Kaynakta hiç geçmeyen anahtarlar (model uydurması) sözlüğe girmemeli. Terimler
     # ÖNCE süzülür: `ayikla_karakter_adlari` 1. elemesinde bu listeyi kullanıyor,
@@ -1756,6 +1785,9 @@ def _translate_chapter_impl(
         # None = denetlenmedi (tanım yok ya da hizalama tutmadı).
         "anlam_denetimi": anlam_metrik,
         "ceviri_kalitesi": kalite_metrik,
+        # Onarımdan sonra hâlâ ad/terim alanı gelmeyen parça sayısı. 0 değilse
+        # `detected_terms` eksiktir: boş öneri "yeni ad yok" anlamına gelmez.
+        "terim_alani_eksik": terim_alani_eksik,
         "chunk_count": len(chunks),
         # MOTOR fiilen çeviren model(ler)den türetilir. Sabit "gemini" yazmak,
         # Mistral zincirin ilk halkası olduğundan doğrudan yanlış bilgiydi:
@@ -3177,6 +3209,10 @@ def _translate_chunk(
             logging.getLogger(__name__).info("kartlı istem ret aldı (%s); parça kartsız deneniyor", model)
         out, model = (_reti_asarak_uret(client_factory, models, model, kartsiz, [ret], system=system)
                       if system else _reti_asarak_uret(client_factory, models, model, kartsiz, [ret]))
+    if baglam is not None:
+        # Analiz yolunun çıktı talimatı terim listesini YASAKLAR (terimler analizden
+        # gelir); orada alanın olmaması kusur değildir, onarım tetiklenmemeli.
+        out.pop("alan_eksik", None)
     out["model"] = model
     return out
 
@@ -4175,6 +4211,14 @@ def _BOS_AYRISTIRMA() -> dict:
     }
 
 
+# Yanıtta bunlardan HİÇBİRİ yoksa model ad/terim bildirimini atlamıştır (`alan_eksik`).
+# "Alan var ama boş" meşrudur (bölümde yeni ad yok); "alan yok" değildir: shadow-slave
+# #1021'de yanıt yalnız `translation` taşıdı ve öldürülen Dehşet'in adı sözlüğe hiç
+# önerilmedi. Eski şema alanları da sayılır, onları okuyoruz.
+_TERIM_ALANLARI = frozenset({"detected_names", "detected_terms",
+                             "detected_guilds", "detected_places"})
+
+
 def _parse_response(raw: str | None) -> dict:
     if not raw:
         return _BOS_AYRISTIRMA()
@@ -4194,11 +4238,14 @@ def _parse_response(raw: str | None) -> dict:
         for eski in ("detected_guilds", "detected_places"):
             for kaynak, hedef in _esleme(data.get(eski)).items():
                 terimler.setdefault(kaynak, hedef)
-        return {
+        out = {
             "translation": _ceviri_metni(data.get("translation", "")),
             "detected_names": _liste(data.get("detected_names")),
             "detected_terms": terimler,
         }
+        if isinstance(data, dict) and not _TERIM_ALANLARI.intersection(data):
+            out["alan_eksik"] = True
+        return out
     except (json.JSONDecodeError, TypeError, AttributeError):
         out = _BOS_AYRISTIRMA()
         # RET (2026-09-28, ölçüldü): istek JSON modunda gidiyor, yani ne JSON ne
@@ -4210,6 +4257,8 @@ def _parse_response(raw: str | None) -> dict:
         if '"translation"' not in text and not _ISARETCI_VAR.search(text):
             out["gecersiz"] = True
             return out
+        if not any(f'"{alan}"' in text for alan in _TERIM_ALANLARI):
+            out["alan_eksik"] = True
         # DİZİ biçimi (2026-10-09, vertex/gemini-3.8-flash, shadow-slave #950): model
         # "translation"ı metin yerine paragraf DİZİSİ döndürdü ve JSON bozuktu; eski kurtarma
         # dizinin içinden kuyruğa kadar her şeyi aldı, detected_terms JSON'u çeviriye sızdı.
