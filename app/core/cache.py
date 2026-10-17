@@ -101,6 +101,12 @@ def _connect() -> sqlite3.Connection:
     # önerdi" oranı hesaplanamıyordu (MP-CoVe'nin çıkarılma oranı; bkz.
     # reports/sozluk-kalite-arastirma). NULL = kaydedilmedi (eski bölüm).
     db.ensure_column(conn, "chapters", "onerilen_terimler", "onerilen_terimler TEXT")
+    # SÖZLÜK DAMGASI (2026-10-18, benzer sistemler Ö3): bu çeviriye giren ve bölümde
+    # GEÇEN kayıtların {kaynak: karşılık} eşlemi. `sozluk_surumu` kitap düzeyinde bir
+    # sayaçtır — herhangi bir terim değişince her bölüm "eski" görünür; damga ise
+    # yalnız BU bölümü etkileyen değişikliği söyler (WTR-LAB her bölümde aynısını
+    # tutuyor). NULL = damgasız (eski bölüm), bilinmiyor.
+    db.ensure_column(conn, "chapters", "sozluk_damgasi", "sozluk_damgasi TEXT")
     # ÇEVİRİ ARŞİVİ: yeniden çeviri (sözlük düzeltmesi sonrası) eski çeviriyi
     # sessizce eziyordu; yeni çeviri daha kötü çıkarsa (hizalama kaybı, kalıntı)
     # geri dönüş yoktu. Metin değişen HER yazımda eski hâl buraya düşer, url
@@ -118,6 +124,7 @@ def _connect() -> sqlite3.Connection:
             ingilizce_kalinti TEXT,
             uzunluk_orani REAL,
             sozluk_surumu INTEGER,
+            sozluk_damgasi TEXT,
             ceviri_zamani REAL,
             arsiv_zamani REAL NOT NULL
         )
@@ -140,13 +147,14 @@ def _connect() -> sqlite3.Connection:
     # şemalı bir DB kurup bunu tel tuzağıyla tutar.
     db.ensure_column(conn, "ceviri_arsivi", "uzunluk_orani", "uzunluk_orani REAL")
     db.ensure_column(conn, "ceviri_arsivi", "ceviri_kalitesi", "ceviri_kalitesi TEXT")
+    db.ensure_column(conn, "ceviri_arsivi", "sozluk_damgasi", "sozluk_damgasi TEXT")
     return conn
 
 
 ARSIV_MAX = 3
 _ARSIV_SUTUNLARI = (
     "translation", "source_text", "engine", "model", "glossary_leaks", "ingilizce_kalinti",
-    "uzunluk_orani", "sozluk_surumu", "ceviri_kalitesi",
+    "uzunluk_orani", "sozluk_surumu", "ceviri_kalitesi", "sozluk_damgasi",
 )
 
 
@@ -254,7 +262,8 @@ def get_chapter(url: str) -> dict | None:
             "SELECT book_slug, book_title, title, chapter_no, translation, "
             "next_url, detected_names, chunk_count, prev_url, source_text, content_type, "
             "engine, added_terms, model, glossary_leaks, ingilizce_kalinti, sozluk_surumu, "
-            "created_at, uzunluk_orani, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu "
+            "created_at, uzunluk_orani, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu, "
+            "sozluk_damgasi "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -293,6 +302,8 @@ def get_chapter(url: str) -> dict | None:
         # glossary_leaks kuralı: NULL da "{}" da okuyucuya boş gelir.
         "karsilik_sapmasi": json.loads(row[20] or "{}"),
         "sayi_uyumsuzlugu": json.loads(row[21] or "{}"),
+        # NULL (damgasız eski bölüm) None kalır: "boş damga" (bölümde kayıt yok) ayrıdır.
+        "sozluk_damgasi": json.loads(row[22]) if row[22] else None,
         "cached": True,
     }
 
@@ -730,8 +741,9 @@ def save_chapter(url: str, data: dict) -> None:
                  translation, next_url, detected_names, chunk_count, created_at,
                  prev_url, source_text, content_type, engine, added_terms, model,
                  glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu, anlam_denetimi,
-                 onerilen_terimler, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 onerilen_terimler, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu,
+                 sozluk_damgasi)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -752,6 +764,7 @@ def save_chapter(url: str, data: dict) -> None:
                 onerilen_terimler = COALESCE(excluded.onerilen_terimler, onerilen_terimler),
                 karsilik_sapmasi = COALESCE(excluded.karsilik_sapmasi, karsilik_sapmasi),
                 sayi_uyumsuzlugu = COALESCE(excluded.sayi_uyumsuzlugu, sayi_uyumsuzlugu),
+                sozluk_damgasi = COALESCE(excluded.sozluk_damgasi, sozluk_damgasi),
                 ceviri_kalitesi = CASE
                     WHEN excluded.ceviri_kalitesi IS NOT NULL THEN excluded.ceviri_kalitesi
                     WHEN excluded.translation IS translation AND excluded.source_text IS source_text
@@ -808,6 +821,9 @@ def save_chapter(url: str, data: dict) -> None:
                 if data.get("karsilik_sapmasi") is not None else None,
                 json.dumps(data["sayi_uyumsuzlugu"], ensure_ascii=False)
                 if data.get("sayi_uyumsuzlugu") is not None else None,
+                # None-vs-değer kuralı: damga taşımayan yol (görsel sayfa) eskisini korur.
+                json.dumps(data["sozluk_damgasi"], ensure_ascii=False, sort_keys=True)
+                if data.get("sozluk_damgasi") is not None else None,
             ),
         )
         conn.commit()

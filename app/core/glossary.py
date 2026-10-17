@@ -274,6 +274,30 @@ def kitap_surumu(book_slug: str) -> int:
     return r[0] if r else 0
 
 
+def sozluk_damgasi(sozluk: dict[str, str], kaynak_metin: str) -> dict[str, str]:
+    """Çeviriye giren sözlükten bu bölümde GEÇEN kayıtlar: {kaynak: karşılık}.
+
+    Bölüm künyesine yazılır (`chapters.sozluk_damgasi`). Kitap sürümünün tersine yalnız
+    bu bölümü ilgilendiren kayıtları taşır; hangisinin sonradan değiştiğini `damga_farki`
+    söyler. Ölçüt prompt'a giren terimlerle aynıdır (`metinde_gecen_terimler`)."""
+    from . import translate  # döngüsel içe aktarma: translate glossary'yi okur
+    return {s: sozluk[s] for s in translate.metinde_gecen_terimler(sozluk, kaynak_metin or "")}
+
+
+def damga_farki(book_slug: str, damga: dict[str, str] | None) -> list[dict] | None:
+    """Damgadaki karşılıklardan BUGÜNKÜ çeviri sözlüğünde değişenler.
+
+    Dönüş: [{"source", "eski", "yeni"}] (yeni None = kayıt silindi ya da tutuldu).
+    Damgasız bölüm (eski kayıt) için None: "değişen yok" ile "bilinmiyor" ayrışır."""
+    if damga is None:
+        return None
+    bugun = ceviri_sozlugu(book_slug)
+    return [
+        {"source": s, "eski": t, "yeni": bugun.get(s)}
+        for s, t in sorted(damga.items()) if bugun.get(s) != t
+    ]
+
+
 def _ozet(satir: dict | None) -> str | None:
     if satir is None:
         return None

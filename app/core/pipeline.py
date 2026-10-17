@@ -73,6 +73,10 @@ def _finalize_cached(cached: dict, url: str, advance_position: bool = True) -> d
     # kalibre edilirse ESKİ satırlar da kendiliğinden doğru değerlendirilir —
     # kaydedilmiş bir karar ise o gün sessizce yanlışa dönerdi.
     cached["kisalmis"] = _translate_mod.kisalmis_mi(cached.get("uzunluk_orani"))
+    # Aynı ilke: bölümün damgası saklanır, "eski sözlükle çevrildi" kararı okurken bugünkü
+    # sözlükle kıyaslanarak türetilir (Ö3). None = damgasız eski bölüm.
+    cached["sozluk_degisen"] = glossary.damga_farki(
+        cached["book_slug"], cached.get("sozluk_damgasi"))
     return cached
 
 
@@ -497,6 +501,8 @@ def _do_fetch_translate_save(
     # Çeviriden ÖNCE okunur: bu bölümün prompt'una giren sözlüğün sürümü. Çeviriden
     # sonra eklenen otomatik terimler bu prompt'ta YOKTU.
     sozluk_surumu = glossary.kitap_surumu(book_slug)
+    # Bölüm damgası: prompt'a giren ve bu bölümde geçen kayıtlar (Ö3). Aynı an okunur.
+    sozluk_damgasi = glossary.sozluk_damgasi(book_glossary, chapter.get("text") or "")
     book = library.get_book(book_slug)
     # Bölüm sınırında bağlam sıfırlanmasın: önceki bölümün son Türkçe satırları
     # ilk parçaya bağlam olur (sahne ortasında biten bölümün devamı için).
@@ -582,6 +588,8 @@ def _do_fetch_translate_save(
         "kisalmis": _translate_mod.kisalmis_mi(result.get("uzunluk_orani")),
         # Bu çeviride kullanılan sözlüğün sürümü (künye).
         "sozluk_surumu": sozluk_surumu,
+        "sozluk_damgasi": sozluk_damgasi,
+        "sozluk_degisen": [],  # taze çeviri bugünkü sözlükle yapıldı
         # Kullanım örneği verilen terimler (CEVIRI_TERIM_ORNEK=1); künye/ölçüm için, saklanmaz.
         "terim_ornekleri": [o["source"] for o in terim_ornekleri or ()],
         "cached": False,
@@ -683,6 +691,7 @@ def fetch_into_book(
     # `model` künyesinde tam bu hata yaşandı.
     book_kosullar = glossary.ceviri_kosullari(target_slug)
     sozluk_surumu = glossary.kitap_surumu(target_slug)  # `_fetch_translate_save` ile AYNI künye
+    sozluk_damgasi = glossary.sozluk_damgasi(book_glossary, chapter.get("text") or "")
     tail = cache.tail_chapter(target_slug)
     # NUMARA ÖNCELİĞİ (2026-09-02'de düzeltildi). Eskiden yalnız `tail+1` vardı ve
     # `fetch_chapter`'ın başlıktan/URL'den zaten çıkardığı numara yok sayılıyordu;
@@ -768,6 +777,8 @@ def fetch_into_book(
         "uzunluk_orani": result.get("uzunluk_orani"),
         "kisalmis": _translate_mod.kisalmis_mi(result.get("uzunluk_orani")),
         "sozluk_surumu": sozluk_surumu,
+        "sozluk_damgasi": sozluk_damgasi,
+        "sozluk_degisen": [],  # taze çeviri bugünkü sözlükle yapıldı
         "cached": False,
     }
     cache.save_chapter(url, payload)
