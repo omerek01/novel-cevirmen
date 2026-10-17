@@ -1377,6 +1377,85 @@ def chapter_archive_restore(req: ArsivGeriRequest) -> dict:
     return {"ok": True, "ceviri_zamani": bolum.get("ceviri_zamani")}
 
 
+class ParagrafOneriRequest(BaseModel):
+    url: str
+    sira: int
+    # "yeniden": paragraf baştan çevrilir (Ö2). "onar": kalite katmanının hedefli
+    # onarımı (Ö4, künyede şüpheli işaretli paragraflar için).
+    mod: str = "yeniden"
+
+
+class ParagrafKaydetRequest(BaseModel):
+    url: str
+    sira: int
+    mevcut: str
+    metin: str
+
+
+def _hizali_bolum(url: str) -> tuple[dict, list[str], list[str]]:
+    bolum = cache.get_chapter(url)
+    if bolum is None:
+        raise HTTPException(status_code=404, detail="Bölüm önbellekte yok.")
+    tr = (bolum.get("translation") or "").split("\n\n")
+    en = (bolum.get("source") or "").split("\n\n") if bolum.get("source") else []
+    if len(en) != len(tr):
+        raise HTTPException(status_code=409,
+                            detail="Bölüm paragraf paragraf hizalı değil; tek paragraf çevrilemez.")
+    return bolum, en, tr
+
+
+@app.post("/api/chapter/paragraf/oneri")
+def paragraf_onerisi(req: ParagrafOneriRequest) -> dict:
+    """Tek paragraf için öneri üret; KAYDETMEZ (okur kabul ederse `/kaydet`).
+
+    Sync def: model çağrısı thread havuzunda koşar. Bölüm künyesi değişmez; öneri
+    sözlüğe yeni terim yazmaz (yalnız bu paragrafın metni)."""
+    if req.mod not in ("yeniden", "onar"):
+        raise HTTPException(status_code=400, detail="mod 'yeniden' ya da 'onar' olmalı.")
+    bolum, en, tr = _hizali_bolum(req.url)
+    if not (0 <= req.sira < len(tr)):
+        raise HTTPException(status_code=400, detail="Paragraf sırası geçersiz.")
+    slug = library.resolve_slug(bolum["book_slug"])
+    sozluk = glossary.ceviri_sozlugu(slug)
+    kosullar = glossary.ceviri_kosullari(slug)
+    try:
+        with api_durum.islem("paragraf_" + req.mod, req.url):
+            if req.mod == "onar":
+                sonuc = translate_mod.paragraf_onar(en, tr, req.sira, sozluk, kosullar, API_KEY)
+                aday, model, kalan = sonuc["aday"], sonuc["model"], sonuc["kalan"]
+            else:
+                # Önceki iki Türkçe paragraf bağlam olur (bölüm ortasında sahne kopmasın).
+                sonuc = translate_mod.translate_chapter(
+                    en[req.sira], API_KEY, glossary=sozluk, kosullar=kosullar,
+                    prev_context="\n\n".join(tr[max(0, req.sira - 2):req.sira]),
+                    bolum_no=bolum.get("chapter_no"), book_slug=slug, bolum_url=req.url)
+                aday = (sonuc.get("translation") or "").strip()
+                model = sonuc.get("model")
+                kalan = (sonuc.get("ceviri_kalitesi") or {}).get("supheli") or []
+                if "\n\n" in aday:
+                    # Model paragrafı böldü: kabul edilirse hizalama kayardı.
+                    aday = " ".join(p.strip() for p in aday.split("\n\n") if p.strip())
+    except TranslateError as exc:
+        raise _pipeline_http_error(exc)
+    return {"sira": req.sira, "mevcut": tr[req.sira], "aday": aday or None,
+            "model": model, "kalan": kalan, "mod": req.mod}
+
+
+@app.post("/api/chapter/paragraf/kaydet")
+def paragraf_kaydet(req: ParagrafKaydetRequest) -> dict:
+    """Kabul edilen öneriyi yaz. Eski çeviri arşive düşer; paragraf okurun gördüğünden
+    farklıysa 409 (arada değişmiş). Yanıttaki `ceviri_zamani` telefon kopyasını tazeletir."""
+    try:
+        zaman = cache.paragraf_degistir(req.url, req.sira, req.mevcut, req.metin)
+    except KeyError:
+        raise HTTPException(status_code=404, detail="Bölüm önbellekte yok.")
+    except cache.ParagrafCakismasi:
+        raise HTTPException(status_code=409, detail="Paragraf bu arada değişmiş; bölümü yenileyin.")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return {"ok": True, "ceviri_zamani": zaman}
+
+
 @app.get("/api/settings/model")
 def get_ceviri_modeli() -> dict:
     """Seçili çeviri modeli + seçenekler (etiket ve ölçüm notlarıyla).

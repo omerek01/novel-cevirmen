@@ -4362,3 +4362,40 @@ def _extract_translation(text: str) -> str:
         return json.loads('"' + captured + '"')  # \n, \" gibi kaçışları çöz
     except json.JSONDecodeError:
         return captured.replace("\\n", "\n").replace('\\"', '"').rstrip('"')
+
+
+def paragraf_onar(en_paras: list[str], tr_paras: list[str], sira: int, glossary=None,
+                  kosullar=None, api_key: str | None = None, models=None) -> dict:
+    """Okuyucunun istediği TEK paragrafın hedefli onarım önerisi (Ö4, kabul/atla).
+
+    Çeviri yolundaki kalite katmanının aynısı (`ceviri_kalite.denetle_ve_onar`, aynı
+    kabul denetimleri: sözlük ihlali, İngilizce kalıntı, yeni karşılık sapması) yalnız bu
+    paragrafa uygulanır; komşu paragraflar bağlam olarak gider. Sonuç KAYDEDİLMEZ —
+    okuyucu kabul ederse ayrı uçla yazılır. Seçili zincir kullanılır (ücretsiz seçim
+    ücretli modele geçmez). Dönüş: {"aday": str|None, "kalan": [...], "model": ...}."""
+    from . import ceviri_kalite
+    if not (0 <= sira < len(en_paras)) or len(en_paras) != len(tr_paras):
+        raise ValueError("Paragraf hizalı değil.")
+    glossary = dict(glossary or {})
+    models = models or secili_zincir()
+    client_factory = _gemini_fabrikasi(api_key)
+    ilgili = _relevant_glossary(glossary, en_paras[sira])
+    kosul = {k: v for k, v in (kosullar or {}).items() if k in ilgili}
+
+    def uret(user, system, asama):
+        with api_durum.baglam(asama=asama):
+            return _izli_uret(client_factory, models, user, system=system,
+                              max_tokens=MAX_OUTPUT_TOKENS)
+
+    en, tr = [en_paras[sira]], [tr_paras[sira]]
+
+    def kabul(yeni):
+        return not (sozluk_ihlali_paragraflari(glossary, yeni, en, kosullar)
+                    or ingilizce_kalinti(yeni, en, glossary))
+
+    # denetle_ve_onar listeyi YERİNDE günceller: kopya verilir, değişmediyse öneri yok.
+    calisma = list(tr)
+    ozet = ceviri_kalite.denetle_ve_onar(calisma, en, ilgili, kosul, uret, kabul)
+    aday = calisma[0] if calisma[0].strip() != tr[0].strip() else None
+    return {"aday": aday, "kalan": ozet.get("supheli") or [],
+            "model": ozet.get("onarim_modeli"), "durum": ozet.get("durum")}

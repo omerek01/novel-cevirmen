@@ -250,6 +250,54 @@ def arsivden_geri_yukle(url: str, arsiv_id: int) -> bool:
         conn.close()
 
 
+class ParagrafCakismasi(Exception):
+    """Okurun gördüğü paragraf sunucudakiyle aynı değil (bu arada değişmiş)."""
+
+
+def paragraf_degistir(url: str, sira: int, beklenen: str, yeni: str) -> float:
+    """Tek paragrafı değiştir (okuyucudan kabul edilen öneri, Ö2/Ö4).
+
+    Eski çeviri arşive düşer (geri alınabilir). Paragraf okurun gördüğüyle aynı değilse
+    yazılmaz (`ParagrafCakismasi`) — arada yeniden çeviri ya da başka cihazdan düzenleme
+    olmuş olabilir. Künyedeki bu paragrafa ait kalite şüpheleri düşer, paragraf
+    `elle_degisen` listesine girer: kalan notlar artık bu metne ait değil. `created_at`
+    tazelenir ki telefon kopyasının bayat olduğunu anlasın. Dönüş: yeni zaman."""
+    conn = _connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        satir = conn.execute(
+            "SELECT translation, ceviri_kalitesi FROM chapters WHERE url = ? "
+            "AND translation IS NOT NULL", (url,)).fetchone()
+        if satir is None:
+            raise KeyError(url)
+        paragraflar = satir[0].split("\n\n")
+        if not (0 <= sira < len(paragraflar)) or paragraflar[sira].strip() != beklenen.strip():
+            raise ParagrafCakismasi(url)
+        yeni = yeni.strip()
+        if not yeni or "\n\n" in yeni:
+            raise ValueError("Paragraf boş olamaz ve bölünemez.")
+        paragraflar[sira] = yeni
+        metin = "\n\n".join(paragraflar)
+        _arsivle(conn, url, metin)
+        kalite = json.loads(satir[1]) if satir[1] else None
+        if isinstance(kalite, dict):
+            kalite["supheli"] = [x for x in kalite.get("supheli") or []
+                                 if x.get("paragraf") != sira]
+            kalite["elle_degisen"] = sorted(set(kalite.get("elle_degisen") or []) | {sira})
+        zaman = time.time()
+        conn.execute(
+            "UPDATE chapters SET translation = ?, ceviri_kalitesi = ?, created_at = ? WHERE url = ?",
+            (metin, json.dumps(kalite, ensure_ascii=False) if kalite is not None else None,
+             zaman, url))
+        conn.commit()
+        return zaman
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def get_chapter(url: str) -> dict | None:
     """Önbellekte varsa ÇEVRİLMİŞ bölümü döndürür (cached=True), yoksa None.
 
