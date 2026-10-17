@@ -2793,3 +2793,41 @@ body:has(#terimPaneli[open]) .okuyucu-alt { display: none; }
   .shelf .spine, .resume-fiche, .chapter-title { animation: none; }
   #shelfFilters .chip, .seg, .read-progress > span, .spine .spine-art { transition: none; }
 }
+
+/* ---------- paragraf önerisi (Ö2 yeniden çeviri, Ö4 onarım): kabul/atla ----------
+   Kaynak satırının ve künyenin içinde açılır; okuma metninin dilini (serif) taşır,
+   eylemler mevcut .pill dili. Hareket yok: öneri anında görünür. */
+.paragraf-oneri { margin: 0.55em 0 0; font-style: normal; }
+.paragraf-oneri-dugme { font-size: 0.8rem; }
+.paragraf-oneri-durum:empty { display: none; }
+.paragraf-oneri-durum { margin: 0.4em 0 0; }
+.paragraf-oneri-panel {
+  margin: 0.6em 0 0;
+  padding: 0.7em 0.85em;
+  background: var(--bg);
+  border: 1px solid color-mix(in oklab, var(--ink) 16%, transparent);
+  border-radius: 6px;
+  color: var(--ink);
+  font-style: normal;
+}
+.paragraf-oneri-blok + .paragraf-oneri-blok { margin-top: 0.6em; }
+.paragraf-oneri-blok p { margin: 0.15em 0 0; line-height: 1.6; text-align: left; }
+.paragraf-oneri-blok.mevcut p { color: var(--ink-soft); }
+.paragraf-oneri-blok.aday { border-left: 3px solid var(--accent); padding-left: 0.6em; }
+.paragraf-oneri-etiket {
+  font-family: var(--sans);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--brass);
+}
+.paragraf-oneri-eylem { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.7em; }
+.paragraf-oneri-kabul { border-color: var(--accent); color: var(--accent); }
+.paragraf-oneri-dugme:focus-visible, .paragraf-oneri-eylem .pill:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+.paragraf-oneri .pill:disabled { opacity: 0.55; cursor: progress; }
+/* Kaynak satırının ardındaki öneri düğmesi: satıra yapışık durur, paragraf aralığını korur. */
+.reader-body .paragraf-oneri-kaynak { margin: -0.9em 0 1.3em; padding-left: calc(0.85em + 3px); }

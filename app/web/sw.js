@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v136"; // kitap profili kartı (öneri, kanıt, onay)
+const SHELL_CACHE = "novellink-shell-v137"; // paragraf önerisi (kabul/atla) + sözlük damgası
 const DATA_CACHE = "novellink-data";
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 
@@ -46,6 +46,8 @@ const SHELL = [
   "/js/kitap.js",
   "/js/kitap-profili.js",
   "/js/kitap-profili-yardimci.js",
+  "/js/paragraf-oneri.js",
+  "/js/paragraf-oneri-yardimci.js",
   "/js/konum.js",
   "/js/kutuphane.js",
   "/js/okuyucu.js",

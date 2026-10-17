@@ -8,6 +8,8 @@ import { settings } from "./ayarlar.js";
 import { warmOffline } from "./cevrimdisi.js";
 import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
+import { oneriDugmesi } from "./paragraf-oneri.js";
+import { damgaOzeti, damgaSatiri } from "./paragraf-oneri-yardimci.js";
 import { openBook } from "./kitap.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
 import { saveTerm, tazelemeyiPlanla, terimiSilGeriAlinabilir } from "./sozluk.js";
@@ -591,6 +593,9 @@ export function buildChapterEntry(url, data) {
     uzunlukOrani: data.uzunluk_orani ?? null,
     // Bu çeviride kullanılan sözlüğün sürümü (eski bölümlerde yok).
     sozlukSurumu: data.sozluk_surumu ?? null,
+    // Çeviriden SONRA değişen ve bu bölümde geçen kayıtlar (bölüm damgası, Ö3).
+    // null = damgasız eski bölüm: bilinmiyor, hiçbir şey söylenmez.
+    sozlukDegisen: Array.isArray(data.sozluk_degisen) ? data.sozluk_degisen : null,
     // Bu bölümde geçen KOŞULLU / ek anlamlı kayıtlar: deterministik denetim dışı.
     // Künye "sözlüğe uyuldu" DİYEMEZ; "bağlam nedeniyle denetlenmedi" der (belge).
     kosulluDenetlenmeyen: data.kosullu_denetlenmeyen || [],
@@ -808,6 +813,7 @@ export function kunyeKarti(entry) {
   // sözlük/kalıntı bayrakları çoğu zaman TEMİZ döner (atılan metinde ihlal de
   // olmaz), yani öteki koşullara bağlansaydı en bozuk bölüm sessiz kalırdı.
   const kisalmis = entry.kisalmis === true;
+  const damga = damgaOzeti(entry.sozlukDegisen);
   // Eski önbellekteki bölümde künye yok: "bilinmiyor" yazmak yanıltıcı olur, sessizce atla.
   if (
     !motor &&
@@ -816,7 +822,7 @@ export function kunyeKarti(entry) {
     kalintiIndeksleri.length === 0 &&
     denetlenmeyen.length === 0 &&
     yeniKayitlar.length === 0 &&
-    !kisalmis && supheler.length === 0 && !denetlenemedi
+    !kisalmis && supheler.length === 0 && !denetlenemedi && !damga
   )
     return null;
 
@@ -832,6 +838,8 @@ export function kunyeKarti(entry) {
   // sayılır: biri "terim yanlış", öteki "paragraf hiç çevrilmemiş".
   const uyarilar = [];
   if (supheler.length) uyarilar.push(`${supheler.length} çeviri şüphesi — inceleme gerekiyor`);
+  // Uyarı değil bilgi: çeviri o günkü sözlüğe uygundu, sözlük sonradan değişti.
+  if (damga) uyarilar.push(damga);
   if (denetlenemedi) uyarilar.push("kalite denetimi tamamlanamadı");
   // Kısalma ÖNCE yazılır: ötekiler "bir terim/paragraf bozuk" der, bu "metnin bir
   // kısmı hiç YOK" der — okurun önce görmesi gereken bu.
@@ -862,11 +870,31 @@ export function kunyeKarti(entry) {
       "“Yeniden Çevir” ile tekrar denenebilir.";
     govde.appendChild(satir);
   }
+  if (damga) {
+    const bilgi = document.createElement("p");
+    bilgi.className = "gloss-hint kunye-satir";
+    bilgi.textContent =
+      "Bu bölüm çevrildikten sonra sözlükte değişen kayıtlar (metinde eski karşılık " +
+      "duruyor; “Yeniden Çevir” ile güncellenebilir):";
+    govde.appendChild(bilgi);
+    const liste = document.createElement("ul");
+    liste.className = "kunye-liste kunye-damga-liste";
+    for (const d of entry.sozlukDegisen) {
+      const li = document.createElement("li");
+      li.textContent = damgaSatiri(d);
+      liste.appendChild(li);
+    }
+    govde.appendChild(liste);
+  }
   for (const bulgu of supheler) {
     const satir = document.createElement("p");
     satir.className = "gloss-hint kunye-satir";
     satir.textContent = `Paragraf ${bulgu.paragraf + 1}: ${bulgu.aciklama} (otomatik değiştirilmedi)`;
     govde.appendChild(satir);
+    // Ö4: şüpheli paragraf için hedefli onarım önerisi; okur kabul etmeden yazılmaz.
+    if (entry.url && Number.isInteger(bulgu.paragraf)) {
+      govde.appendChild(oneriDugmesi(entry.url, bulgu.paragraf, "onar", { mevcutGoster: true }));
+    }
   }
   if (motor) {
     const rozet = document.createElement("span");
@@ -1484,6 +1512,10 @@ export function onParaTap(e) {
 export function toggleSource(p, idx, url) {
   const sib = p.nextElementSibling;
   if (sib && sib.classList.contains("source-line")) {
+    // Satırın ardındaki öneri düğmesi (Ö2) satırla birlikte kapanır.
+    if (sib.nextElementSibling?.classList.contains("paragraf-oneri-kaynak")) {
+      sib.nextElementSibling.remove();
+    }
     sib.remove(); // ikinci çift-tık → kapat
     return;
   }
@@ -1500,6 +1532,15 @@ export function insertSourceLine(p, text, extraClass) {
   div.className = "source-line" + (extraClass ? " " + extraClass : "");
   div.textContent = text;
   p.after(div);
+  // Ö2: kaynağı açılan paragrafı tek başına yeniden çevirme önerisi (yükleniyor
+  // satırında değil, gerçek kaynakta). Satırın İÇİNE değil ARDINA konur: satırın
+  // metni İngilizce kaynağın kendisi kalmalı (arama ve testler onu okuyor).
+  const url = p.closest("article.chapter")?.dataset.url;
+  if (!extraClass && url && p.dataset.idx != null) {
+    const oneri = oneriDugmesi(url, Number(p.dataset.idx), "yeniden");
+    oneri.classList.add("paragraf-oneri-kaynak");
+    div.after(oneri);
+  }
   return div;
 }
 
