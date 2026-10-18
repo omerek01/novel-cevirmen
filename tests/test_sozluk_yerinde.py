@@ -158,3 +158,24 @@ def test_kitaptan_ogrenilen_ayni_unlu_cokluk_kesmesini_geri_getirmez():
     cikti, _ = sy.yeniden_yaz(["Şeytanlarla savaştı."], ["He fought the daemons."],
                               translate._term_regex("daemon"), "Şeytan", "İblis", uyum=uyum)
     assert cikti == ["İblislerle savaştı."]
+
+
+
+def test_ayni_bas_sozcukte_yalniz_onceki_sozcukler_degisir():
+    # Son sözcük aynıysa ek ona bağlı kalır: kesmeli ikinci ek ve çoğul da korunur.
+    tr = ["Kovan Dağları'nın eteğine vardılar.", "KOVAN DAĞI'NA!", "Kader İblisinin sesi."]
+    en = ["They reached the foot of the Hollow Mountains.", "TO HOLLOW MOUNTAIN!",
+          "The voice of the Demon of Destiny."]
+    cikti, oz = _yaz(tr[:2], en[:2], "Hollow Mountain", "Kovan Dağı", "Oyuk Dağı")
+    assert cikti == ["Oyuk Dağları'nın eteğine vardılar.", "OYUK DAĞI'NA!"]
+    assert oz.degisen == 2 and not oz.belirsiz
+    cikti, oz = _yaz(tr[2:], en[2:], "Demon of Destiny", "Kader İblisi", "Yazgı İblisi")
+    # Genel yol ayrıştırabildiği geçişte önceliklidir (özel ad kesmesi de gelir).
+    assert cikti == ["Yazgı İblisi'nin sesi."] and oz.degisen == 1
+
+
+def test_bas_sozcuk_degisince_kesme_sonrasi_belirsiz_kalir():
+    tr = ["Kovan Dağları'nın eteğine vardılar."]
+    en = ["They reached the foot of the Hollow Mountains."]
+    cikti, oz = _yaz(tr, en, "Hollow Mountain", "Kovan Dağı", "Oyuk Tepe")
+    assert cikti == tr and oz.belirsiz == ["kesme_sonrasi"]

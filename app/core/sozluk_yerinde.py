@@ -246,6 +246,19 @@ def _kesme_sonrasi(metin: str, son: int) -> bool:
     return metin[son:son + 1] in turkce_ek.KESME and metin[son + 1:son + 2].isalpha()
 
 
+def _ayni_bas(g: Gecis, eski: str, yeni: str) -> str | None:
+    """Son sözcük (baş) değişmiyorsa yalnız öndeki sözcükler yazılır, son sözcük ekleriyle
+    olduğu gibi kalır: Türkçede ek yalnız son sözcüğe bağlanır ("Kovan Dağları'nın" ->
+    "Oyuk Dağları'nın"). Ek ayrıştırması gerekmez, kesmeli ikinci ek de sorun olmaz."""
+    es, ys, yuz = eski.split(), yeni.split(), g.yuzey.split()
+    if (len(es) < 2 or len(ys) < 2 or len(yuz) != len(es)
+            or tr_kucuk(es[-1].strip(turkce_ek.KESME)) != tr_kucuk(ys[-1].strip(turkce_ek.KESME))):
+        return None
+    bicim = _karsilik_bicimi(_bicim(g.yuzey, eski), yeni)
+    onceki = _uygula_bicim(" ".join(ys[:-1] + [yuz[-1]]), bicim).split(" ")[:-1]
+    return " ".join(onceki + [yuz[-1]])
+
+
 @dataclass
 class Sonuc:
     metin: str
@@ -283,12 +296,15 @@ def yeniden_yaz(tr_paragraflar: list[str], en_paragraflar: list[str] | None, kay
             continue
         parcalar, imlec = [], 0
         for g in gs:
-            if _kesme_sonrasi(p, g.son):
-                ozet.belirsiz.append("kesme_sonrasi")
-                continue
-            yeni_yuzey = _yeni_yuzey(g, eski, yeni, kaynak, uyum) if g.ekler else None
+            kesme_sonrasi = _kesme_sonrasi(p, g.son)
+            yeni_yuzey = (_yeni_yuzey(g, eski, yeni, kaynak, uyum)
+                          if g.ekler and not kesme_sonrasi else None)
+            # Genel yol vazgeçtiyse baş sözcük aynı kalan karşılıkta ek hiç değişmez.
             if yeni_yuzey is None:
-                ozet.belirsiz.append("ayrismadi" if not g.ekler else "cok_anlamli")
+                yeni_yuzey = _ayni_bas(g, eski, yeni)
+            if yeni_yuzey is None:
+                ozet.belirsiz.append("kesme_sonrasi" if kesme_sonrasi
+                                     else "ayrismadi" if not g.ekler else "cok_anlamli")
                 continue
             parcalar += [p[imlec:g.bas], yeni_yuzey]
             imlec = g.son
