@@ -67,5 +67,6 @@ def test_ozel_ada_yapim_eki_kesmesiz():
 def test_soylenis_unlusu_uyumu_belirler_kaynastirmayi_degil():
     knight = Kok("knight", kesmeli=True, unlu="ı")
     assert kur(knight, ("(y)I",)) == "knight'ı"
-    assert kur(knight, ("lAr", "DAn")) == "knight'lardan"
+    # Çokluk eki özel adda kesmesiz (TDK); uyum yine söylenişten: -lardan, -lerden değil.
+    assert kur(knight, ("lAr", "DAn")) == "knightlardan"
     assert kur(Kok("reaper", kesmeli=True, unlu="ı"), ("(y)A",)) == "reaper'a"

@@ -74,11 +74,12 @@ def test_yer_tutucu_siradan_sozcugu_belirtece_cevirmez():
 
 
 def test_turkce_karsiliktan_ingilizce_ada_gecis_kesme_ve_soylenis():
-    # Hakem ölçümünde yanlış çıkan sınıf: Şövalye -> Knight (Knight'ı, Knight'lardan).
+    # Hakem ölçümünde yanlış çıkan sınıf: Şövalye -> Knight (Knight'ı); çokluk eki
+    # yabancı adda da kesmesiz (TDK; hakem 2026-10-18).
     tr = ["Şövalyeyi gördü.", "Şövalyelerden kaçtı."]
     en = ["He saw the Knight.", "He fled from the Knights."]
     cikti, oz = _yaz(tr, en, "Knight", "Şövalye", "Knight")
-    assert cikti == ["Knight'ı gördü.", "Knight'lardan kaçtı."] and oz.degisen == 2
+    assert cikti == ["Knight'ı gördü.", "Knightlardan kaçtı."] and oz.degisen == 2
 
 
 def test_kitaptan_ogrenilen_uyum_kuraldan_once_gelir():
@@ -151,8 +152,8 @@ def test_tekil_cogul_karsilik_degisimi_belirsiz():
 
 
 def test_kitaptan_ogrenilen_ayni_unlu_cokluk_kesmesini_geri_getirmez():
-    # Canlı ölçümde kural tutmadı: kitap "İblis'i" yazdığı için uyum "i" öğreniyor; söyleniş
-    # yazımla AYNIYSA ad yabancı-okunuşlu sayılmamalı (İblisler, Knight'lar değil).
+    # Canlı ölçümde kural tutmadı: kitap "İblis'i" yazdığı için uyum "i" öğreniyor ve kök
+    # söyleniş ünlülü kuruluyor; çokluk kesmesi buna bakmamalı.
     uyum = sy.Uyum(["İblis'i gördü. İblis'in sesi. İblis'e gitti."])
     cikti, _ = sy.yeniden_yaz(["Şeytanlarla savaştı."], ["He fought the daemons."],
                               translate._term_regex("daemon"), "Şeytan", "İblis", uyum=uyum)
