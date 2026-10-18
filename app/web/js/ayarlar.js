@@ -1,6 +1,7 @@
 /* Okuma ayarları (tema, punto, satır aralığı, kenar, sonsuz okuma), çeviri modeli
    seçimi, harcama göstergesi, kabuk sürümü ve sıfırlama. */
 
+import { asamaGovdesi, asamaSureMetni, olcumOzeti } from "./asama-yardimci.js";
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { refreshStreamEnd, setStatus } from "./okuyucu.js";
 import { fetchWithTimeout } from "./sozluk.js";
@@ -157,6 +158,67 @@ export async function loadModelSecim() {
     kutu.innerHTML = "";
     const notu = el("modelNotu");
     if (notu) notu.textContent = "Sunucuya ulaşılamadı — model seçimi okunamadı.";
+  }
+}
+
+/* ---------- çeviri aşamaları (aç/kapa) ---------- */
+/* Model seçimiyle aynı gerekçeyle SUNUCUDA durur: prefetch ve toplu çeviri istemci
+   olmadan koşuyor. Süreler son bölümlerin gerçek çağrı kaydından gelir; kullanıcı bir
+   aşamayı kapatınca bölüm başına ne kazanacağını görerek karar versin. */
+let asamaVerisi = null;
+
+export function cizAsamalar(veri) {
+  const kutu = el("asamaSecim");
+  if (!kutu) return;
+  asamaVerisi = veri;
+  kutu.innerHTML = "";
+  for (const a of veri.asamalar || []) {
+    const satir = document.createElement("div");
+    satir.className = "setting-row asama-satir";
+    const metin = document.createElement("div");
+    metin.className = "asama-metin";
+    const ad = document.createElement("span");
+    ad.className = "asama-ad";
+    ad.id = `asama-${a.ad}`;
+    ad.textContent = a.etiket;
+    const aciklama = document.createElement("span");
+    aciklama.className = "asama-aciklama";
+    aciklama.textContent = a.aciklama;
+    const sure = document.createElement("span");
+    sure.className = "asama-sure";
+    sure.textContent = asamaSureMetni(a.ad, veri.olcum);
+    metin.append(ad, aciklama, sure);
+    const grup = document.createElement("div");
+    grup.className = "segmented";
+    grup.setAttribute("role", "group");
+    grup.setAttribute("aria-labelledby", ad.id);
+    for (const [deger, yazi] of [["1", "Açık"], ["0", "Kapalı"]]) {
+      const b = document.createElement("button");
+      b.className = "seg";
+      b.dataset.asama = a.ad;
+      b.dataset.acik = deger;
+      b.textContent = yazi;
+      b.setAttribute("aria-pressed", String(a.acik === (deger === "1")));
+      grup.appendChild(b);
+    }
+    satir.append(metin, grup);
+    kutu.appendChild(satir);
+  }
+  const ozet = el("asamaOzet");
+  if (ozet) ozet.textContent = olcumOzeti(veri.olcum);
+}
+
+export async function loadAsamalar() {
+  const kutu = el("asamaSecim");
+  if (!kutu) return;
+  try {
+    const res = await fetchWithTimeout("/api/settings/asamalar", {}, 8000);
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    cizAsamalar(await res.json());
+  } catch {
+    kutu.innerHTML = "";
+    const ozet = el("asamaOzet");
+    if (ozet) ozet.textContent = "Sunucuya ulaşılamadı — çeviri aşamaları okunamadı.";
   }
 }
 
@@ -344,6 +406,34 @@ export function kur() {
     }
   });
 
+  el("asamaSecim").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-asama]");
+    if (!b || b.getAttribute("aria-pressed") === "true" || !asamaVerisi) return;
+    const onceki = asamaVerisi;
+    const govde = asamaGovdesi(b.dataset.asama, b.dataset.acik);
+    // İyimser: dokunuş anında geri bildirim; yazılamazsa gerçeğe dönülür.
+    cizAsamalar({
+      ...onceki,
+      asamalar: onceki.asamalar.map((a) => (a.ad === govde.ad ? { ...a, acik: govde.acik } : a)),
+    });
+    try {
+      const res = await fetch("/api/settings/asamalar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(govde),
+      });
+      if (!res.ok) throw new Error(`sunucu ${res.status}`);
+      cizAsamalar(await res.json());
+      setStatus(
+        `${b.closest(".asama-satir").querySelector(".asama-ad").textContent} ` +
+        `${govde.acik ? "açıldı" : "kapatıldı"} — yeni çevrilen bölümlerde geçerli.`
+      );
+    } catch {
+      cizAsamalar(onceki);
+      setStatus("Aşama kaydedilemedi — sunucuya ulaşılamadı.");
+    }
+  });
+
   el("settingsBtn").addEventListener("click", () => {
     if (diyalogAcikMi("settingsPanel")) {
       diyalogKapat("settingsPanel");
@@ -352,6 +442,7 @@ export function kur() {
     diyalogAc("settingsPanel");
     showShellVersion();
     loadModelSecim();
+    loadAsamalar();
   });
 
   el("shellReset")?.addEventListener("click", async () => {

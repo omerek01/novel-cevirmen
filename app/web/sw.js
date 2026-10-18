@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v138"; // sözlükte yerinde güncelleme (Ö1)
+const SHELL_CACHE = "novellink-shell-v139"; // ayarlarda çeviri aşaması düğmeleri
 const DATA_CACHE = "novellink-data";
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 
@@ -34,6 +34,7 @@ const SHELL = [
   "/js/alt-cubuk.js",
   "/js/api-durum.js",
   "/js/api-durum-yardimci.js",
+  "/js/asama-yardimci.js",
   "/js/ayarlar.js",
   "/js/bildirim.js",
   "/js/cevrimdisi.js",

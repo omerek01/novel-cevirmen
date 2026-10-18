@@ -2752,6 +2752,19 @@ span.defter-ad { min-height: 0; padding: 4px 12px; font-size: 15px; }
 .segmented { border: 1px solid var(--border); background: var(--surface-2); border-radius: 12px; padding: 3px; }
 .seg { border-radius: 9px; font-family: var(--sans); font-size: 14.5px; letter-spacing: 0; text-transform: none; color: var(--ink-soft); }
 .seg[aria-pressed="true"] { background: var(--surface); color: var(--ink); font-weight: 700; box-shadow: 0 1px 2px rgb(var(--shadow-rgb) / 0.25); }
+/* Çeviri aşamaları: solda ad + ne yaptığı + gerçek süresi, sağda Açık/Kapalı.
+   Süre satırı rakam hizalı; kullanıcı aşamaları süreye bakarak kıyaslıyor. */
+.asama-secim { width: 100%; }
+.settings-panel .asama-satir { align-items: flex-start; gap: 14px; padding: 0.75rem 0; }
+.asama-metin {
+  display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0;
+  text-transform: none; letter-spacing: normal; font-weight: 500;
+}
+.asama-ad { font-family: var(--sans); font-size: 16px; font-weight: 600; color: var(--ink); }
+.asama-aciklama { font-family: var(--sans); font-size: 13.5px; line-height: 1.45; color: var(--ink-soft); }
+.asama-sure { font-family: var(--sans); font-size: 12.5px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
+.asama-satir .segmented { flex-shrink: 0; margin-top: 2px; }
+.asama-ozet { margin-top: 0.6rem; }
 [data-theme-opt] { display: inline-flex; align-items: center; gap: 6px; }
 .theme-swatch {
   display: inline-grid; place-items: center; width: 26px; height: 18px; border-radius: 3px;

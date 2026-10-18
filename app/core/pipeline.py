@@ -365,10 +365,12 @@ def _fetch_translate_save(
 
 def _roman_baglami(slug, url, prev_url, no):
     import os
-    analiz = os.getenv("CEVIRI_ANALIZ", "1") != "0"
+
+    from . import ceviri_asamalari
+    analiz = ceviri_asamalari.acik("analiz")
     bellek = os.getenv("CEVIRI_BELLEK", "0") == "1"
-    ozet = os.getenv("CEVIRI_OZET", "0") == "1"  # özet zinciri: önceki bölümün kaydı
-    if not analiz and not bellek and not ozet and os.getenv("CEVIRI_KALITE", "1") == "0":
+    ozet = ceviri_asamalari.acik("ozet")  # özet zinciri: önceki bölümün kaydı
+    if not analiz and not bellek and not ozet and not ceviri_asamalari.acik("kalite"):
         return {}
     ek = {"book_slug": slug, "bolum_url": url,
           "onceki_bolum": cache.onceki_kaynak(slug, prev_url, no) if analiz or bellek or ozet else None}
@@ -378,8 +380,8 @@ def _roman_baglami(slug, url, prev_url, no):
 
 
 def _onceki_ceviri_baglami(slug, prev_url, no):
-    import os
-    if os.getenv("CEVIRI_ANALIZ", "1") == "0":
+    from . import ceviri_asamalari
+    if not ceviri_asamalari.acik("analiz"):
         return cache.prev_translation(slug, prev_url, no)
     onceki = cache.onceki_kaynak(slug, prev_url, no)
     return onceki["translation"] if onceki else ""

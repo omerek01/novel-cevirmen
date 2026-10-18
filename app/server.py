@@ -40,7 +40,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
-from core import profil_cikarim  # noqa: E402
+from core import ceviri_asamalari, profil_cikarim  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -1476,6 +1476,31 @@ def paragraf_kaydet(req: ParagrafKaydetRequest) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     return {"ok": True, "ceviri_zamani": zaman}
+
+
+class AsamaRequest(BaseModel):
+    ad: str
+    acik: bool
+
+
+def _asama_yaniti() -> dict:
+    return {"asamalar": ceviri_asamalari.durum(), "olcum": ceviri_asamalari.olcum()}
+
+
+@app.get("/api/settings/asamalar")
+def get_ceviri_asamalari() -> dict:
+    """Çeviri ek aşamalarının durumu + son bölümlerdeki gerçek süreleri (API'siz)."""
+    return _asama_yaniti()
+
+
+@app.post("/api/settings/asamalar")
+def set_ceviri_asamasi(req: AsamaRequest) -> dict:
+    """Aşamayı aç/kapa. Yeniden başlatma gerekmez; yalnız yeni çevrilen bölümde geçerli."""
+    try:
+        ceviri_asamalari.ayarla(req.ad, req.acik)
+    except KeyError:
+        raise HTTPException(status_code=400, detail="Bilinmeyen çeviri aşaması.")
+    return _asama_yaniti()
 
 
 @app.get("/api/settings/model")

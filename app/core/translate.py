@@ -31,7 +31,7 @@ from google import genai
 from google.genai import errors as genai_errors
 from google.genai import types
 
-from . import api_durum, kullanim
+from . import api_durum, ceviri_asamalari, kullanim
 from . import settings as _ayarlar
 from .glossary import fold_term
 from .ceviri_dili import ROMAN_DILI
@@ -1278,8 +1278,8 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
     `terim_ornekleri`: `terim_ornek.hazirla` çıktısı; aynı kuralla parça başına eklenir.
     `hafif`: okuyucunun tek paragraf önerisi için (bkz. `_translate_chapter_impl`)."""
     from . import ceviri_baglam, ceviri_izleri
-    acik = (os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
-            or os.getenv("CEVIRI_OZET", "0") == "1")
+    acik = (ceviri_asamalari.acik("analiz") or ceviri_asamalari.acik("kalite")
+            or ceviri_asamalari.acik("ozet"))
     iz = ({"id": uuid.uuid4().hex, "book_slug": book_slug, "chapter_no": bolum_no,
            "kaynak": text, "kaynak_sha256": ceviri_baglam.kaynak_hash(text),
            "durum": "basladi", "cagrilar": [], "asamalar": []} if acik else None)
@@ -1377,7 +1377,7 @@ def _translate_chapter_impl(
 
     iz = _CEVIRI_IZ.get()
     analiz = None
-    if not hafif and os.getenv("CEVIRI_ANALIZ", "1") != "0" and text.strip():
+    if not hafif and ceviri_asamalari.acik("analiz") and text.strip():
         from . import ceviri_baglam, ceviri_izleri
         ilgili = _relevant_glossary(glossary, text)
         def analiz_uret(user, system, asama):
@@ -1413,7 +1413,7 @@ def _translate_chapter_impl(
     # yalnız ÖZET çağrısına girer; çeviriye yalnız bu bölümün özeti eklenir, çıktı
     # biçimi ve terim tespiti değişmez. Özet düşerse çeviri özetsiz sürer.
     ozet = ozet_modeli = None
-    if not hafif and os.getenv("CEVIRI_OZET", "0") == "1" and text.strip():
+    if not hafif and ceviri_asamalari.acik("ozet") and text.strip():
         from . import ozet_zinciri
         onceki_ozet = ""
         if (onceki_bolum and book_slug and type(bolum_no) is int
@@ -1508,8 +1508,7 @@ def _translate_chapter_impl(
         # tur, kısalma onarımıyla aynı gerekçe. Yeni hâl ancak alanları taşıyor,
         # kısalmamış ve ilk hâlden daha kötü hizalanmamışsa alınır: terimler ile metin
         # aynı yanıttan gelmeli, yoksa önerilen karşılık metindekiyle ayrışırdı.
-        if (result.get("alan_eksik") and not hafif
-                and os.getenv("CEVIRI_TERIM_ALANI_ONARIM", "1") != "0"):
+        if result.get("alan_eksik") and not hafif and ceviri_asamalari.acik("terim_alani"):
             try:
                 with api_durum.baglam(asama="terim_alani_onarimi"):
                     yeniden = _translate_chunk(
@@ -1649,7 +1648,7 @@ def _translate_chapter_impl(
     # denetler. Tur çeviriyi düşürmez; yeni sözlük ihlali/İngilizce kalıntı getiren
     # paragraf özgün kalır. Ölçüm ve gerekçe: `core/ceviri_cilala.py`.
     cilalama_oncesi = None
-    if not hafif and os.getenv("CEVIRI_CILALA", "0") == "1" and tr_paras and aligned:
+    if not hafif and ceviri_asamalari.acik("cilalama") and tr_paras and aligned:
         from . import ceviri_cilala
         cilalama_oncesi = list(tr_paras)
         def cilala_uret(user, system, asama):
@@ -1675,7 +1674,7 @@ def _translate_chapter_impl(
             iz["cilalama"] = cilalama
             iz["asamalar"].append({"asama": "cilalama_sonrasi", "metin": list(tr_paras)})
     kalite_metrik = None
-    if not hafif and os.getenv("CEVIRI_KALITE", "1") != "0" and tr_paras:
+    if not hafif and ceviri_asamalari.acik("kalite") and tr_paras:
         from . import ceviri_kalite
         # KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi
         # düşürmez. Denetim yapılamazsa çeviri "denetlenemedi" durumuyla kaydedilir.
