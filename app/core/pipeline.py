@@ -865,6 +865,75 @@ def terim_etkisi(book_slug: str, source: str) -> dict:
             "karsilik": guncel, "eski_karsiliklar": eskiler, "durum_sayilari": sayac}
 
 
+def _cumle_kes(paragraf: str, aranan: str) -> str:
+    """Paragraftan ``aranan``ı içeren cümle (önizlemede değişikliği göstermek için)."""
+    i = paragraf.find(aranan)
+    if i < 0:
+        return paragraf[:ETKI_ORNEK_MAX]
+    bas = max(paragraf.rfind(c, 0, i) for c in ".!?\n") + 1
+    sonlar = [j for j in (paragraf.find(c, i + len(aranan)) for c in ".!?\n") if j >= 0]
+    return paragraf[bas:(min(sonlar) + 1 if sonlar else len(paragraf))].strip()
+
+
+def yerinde_guncelle(book_slug: str, source: str, urls: list[str] | None = None,
+                     uygula: bool = False) -> dict:
+    """Sözlük karşılığı değişince ESKİ karşılığı taşıyan bölümleri yeniden çevirmeden güncelle.
+
+    Ö1 (2026-10-18): `sozluk_yerinde.yeniden_yaz` hizalı paragrafta eski karşılığın çekimli
+    geçişini yeni karşılığa göre yeniden kurar; emin olmadığı geçişe DOKUNMAZ (belirsiz).
+    Canlı kopyada (SS, 43 değişiklik) geçişlerin %60'ı değişti, hakem doğruluğu %95.
+    ``uygula`` False ise yalnız sayar (önizleme). ``urls`` verilirse yalnız o bölümler.
+    Eski metin arşive düşer; her bölüm tek tek geri alınabilir. Ücretsiz, API çağırmaz."""
+    from . import sozluk_yerinde
+    from .turkce_eslesme import tr_kucuk
+    guncel, eskiler = _karsilik_gecmisi(book_slug, source)
+    sonuc: dict = {"karsilik": guncel, "eski_karsiliklar": eskiler, "bolumler": [],
+                   "degisen": 0, "belirsiz": 0}
+    # Eski karşılık yenisinin parçasıysa ("Kule" -> "Ak Kule") güncellenmiş metindeki
+    # parça yeniden değiştirilirdi ("Ak Ak Kule"); o eski karşılık atlanır.
+    eskiler = [e for e in eskiler if guncel and tr_kucuk(e) not in tr_kucuk(guncel)]
+    if not guncel or not eskiler:
+        return sonuc
+    secim = set(urls) if urls is not None else None
+    desen = _translate_mod._term_regex(source)
+    bolumler = cache.kaynak_bolumleri(book_slug)
+    # Söyleniş uyumu kitabın kendi çevirilerinden (Knight'ın / Reaper'a) öğrenilir.
+    uyum = sozluk_yerinde.Uyum(b.get("translation") or "" for b in bolumler)
+    for b in bolumler:
+        tr = b.get("translation") or ""
+        if (secim is not None and b["url"] not in secim) or not tr or not desen.search(b["source"]):
+            continue
+        tr_p, en_p = tr.split("\n\n"), b["source"].split("\n\n")
+        yeni_p, degisen, belirsiz, ornek = tr_p, 0, 0, None
+        for eski in eskiler:
+            onceki = yeni_p
+            yeni_p, oz = sozluk_yerinde.yeniden_yaz(onceki, en_p, desen, eski, guncel,
+                                                    kaynak=source, uyum=uyum)
+            degisen += oz.degisen
+            # İngilizce paragrafta terim yoksa Türkçe sözcük bu terimin karşılığı değildir
+            # ("Şeytan" = devil, daemon değil): doğru bırakılmıştır, belirsiz sayılmaz.
+            belirsiz += sum(1 for n in oz.belirsiz if n != "kaynakta_yok")
+            if ornek is None and oz.ornekler:
+                es_y, ye_y = oz.ornekler[0]
+                i = next(i for i, (a, c) in enumerate(zip(onceki, yeni_p)) if a != c)
+                ornek = (_cumle_kes(onceki[i], es_y), _cumle_kes(yeni_p[i], ye_y))
+        if not degisen and not belirsiz:
+            continue
+        satir = {"url": b["url"], "chapter_no": b["chapter_no"], "title": b["title"],
+                 "degisen": degisen, "belirsiz": belirsiz,
+                 "ornek_once": ornek[0] if ornek else None,
+                 "ornek_sonra": ornek[1] if ornek else None}
+        if uygula and degisen:
+            yazim = cache.yerinde_yaz(b["url"], tr, "\n\n".join(yeni_p),
+                                      damga_terim=None if belirsiz else (source, guncel))
+            satir["yazildi"] = yazim is not None
+            satir["ceviri_zamani"], satir["arsiv_id"] = yazim or (None, None)
+        sonuc["degisen"] += degisen
+        sonuc["belirsiz"] += belirsiz
+        sonuc["bolumler"].append(satir)
+    return sonuc
+
+
 def _karsilik_gecmisi(book_slug: str, source: str) -> tuple[str | None, list[str]]:
     """(bugünkü karşılık, sözlük geçmişindeki ESKİ karşılıklar — yeniden eskiye, tekrarsız).
 

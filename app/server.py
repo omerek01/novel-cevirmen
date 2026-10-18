@@ -1331,6 +1331,27 @@ def book_glossary_impact(slug: str, source: str = Query(...)) -> dict:
     return pipeline.terim_etkisi(library.resolve_slug(slug), source)
 
 
+class YerindeRequest(BaseModel):
+    source: str
+    urls: list[str] | None = None
+    uygula: bool = False
+
+
+@app.post("/api/book/{slug}/glossary/yerinde")
+def book_glossary_in_place(slug: str, req: YerindeRequest) -> dict:
+    """Eski karşılığı taşıyan bölümleri YENİDEN ÇEVİRMEDEN güncelle (Ö1).
+
+    `uygula` false: önizleme (kaç geçiş değişir, kaçı belirsiz kalır, örnek cümle).
+    `uygula` true: yazar; eski metin arşive düşer, her bölüm `arsiv_id` ile geri
+    alınabilir. Ücretsiz: model çağrılmaz, Türkçe ek kuralla yeniden kurulur."""
+    if not req.source.strip():
+        raise HTTPException(status_code=400, detail="Terim boş.")
+    if req.urls is not None and len(req.urls) > 2000:
+        raise HTTPException(status_code=400, detail="En çok 2000 bölüm seçilebilir.")
+    return pipeline.yerinde_guncelle(
+        library.resolve_slug(slug), req.source.strip(), req.urls, req.uygula)
+
+
 @app.post("/api/book/{slug}/retranslate")
 def start_retranslate(slug: str, req: RetranslateRequest) -> dict:
     """Seçili bölümleri arka planda yeniden çevir (sözlük düzeltmesi eski bölümlere).

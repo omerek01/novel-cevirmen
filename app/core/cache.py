@@ -298,6 +298,44 @@ def paragraf_degistir(url: str, sira: int, beklenen: str, yeni: str) -> float:
         conn.close()
 
 
+def yerinde_yaz(url: str, beklenen: str, yeni: str,
+                damga_terim: tuple[str, str] | None = None) -> tuple[float, int | None] | None:
+    """Sözlük karşılığı değişince bölümün metnini yerinde güncelle (yeniden çevirmeden).
+
+    Metin hesaplandığı andaki hâlinden (``beklenen``) farklıysa yazılmaz, None döner: arada
+    yeniden çeviri ya da paragraf düzenlemesi olmuş olabilir. Eski metin arşive düşer
+    (geri alınabilir), `created_at` tazelenir ki telefon kopyasının bayat olduğunu anlasın.
+    ``damga_terim`` = (kaynak, yeni karşılık) verilirse bölümün sözlük damgasında o terim
+    yeni karşılığa çekilir (künyedeki "bugünkü sözlükle fark" artık yanlış uyarmasın).
+    Dönüş: (yeni zaman, arşiv kimliği)."""
+    conn = _connect()
+    try:
+        conn.execute("BEGIN IMMEDIATE")
+        satir = conn.execute(
+            "SELECT translation, sozluk_damgasi FROM chapters WHERE url = ?", (url,)).fetchone()
+        if satir is None or satir[0] != beklenen:
+            conn.rollback()
+            return None
+        _arsivle(conn, url, yeni)
+        arsiv_id = conn.execute(
+            "SELECT MAX(id) FROM ceviri_arsivi WHERE url = ?", (url,)).fetchone()[0]
+        damga = json.loads(satir[1]) if satir[1] else None
+        if damga_terim and isinstance(damga, dict) and damga_terim[0] in damga:
+            damga[damga_terim[0]] = damga_terim[1]
+        zaman = time.time()
+        conn.execute(
+            "UPDATE chapters SET translation = ?, sozluk_damgasi = ?, created_at = ? WHERE url = ?",
+            (yeni, json.dumps(damga, ensure_ascii=False, sort_keys=True)
+             if damga is not None else satir[1], zaman, url))
+        conn.commit()
+        return zaman, arsiv_id
+    except BaseException:
+        conn.rollback()
+        raise
+    finally:
+        conn.close()
+
+
 def get_chapter(url: str) -> dict | None:
     """Önbellekte varsa ÇEVRİLMİŞ bölümü döndürür (cached=True), yoksa None.
 
