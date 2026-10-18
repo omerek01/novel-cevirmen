@@ -116,7 +116,8 @@ def _tr_buyuk(metin: str) -> str:
 
 def _bicim(yuzey: str, karsilik: str) -> str:
     """Harf biçimi: K = karşılığın kayıtlı yazımı, B = tamamı büyük, k = tamamı küçük,
-    I = ilk harf büyük gerisi küçük (cümle başındaki küçük harfli kayıt)."""
+    I = ilk harf büyük gerisi küçük (cümle başındaki küçük harfli kayıt), S01… = sözcük
+    başına baş harf maskesi (model kaydın bir sözcüğünü küçük yazmış: "ilk Lord'a")."""
     # Harflerin kendisine değil BÜYÜK/küçük kalıbına bakılır: kök yüzeyde değişmiş
     # olabilir (Kitap -> Kitabı, Yaratığı -> Yaratıkları). Son harf yumuşayabildiği için
     # karşılığın son harfi hariç.
@@ -132,7 +133,26 @@ def _bicim(yuzey: str, karsilik: str) -> str:
     sozcukler = yuzey.split()
     if len(sozcukler) > 1 and all(w[:1].isupper() for w in sozcukler):
         return "T"  # başlık biçimi: kayıt küçük harfli ama metinde ad gibi yazılmış
-    return "I"
+    maske = "".join("1" if w[:1].isupper() else "0" for w in sozcukler)
+    return "I" if maske == "1" + "0" * (len(sozcukler) - 1) else "S" + maske
+
+
+def _ayir_bicim(alan: str) -> tuple[str, str]:
+    """Belirteçteki biçim alanını (biçim, kesme) diye ayır: "S01'" -> ("S01", "'")."""
+    if alan[:1] == "S":
+        n = 1 + len(alan[1:]) - len(alan[1:].lstrip("01"))
+        return alan[:n], alan[n:]
+    return alan[:1], alan[1:]
+
+
+def _karsilik_bicimi(bicim: str, karsilik: str) -> str:
+    """Karşılık değişince eski yüzeyin biçimi: özel ad kayıtlı yazımıyla gelir (K), ama
+    sözcük maskesi yeni karşılığın sözcük sayısı tutuyorsa korunur."""
+    if bicim.startswith("S") and len(bicim) - 1 == len(karsilik.split()):
+        return bicim
+    if karsilik[:1].isupper() and bicim != "B":
+        return "K"
+    return "K" if bicim.startswith("S") else bicim
 
 
 def _kesme(yuzey: str) -> str:
@@ -151,6 +171,10 @@ def _uygula_bicim(metin: str, bicim: str) -> str:
         return _tr_buyuk(k[:1]) + k[1:]
     if bicim == "T":
         return " ".join(_tr_buyuk(w[:1]) + w[1:] for w in metin.split(" "))
+    sozcukler = metin.split(" ")
+    if bicim.startswith("S") and len(bicim) - 1 == len(sozcukler):
+        return " ".join((_tr_buyuk(w[:1]) if b == "1" else tr_kucuk(w[:1])) + w[1:]
+                        for w, b in zip(sozcukler, bicim[1:]))
     return metin
 
 
@@ -192,9 +216,7 @@ def _yeni_yuzey(g: Gecis, eski: str, yeni: str, kaynak: str | None = None,
     yeni_son = turkce_ek.kur_tek(g.kok or kok(eski, g.kesmeli), son_sozcuk, yeni_kok)
     if yeni_son is None:
         return None
-    bicim = _bicim(g.yuzey, eski)
-    if yeni[:1].isupper() and bicim != "B":
-        bicim = "K"  # özel ad: kayıtlı yazımıyla (cümle içinde de büyük harf)
+    bicim = _karsilik_bicimi(_bicim(g.yuzey, eski), yeni)
     return _yuzeye(yeni, yeni_son, bicim, _kesme(g.yuzey) if yeni_kok.kesmeli else "")
 
 
@@ -306,7 +328,13 @@ def sablon(metin: str, kayitlar: dict[int, tuple[str, int]],
             ek = "+".join(tek)
             bicim = _bicim(g.yuzey, karsilik) + _kesme(g.yuzey)
             unlu = g.kok.unlu or ""
-            kapsanan.append((g.bas, g.son, f"⟦{kimlik}|{ek}|{bicim}|{_ozet(karsilik)}|{unlu}⟧"))
+            belirtec = f"⟦{kimlik}|{ek}|{bicim}|{_ozet(karsilik)}|{unlu}⟧"
+            # Geri doldurma özgünü birebir vermiyorsa (biçim sınıflarına sığmayan yazım:
+            # "İLk Lord'a") geçiş metin kalır: şablon özgün metni asla bozmamalı.
+            if doldur(belirtec, {kimlik: karsilik}) != g.yuzey:
+                kalan += 1
+                continue
+            kapsanan.append((g.bas, g.son, belirtec))
     kapsanan.sort()
     parcalar, imlec = [], 0
     for b, s, belirtec in kapsanan:
@@ -323,13 +351,12 @@ def doldur(sablon_metin: str, kayitlar: dict[int, str], kaynaklar: dict[int, str
         kimlik = int(m.group(1))
         karsilik = kayitlar[kimlik]
         ekler = tuple(e for e in m.group(2).split("+") if e)
-        bicim, kesme = m.group(3)[:1], m.group(3)[1:]
+        bicim, kesme = _ayir_bicim(m.group(3))
         if m.group(4) == _ozet(karsilik):
             son = turkce_ek.kur(kok(karsilik, bool(kesme), m.group(5) or None), ekler)
             return _yuzeye(karsilik, son, bicim, kesme)
         yeni_kok = _yeni_kok(karsilik, (kaynaklar or {}).get(kimlik), uyum)
         son = turkce_ek.kur(yeni_kok, ekler)
-        if karsilik[:1].isupper() and bicim != "B":
-            bicim = "K"
+        bicim = _karsilik_bicimi(bicim, karsilik)
         return _yuzeye(karsilik, son, bicim, (kesme or "'") if yeni_kok.kesmeli else "")
     return BELIRTEC.sub(_bir, sablon_metin)

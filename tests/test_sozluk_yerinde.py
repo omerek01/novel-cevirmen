@@ -97,3 +97,30 @@ def test_baslik_bicimi_korunur():
     cikti, _ = _yaz(["Kasvetli Gölgeyle döndü."], ["He returned with the gloomy shadow."],
                     "gloomy shadow", "kasvetli gölge", "karanlık gölge")
     assert cikti == ["Karanlık Gölgeyle döndü."]
+
+
+def test_karisik_sozcuk_bicimi_geri_doldurmada_korunur():
+    # Canlı ölçümde 4 paragraf: model kaydın bir sözcüğünü küçük yazmış ("ilk Lord'a",
+    # "Demir El adasında"). "İlk harf büyük" sınıfı bunu "İlk lord'a" diye geri veriyordu.
+    tr = ["Taht ilk Lord'a aitti.", "Gece dördüncü Kabus bitti.", "Eski Demir El adasında kaldı."]
+    en = ["The throne belonged to the First Lord.", "The Fourth Nightmare ended at night.",
+          "He stayed on Iron Hand Island of old."]
+    kayit = [("First Lord", "İlk Lord"), ("Fourth Nightmare", "Dördüncü Kabus"),
+             ("Iron Hand Island", "Demir El Adası")]
+    sab, say = _sablon(tr, en, kayit)
+    karsiliklar = {i: t for i, (_s, t) in enumerate(kayit)}
+    assert [sy.doldur(p, karsiliklar) for p in sab] == tr
+    assert say["belirtec"] == 3
+
+
+def test_karisik_bicim_yeni_karsilikta_sozcuk_sayisi_tutunca_uygulanir():
+    sab, _ = _sablon(["Taht ilk Lord'a aitti."], ["It belonged to the First Lord."],
+                     [("First Lord", "İlk Lord")])
+    assert sy.doldur(sab[0], {0: "Birinci Usta"}) == "Taht birinci Usta'ya aitti."
+
+
+def test_geri_doldurmayi_bozacak_gecis_belirtece_cevrilmez():
+    # Sözcük içi büyük harf hiçbir biçim sınıfına uymaz: metin olduğu gibi kalır.
+    tr = ["Taht İLk Lord'a aitti."]
+    sab, say = _sablon(tr, ["It belonged to the First Lord."], [("First Lord", "İlk Lord")])
+    assert sab == tr and say["belirtec"] == 0 and say["cok_anlamli_kalan"] == 1
