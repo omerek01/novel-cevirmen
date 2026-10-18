@@ -60,6 +60,16 @@ def test_kur_tek_belirsizde_karar_vermez():
     assert kur_tek(Kok("kovan"), "kovanı", Kok("oyuk")) == "oyuğu"
 
 
+def test_kesmeli_ozel_adda_ikinci_kisi_iyelik_adayi_elenir():
+    # "Kule'nin" = Kule + (n)In ya da Kule + (I)n + (n)In ("senin Kule'nin"). Kesmeyle
+    # yazılmış özel adda 2. kişi iyelik neredeyse hiç geçmez: tamlayan okunuşu seçilir.
+    assert kur_tek(Kok("kule", kesmeli=True), "kule'nin", Kok("burç", kesmeli=True)) == "burç'un"
+    # Kesmesiz (sıradan ad) yüzeyde iki okunuş da olasıdır: karar verilmez.
+    assert kur_tek(Kok("kule"), "kulenin", Kok("burç")) is None
+    # 1. kişi iyelik ("Kule'm") elenmez: diyalogda geçer.
+    assert kur_tek(Kok("kule", kesmeli=True), "kule'm", Kok("burç", kesmeli=True)) == "burç'um"
+
+
 def test_ozel_ada_yapim_eki_kesmesiz():
     assert kur(Kok("bülbül", kesmeli=True), ("lI",)) == "bülbüllü"
 

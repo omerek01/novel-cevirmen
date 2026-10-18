@@ -54,6 +54,7 @@ def uyum_metni(sozcuk: str) -> str:
 _TUREM = ["lI", "sIz", "lIk", "CI"]
 _COGUL = ["lAr"]
 _IYELIK = ["(I)m", "(I)n", "(s)I", "(I)mIz", "(I)nIz"]
+_IKINCI_KISI = {"(I)n", "(I)nIz"}
 _DURUM = ["(y)I", "(y)A", "DA", "DAn", "(n)In", "(y)lA", "CA"]
 _KI = ["ki"]
 _EK_FIIL = ["(y)DI", "(y)mIş", "(y)sA", "DIr", "(y)Im", "(y)sIn", "(y)Iz", "lAr"]
@@ -277,4 +278,9 @@ def kur_tek(eski: Kok, yuzey: str, yeni: Kok) -> str | None:
     if not adaylar:
         return None
     sonuclar = {kur(yeni, d) for d in adaylar}
+    if len(sonuclar) > 1 and eski.kesmeli:
+        # Kesmeyle yazılmış özel adda 2. kişi iyelik ("senin Kule'n") neredeyse hiç geçmez;
+        # o okunuş elenince "Kule'nin" tamlayan olarak tek anlamlı kalır. 1. kişi
+        # ("Kule'm") diyalogda geçtiği için elenmez.
+        sonuclar = {kur(yeni, d) for d in adaylar if not set(d) & _IKINCI_KISI} or sonuclar
     return sonuclar.pop() if len(sonuclar) == 1 else None
