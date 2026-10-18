@@ -124,3 +124,27 @@ def test_geri_doldurmayi_bozacak_gecis_belirtece_cevrilmez():
     tr = ["Taht İLk Lord'a aitti."]
     sab, say = _sablon(tr, ["It belonged to the First Lord."], [("First Lord", "İlk Lord")])
     assert sab == tr and say["belirtec"] == 0 and say["cok_anlamli_kalan"] == 1
+
+
+def test_ozel_ada_cokluk_eki_kesmesiz_gelir():
+    # TDK: özel ada gelen çokluk eki ve ardındaki ekler kesmeyle ayrılmaz (Türkler,
+    # Ahmetlerden). Hakem ölçümünde 13/19 yanlış bu sınıftı: İblis'lerle, Titan'lar.
+    tr = ["Şeytanlarla savaştı.", "Şeytanı gördü."]
+    en = ["He fought the daemons.", "He saw the daemon."]
+    cikti, oz = _yaz(tr, en, "daemon", "Şeytan", "İblis")
+    assert cikti == ["İblislerle savaştı.", "İblis'i gördü."] and oz.degisen == 2
+
+
+def test_eslesmenin_ardinda_kesmeli_ek_kalirsa_belirsiz():
+    # "Şövalyesi'nden": eşleşme kesmede biter, "'nden" dışarıda kalır; yazılsa
+    # "Knight'ı'nden" (çift kesme, uyumsuz ek) çıkıyordu.
+    tr = ["Klanın iki Şövalyesi'nden biri geldi."]
+    cikti, oz = _yaz(tr, ["One of the clan's two Knights came."], "Knight", "Şövalye", "Knight")
+    assert cikti == tr and oz.belirsiz == ["kesme_sonrasi"]
+
+
+def test_tekil_cogul_karsilik_degisimi_belirsiz():
+    # "Kayıplar" -> "Kayıp": çoğul anlamı mı kalmalı tekile mi dönmeli, metinden bilinmez.
+    tr = ["Kayıplar'ın çoğu döndü."]
+    cikti, oz = _yaz(tr, ["Most of the Lost returned."], "Lost", "Kayıplar", "Kayıp")
+    assert cikti == tr and oz.belirsiz == ["cogul_uyumsuz"]

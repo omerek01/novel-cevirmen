@@ -235,6 +235,17 @@ def _yuzeye(karsilik: str, son_kucuk: str, bicim: str, kesme: str) -> str:
     return _uygula_bicim(" ".join(sozcukler[:-1] + [son_kucuk]), bicim)
 
 
+def _cogul_mu(karsilik: str) -> bool:
+    son = tr_kucuk(karsilik.split()[-1].strip(turkce_ek.KESME)) if karsilik.split() else ""
+    return son.endswith(("lar", "ler"))
+
+
+def _kesme_sonrasi(metin: str, son: int) -> bool:
+    """Eşleşmenin hemen ardında kesmeli ek var mı ("Şövalyesi'nden"): ek eşleşmenin
+    dışında kalır, yeni kökle birleşmez ("Knight'ı'nden")."""
+    return metin[son:son + 1] in turkce_ek.KESME and metin[son + 1:son + 2].isalpha()
+
+
 @dataclass
 class Sonuc:
     metin: str
@@ -251,9 +262,14 @@ def yeniden_yaz(tr_paragraflar: list[str], en_paragraflar: list[str] | None, kay
     ozet = Sonuc("")
     cikti = list(tr_paragraflar)
     hizali = en_paragraflar is not None and len(en_paragraflar) == len(tr_paragraflar)
+    # Biri çoğul biri tekilse ("Kayıplar" -> "Kayıp") çoğul anlam kalmalı mı bilinmez.
+    cogul_uyumsuz = _cogul_mu(eski) != _cogul_mu(yeni)
     for i, p in enumerate(tr_paragraflar):
         gs = gecisler(p, eski, uyum)
         if not gs:
+            continue
+        if cogul_uyumsuz:
+            ozet.belirsiz += ["cogul_uyumsuz"] * len(gs)
             continue
         if not hizali:
             ozet.belirsiz += ["hizasiz"] * len(gs)
@@ -267,6 +283,9 @@ def yeniden_yaz(tr_paragraflar: list[str], en_paragraflar: list[str] | None, kay
             continue
         parcalar, imlec = [], 0
         for g in gs:
+            if _kesme_sonrasi(p, g.son):
+                ozet.belirsiz.append("kesme_sonrasi")
+                continue
             yeni_yuzey = _yeni_yuzey(g, eski, yeni, kaynak, uyum) if g.ekler else None
             if yeni_yuzey is None:
                 ozet.belirsiz.append("ayrismadi" if not g.ekler else "cok_anlamli")
@@ -319,6 +338,9 @@ def sablon(metin: str, kayitlar: dict[int, tuple[str, int]],
             continue
         for g in gs:
             if any(not (g.son <= b or g.bas >= s) for b, s, _ in kapsanan):
+                continue
+            if _kesme_sonrasi(metin, g.son):
+                kalan += 1
                 continue
             son_sozcuk = re.split(r"\s+", g.yuzey)[-1]
             tek = turkce_ek.soyut_tek(g.kok, son_sozcuk) if g.ekler else None

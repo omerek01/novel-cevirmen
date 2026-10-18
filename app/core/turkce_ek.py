@@ -173,8 +173,12 @@ def kur(kok: Kok, ekler: tuple[str, ...]) -> str:
             govde = s[:-2] + "ng" if s.endswith("nk") else s[:-1] + _YUMUSAMA[s[-1]]
         yuzey_ek += parca
         iyelik3_once = e == IYELIK3
-    # Özel ada YAPIM eki kesmesiz yazılır (Ankaralı, Nightingale'li değil Bülbüllü).
-    if kok.kesmeli and yuzey_ek and not (ekler and ekler[0] in _TUREM):
+    # Özel ada YAPIM eki ve ÇOKLUK eki (ardındakilerle) kesmesiz yazılır (TDK: Ankaralı,
+    # Türkler, Ahmetlerden). Hakem ölçümünde (2026-10-18) yanlışların 13/19'u buydu
+    # (İblis'ler, Titan'lar). Söylenişi yazımından ayrılan yabancı adda kesme okunuşu
+    # gösterdiği için kalır (Knight'lar).
+    cokluk = ekler and ekler[0] == "lAr" and not kok.unlu
+    if kok.kesmeli and yuzey_ek and not (ekler and ekler[0] in _TUREM) and not cokluk:
         return govde + "'" + yuzey_ek
     return govde + yuzey_ek
 
