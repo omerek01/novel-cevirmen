@@ -148,3 +148,12 @@ def test_tekil_cogul_karsilik_degisimi_belirsiz():
     tr = ["Kayıplar'ın çoğu döndü."]
     cikti, oz = _yaz(tr, ["Most of the Lost returned."], "Lost", "Kayıplar", "Kayıp")
     assert cikti == tr and oz.belirsiz == ["cogul_uyumsuz"]
+
+
+def test_kitaptan_ogrenilen_ayni_unlu_cokluk_kesmesini_geri_getirmez():
+    # Canlı ölçümde kural tutmadı: kitap "İblis'i" yazdığı için uyum "i" öğreniyor; söyleniş
+    # yazımla AYNIYSA ad yabancı-okunuşlu sayılmamalı (İblisler, Knight'lar değil).
+    uyum = sy.Uyum(["İblis'i gördü. İblis'in sesi. İblis'e gitti."])
+    cikti, _ = sy.yeniden_yaz(["Şeytanlarla savaştı."], ["He fought the daemons."],
+                              translate._term_regex("daemon"), "Şeytan", "İblis", uyum=uyum)
+    assert cikti == ["İblislerle savaştı."]

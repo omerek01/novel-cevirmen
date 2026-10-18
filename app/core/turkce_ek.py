@@ -176,8 +176,10 @@ def kur(kok: Kok, ekler: tuple[str, ...]) -> str:
     # Özel ada YAPIM eki ve ÇOKLUK eki (ardındakilerle) kesmesiz yazılır (TDK: Ankaralı,
     # Türkler, Ahmetlerden). Hakem ölçümünde (2026-10-18) yanlışların 13/19'u buydu
     # (İblis'ler, Titan'lar). Söylenişi yazımından ayrılan yabancı adda kesme okunuşu
-    # gösterdiği için kalır (Knight'lar).
-    cokluk = ekler and ekler[0] == "lAr" and not kok.unlu
+    # gösterdiği için kalır (Knight'lar). Ölçüt ünlünün VARLIĞI değil FARKI: kitaptan
+    # öğrenilen ünlü yazımdakiyle aynıysa (İblis -> i) ad okunduğu gibi yazılır.
+    ayrik_soylenis = bool(kok.unlu) and kok.unlu != _son_unlu(kok.sozcuk)
+    cokluk = ekler and ekler[0] == "lAr" and not ayrik_soylenis
     if kok.kesmeli and yuzey_ek and not (ekler and ekler[0] in _TUREM) and not cokluk:
         return govde + "'" + yuzey_ek
     return govde + yuzey_ek
