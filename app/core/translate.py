@@ -1508,7 +1508,10 @@ def _translate_chapter_impl(
         # tur, kısalma onarımıyla aynı gerekçe. Yeni hâl ancak alanları taşıyor,
         # kısalmamış ve ilk hâlden daha kötü hizalanmamışsa alınır: terimler ile metin
         # aynı yanıttan gelmeli, yoksa önerilen karşılık metindekiyle ayrışırdı.
-        if result.get("alan_eksik") and not hafif and ceviri_asamalari.acik("terim_alani"):
+        # BOZUK liste de aynı sınıftır (2026-10-18, #1001 ters, #1026 iki taraf Türkçe):
+        # alan var ama anahtarlar kaynakta geçmediği için hepsi uydurma diye elenir.
+        if (_terim_alani_sorunlu(result, chunk) and not hafif
+                and ceviri_asamalari.acik("terim_alani")):
             try:
                 with api_durum.baglam(asama="terim_alani_onarimi"):
                     yeniden = _translate_chunk(
@@ -1516,17 +1519,17 @@ def _translate_chapter_impl(
                     )
             except Exception:  # noqa: BLE001 — best-effort: ilk çeviri elde, onu kaybetme
                 yeniden = None
-            if (yeniden and not yeniden.get("alan_eksik")
+            if (yeniden and not _terim_alani_sorunlu(yeniden, chunk)
                     and not kisalmis_mi(uzunluk_orani(
                         _strip_markers(yeniden.get("translation") or ""), chunk))
                     and (_split_by_markers(yeniden.get("translation") or "", len(chunk_en))
                          is not None
                          or _split_by_markers(result["translation"], len(chunk_en)) is None)):
                 result = yeniden
-        if result.get("alan_eksik") and not hafif:
+        if _terim_alani_sorunlu(result, chunk) and not hafif:
             terim_alani_eksik += 1
             logging.getLogger(__name__).warning(
-                "çeviri yanıtında ad/terim alanları yok; bu parçadaki yeni adlar önerilmedi"
+                "çeviri yanıtında ad/terim alanları yok ya da bozuk; bu parçadaki yeni adlar önerilmedi"
                 " (bölüm %s, model %s)", bolum_no, result.get("model"))
         if result.get("model"):
             used_models[result["model"]] = None
@@ -1834,6 +1837,33 @@ def kaynakta_gecen(terim: str, kaynak: str, cogul_esnek: bool = False) -> bool:
     if not (kaynak or "").strip() or not (terim or "").strip():
         return True
     return bool(_term_regex(terim, cogul_esnek).search(kaynak))
+
+
+# Bozuk terim listesi eşiği. Ölçüm (2026-10-18, canlı izler, 77 çeviri çağrısı):
+# sağlam listelerin en kötüsü %27 (3/11) kaynak dışı anahtar taşıyordu, bozuk iki
+# liste %90 (18/20) ve %100 (48/48). Kısa listede oran oynak olduğu için en az 4 kayıt.
+BOZUK_LISTE_ORANI = 0.5
+BOZUK_LISTE_EN_AZ = 4
+
+
+def terim_listesi_bozuk(terms: dict[str, str] | None, kaynak: str) -> bool:
+    """`detected_terms` anahtarlarının en az yarısı kaynakta geçmiyor mu?
+
+    Model listeyi ters (`'Gölge Feneri' -> 'Shadow Lantern'`) ya da iki tarafı Türkçe
+    (`'Ateş Anısı' -> 'Ateş Anısı'`) yazınca `ayikla_terim_anahtarlari` hepsini uydurma
+    diye eler ve bölümün yeni terimleri sessizce kaybolur. Ölçüt o süzgeçle AYNI
+    karşılaştırmayı kullanır; ayrışırsa tekrar, süzgecin elemediği listeyi "bozuk" sayardı.
+    """
+    if not terms or len(terms) < BOZUK_LISTE_EN_AZ:
+        return False
+    disarida = sum(1 for k in terms if not kaynakta_gecen(k, kaynak, cogul_esnek=True))
+    return disarida / len(terms) >= BOZUK_LISTE_ORANI
+
+
+def _terim_alani_sorunlu(result: dict, kaynak: str) -> bool:
+    """Terim alanı onarımını tetikleyen iki durum: alan hiç yok ya da liste bozuk."""
+    return bool(result.get("alan_eksik")) or terim_listesi_bozuk(
+        result.get("detected_terms"), kaynak)
 
 
 def ayikla_terim_anahtarlari(

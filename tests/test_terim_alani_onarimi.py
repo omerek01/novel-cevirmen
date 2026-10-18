@@ -141,6 +141,48 @@ def test_bayrakla_kapatilir(monkeypatch):
     assert sonuc["terim_alani_eksik"] == 1
 
 
+# --- bozuk (ters / Türkçe anahtarlı) liste ---------------------------------------
+# Gerçek vakalar (vertex/gemini-3.8-flash): #1001 anahtarlar Türkçe, değerler İngilizce
+# (18/20); #1026 iki taraf da Türkçe (48/48). Kaynakta geçmeyen anahtar uydurma diye
+# elendiği için bölümün yeni terimleri sessizce kayboldu. 77 çağrıda sağlam listelerin
+# en kötüsü %27 (3/11) kaynak dışı anahtar taşıyordu; bozuklar %90-100.
+
+BOZUK = {"Düşmüş Lütuf Kâhini": "Sybil of the Fallen Grace", "Gölge Feneri": "Shadow Lantern",
+         "Ateş Anısı": "Ateş Anısı", "Büyü": "Spell"}
+
+
+def test_anahtarlarinin_yarisi_kaynakta_yoksa_liste_bozuktur():
+    assert translate.terim_listesi_bozuk(BOZUK, KAYNAK)
+    yarisi = {"Sybil of the Fallen Grace": "x", "P1": "y", "Gölge Feneri": "z", "Büyü": "w"}
+    assert translate.terim_listesi_bozuk(yarisi, KAYNAK)
+
+
+def test_az_sayida_kacak_bozuk_sayilmaz():
+    # Tek tük Türkçeleştirilmiş ad (`LO49 Dehşeti`) ya da kaynakta başka biçimde geçen
+    # ad (`Memory`) MEŞRU listenin parçası; tekrar tetiklenmemeli.
+    uc_de_bir = {"Sybil of the Fallen Grace": "x", "P1": "y", "P2": "z", "Memory": "Anı"}
+    assert not translate.terim_listesi_bozuk(uc_de_bir, KAYNAK)
+    # Çok kısa listede oran oynak: 1/2 tek başına liste bozuk demek değildir.
+    assert not translate.terim_listesi_bozuk({"Sybil of the Fallen Grace": "x", "Memory": "y"}, KAYNAK)
+    assert not translate.terim_listesi_bozuk({}, KAYNAK)
+
+
+def test_bozuk_listeli_parca_yeniden_denenir_ve_terim_kurtulur(monkeypatch):
+    sahte = _Sahte((_hizali(), BOZUK), (_hizali(), TERIM))
+    sonuc = _cevir(monkeypatch, sahte)
+    assert sahte.cagri == 2
+    assert sonuc["detected_terms"] == TERIM
+    assert sonuc["terim_alani_eksik"] == 0
+
+
+def test_yeniden_deneme_de_bozuksa_ilk_ceviri_kalir_ve_sayilir(monkeypatch):
+    sahte = _Sahte((_hizali(), BOZUK), (_hizali(), BOZUK))
+    sonuc = _cevir(monkeypatch, sahte)
+    assert sahte.cagri == 2
+    assert sonuc["model"] == "sahte-1"
+    assert sonuc["terim_alani_eksik"] == 1
+
+
 # --- analiz yolu -----------------------------------------------------------------
 
 def test_analiz_yolunda_alan_istenmedigi_icin_isaret_dusurulur(monkeypatch):
