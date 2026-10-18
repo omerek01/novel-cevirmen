@@ -115,8 +115,61 @@ zamir cinsiyetsiz; bizde hitap sen/siz daha önemli ve var), RAG örnekleri (Faz
 ## 4. Sınırlılıklar
 
 - WTR-LAB'da tek kitap/tek bölüm, girişsiz oturum; kullanıcı sözlüğü, yeniden çeviri ve
-  öneri akışları çalıştırılmadı (hesap gerektirir). Okuyucu dışındaki 40 betik statik
-  analizde kapsam dışı bırakıldı; yer tutucu doldurma ve terim nesnesi kodu doğrudan okundu.
+  öneri akışları çalıştırılmadı (hesap gerektirir; sahte hesap açılmadı, bkz. 5. bölüm).
+  İlk statik analiz okuyucu dışındaki 40 betiği kapsam dışı bırakmıştı; yeniden çalıştırıldı,
+  41/41 betik ayrıştırıldı (bkz. 5. bölüm).
 - Diğer sistemler yalnız kendi belgelerinden; davranışları gözlenmedi.
 - Hiçbir öneri bizim verimizde ölçülmedi; Ö1'in Türkçe ek yeniden üretimindeki isabet
   bilinmiyor ve uygulamadan önce ölçülmeli.
+
+## 5. Uygulama ve ölçüm sonuçları (2026-10-18)
+
+**REA yeniden analiz.** 41/41 betik ayrıştırıldı. Sözlük uçlarından çıkan akışlar:
+genel sözlük (`glossary/create-generic`, `edit-generic`, `batch-add-generic`), kullanıcının
+genel kaydı ezmesi (`edit-overwrite`, `batch-add-overwrite`), ham terimi yok sayma
+(`edit-raw-ignore`, `edit-generic-ignore`), yapay zekâyla terim çözümleme
+(`ai-analyze-terms`, `analyze-user-terms`), yeniden çeviri kuyruk işi olarak (`reader/task`,
+`queue/update`), hata bildirimleri yapay zekâ çözümlemesiyle (`report/ai-analysis`). Bizdeki
+karşılıkları zaten var (kitap sözlüğü, red/yasak listesi, otomatik öneri ve doğrulama, toplu
+yeniden çeviri işi); yeni öneri çıkmadı.
+
+**Uygulananlar (canlıda, kabuk v137):** Ö2 tek paragraf yeniden çeviri, Ö3 bölüm başına sözlük
+damgası ve bugünkü sözlükle farkı, Ö4 öneriyi kabul/atla paneli (yalnız şüpheli işaretli
+paragraflarda), Ö5'ten ardışık paragraf tekrarı şüphesi.
+
+**Uygulanmayan (Ö5, terim önceliği/sıklığı):** istem sözlüğün tamamını değil yalnız parçada
+fiilen geçen terimleri alıyor (`translate._relevant_glossary`); kesilen bir liste olmadığı için
+sıralamanın etkileyeceği yer yok. Geçiş sayacı (`hit_count`) da bilerek tutulmuyor: okumanın
+gövdesi önbellekten geldiği için sistematik eksik sayardı (`glossary.py` notu).
+
+**Ö1 ölçümü (yalnız ölçüm; canlıda kullanıcıya açık değil).** Shadow Slave canlı kopyası,
+1.020 bölüm, sözlük geçmişindeki 42 gerçek karşılık değişikliği yeniden oynandı
+(`scripts/sozluk_yerinde_olcum.py`, model çağrısı yok; hakem ayrı).
+
+| | Sayı |
+|---|---|
+| Eski karşılığın geçişi | 3.286 |
+| Otomatik değişen | 1.909 (%58) |
+| Yeni biçimi kitapta başka yerde de geçen | 1.553 (değişenlerin %81'i) |
+| Kaynakta terim yok, dokunulmadı | 807 |
+| Ek çok anlamlı / ayrışmadı | 207 / 163 |
+| Tekil-çoğul karşılık değişimi, belirsiz bırakıldı | 102 |
+| Eşleşme ardında kesmeli ek, belirsiz bırakıldı | 58 |
+
+Hakem (gemini-3.6-flash, sıcaklık 0, yalnız yeni sözcüğün çekimi): ilk koşu 160/179 doğru
+(%89), düzeltmelerden sonra 156/167 (%93). Düzeltilen sınıflar: özel ada çokluk eki kesmesiz
+(TDK; yabancı adda da), eşleşme ardındaki kesmeli ek ve tekil/çoğul değişimi belirsiz.
+Son düzeltme (yabancı adda da çokluk kesmesiz; kalan 11 yanlışın 9'u bu sınıftı) birim
+testlerle doğrulandı; hakem koşusu bellek yetersizliğinden yarıda kaldı, yeniden ölçülmedi.
+Bilerek bırakılan belirsizlikler: "İblis'i" (ad tamlaması mı belirtme mi), "Fool'ca"
+(eşitlik hâli mi yapım eki mi).
+
+**Yer tutucu.** Bugünkü sözlükle 1.020 bölüm şablona çevrilip geri dolduruldu: 1.020/1.020
+birebir (ilk koşuda 1.016; kalan 4'ü kaydın bir sözcüğünü küçük yazan model çıktısıydı:
+"ilk Lord'a"). Sözcük başına harf maskesi eklendi; ayrıca şablon her belirteci geri doldurup
+denetliyor, özgünü birebir vermeyen geçiş metin kalıyor. 48.067 belirteç.
+
+**Sonuç.** Ö1 uygulanabilir: geçişlerin yarıdan fazlası model çağrısı olmadan, ölçülen
+çekim doğruluğu %93 ile değişiyor; geri kalanı belirsiz işaretlenip yeniden çeviriye
+bırakılabilir. Uygulama (önizleme, onay, arşiv) kullanıcı kararı bekliyor.
+
