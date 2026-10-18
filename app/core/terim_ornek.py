@@ -92,7 +92,10 @@ def secim(kaynak_metin: str, glossary: dict[str, str] | None, kosullar: dict[str
         return []
     kosullu = {k.casefold() for k in (kosullar or {})}
     out = []
-    for kaynak, sayi in sorunlu.most_common():
+    # Eşitlikte ada göre: sayaç `set`ten doldurulduğu için `most_common()` eşit sayılı
+    # terimleri süreçten sürece (hash tohumu) farklı sırada veriyordu; `EN_COK_TERIM`
+    # sınırında hangi terimin isteme gireceği rastgele olurdu.
+    for kaynak, sayi in sorted(sorunlu.items(), key=lambda kv: (-kv[1], kv[0].casefold())):
         karsilik = glossary.get(kaynak)
         if (not karsilik or kaynak.casefold() in kosullu or kaynak.casefold() == karsilik.casefold()
                 or not translate._term_regex(kaynak).search(kaynak_metin)):
