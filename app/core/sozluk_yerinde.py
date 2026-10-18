@@ -213,10 +213,18 @@ def _yeni_yuzey(g: Gecis, eski: str, yeni: str, kaynak: str | None = None,
                 uyum: Uyum | None = None) -> str | None:
     son_sozcuk = re.split(r"\s+", g.yuzey)[-1]
     yeni_kok = _yeni_kok(yeni, kaynak, uyum)
+    eski_bicim = _bicim(g.yuzey, eski)
+    # Kayıt büyük harfliyken model küçük yazdıysa sözcük orada sıradan addır; Türkçe yeni
+    # karşılık da sıradan ad olarak (küçük, kesmesiz) gelir: "peleriniyle" -> "mantosuyla".
+    # Yabancı ad küçük yazılamaz, özel ad gibi kalır ("ucubeyi" -> "Abomination'ı").
+    siradan = (eski_bicim == "k" and eski[:1].isupper()
+               and not _yabanci_mi(yeni.split()[-1].strip(turkce_ek.KESME), kaynak))
+    if siradan:
+        yeni_kok = kok(yeni, kesmeli=False, unlu=yeni_kok.unlu)
     yeni_son = turkce_ek.kur_tek(g.kok or kok(eski, g.kesmeli), son_sozcuk, yeni_kok)
     if yeni_son is None:
         return None
-    bicim = _karsilik_bicimi(_bicim(g.yuzey, eski), yeni)
+    bicim = "k" if siradan else _karsilik_bicimi(eski_bicim, yeni)
     return _yuzeye(yeni, yeni_son, bicim, _kesme(g.yuzey) if yeni_kok.kesmeli else "")
 
 

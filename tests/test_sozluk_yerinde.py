@@ -179,3 +179,21 @@ def test_bas_sozcuk_degisince_kesme_sonrasi_belirsiz_kalir():
     en = ["They reached the foot of the Hollow Mountains."]
     cikti, oz = _yaz(tr, en, "Hollow Mountain", "Kovan Dağı", "Oyuk Tepe")
     assert cikti == tr and oz.belirsiz == ["kesme_sonrasi"]
+
+
+def test_kucuk_harfli_siradan_kullanim_turkce_karsilikta_kucuk_ve_kesmesiz_kalir():
+    # Hakem bulgusu: kayıt büyük harfli ("Pelerin") ama model sıradan ad olarak küçük
+    # yazmışsa yeni Türkçe karşılık da sıradan addır: "Manto'suyla" değil "mantosuyla".
+    tr = ["Sunny peleriniyle örtündü."]
+    en = ["Sunny wrapped himself in his Mantle."]
+    cikti, oz = _yaz(tr, en, "Mantle", "Pelerin", "Manto")
+    assert cikti == ["Sunny mantosuyla örtündü."] and oz.degisen == 1
+
+
+def test_kucuk_harfli_kullanimda_yabanci_ad_ozel_ad_gibi_yazilir():
+    tr = ["Bir ucubeyi gördü."]
+    en = ["He saw an Abomination."]
+    # Kaynak terim verilir (canlı yol da verir): yabancılık oradan anlaşılır.
+    cikti, _ = sy.yeniden_yaz(tr, en, translate._term_regex("Abomination"), "Ucube",
+                              "Abomination", kaynak="Abomination")
+    assert cikti[0].startswith("Bir Abomination'")
