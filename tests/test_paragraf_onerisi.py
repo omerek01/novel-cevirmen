@@ -41,6 +41,67 @@ def test_yeniden_oneri_kaydetmez_ve_baglam_verir(monkeypatch):
     assert cache.get_chapter(URL)["translation"] == "Bir.\n\nİki.\n\nÜç."
 
 
+def test_yeniden_oneri_hafif_kipte_cevirir(monkeypatch):
+    # Tek cümlelik öneri bölüm hattının bütün turlarıyla 3-5 çağrı / 40-75 sn sürüyordu.
+    _bolum()
+    gorulen = {}
+
+    def sahte(text, api_key, **kw):
+        gorulen["hafif"] = kw.get("hafif")
+        return {"translation": "İKİ", "model": "m"}
+    monkeypatch.setattr(translate, "translate_chapter", sahte)
+    _client().post("/api/chapter/paragraf/oneri", json={"url": URL, "sira": 1})
+    assert gorulen["hafif"] is True
+
+
+class _Tur:
+    """Ek turları sayar; hafif kipte hiçbiri çağrılmamalı."""
+
+    def __init__(self, monkeypatch):
+        from core import ceviri_baglam, ceviri_cilala, ceviri_kalite
+
+        self.turlar = []
+        self.ceviri = 0
+        def cilala(tr, *a, **k):
+            self.turlar.append("cilalama")
+            return {}
+        def kalite(*a, **k):
+            self.turlar.append("kalite")
+            return {"durum": "temiz", "supheli": [], "onarim_modelleri": []}
+        def analiz(*a, **k):
+            self.turlar.append("analiz")
+            raise ceviri_baglam.AnalizHatasi("testte analiz yok")
+        def parca(*a, **k):
+            # Terim alanları eksik yanıt: hafif olmayan kipte bir tekrar daha tetikler.
+            self.ceviri += 1
+            return {"translation": "[[1]] Merhaba dostum, nasılsın.", "detected_names": [],
+                    "detected_terms": {}, "model": "m", "alan_eksik": True}
+        monkeypatch.setattr(ceviri_cilala, "cilala", cilala)
+        monkeypatch.setattr(ceviri_kalite, "denetle_ve_onar", kalite)
+        monkeypatch.setattr(ceviri_baglam, "analiz", analiz)
+        monkeypatch.setattr(translate, "_translate_chunk", parca)
+        for ad in ("CEVIRI_CILALA", "CEVIRI_KALITE"):
+            monkeypatch.setenv(ad, "1")
+
+
+def test_hafif_kip_tek_ceviri_cagrisi_yapar(monkeypatch):
+    tur = _Tur(monkeypatch)
+    monkeypatch.setenv("CEVIRI_ANALIZ", "1")
+    sonuc = translate.translate_chapter("Hello my friend, how are you.", "anahtar",
+                                        models=("m",), hafif=True)
+    assert sonuc["translation"] == "Merhaba dostum, nasılsın."
+    assert tur.ceviri == 1 and tur.turlar == []
+
+
+def test_hafif_olmayan_kip_ek_turlari_calistirir(monkeypatch):
+    # Karşı test: ek turlar bu kurulumda gerçekten tetikleniyor, yani yukarıdaki
+    # "hiçbiri çağrılmadı" sonucu kurulum hatasından gelmiyor.
+    tur = _Tur(monkeypatch)
+    monkeypatch.setenv("CEVIRI_ANALIZ", "0")
+    translate.translate_chapter("Hello my friend, how are you.", "anahtar", models=("m",))
+    assert tur.ceviri == 2 and tur.turlar == ["cilalama", "kalite"]
+
+
 def test_bolunen_paragraf_tek_paragrafa_indirilir(monkeypatch):
     _bolum()
     monkeypatch.setattr(translate, "translate_chapter",

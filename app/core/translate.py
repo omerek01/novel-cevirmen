@@ -1269,12 +1269,14 @@ def _izli_uret(*args, **kwargs):
 def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_context="",
                       kosullar=None, anlamlar=None, bolum_no=None, anlam_denetimi=None,
                       *, book_slug=None, bolum_url=None, onceki_bolum=None,
-                      bellek_havuzu=None, defter=None, terim_ornekleri=None) -> dict:
+                      bellek_havuzu=None, defter=None, terim_ornekleri=None,
+                      hafif=False) -> dict:
     """Çeviri denemesini izler; başarısız deneme eski chapter kaydını değiştirmez.
 
     `defter`: karakter defteri anlık görüntüsü (`karakter_defteri.ceviri_kartlari`); verilirse
     her parçaya yalnız o parçada geçen kişilerin kartı eklenir. None -> istem aynen kalır.
-    `terim_ornekleri`: `terim_ornek.hazirla` çıktısı; aynı kuralla parça başına eklenir."""
+    `terim_ornekleri`: `terim_ornek.hazirla` çıktısı; aynı kuralla parça başına eklenir.
+    `hafif`: okuyucunun tek paragraf önerisi için (bkz. `_translate_chapter_impl`)."""
     from . import ceviri_baglam, ceviri_izleri
     acik = (os.getenv("CEVIRI_ANALIZ", "1") != "0" or os.getenv("CEVIRI_KALITE", "1") != "0"
             or os.getenv("CEVIRI_OZET", "0") == "1")
@@ -1291,7 +1293,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
         sonuc = _translate_chapter_impl(text, api_key, glossary, models, prev_context,
                     kosullar, anlamlar, bolum_no, anlam_denetimi,
                     book_slug=book_slug, bolum_url=bolum_url, onceki_bolum=onceki_bolum,
-                    bellek_havuzu=bellek_havuzu)
+                    bellek_havuzu=bellek_havuzu, hafif=hafif)
         if iz is not None:
             iz.update(durum="tamamlandi", son_ceviri=sonuc["translation"])
             iz.setdefault("kalite", sonuc.get("ceviri_kalitesi"))
@@ -1329,8 +1331,17 @@ def _translate_chapter_impl(
     bolum_no: int | None = None,
     anlam_denetimi: list[dict] | None = None,
     *, book_slug=None, bolum_url=None, onceki_bolum=None, bellek_havuzu=None,
+    hafif: bool = False,
 ) -> dict:
     """Tüm bölümü parçalayıp çevirir; bağlamı taşır, yeni isimleri biriktirir.
+
+    ``hafif``: okuyucunun TEK PARAGRAF önerisi (2026-10-18, kullanıcı şikâyeti + ölçüm).
+    Bölüm hattının bütün turlarıyla tek cümle 3-5 çağrı ve 42-77 sn sürüyordu
+    (çeviri 11-22, cilalama 9-10, kalite denetimi 10-32 sn, ardından onarım/doğrulama).
+    Hafif kipte analiz, özet, cilalama, kalite katmanı ve terim alanı onarımı ATLANIR:
+    öneriyi okur kendisi görüp kabul ediyor ve öneri sözlüğe terim yazmıyor (terim
+    alanı onarımının koruduğu şey burada yok). Sözlük ihlali, İngilizce kalıntı,
+    kısalma ve hizalama onarımları KALIR — yalnız sorun bulunca çağrı harcarlar.
 
     ``anlam_denetimi``: çift anlamlı adların tanımları (`varlik_grafigi.ceviri_anlamlari`).
     Ana talimata GİRMEZ; çeviriden SONRA denetim + hedefli onarım için kullanılır
@@ -1366,7 +1377,7 @@ def _translate_chapter_impl(
 
     iz = _CEVIRI_IZ.get()
     analiz = None
-    if os.getenv("CEVIRI_ANALIZ", "1") != "0" and text.strip():
+    if not hafif and os.getenv("CEVIRI_ANALIZ", "1") != "0" and text.strip():
         from . import ceviri_baglam, ceviri_izleri
         ilgili = _relevant_glossary(glossary, text)
         def analiz_uret(user, system, asama):
@@ -1402,7 +1413,7 @@ def _translate_chapter_impl(
     # yalnız ÖZET çağrısına girer; çeviriye yalnız bu bölümün özeti eklenir, çıktı
     # biçimi ve terim tespiti değişmez. Özet düşerse çeviri özetsiz sürer.
     ozet = ozet_modeli = None
-    if os.getenv("CEVIRI_OZET", "0") == "1" and text.strip():
+    if not hafif and os.getenv("CEVIRI_OZET", "0") == "1" and text.strip():
         from . import ozet_zinciri
         onceki_ozet = ""
         if (onceki_bolum and book_slug and type(bolum_no) is int
@@ -1497,7 +1508,8 @@ def _translate_chapter_impl(
         # tur, kısalma onarımıyla aynı gerekçe. Yeni hâl ancak alanları taşıyor,
         # kısalmamış ve ilk hâlden daha kötü hizalanmamışsa alınır: terimler ile metin
         # aynı yanıttan gelmeli, yoksa önerilen karşılık metindekiyle ayrışırdı.
-        if result.get("alan_eksik") and os.getenv("CEVIRI_TERIM_ALANI_ONARIM", "1") != "0":
+        if (result.get("alan_eksik") and not hafif
+                and os.getenv("CEVIRI_TERIM_ALANI_ONARIM", "1") != "0"):
             try:
                 with api_durum.baglam(asama="terim_alani_onarimi"):
                     yeniden = _translate_chunk(
@@ -1512,7 +1524,7 @@ def _translate_chapter_impl(
                          is not None
                          or _split_by_markers(result["translation"], len(chunk_en)) is None)):
                 result = yeniden
-        if result.get("alan_eksik"):
+        if result.get("alan_eksik") and not hafif:
             terim_alani_eksik += 1
             logging.getLogger(__name__).warning(
                 "çeviri yanıtında ad/terim alanları yok; bu parçadaki yeni adlar önerilmedi"
@@ -1637,7 +1649,7 @@ def _translate_chapter_impl(
     # denetler. Tur çeviriyi düşürmez; yeni sözlük ihlali/İngilizce kalıntı getiren
     # paragraf özgün kalır. Ölçüm ve gerekçe: `core/ceviri_cilala.py`.
     cilalama_oncesi = None
-    if os.getenv("CEVIRI_CILALA", "0") == "1" and tr_paras and aligned:
+    if not hafif and os.getenv("CEVIRI_CILALA", "0") == "1" and tr_paras and aligned:
         from . import ceviri_cilala
         cilalama_oncesi = list(tr_paras)
         def cilala_uret(user, system, asama):
@@ -1663,7 +1675,7 @@ def _translate_chapter_impl(
             iz["cilalama"] = cilalama
             iz["asamalar"].append({"asama": "cilalama_sonrasi", "metin": list(tr_paras)})
     kalite_metrik = None
-    if os.getenv("CEVIRI_KALITE", "1") != "0" and tr_paras:
+    if not hafif and os.getenv("CEVIRI_KALITE", "1") != "0" and tr_paras:
         from . import ceviri_kalite
         # KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi
         # düşürmez. Denetim yapılamazsa çeviri "denetlenemedi" durumuyla kaydedilir.

@@ -1449,7 +1449,8 @@ def paragraf_onerisi(req: ParagrafOneriRequest) -> dict:
                 sonuc = translate_mod.translate_chapter(
                     en[req.sira], API_KEY, glossary=sozluk, kosullar=kosullar,
                     prev_context="\n\n".join(tr[max(0, req.sira - 2):req.sira]),
-                    bolum_no=bolum.get("chapter_no"), book_slug=slug, bolum_url=req.url)
+                    bolum_no=bolum.get("chapter_no"), book_slug=slug, bolum_url=req.url,
+                    hafif=True)
                 aday = (sonuc.get("translation") or "").strip()
                 model = sonuc.get("model")
                 kalan = (sonuc.get("ceviri_kalitesi") or {}).get("supheli") or []
