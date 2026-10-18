@@ -146,6 +146,42 @@ def test_etkilenen_bolumler_ornekli_listelenir_secilenler_ise_gider(sayfa):
     assert istekler == [{"urls": [urller[0]]}]
 
 
+def _ceviri(sayfa, url):
+    return sayfa.evaluate(
+        "u => fetch('/api/chapter?url=' + encodeURIComponent(u)).then(r => r.json())"
+        ".then(v => v.translation)", url)
+
+
+def test_eski_karsilik_yeniden_cevirmeden_yerinde_guncellenir_ve_geri_alinir(sayfa):
+    """Ö1: önce önizleme (yazmaz), onayla yazar; her bölüm arşivden geri alınabilir."""
+    urller = tohum.kitap(bolum_sayisi=2)
+    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
+    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Burç"})
+    _sozluge_git(sayfa)
+    sayfa.locator("#glossList .gloss-row").first.click()
+    sayfa.locator("#terimEtkiBtn").click()
+    expect(sayfa.locator("#terimEtki .terim-etki-satir")).to_have_count(2)
+    sayfa.locator(f"#terimEtki li[data-url='{urller[1]}'] input[type=checkbox]").uncheck()
+    sayfa.get_by_role("button", name="Yerinde güncelle (ücretsiz)").click()
+    ozet = sayfa.locator("#terimEtki .terim-yerinde-ozet")
+    expect(ozet).to_contain_text("1 bölümde")
+    ilk = sayfa.locator(f"#terimEtki li[data-url='{urller[0]}'] .terim-etki-sonuc")
+    expect(ilk).to_contain_text("Gümüş Burç")
+    # Önizleme yazmaz.
+    bolum = _ceviri(sayfa, urller[0])
+    assert "Gümüş Kule" in bolum
+    sayfa.get_by_role("button", name="Onayla ve güncelle").click()
+    expect(ilk).to_contain_text("YERİNDE GÜNCELLENDİ")
+    bolum = _ceviri(sayfa, urller[0])
+    assert "Gümüş Burç" in bolum and "Gümüş Kule" not in bolum
+    ikinci = _ceviri(sayfa, urller[1])
+    assert "Gümüş Kule" in ikinci  # seçilmeyen bölüme dokunulmadı
+    ilk.get_by_role("button", name="Eski çeviriye dön").click()
+    expect(ilk).to_contain_text("ESKİ ÇEVİRİYE DÖNÜLDÜ")
+    bolum = _ceviri(sayfa, urller[0])
+    assert "Gümüş Kule" in bolum
+
+
 def test_guncel_karsiligi_tasiyan_bolum_varsayilan_secilmez(sayfa):
     """Etki listesi bölümün BUGÜNKÜ çevirisine bakar: güncel karşılığı taşıyan bölümü
     yeniden çevirmek boşa istek harcar (Faz A4)."""

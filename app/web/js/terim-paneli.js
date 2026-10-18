@@ -808,7 +808,118 @@ function etkiListesiCiz(kutu, slug, veri) {
     yenidenCevir(slug, urls, kutu).finally(() => (basla.disabled = false));
   });
   eylem.append(hepsi, basla);
+  // Ö1: karşılık değiştiyse eski bölümler yeniden çevrilmeden (ücretsiz, anında) yerinde
+  // güncellenebilir. Önce önizleme; "Onayla" yazar. Emin olunmayan geçişe dokunulmaz.
+  if (veri.eski_karsiliklar && veri.eski_karsiliklar.length && veri.karsilik) {
+    const yerinde = document.createElement("button");
+    yerinde.type = "button";
+    yerinde.className = "pill";
+    yerinde.textContent = "Yerinde güncelle (ücretsiz)";
+    yerinde.addEventListener("click", () => {
+      const urls = [...liste.querySelectorAll("input[type=checkbox]:checked")].map((k) => k.value);
+      if (!urls.length) return bildir("Bölüm seçilmedi.");
+      yerinde.disabled = true;
+      yerindeOnizle(slug, panel.kayitli, urls, kutu).finally(() => (yerinde.disabled = false));
+    });
+    eylem.append(yerinde);
+  }
   kutu.appendChild(eylem);
+}
+
+async function yerindeIstek(slug, source, urls, uygula) {
+  const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary/yerinde`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ source, urls, uygula }),
+  });
+  const veri = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(veri.detail || "sunucu " + res.status);
+  return veri;
+}
+
+function yerindeSatiri(kutu, url) {
+  return kutu.querySelector(`li[data-url="${CSS.escape(url)}"] .terim-etki-sonuc`);
+}
+
+/* Önizleme: hiçbir şey yazılmaz. Her bölüm satırına "önce → sonra" örneği, üstte özet,
+   altta "Onayla ve güncelle". Sunucu küçük makinede birkaç saniye hesaplayabilir. */
+async function yerindeOnizle(slug, source, urls, kutu) {
+  let ozet = kutu.querySelector(".terim-yerinde-ozet");
+  if (!ozet) {
+    ozet = document.createElement("p");
+    ozet.className = "modal-hint terim-yerinde-ozet";
+    ozet.setAttribute("role", "status");
+    kutu.appendChild(ozet);
+  }
+  kutu.querySelector(".terim-yerinde-onay")?.remove();
+  ozet.textContent = "Değişecek yerler hesaplanıyor…";
+  let veri;
+  try {
+    veri = await yerindeIstek(slug, source, urls, false);
+  } catch (err) {
+    ozet.textContent = "Önizleme alınamadı (" + err.message + ").";
+    return;
+  }
+  const degisecek = veri.bolumler.filter((b) => b.degisen);
+  for (const b of veri.bolumler) {
+    const satir = yerindeSatiri(kutu, b.url);
+    if (!satir) continue;
+    satir.textContent = b.degisen
+      ? `${b.degisen} yer değişecek` + (b.belirsiz ? `, ${b.belirsiz} yer emin olunamadığı için kalacak` : "") +
+        (b.ornek_sonra ? `: «${b.ornek_once}» → «${b.ornek_sonra}»` : "")
+      : `${b.belirsiz} yer emin olunamadığı için olduğu gibi kalacak (yeniden çeviri gerekir)`;
+  }
+  if (!degisecek.length) {
+    ozet.textContent = "Seçilen bölümlerde güvenle değiştirilebilecek yer bulunamadı; " +
+      "eski karşılığı kaldırmak için yeniden çevir.";
+    return;
+  }
+  ozet.textContent =
+    `${degisecek.length} bölümde ${veri.degisen} yer «${veri.eski_karsiliklar.join("», «")}» → ` +
+    `«${veri.karsilik}» olacak` +
+    (veri.belirsiz ? `; ${veri.belirsiz} yer emin olunamadığı için olduğu gibi kalacak` : "") +
+    ". Eski metin arşive düşer, her bölüm geri alınabilir.";
+  const onay = document.createElement("div");
+  onay.className = "modal-actions terim-yerinde-onay";
+  const dugme = document.createElement("button");
+  dugme.type = "button";
+  dugme.className = "next-btn";
+  dugme.textContent = "Onayla ve güncelle";
+  dugme.addEventListener("click", async () => {
+    dugme.disabled = true;
+    await yerindeUygula(slug, source, degisecek.map((b) => b.url), kutu, ozet);
+    onay.remove();
+  });
+  onay.appendChild(dugme);
+  ozet.after(onay);
+}
+
+async function yerindeUygula(slug, source, urls, kutu, ozet) {
+  ozet.textContent = "Güncelleniyor…";
+  let veri;
+  try {
+    veri = await yerindeIstek(slug, source, urls, true);
+  } catch (err) {
+    ozet.textContent = "Güncellenemedi (" + err.message + ").";
+    return;
+  }
+  let yazilan = 0;
+  for (const b of veri.bolumler) {
+    const satir = yerindeSatiri(kutu, b.url);
+    if (!b.degisen) continue;
+    if (!b.yazildi) {
+      if (satir) satir.textContent = "Bu arada değişmiş, atlandı; yeniden önizle.";
+      continue;
+    }
+    yazilan += 1;
+    if (satir) {
+      satir.textContent = `YERİNDE GÜNCELLENDİ (${b.degisen} yer)`;
+      if (b.arsiv_id) satir.appendChild(geriAlDugmesi(b.url, b.arsiv_id, satir));
+    }
+    await bolumuTazele(b.url);
+  }
+  ozet.textContent = `${yazilan} bölüm yerinde güncellendi (${veri.degisen} yer).`;
+  bildir(ozet.textContent);
 }
 
 /* Yeniden çeviri işi: sunucuda arka planda koşar (panel kapansa da sürer). Her
