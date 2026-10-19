@@ -13,5 +13,5 @@ def test_ayarlar_bolumleri_ve_tema_ornekleri(sayfa):
     sayfa.locator('.navtab[data-tab="settings"]').click()
     panel = sayfa.locator("#settingsPanel")
     expect(panel).to_be_visible()
-    expect(panel.locator(".ayar-bolumu")).to_have_text(["Sayfa", "Çeviri modeli", "Bu bölüm", "Bakım"])
+    expect(panel.locator(".ayar-bolumu")).to_have_text(["Sayfa", "Çeviri modeli", "Çeviri aşamaları", "Bakım"])
     expect(panel.locator("[data-theme-opt] i.theme-swatch")).to_have_count(3)
