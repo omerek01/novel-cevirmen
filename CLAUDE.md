@@ -1858,6 +1858,10 @@ Dört kural:
   güvenli). Göçler tembel ve eklemelidir ama ilk bağlantıda canlı veriye yazar.
 * **Restart'tan ÖNCE koşan toplu çeviri işi var mı bak.** İşler BELLEK-İÇİ
   (`jobs.py`), restart onları öldürür: `curl -s localhost:8000/api/book/<slug>/job`.
+  **Uçuştaki ön ısıtma (prefetch) da öyle** — iş değil, daemon thread; `/job` onu
+  GÖSTERMEZ. Son birkaç dakikada `api_olay`'da `amac='prefetch'` kaydı olup
+  `chapters`'ta henüz bulunmayan url varsa bitmesini bekle. Vaka 2026-10-19
+  (#1043): deploy restart'ı süren ısıtmayı öldürdü, okur 6 dk bekledi.
 * **Yalnız `app/web/` değiştiyse restart GEREKMEZ** — statikler her istekte
   diskten okunuyor. Python değiştiyse gerekir (süreç açılışında yükleniyor).
   Açılış e2-micro'da ~8 sn sürer; hemen atılan `curl` 000 döner, panik etme.
