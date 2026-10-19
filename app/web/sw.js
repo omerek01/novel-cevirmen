@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v140"; // aşamalar paragraf önerisinde de açılabilir
+const SHELL_CACHE = "novellink-shell-v141"; // ön ısıtma bağlantı hatasında vazgeçmez
 const DATA_CACHE = "novellink-data";
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 

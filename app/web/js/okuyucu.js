@@ -1151,7 +1151,11 @@ export async function isitVeKaydet(url, kalanDeneme) {
     });
     veri = await r.json();
   } catch {
-    return; // çevrimdışı / sunucu kapalı: ısıtma en iyi çabadır
+    // Çevrimdışı / sunucu yeniden başlıyor: VAZGEÇME, deneme hakkıyla yoklamaya devam et.
+    // Vaka #1043 (2026-10-19): ısıtma sürerken sunucu yeniden başladı, iş parçacığı
+    // öldü; yoklama ilk hatada durduğu için bölüm bir daha istenmedi ve okur
+    // çevirinin tamamını baştan bekledi. Sonraki POST işi yeniden kuyruğa koyar.
+    veri = null;
   }
   if (veri && veri.cached) {
     await warmOffline(url);
