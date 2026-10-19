@@ -5,6 +5,8 @@ roundtrip'leri ve ağ gerektirmeyen endpoint'ler.
 """
 from __future__ import annotations
 
+import pytest
+
 from fastapi.testclient import TestClient
 
 import server
@@ -658,3 +660,46 @@ def test_sistem_talimati_hiyerarsi_basamagini_kapsar():
     # Ayırt edici ŞART: düzene bağlanmayan sıradan cins isim girmemeli.
     assert "AYIRT EDİCİ" in madde
 
+
+
+# --- ünsüz + y ile biten terimin -ies çoğulu (2026-10-19, shadow-slave #1040) ---
+# `Memory -> Anı` kayıtlıyken bölüm yalnız "Memories" diyordu: desen çoğulu yalnız
+# -s/-es ile tanıdığı için kayıt prompt'a girmedi ve model "Hatıra" yazdı; denetim de
+# eşleşme görmediği için ihlal saymadı. Canlıda 11 terim, 272 bölüm.
+
+@pytest.mark.parametrize("terim, metin", [
+    ("Memory", "He summoned several Memories."),
+    ("Ability", "Both Abilities activated."),
+    ("Aspect Ability", "their Aspect Abilities were dormant"),
+    ("Legacy", "the great Legacies of the past"),
+])
+def test_term_regex_unsuz_y_terimin_ies_cogulunu_yakalar(terim, metin):
+    assert translate._term_regex(terim).search(metin)
+
+
+@pytest.mark.parametrize("terim, metin", [
+    ("Memory", "a memorial stone"),     # kök başka sözcüğün parçası
+    ("Memory", "Memoria was silent"),
+    ("Day", "the Daies"),                # ünlü + y: -ies çoğulu yok (days)
+    ("Key", "two Keies"),
+])
+def test_term_regex_ies_esnekligi_baska_sozcuge_bulasmaz(terim, metin):
+    assert not translate._term_regex(terim).search(metin)
+
+
+def test_relevant_glossary_ies_cogulunu_gorunce_terimi_tutar(monkeypatch):
+    monkeypatch.setattr(translate, "GLOSSARY_FILTER_MIN", 2)
+    terms = {"Memory": "Anı", "Nightmare": "Kabus"}
+    picked = translate._relevant_glossary(terms, "Sunny started summoning several Memories.")
+    assert picked == {"Memory": "Anı"}
+
+
+def test_sozluk_ihlali_ies_cogulunda_yakalanir():
+    g = {"Memory": "Anı"}
+    en = ["Sunny took a deep breath and started summoning several Memories."]
+    assert translate.sozluk_ihlali_paragraflari(
+        g, ["Sunny derin bir nefes alıp birkaç Memory çağırmaya başladı."], en, {})
+    assert translate.karsilik_sapmasi_paragraflari(
+        g, ["Sunny derin bir nefes alıp birkaç Hatıra çağırmaya başladı."], en, {})
+    assert not translate.sozluk_ihlali_paragraflari(
+        g, ["Sunny derin bir nefes alıp birkaç Anı çağırmaya başladı."], en, {})

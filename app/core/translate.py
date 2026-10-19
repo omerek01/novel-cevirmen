@@ -2236,6 +2236,22 @@ def cumle_bul(metin: str, terim: str) -> str | None:
     return None
 
 
+_IES_UNSUZ = frozenset("bcdfghjklmnpqrstvwxz")
+
+
+def _ies_koku(parca: str) -> str | None:
+    """Ünsüz + `y` ile biten sözcüğün `-ies` çoğulu için kökü (`Memory` -> `Memor`).
+
+    Desenin `s/es` kuyruğu bu çoğulu tanımıyordu (`Memories`, `Abilities`): kayıt
+    yalnız çoğul geçen bölümde prompt'a girmiyor, denetim de eşleşme görmüyordu.
+    Ölçüm (2026-10-19, canlı, shadow-slave): 11 terim, 883 geçiş, 272 bölüm; vaka
+    #1040 `Memory -> Anı` varken "Memories" -> "Hatıra". Ünlü + `y` (`Day`, `Key`)
+    `-ies` almaz, dokunulmaz."""
+    if len(parca) >= 3 and parca[-1] in "yY" and parca[-2].lower() in _IES_UNSUZ:
+        return parca[:-1]
+    return None
+
+
 @lru_cache(maxsize=2048)
 def _term_regex(term: str, cogul_esnek: bool = False) -> re.Pattern[str]:
     """Terimi kelime-sınırlı, çekim ekine ve YAZIM VARYANTINA toleranslı arayan desen.
@@ -2272,7 +2288,11 @@ def _term_regex(term: str, cogul_esnek: bool = False) -> re.Pattern[str]:
         parts = _cogul_tekil_parcalari(parts) or parts
     head = r"\b" if parts[0][:1].isalnum() else ""
     tail = r"(?:['’]s|es|s)?\b" if parts[-1][-1:].isalnum() else ""
-    core = _TERM_GLUE.join(re.escape(p) for p in parts)
+    parcalar = [re.escape(p) for p in parts]
+    kok = _ies_koku(parts[-1])
+    if kok:
+        parcalar[-1] = re.escape(kok) + "(?:y|ies)"
+    core = _TERM_GLUE.join(parcalar)
     return re.compile(head + core + tail, re.IGNORECASE)
 
 
@@ -2314,6 +2334,11 @@ def _on_eleme_anahtari(
         tekil = _cogul_tekil_parcalari(_term_parts(source))
         if tekil:
             return fold_term("".join(tekil))
+    parts = _term_parts(source)
+    kok = _ies_koku(parts[-1]) if parts else None
+    if kok:
+        # Desen `Memor(?:y|ies)` arıyor; dizgi ikisinde de geçen kök olmalı.
+        return fold_term("".join(parts[:-1]) + kok)
     return fold_term(source)
 
 
@@ -2498,7 +2523,9 @@ already not
 def _kayit_deseni(source: str) -> re.Pattern:
     # Önbellek ŞART: denetim onarım kabulünde de koşuyor (paragraf x kayıt); `re`'nin
     # kendi 512'lik önbelleği ~1100 kayıtlı sözlükte sürekli boşalıyordu.
-    return re.compile(rf"(?<!\w){re.escape(source)}(?!\w)", re.IGNORECASE)
+    kok = _ies_koku(source)
+    govde = re.escape(kok) + "(?:y|ies)" if kok else re.escape(source)
+    return re.compile(rf"(?<!\w){govde}(?!\w)", re.IGNORECASE)
 
 
 @lru_cache(maxsize=8)
@@ -2524,7 +2551,9 @@ def _kapsayan_kayitlar(glossary: dict[str, str]) -> dict[str, tuple[re.Pattern, 
 
 def _ad_olarak_geciyor(source: str, en: str, kapsayanlar, en_kucuk: str | None = None) -> bool:
     """Kayıt bu İngilizce paragrafta AD/TERİM olarak geçiyor mu (karşılık sapması ölçütü)."""
-    if source.lower() not in (en_kucuk if en_kucuk is not None else en.lower()):
+    # Ön süzgeç desenle aynı kökü arar: "memory" dizgisi "memories"te geçmez.
+    anahtar = (_ies_koku(source) or source).lower()
+    if anahtar not in (en_kucuk if en_kucuk is not None else en.lower()):
         return False  # ucuz ön süzgeç: regex'e yalnız aday kalan kayıt girer
     ortu = [m.span() for d in (kapsayanlar or ()) for m in d.finditer(en)]
     cok_sozcuk = len(source.split()) > 1
