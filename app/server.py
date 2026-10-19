@@ -1481,6 +1481,9 @@ def paragraf_kaydet(req: ParagrafKaydetRequest) -> dict:
 class AsamaRequest(BaseModel):
     ad: str
     acik: bool
+    # "bolum": bölüm çevirisi (varsayılan). "paragraf": okuyucunun tek paragraf önerisi;
+    # yalnız cilalama ve kalite bu kipte açılabilir.
+    kapsam: str = "bolum"
 
 
 def _asama_yaniti() -> dict:
@@ -1495,11 +1498,17 @@ def get_ceviri_asamalari() -> dict:
 
 @app.post("/api/settings/asamalar")
 def set_ceviri_asamasi(req: AsamaRequest) -> dict:
-    """Aşamayı aç/kapa. Yeniden başlatma gerekmez; yalnız yeni çevrilen bölümde geçerli."""
+    """Aşamayı aç/kapa. Yeniden başlatma gerekmez; yalnız yeni çevrilen bölümde (paragraf
+    kapsamında bir sonraki öneride) geçerli."""
+    if req.kapsam not in ("bolum", "paragraf"):
+        raise HTTPException(status_code=400, detail="kapsam 'bolum' ya da 'paragraf' olmalı.")
     try:
-        ceviri_asamalari.ayarla(req.ad, req.acik)
+        if req.kapsam == "paragraf":
+            ceviri_asamalari.ayarla_paragraf(req.ad, req.acik)
+        else:
+            ceviri_asamalari.ayarla(req.ad, req.acik)
     except KeyError:
-        raise HTTPException(status_code=400, detail="Bilinmeyen çeviri aşaması.")
+        raise HTTPException(status_code=400, detail="Bu aşama bu kapsamda açılamaz.")
     return _asama_yaniti()
 
 

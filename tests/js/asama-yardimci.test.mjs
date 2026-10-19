@@ -37,3 +37,9 @@ test("gövde açık/kapalıyı boolean taşır", () => {
   assert.deepEqual(asamaGovdesi("kalite", "0"), { ad: "kalite", acik: false });
   assert.deepEqual(asamaGovdesi("kalite", "1"), { ad: "kalite", acik: true });
 });
+
+test("paragraf kapsamı gövdeye yazılır, bölüm gövdesi eskisi gibi kalır", () => {
+  assert.deepEqual(asamaGovdesi("kalite", "1", "paragraf"), { ad: "kalite", acik: true, kapsam: "paragraf" });
+  assert.deepEqual(asamaGovdesi("kalite", "0", "bolum"), { ad: "kalite", acik: false });
+  assert.deepEqual(asamaGovdesi("kalite", "0", undefined), { ad: "kalite", acik: false });
+});

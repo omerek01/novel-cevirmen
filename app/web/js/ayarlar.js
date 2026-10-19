@@ -167,6 +167,24 @@ export async function loadModelSecim() {
    aşamayı kapatınca bölüm başına ne kazanacağını görerek karar versin. */
 let asamaVerisi = null;
 
+function asamaDugmeleri(ad, acik, kapsam, etiketId) {
+  const grup = document.createElement("div");
+  grup.className = "segmented";
+  grup.setAttribute("role", "group");
+  grup.setAttribute("aria-labelledby", etiketId);
+  for (const [deger, yazi] of [["1", "Açık"], ["0", "Kapalı"]]) {
+    const b = document.createElement("button");
+    b.className = "seg";
+    b.dataset.asama = ad;
+    b.dataset.acik = deger;
+    b.dataset.kapsam = kapsam;
+    b.textContent = yazi;
+    b.setAttribute("aria-pressed", String(acik === (deger === "1")));
+    grup.appendChild(b);
+  }
+  return grup;
+}
+
 export function cizAsamalar(veri) {
   const kutu = el("asamaSecim");
   if (!kutu) return;
@@ -188,20 +206,25 @@ export function cizAsamalar(veri) {
     sure.className = "asama-sure";
     sure.textContent = asamaSureMetni(a.ad, veri.olcum);
     metin.append(ad, aciklama, sure);
-    const grup = document.createElement("div");
-    grup.className = "segmented";
-    grup.setAttribute("role", "group");
-    grup.setAttribute("aria-labelledby", ad.id);
-    for (const [deger, yazi] of [["1", "Açık"], ["0", "Kapalı"]]) {
-      const b = document.createElement("button");
-      b.className = "seg";
-      b.dataset.asama = a.ad;
-      b.dataset.acik = deger;
-      b.textContent = yazi;
-      b.setAttribute("aria-pressed", String(a.acik === (deger === "1")));
-      grup.appendChild(b);
+    satir.append(metin, asamaDugmeleri(a.ad, a.acik, "bolum", ad.id));
+    // Paragraf önerisi hafif kipte ek turları atlar; uygun aşamalar orada ayrıca
+    // açılabilir. Bölüm seçiminden bağımsız (null = bu aşama o kipte açılamaz).
+    if (a.paragraf !== null && a.paragraf !== undefined) {
+      const alt = document.createElement("div");
+      alt.className = "asama-paragraf";
+      const altMetin = document.createElement("span");
+      altMetin.className = "asama-paragraf-metin";
+      const altAd = document.createElement("span");
+      altAd.className = "asama-paragraf-ad";
+      altAd.id = `asama-${a.ad}-paragraf`;
+      altAd.textContent = "Paragraf önerisinde";
+      const altNot = document.createElement("span");
+      altNot.className = "asama-sure";
+      altNot.textContent = "Açıkken öneri bu tur kadar uzar";
+      altMetin.append(altAd, altNot);
+      alt.append(altMetin, asamaDugmeleri(a.ad, a.paragraf, "paragraf", `${ad.id} ${altAd.id}`));
+      satir.appendChild(alt);
     }
-    satir.append(metin, grup);
     kutu.appendChild(satir);
   }
   const ozet = el("asamaOzet");
@@ -410,11 +433,12 @@ export function kur() {
     const b = ev.target.closest("[data-asama]");
     if (!b || b.getAttribute("aria-pressed") === "true" || !asamaVerisi) return;
     const onceki = asamaVerisi;
-    const govde = asamaGovdesi(b.dataset.asama, b.dataset.acik);
+    const govde = asamaGovdesi(b.dataset.asama, b.dataset.acik, b.dataset.kapsam);
+    const alan = govde.kapsam === "paragraf" ? "paragraf" : "acik";
     // İyimser: dokunuş anında geri bildirim; yazılamazsa gerçeğe dönülür.
     cizAsamalar({
       ...onceki,
-      asamalar: onceki.asamalar.map((a) => (a.ad === govde.ad ? { ...a, acik: govde.acik } : a)),
+      asamalar: onceki.asamalar.map((a) => (a.ad === govde.ad ? { ...a, [alan]: govde.acik } : a)),
     });
     try {
       const res = await fetch("/api/settings/asamalar", {
@@ -424,10 +448,10 @@ export function kur() {
       });
       if (!res.ok) throw new Error(`sunucu ${res.status}`);
       cizAsamalar(await res.json());
-      setStatus(
-        `${b.closest(".asama-satir").querySelector(".asama-ad").textContent} ` +
-        `${govde.acik ? "açıldı" : "kapatıldı"} — yeni çevrilen bölümlerde geçerli.`
-      );
+      const etiket = asamaVerisi.asamalar.find((a) => a.ad === govde.ad)?.etiket || "Aşama";
+      setStatus(alan === "paragraf"
+        ? `${etiket} paragraf önerisinde ${govde.acik ? "açıldı" : "kapatıldı"} — bir sonraki öneride geçerli.`
+        : `${etiket} ${govde.acik ? "açıldı" : "kapatıldı"} — yeni çevrilen bölümlerde geçerli.`);
     } catch {
       cizAsamalar(onceki);
       setStatus("Aşama kaydedilemedi — sunucuya ulaşılamadı.");

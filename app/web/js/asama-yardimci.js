@@ -19,8 +19,12 @@ export function olcumOzeti(olcum) {
     `model süresi, bunun ${Math.round(olcum.ceviri_ort_sn)} sn'si çevirinin kendisi. ${GECERLILIK}`;
 }
 
-export function asamaGovdesi(ad, acik) {
-  return { ad, acik: acik === "1" };
+/* `kapsam` "paragraf" ise seçim okuyucunun tek paragraf önerisine yazılır; bölüm
+   seçiminin gövdesi kapsamsız kalır (sunucu varsayılanı "bolum"). */
+export function asamaGovdesi(ad, acik, kapsam) {
+  const govde = { ad, acik: acik === "1" };
+  if (kapsam === "paragraf") govde.kapsam = "paragraf";
+  return govde;
 }
 
 /* Sayıdan sonra gelen "-(s)inde" ekinin ünlü uyumu (son okunan sözcüğe göre). */

@@ -12,6 +12,12 @@ kapatıyor; ayar yazılmadıkça o yol da aynen çalışır.
 Bayrağı doğrudan `os.getenv` ile okuyan yeni bir yer düğmeyi SESSİZCE etkisiz
 bırakır (düğme "kapalı" der, aşama yine çalışır); `tests/test_ceviri_asamalari.py`
 statik tel tuzağıyla tutar.
+
+Paragraf önerisi (2026-10-19, kullanıcı isteği): okuyucunun tek paragraf önerisi
+hafif kipte koşar ve ek turları atlar (`translate._translate_chapter_impl`, `hafif`).
+`paragraf: True` taşıyan aşamalar orada AYRI bir anahtarla açılabilir. Anahtar bölüm
+seçiminden bağımsızdır, varsayılanı kapalıdır ve ortam değişkeni okumaz: öneri bilinçli
+olarak kısıtlandı, açmak her aşama için ayrı bir seçimdir.
 """
 from __future__ import annotations
 
@@ -22,6 +28,7 @@ from collections import defaultdict
 from . import db, settings
 
 AYAR_ONEKI = "ceviri_asama."
+PARAGRAF_ONEKI = "paragraf."
 
 # `olcum`: aşamanın `api_olay.asama` adları (bkz. `api_durum.baglam(asama=...)`).
 ASAMALAR = (
@@ -36,11 +43,11 @@ ASAMALAR = (
     {"ad": "cilalama", "ortam": "CEVIRI_CILALA", "varsayilan": False,
      "etiket": "Türkçe cilalama",
      "aciklama": "Çeviriyi ayrı bir turda okuyup çeviri kokan cümleleri düzeltir.",
-     "olcum": ("cilalama",)},
+     "olcum": ("cilalama",), "paragraf": True},
     {"ad": "kalite", "ortam": "CEVIRI_KALITE", "varsayilan": True,
      "etiket": "Kalite denetimi",
      "aciklama": "Çeviriyi kaynakla karşılaştırır; anlam hatası bulursa paragrafı onarıp doğrular.",
-     "olcum": ("kalite_denetimi", "kalite_onarimi", "kalite_dogrulama")},
+     "olcum": ("kalite_denetimi", "kalite_onarimi", "kalite_dogrulama"), "paragraf": True},
     {"ad": "terim_alani", "ortam": "CEVIRI_TERIM_ALANI_ONARIM", "varsayilan": True,
      "etiket": "Terim listesi tekrarı",
      "aciklama": "Model yeni ad/terim listesini hiç yazmazsa parçayı bir kez daha ister. "
@@ -86,13 +93,34 @@ def ayarla(ad: str, acik_mi: bool) -> None:
     settings.set(AYAR_ONEKI + ad, "1" if acik_mi else "0")
 
 
+def paragrafta_acik(ad: str) -> bool:
+    """Aşama okuyucunun paragraf önerisinde de çalışsın mı (varsayılan kapalı)."""
+    if not _ADLAR.get(ad, {}).get("paragraf"):
+        return False
+    return _kayit(PARAGRAF_ONEKI + ad) == "1"
+
+
+def ayarla_paragraf(ad: str, acik_mi: bool) -> None:
+    if not _ADLAR.get(ad, {}).get("paragraf"):
+        raise KeyError(ad)
+    settings.set(AYAR_ONEKI + PARAGRAF_ONEKI + ad, "1" if acik_mi else "0")
+
+
+def calisir(ad: str, paragraf: bool = False) -> bool:
+    """Çeviri hattının sorduğu tek soru: bu kipte (bölüm ya da paragraf) aşama koşsun mu."""
+    return paragrafta_acik(ad) if paragraf else acik(ad)
+
+
 def durum() -> list[dict]:
-    """Okuyucu paneli için: her aşamanın etiketi, açıklaması, durumu ve kaynağı."""
+    """Okuyucu paneli için: her aşamanın etiketi, açıklaması, durumu ve kaynağı.
+
+    `paragraf`: paragraf önerisinde çalışıyor mu; o kipte açılamayan aşamada None."""
     sonuc = []
     for a in ASAMALAR:
         kayitli = _kayit(a["ad"]) in ("0", "1")
         sonuc.append({"ad": a["ad"], "etiket": a["etiket"], "aciklama": a["aciklama"],
-                      "acik": acik(a["ad"]), "kaynak": "ayar" if kayitli else "ortam"})
+                      "acik": acik(a["ad"]), "kaynak": "ayar" if kayitli else "ortam",
+                      "paragraf": paragrafta_acik(a["ad"]) if a.get("paragraf") else None})
     return sonuc
 
 

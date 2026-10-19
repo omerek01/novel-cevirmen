@@ -1342,6 +1342,8 @@ def _translate_chapter_impl(
     öneriyi okur kendisi görüp kabul ediyor ve öneri sözlüğe terim yazmıyor (terim
     alanı onarımının koruduğu şey burada yok). Sözlük ihlali, İngilizce kalıntı,
     kısalma ve hizalama onarımları KALIR — yalnız sorun bulunca çağrı harcarlar.
+    Cilalama ve kalite katmanı ayarlardaki "Paragraf önerisinde" anahtarıyla bu kipte
+    de açılabilir (`ceviri_asamalari.calisir(ad, paragraf=True)`, varsayılan kapalı).
 
     ``anlam_denetimi``: çift anlamlı adların tanımları (`varlik_grafigi.ceviri_anlamlari`).
     Ana talimata GİRMEZ; çeviriden SONRA denetim + hedefli onarım için kullanılır
@@ -1651,7 +1653,7 @@ def _translate_chapter_impl(
     # denetler. Tur çeviriyi düşürmez; yeni sözlük ihlali/İngilizce kalıntı getiren
     # paragraf özgün kalır. Ölçüm ve gerekçe: `core/ceviri_cilala.py`.
     cilalama_oncesi = None
-    if not hafif and ceviri_asamalari.acik("cilalama") and tr_paras and aligned:
+    if ceviri_asamalari.calisir("cilalama", paragraf=hafif) and tr_paras and aligned:
         from . import ceviri_cilala
         cilalama_oncesi = list(tr_paras)
         def cilala_uret(user, system, asama):
@@ -1677,7 +1679,7 @@ def _translate_chapter_impl(
             iz["cilalama"] = cilalama
             iz["asamalar"].append({"asama": "cilalama_sonrasi", "metin": list(tr_paras)})
     kalite_metrik = None
-    if not hafif and ceviri_asamalari.acik("kalite") and tr_paras:
+    if ceviri_asamalari.calisir("kalite", paragraf=hafif) and tr_paras:
         from . import ceviri_kalite
         # KAYDET, İŞARETLE (2026-10-11, kullanıcı kararı): kalite katmanı çeviriyi
         # düşürmez. Denetim yapılamazsa çeviri "denetlenemedi" durumuyla kaydedilir.

@@ -102,6 +102,39 @@ def test_hafif_olmayan_kip_ek_turlari_calistirir(monkeypatch):
     assert tur.ceviri == 2 and tur.turlar == ["cilalama", "kalite"]
 
 
+@pytest.mark.parametrize("acilan, beklenen", [
+    (("cilalama",), ["cilalama"]),
+    (("kalite",), ["kalite"]),
+    (("cilalama", "kalite"), ["cilalama", "kalite"]),
+])
+def test_hafif_kipte_paragraf_anahtari_acik_asamayi_calistirir(monkeypatch, acilan, beklenen):
+    # Ayarlardaki "Paragraf önerisinde" anahtarı: yalnız açılan tur koşar; analiz ve
+    # terim tekrarı hafif kipte yine atlanır (tek çeviri çağrısı).
+    from core import ceviri_asamalari
+
+    tur = _Tur(monkeypatch)
+    monkeypatch.setenv("CEVIRI_ANALIZ", "1")
+    for ad in acilan:
+        ceviri_asamalari.ayarla_paragraf(ad, True)
+    translate.translate_chapter("Hello my friend, how are you.", "anahtar",
+                                models=("m",), hafif=True)
+    assert tur.ceviri == 1 and tur.turlar == beklenen
+
+
+def test_paragraf_anahtari_bolum_cevirisini_etkilemez(monkeypatch):
+    # Bölüm anahtarı kapalıyken paragraf anahtarı açık: bölüm çevirisinde tur KOŞMAZ.
+    from core import ceviri_asamalari
+
+    tur = _Tur(monkeypatch)
+    monkeypatch.setenv("CEVIRI_ANALIZ", "0")
+    ceviri_asamalari.ayarla("cilalama", False)
+    ceviri_asamalari.ayarla("kalite", False)
+    ceviri_asamalari.ayarla_paragraf("cilalama", True)
+    ceviri_asamalari.ayarla_paragraf("kalite", True)
+    translate.translate_chapter("Hello my friend, how are you.", "anahtar", models=("m",))
+    assert tur.turlar == []
+
+
 def test_bolunen_paragraf_tek_paragrafa_indirilir(monkeypatch):
     _bolum()
     monkeypatch.setattr(translate, "translate_chapter",

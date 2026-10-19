@@ -117,3 +117,64 @@ def test_bayraklar_yalniz_yardimcidan_okunur():
              for i, satir in enumerate(p.read_text(encoding="utf-8").splitlines(), 1)
              if desen.search(satir)]
     assert ihlal == []
+
+
+# --- paragraf önerisinde çalışma (2026-10-19, kullanıcı isteği) ---
+
+def test_paragraf_anahtari_varsayilan_kapali_ve_bolumden_bagimsiz(monkeypatch):
+    # Bölümde açık olan aşama paragraf önerisinde kendiliğinden ÇALIŞMAZ: öneri
+    # hafif kalsın diye kısıtlandı; açmak ayrı ve bilinçli bir seçim.
+    monkeypatch.setenv("CEVIRI_CILALA", "1")
+    assert ca.acik("cilalama") is True
+    assert ca.paragrafta_acik("cilalama") is False
+    ca.ayarla_paragraf("cilalama", True)
+    assert ca.paragrafta_acik("cilalama") is True
+    # Bölüm anahtarı kapansa da paragraf seçimi durur (bağımsız iki seçim).
+    ca.ayarla("cilalama", False)
+    assert ca.paragrafta_acik("cilalama") is True
+    assert ca.acik("cilalama") is False
+
+
+@pytest.mark.parametrize("ad", ["analiz", "ozet", "terim_alani", "yok_boyle"])
+def test_paragrafa_acilamayan_asama_reddedilir(ad):
+    with pytest.raises(KeyError):
+        ca.ayarla_paragraf(ad, True)
+    assert ca.paragrafta_acik(ad) is False
+
+
+def test_calisir_kipe_gore_dogru_anahtara_bakar(monkeypatch):
+    monkeypatch.setenv("CEVIRI_KALITE", "1")
+    assert ca.calisir("kalite") is True
+    assert ca.calisir("kalite", paragraf=True) is False
+    ca.ayarla_paragraf("kalite", True)
+    ca.ayarla("kalite", False)
+    assert ca.calisir("kalite") is False
+    assert ca.calisir("kalite", paragraf=True) is True
+
+
+def test_durum_paragraf_alanini_yalniz_uygun_asamada_verir():
+    ca.ayarla_paragraf("kalite", True)
+    durum = {a["ad"]: a for a in ca.durum()}
+    assert durum["kalite"]["paragraf"] is True
+    assert durum["cilalama"]["paragraf"] is False
+    for ad in ("analiz", "ozet", "terim_alani"):
+        assert durum[ad]["paragraf"] is None
+
+
+def test_uc_paragraf_kapsamini_yazar():
+    c = _client()
+    r = c.post("/api/settings/asamalar", json={"ad": "cilalama", "acik": True, "kapsam": "paragraf"})
+    assert r.status_code == 200
+    cilalama = next(a for a in r.json()["asamalar"] if a["ad"] == "cilalama")
+    assert cilalama["paragraf"] is True
+    assert ca.paragrafta_acik("cilalama") is True
+    # Bölüm seçimine dokunulmadı.
+    assert ca._kayit("cilalama") == ""
+
+
+@pytest.mark.parametrize("govde", [
+    {"ad": "analiz", "acik": True, "kapsam": "paragraf"},   # paragrafa açılamaz
+    {"ad": "kalite", "acik": True, "kapsam": "kitap"},      # bilinmeyen kapsam
+])
+def test_uc_gecersiz_paragraf_isteginde_400(govde):
+    assert _client().post("/api/settings/asamalar", json=govde).status_code == 400
