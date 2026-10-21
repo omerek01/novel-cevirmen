@@ -24,6 +24,11 @@ FIYAT = {
     "vertex/gemini-3.8-flash": {"giris": 0.75, "cikis": 3.75},
     "vertex/gemini-3.7-flash": {"giris": 0.75, "cikis": 3.75},
     "vertex/gemini-3.6-flash": {"giris": 0.75, "cikis": 3.75},
+    # Gemini 4 Argon, global uç: TANITIM fiyatı 2026-11-30'a kadar. 2026-12-01'den
+    # 4,00 / 20,00 — o gün BURASI güncellenmeli. Tablo bugünkü fiyatı geçmişe de
+    # uygular (token saklanır, maliyet türetilir); güncellenmezse gösterge Aralık
+    # harcamasını YARI fiyattan gösterir — tehlikeli yön, kredi olduğundan hızlı biter.
+    "vertex/gemini-4-argon": {"giris": 2.00, "cikis": 10.00},
     "claude-haiku-4-5": {"giris": 1.00, "cikis": 5.00},
     "claude-sonnet-5": {"giris": 2.00, "cikis": 10.00},
 }
