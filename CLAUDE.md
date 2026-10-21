@@ -517,6 +517,24 @@ fiyat 3.6 ile aynı; kalite ÖLÇÜLMEDİ, yalnız listede. Yeni Vertex modeli e
 (`tests/test_vertex_halkasi.py` tutar). **AI Studio'daki ücretsiz projelerde "Set up billing"e BASILMAZ**: o projenin
 ücretsiz kotası biter ve anahtarı sessizce ücretli olur. Testler `tests/test_vertex_halkasi.py`.
 
+**GEMINI 4 ARGON: `vertex/gemini-4-argon`, ÜCRETLİ, YALNIZ SEÇİLİNCE** (2026-10-21,
+kullanıcı isteği). Gemini 4 sınıfı; ücretsiz katmanda YOK, bu projede yalnız Vertex'ten
+(kredi) erişilir. Kimlik resmî Google belgesinden (`publishers/google/models/gemini-4-argon`,
+`global` destekli); Google'ın kendi modeli olduğu için mevcut `generate_content` yolu
+aynen çalışır. **Ad sunucuda YOKLANMADI** (eklendiği ortamın sunucuya erişimi yoktu) ve
+kalite/uzunluk oranı ÖLÇÜLMEDİ — 3.8/3.7 Vertex gibi zincire değil yalnız listeye girer,
+listede Vertex grubunun BAŞINDA (sürüm sırası). **Fiyat** tanıtım 2,00/10,00 $ (1M,
+global) 2026-11-30'a kadar, **2026-12-01'den 4,00/20,00** — o gün `kullanim.FIYAT`
+güncellenmeli, yoksa gösterge harcamayı YARI fiyattan gösterir.
+**Düşünme bütçesini REDDEDER** (`thinking_budget` → 400; yalnız LOW/MEDIUM/HIGH,
+varsayılan MEDIUM). `GEMINI_DUSUNME_BUTCESI` sayıya çekilirse ortak yapılandırmadan
+Argon'a da gider ve 400'ü `_vertex_uret` "sıradaki model"e çevirdiği için okuma
+SESSİZCE ücretsiz 3.6'ya inerdi. `translate._dusunme_alanlari` bütçeyi modele göre
+ATAR (`_DUSUNME_BUTCESI_REDDEDENLER`); `_gemini_yapilandirmasi` bu yüzden API model
+kimliğini de alır ve İKİ çağrı yeri (AI Studio + Vertex) onu geçirir. `roman-baglam`
+dalında aynı koruma karakter defterinin `_DUSUNME_AYARI`'sını da kapsar (`minimal`
+düzeyi dahil); iki dal birleşirken o sürüm esas alınmalı.
+
 **GEMİNİ DIŞI SAĞLAYICILAR KALDIRILDI** (2026-09-02, kullanıcı kararı; 2026-09-26'da
 yukarıdaki NVIDIA halkası ÖLÇÜLEREK istisna oldu). Bir dönem zincirde
 OpenAI-uyumlu üç sağlayıcı vardı (`openrouter:minimax/minimax-m3:free`,
