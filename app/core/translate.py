@@ -276,6 +276,35 @@ VERTEX_KONUM_ENV = "VERTEX_KONUM"
 # kısa istek: ikisi de 200). Kalite/uzunluk oranı ÖLÇÜLMEDİ — zincire değil yalnız
 # listeye girer. Fiyat 3.6 ile aynı (tanıtım 0,75/3,75 $).
 VERTEX_MODELLER = {
+    # GEMINI 4 ARGON (2026-10-21, kullanıcı isteği). Grubun BAŞINDA: liste SÜRÜM
+    # sırasıyla (yeniden eskiye) çiziliyor, `test_model_secimi` bunu tutar. Google'ın Gemini 4 sınıfı
+    # modeli; ÜCRETSİZ katmanda YOK, bu projede yalnız Vertex'ten (kredi)
+    # erişilebilir. Kimlik resmî Google belgesinden: `gemini-4-argon`
+    # (`publishers/google/models/gemini-4-argon`), `global` konumu destekli.
+    # Google'ın KENDİ modeli olduğu için mevcut `generate_content` yolu aynen
+    # çalışır — ayrı istemci/uç gerekmez.
+    #
+    # Ad sunucuda YOKLANMADI (değişiklik sunucuya erişimi olmayan bir ortamda
+    # yazıldı); 3.8/3.7 eklenirken yapılan kısa yoklama deploy sonrası yapılmalı.
+    # Kalite/uzunluk oranı ÖLÇÜLMEDİ — 3.8/3.7 ile aynı kural: zincire DEĞİL,
+    # yalnız listeye girer.
+    #
+    # DÜŞÜNME: `thinking_budget` ve `thinking_level=minimal` 400 ile REDDEDİLİR
+    # (bkz. `_DUSUNME_BUTCESI_REDDEDENLER`); en düşük düzey LOW, varsayılan
+    # MEDIUM. Düşünme tokenları ÇIKIŞ fiyatından ödenir.
+    #
+    # FİYAT: tanıtım 2,00/10,00 $ (1M token, global) 2026-11-30'a KADAR;
+    # 2026-12-01'den 4,00/20,00 — 3.6 Vertex'in ~2,7 katı, Aralık'tan ~5,3 katı.
+    # Bölüm başı tahmin 3.6'nın token profiliyle yapıldı; Argon daha çok
+    # düşünürse gerçek maliyet daha yüksek olur.
+    "vertex/gemini-4-argon": {
+        "model": "gemini-4-argon",
+        "etiket": "4 Argon (Vertex, kredi)",
+        "kisa": "4 Argon",
+        "not": "ÜCRETLİ ~$0,09+/bölüm (3.6'nın ~3 katı), deneme kredisinden düşer; "
+               "1 Aralık'tan fiyat İKİYE katlanır. Gemini 4 sınıfı; çeviri "
+               "kalitesi henüz ölçülmedi.",
+    },
     "vertex/gemini-3.8-flash": {
         "model": "gemini-3.8-flash",
         "etiket": "3.8 Flash (Vertex, kredi)",
@@ -3642,25 +3671,59 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
     return _MetinYanit(metin, "STOP" if bitis == "end_turn" else bitis)
 
 
-def _gemini_yapilandirmasi(system: str, max_tokens: int) -> types.GenerateContentConfig:
+# Düşünme BÜTÇESİNİ (ve `minimal` düzeyini) HTTP 400 ile REDDEDEN modeller (API
+# model kimliği, Vertex öneki YOK). Gemini 4 Argon düşünmeyi yalnız
+# `thinking_level` LOW/MEDIUM/HIGH ile kabul ediyor (resmî belge, 2026-10-21).
+#
+# Neden şimdiden: bütçe bugün İKİ yoldan gidebiliyor — `GEMINI_DUSUNME_BUTCESI`
+# (bu belge "ara bütçe denenecekse" diye açık bir öneri taşıyor) ve karakter
+# defterinin `_DUSUNME_AYARI`'sı (`DEFTER_DUSUNME` sayıysa bütçe, `minimal`
+# düzey gönderir; defter varsayılan olarak bir Vertex modeli kullanıyor). Argon
+# 400 alınca `_vertex_uret` bunu "sıradaki model"e çevirir: çeviride okuma
+# SESSİZCE ücretsiz 3.6'ya iner, defterde ise tek halkalı çağrı düşer. Kullanıcı
+# Argon seçtiğini sanırken hiçbir istek Argon'a ulaşmaz ve sebep hiçbir yerde
+# okunmaz. Koruma desteklenmeyen alanı ATAR, modeli kendi varsayılanında bırakır.
+_DUSUNME_BUTCESI_REDDEDENLER = frozenset({"gemini-4-argon"})
+_GECERSIZ_DUSUNME_DUZEYLERI = frozenset({"minimal"})
+
+
+def _dusunme_alanlari(model: str | None) -> dict | None:
+    """Bu çağrıya gidecek `ThinkingConfig` alanları; None = hiç gönderme.
+
+    Öncelik eskisiyle aynı: çağrı başına ayar (`_DUSUNME_AYARI`) > global bütçe."""
+    ayar = _DUSUNME_AYARI.get()
+    alanlar = (
+        dict(ayar) if ayar
+        else {"thinking_budget": GEMINI_DUSUNME_BUTCESI}
+        if GEMINI_DUSUNME_BUTCESI is not None
+        else None
+    )
+    if alanlar and model in _DUSUNME_BUTCESI_REDDEDENLER:
+        alanlar.pop("thinking_budget", None)
+        if str(alanlar.get("thinking_level", "")).lower() in _GECERSIZ_DUSUNME_DUZEYLERI:
+            alanlar.pop("thinking_level")
+    return alanlar or None
+
+
+def _gemini_yapilandirmasi(
+    system: str, max_tokens: int, model: str | None = None
+) -> types.GenerateContentConfig:
     """Gemini çağrı ayarları — AI Studio ve Vertex yolu AYNI ayarı kullanır.
 
     İki kopya olsaydı biri güncellenip öteki unutulurdu (düşünme bütçesi tam da
-    böyle bir ayar) ve "aynı model" iki yolda farklı çevirirdi."""
-    ayar = _DUSUNME_AYARI.get()
+    böyle bir ayar) ve "aynı model" iki yolda farklı çevirirdi.
+
+    ``model`` API model kimliğidir (Vertex öneki YOK). Verilmezse davranış
+    eskisiyle birebir aynıdır; yalnız düşünme bütçesini reddeden modellerde o
+    alan atılır (`_dusunme_alanlari`)."""
+    alanlar = _dusunme_alanlari(model)
     return types.GenerateContentConfig(
         system_instruction=system,
         response_mime_type="application/json",
         temperature=0.3,
         max_output_tokens=max_tokens,
         safety_settings=SAFETY_SETTINGS,
-        thinking_config=(
-            types.ThinkingConfig(**ayar)
-            if ayar
-            else types.ThinkingConfig(thinking_budget=GEMINI_DUSUNME_BUTCESI)
-            if GEMINI_DUSUNME_BUTCESI is not None
-            else None
-        ),
+        thinking_config=types.ThinkingConfig(**alanlar) if alanlar else None,
     )
 
 
@@ -3697,10 +3760,11 @@ def _vertex_uret(model: str, user: str, system: str, max_tokens: int):
                 ),
             )
             _VERTEX_ISTEMCI[(proje, konum)] = istemci
+        api_modeli = VERTEX_MODELLER[model]["model"]
         yanit = istemci.models.generate_content(
-            model=VERTEX_MODELLER[model]["model"],
+            model=api_modeli,
             contents=user,
-            config=_gemini_yapilandirmasi(system, max_tokens),
+            config=_gemini_yapilandirmasi(system, max_tokens, api_modeli),
         )
     except genai_errors.APIError as exc:
         kod = getattr(exc, "code", None) or 0
@@ -4152,7 +4216,7 @@ def _tek_anahtarla_uret(
             response = client.models.generate_content(
                 model=model,
                 contents=user,
-                config=_gemini_yapilandirmasi(system, max_tokens),
+                config=_gemini_yapilandirmasi(system, max_tokens, model),
             )
         except (genai_errors.APIError, _KodluHata) as exc:
             code = getattr(exc, "code", None)
