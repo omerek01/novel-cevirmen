@@ -172,3 +172,45 @@ def test_vertex_duserse_ucretsiz_halkaya_inilir(monkeypatch):
         fabrika, (VERTEX, "gemini-3.6-flash"), "p"
     )
     assert model == "gemini-3.6-flash"
+
+
+# ---------------------------------------------------------------- Gemini 4 Argon
+
+ARGON = "vertex/gemini-4-argon"
+
+
+def test_argon_listede_ucretli_ve_ZINCIRE_girmez():
+    """Ölçülmemiş ve ücretli: 3.8/3.7 Vertex ile aynı kural — yalnız listeye."""
+    secenek = [m for m in translate.SECILEBILIR_MODELLER if m["ad"] == ARGON][0]
+    assert secenek["ucretli"] and "ÜCRETLİ" in secenek["not"]
+    assert ARGON not in translate.DEFAULT_MODELS
+    assert translate.VERTEX_MODELLER[ARGON]["model"] == "gemini-4-argon"
+
+
+@pytest.mark.parametrize("butce", [2048, 0])
+def test_global_butce_ARGONA_gitmez(monkeypatch, butce):
+    """Argon `thinking_budget`'ı 400 ile reddeder. 400'ü `_vertex_uret` "sıradaki
+    model"e çevirdiği için okuma SESSİZCE ücretsiz 3.6'ya inerdi — kullanıcı Argon
+    seçtiğini sanırken hiçbir istek Argon'a ulaşmazdı."""
+    monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", butce)
+    assert translate._gemini_yapilandirmasi("s", 1, "gemini-4-argon").thinking_config is None
+
+
+def test_koruma_OTEKI_modellerin_davranisini_degistirmez(monkeypatch):
+    """Bütçeyi kabul eden modellerde ayar eskisiyle birebir aynı gider."""
+    monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", 2048)
+    cfg = translate._gemini_yapilandirmasi("s", 1, "gemini-3.6-flash")
+    assert cfg.thinking_config.thinking_budget == 2048
+    assert cfg == translate._gemini_yapilandirmasi("s", 1)
+
+
+def test_argon_vertex_cagrisi_API_kimligiyle_ve_butcesiz_gider(monkeypatch):
+    monkeypatch.setenv("VERTEX_PROJE", "proje-x")
+    monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", 2048)
+    cagrilar = []
+    _sahte_istemci(monkeypatch, _Yanit(), cagrilar)
+    yanit, model = translate._generate_with_fallback(_fabrika_kullanilmamali, (ARGON,), "p")
+    assert model == ARGON
+    istek = cagrilar[1]
+    assert istek["model"] == "gemini-4-argon"
+    assert istek["config"].thinking_config is None
