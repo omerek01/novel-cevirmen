@@ -501,3 +501,10 @@ def test_kart_wiki_notlarini_konuma_kadar_ve_defterde_olmayan_adlari_verir(kitap
     assert wiki["durum"] == "hazir" and len(wiki["notlar"]) == 2  # 1500 konumdan sonra
     assert [e["ad"] for e in wiki["eksikler"]] == ["Shadow Lantern"]  # Azure Blade defterde var
     assert de.kart(KITAP, _kimlik("Nephis"), 700)["wiki"]["durum"] == "sayfa_yok"
+    # "Deftere ekle": elle kayıt (kanıtı wiki cümlesi) eklenince ad eksik sayılmaz, anılarda görünür.
+    dk.elle_yaz(KITAP, {"tur": "ani", "sahip": "Sunny", "ad": "Shadow Lantern", "ilk_bolum": 653,
+                        "kanit": "Wiki (Shadow Slave Wiki): He got [Shadow Lantern]."})
+    kart = de.kart(KITAP, _kimlik("Sunny"), 700)
+    assert kart["wiki"]["eksikler"] == []
+    lantern = next(a for a in kart["anilar"] if a["ad"] == "Shadow Lantern")
+    assert lantern["origin"] == "elle" and lantern["kanit"].startswith("Wiki (Shadow Slave Wiki)")

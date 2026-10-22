@@ -2729,6 +2729,9 @@ span.defter-ad { min-height: 0; padding: 4px 12px; font-size: 15px; }
 .defter-uyari { margin: 8px 0 0; padding: 8px 10px; font-size: 14px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); }
 .defter-wiki-not { margin: 6px 0; font-size: 14px; line-height: 1.45; overflow-wrap: anywhere; }
 .defter-wiki-not small { color: var(--ink-dim); }
+.defter-wiki-eksik { list-style: none; margin: 6px 0 0; padding: 0; }
+.defter-wiki-eksik li { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
+.defter-wiki-eksik small { color: var(--ink-dim); }
 /* Tam rün listesinden düşenler: kapalı grup, soluk. */
 .defter-eski { margin: 8px 0 0; color: var(--ink-dim); }
 .defter-eski > summary { cursor: pointer; font-size: 14px; padding: 6px 0; min-height: 44px; display: flex; align-items: center; }

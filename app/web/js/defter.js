@@ -11,7 +11,7 @@ import { showView } from "./gezinme.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { el } from "./temel.js";
 import {
-  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, wikiDurumMetni, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
+  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, WIKI_TURLERI, wikiDurumMetni, wikiKaydi, wikiTurTahmini, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
   sayacMetinleri, sekmeSatirlari, sinirMetni, sistemAltMetni, sistemSatirlari, tr,
 } from "./defter-yardimci.js";
 import { fetchBooks } from "./kutuphane.js";
@@ -352,13 +352,16 @@ function kartCiz() {
     if (not) ic.push(oge("p", "defter-bos-not", not));
     if ((wiki.eksikler || []).length) {
       ic.push(oge("p", "defter-uyari", `Wikide geçip defterde olmayan ${wiki.eksikler.length} ad:`));
-      const c = oge("div", "defter-cipler");
+      const liste = oge("ul", "defter-wiki-eksik");
       for (const e of wiki.eksikler) {
-        const cip = oge("span", "defter-efsun", `${e.ad} · ${e.bolum}`);
-        cip.title = e.metin;
-        c.append(cip);
+        const li = oge("li");
+        const ad = oge("span", null, e.ad);
+        ad.append(oge("small", null, ` · bölüm ${e.bolum}`));
+        ad.title = e.metin;
+        li.append(ad, dugme("Deftere ekle", "pill", () => wikiEkleFormu(e, wiki.site_adi)));
+        liste.append(li);
       }
-      ic.push(c);
+      ic.push(liste);
     }
     const notlar = [...(wiki.notlar || [])].reverse();  // en yeni bölüm üstte
     if (notlar.length) {
@@ -612,7 +615,8 @@ function kayitFormuAc(tur, sahip, mevcut = null) {
   if (mevcut && mevcut.kanit) {
     // Anlatımdan gelen alan (rün ekranı açılmadan oluşan sınıf/çekirdek) rün mesajı değildir.
     ek.push(oge("p", "terim-etiket defter-form-bolum",
-      mevcut.origin === "anlatim" ? "Anlatımdan · köken" : "Rün mesajı · köken"),
+      mevcut.origin === "anlatim" ? "Anlatımdan · köken"
+        : String(mevcut.kanit).startsWith("Wiki") ? "Wikiden · köken" : "Rün mesajı · köken"),
       oge("p", "defter-kanit", mevcut.kanit));
   }
   if (mevcut && mevcut.elde_kanit) {
@@ -634,6 +638,26 @@ function kayitFormuAc(tur, sahip, mevcut = null) {
     kaldir: mevcut && mevcut.anahtar
       ? () => istek("/kayit", { method: "DELETE", body: JSON.stringify({ anahtar: mevcut.anahtar }) })
       : null,
+  });
+}
+
+/* Wikide geçip defterde olmayan adı ELLE kayıt olarak ekle. Tür cümleden tahmin edilir, kullanıcı
+   değiştirir; kanıt wiki cümlesidir. Wiki hayran yazımı: kendiliğinden eklenmez (kullanıcı kararı). */
+function wikiEkleFormu(e, siteAdi) {
+  const k = p.kart;
+  formAc({
+    baslik: `${e.ad} · deftere ekle`,
+    alanlar: [
+      { ad: "tur", etiket: "Ne olarak eklensin?", tip: "secim", secenekler: WIKI_TURLERI, deger: wikiTurTahmini(e.metin) },
+      { ad: "ad", etiket: "Ad (İngilizce)", tip: "metin", deger: e.ad },
+      { ad: "ilk_bolum", etiket: "Bölüm", tip: "sayi", deger: e.bolum },
+    ],
+    ek: [oge("p", "terim-etiket defter-form-bolum", `Wikideki cümle${siteAdi ? ` · ${siteAdi}` : ""}`),
+      oge("p", "defter-kanit", e.metin)],
+    kaydet: async (d) => {
+      const kayit = wikiKaydi({ ...e, ad: d.ad }, d.tur, k.ad, d.ilk_bolum, siteAdi);
+      await istek("/kayit", { method: "POST", body: JSON.stringify({ kayit, yerine: null }) });
+    },
   });
 }
 

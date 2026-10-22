@@ -177,3 +177,18 @@ test("wikiDurumMetni durumları okunur nota çevirir", async () => {
   assert.equal(wikiDurumMetni({ durum: "hazir", notlar: [{ metin: "x" }] }), null);
   assert.equal(wikiDurumMetni(undefined), null);
 });
+
+test("wikiTurTahmini ve wikiKaydi wikideki eksik adı elle kayda çevirir", async () => {
+  const { wikiTurTahmini, wikiKaydi } = await import("../../app/web/js/defter-yardimci.js");
+  assert.equal(wikiTurTahmini("Memory: [Shadow Lantern]."), "ani");
+  assert.equal(wikiTurTahmini("Attributes: [Fated], [Marble Shell]."), "nitelik");
+  assert.equal(wikiTurTahmini("Shadow Attributes: [Ravenous]."), "nitelik");
+  assert.equal(wikiTurTahmini("Shadows: [Onyx Saint]."), "golge");
+  assert.equal(wikiTurTahmini("Echoes: [Ravenous Fiend]."), "yanki");
+  assert.equal(wikiTurTahmini("The [Lesser Iron Body] had been [Nascent Iron Body] before."), "ani");
+  const k = wikiKaydi({ ad: " Silenced ", metin: "[Silenced] enchantment." }, "nitelik", "Sunny", "853", "Shadow Slave Wiki");
+  assert.deepEqual(k, { tur: "nitelik", sahip: "Sunny", ad: "Silenced", deger: "", alanlar: {}, ilk_bolum: 853,
+    kanit: "Wiki (Shadow Slave Wiki): [Silenced] enchantment." });
+  assert.throws(() => wikiKaydi({ ad: "", metin: "x" }, "ani", "Sunny", "1"), /Ad boş/);
+  assert.throws(() => wikiKaydi({ ad: "X", metin: "x" }, "ani", "Sunny", "-3"), /Bölüm/);
+});

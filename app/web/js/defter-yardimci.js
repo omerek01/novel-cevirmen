@@ -51,6 +51,38 @@ export function wikiDurumMetni(wiki) {
   return null;
 }
 
+/* Wikideki eksik adı deftere eklerken seçilebilen türler (efsun bir anıya bağlıdır, buradan eklenmez). */
+export const WIKI_TURLERI = [
+  { deger: "ani", etiket: "Anı" }, { deger: "nitelik", etiket: "Nitelik" }, { deger: "golge", etiket: "Gölge" },
+  { deger: "yanki", etiket: "Yankı" }, { deger: "yaratik", etiket: "Yaratık" },
+];
+
+/* Wiki cümlesinin etiketinden türü tahmin et ("Memory: [Shadow Lantern]." -> anı). Kullanıcı formda
+   değiştirebilir; tahmin yoksa anı (wikide eksik çıkan adların çoğu anı/eşya). */
+export function wikiTurTahmini(metin) {
+  const m = String(metin || "");
+  if (/^(Shadow|Echo) Attributes?\b|^Attributes?\b|\bAttribute\b/.test(m)) return "nitelik";
+  if (/^Memor(y|ies)\b/.test(m)) return "ani";
+  if (/^Shadows?\s*:/.test(m)) return "golge";
+  if (/^Echo(es)?\s*:/.test(m)) return "yanki";
+  if (/\bslain\b|\bkilled\b/i.test(m)) return "yaratik";
+  return "ani";
+}
+
+/* Wikiden deftere elle kayıt: kanıt wiki cümlesidir (kaynağı kartta görünsün). */
+export function wikiKaydi(eksik, tur, sahip, bolum, siteAdi) {
+  const ad = String(eksik.ad || "").trim();
+  if (!ad) throw new Error("Ad boş olamaz");
+  const kayit = { tur, sahip: sahip || "", ad, deger: "", alanlar: {},
+    kanit: `Wiki${siteAdi ? ` (${siteAdi})` : ""}: ${eksik.metin}` };
+  const n = Number(bolum);
+  if (String(bolum ?? "").trim() !== "") {
+    if (!Number.isInteger(n) || n < 0) throw new Error("Bölüm numarası geçersiz");
+    kayit.ilk_bolum = n;
+  }
+  return kayit;
+}
+
 /* Tam rün listesinden düşen kayıtlar (`alanlar.elde === "yok"`) ayrı gösterilir: kart eskiden
    kaybedilen anıları ve evrimleşmiş gölgelerin eski hâllerini güncel gibi sayıyordu. */
 export function eldeAyir(liste) {
