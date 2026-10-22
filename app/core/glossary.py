@@ -81,6 +81,11 @@ def _connect() -> sqlite3.Connection:
     db.ensure_column(conn, "glossary", "kimlik", "kimlik TEXT")
     db.ensure_column(conn, "glossary", "surum", "surum INTEGER")
     db.ensure_column(conn, "glossary", "updated_at", "updated_at REAL")
+    # Varlık grafiği bağları sözlüğe KİMLİKLE katılır (`varlik_grafigi.baglar`). İndeks
+    # yokken her bağ için kitabın tüm sözlüğü taranıyordu: canlıda 1.234 bağ x 909 kayıt,
+    # Defter listesi 5,4 sn sürdü ve servis çalışanının 4 sn sınırına takılıp telefonda
+    # günlerce eski bir kopya gösterdi (2026-10-22, "1003'te kalmış"). İndeksle 0,3 sn.
+    conn.execute("CREATE INDEX IF NOT EXISTS glossary_kimlik ON glossary (book_slug, kimlik)")
     # İNCELEME (4. aşama): otomatik eklenen yeni kayıt "bekliyor" ile girer ve
     # inceleme listesinde kaynak cümlesiyle görünür; onay "onaylandi" yazar. Eski
     # otomatik kayıtlar NULL kalır (kullanıcı kararı: yalnız çakışan/belirsiz

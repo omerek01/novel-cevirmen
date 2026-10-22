@@ -287,3 +287,21 @@ def test_uc_sistem_mesajlari(istemci):
     _yeni_bolum(1, ["[Welcome.]"], ["[Hoş geldin.]"])
     r = istemci.get(f"/api/book/{YENI}/defter/sistem", params={"spoiler": True})
     assert r.status_code == 200 and r.json()["mesajlar"][0]["metin"] == "[Hoş geldin.]"
+
+
+def test_baglar_sozluge_kimlik_indeksiyle_katilir(kitap):
+    # İndeks yokken her bağ için kitabın tüm sözlüğü taranıyordu: canlıda Defter listesi
+    # 5,4 sn sürdü, servis çalışanının 4 sn sınırına takıldı ve telefonda eski kopya
+    # kaldı (2026-10-22, "1003'te kalmış").
+    glossary.semayi_hazirla()
+    vg.baglar(KITAP)  # tabloyu açar
+    conn = db.connect()
+    try:
+        plan = " ".join(r[3] for r in conn.execute(
+            "EXPLAIN QUERY PLAN SELECT b.kaynak_kimlik FROM varlik_bag b "
+            "JOIN glossary k ON k.book_slug = b.book_slug AND k.kimlik = b.kaynak_kimlik WHERE b.book_slug = ?",
+            (KITAP,)))
+    finally:
+        conn.close()
+    assert "glossary_kimlik" in plan
+
