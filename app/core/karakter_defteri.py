@@ -757,13 +757,22 @@ def uzlastir(book_slug: str) -> dict:
             "AND ozne_kimlik IS NOT NULL AND nesne_kimlik IS NOT NULL AND iliski IS NOT NULL",
             (book_slug,),
         ).fetchall()
-        turler = {r[0]: r[1] for r in conn.execute(
-            "SELECT kimlik, tur FROM glossary WHERE book_slug = ?", (book_slug,))}
+        turler, adlar = {}, {}
+        for kimlik, tur, kaynak in conn.execute(
+                "SELECT kimlik, tur, source FROM glossary WHERE book_slug = ?", (book_slug,)):
+            turler[kimlik], adlar[kimlik] = tur, kaynak
+        # Yaratık sınıfı rütbe değildir: istem `rutbesi` ister, model "I'm a Tyrant now" için
+        # `Sunny rutbesi Tyrant` yazar. Rütbe geçmişi sınıfı süzüyor, kart sınıfı yalnız
+        # rünlerden okuyordu — Sunny 1090'da Tiran olduğu hâlde "Şeytan" kaldı (2026-10-22).
+        siniflar = {x.casefold() for x in ((varlik_grafigi.profil(book_slug) or {}).get("diziler") or {})
+                    .get("yaratik_sinifi", ())}
         gruplar: dict[tuple, dict] = {}
         for tur, ok, iliski, nk, bolum, anlatim, alinti, nad in satirlar:
             if tur == "varlik":  # "ad, asil'in takma adı": asıl -> takma_adi -> ad
                 anahtar, anlatim = (nk, "takma_adi", ok), "anlatici"
             else:
+                if iliski == "rutbesi" and (adlar.get(nk) or "").casefold() in siniflar:
+                    iliski = "sinifi"
                 anahtar = (ok, iliski, nk)
             g = gruplar.setdefault(anahtar, {"bolumler": set(), "anlatim": set(), "kanit": (10**9, None)})
             g["bolumler"].add(bolum)
@@ -776,6 +785,14 @@ def uzlastir(book_slug: str) -> dict:
         kurallar = varlik_grafigi.anlam_kurallari(book_slug)
         vconn = varlik_grafigi._connect()
         try:
+            # Eski koşuların aynı iddialardan yazdığı yanlış etiketli adaylar; yukarıda `sinifi`
+            # olarak yeniden yazılır. Elle karar verilmiş (onaylı/reddedilmiş) bağa dokunulmaz.
+            sinif_kimlikleri = [k for k, ad in adlar.items() if (ad or "").casefold() in siniflar]
+            if sinif_kimlikleri:
+                vconn.execute(
+                    "DELETE FROM varlik_bag WHERE book_slug = ? AND iliski = 'rutbesi' AND origin = 'model' "
+                    f"AND durum = 'aday' AND hedef_kimlik IN ({', '.join('?' for _ in sinif_kimlikleri)})",
+                    (book_slug, *sinif_kimlikleri))
             for (kaynak, iliski, hedef), g in gruplar.items():
                 if kaynak == hedef:
                     continue

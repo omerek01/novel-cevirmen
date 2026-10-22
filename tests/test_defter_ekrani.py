@@ -310,3 +310,22 @@ def test_defter_uclari_service_worker_onbelleginden_gecmez():
     from pathlib import Path
     sw = (Path(__file__).resolve().parents[1] / "app" / "web" / "sw.js").read_text(encoding="utf-8")
     assert sw.index("DEFTER_YOLU.test(url.pathname)) return;") < sw.index("networkFirst(request)); // /api/books")
+
+
+# ---------- Anlatımla gelen sınıf (canlı, 2026-10-22: Sunny 1090'da Tiran, kart "Şeytan") ----------
+def test_uzlastir_yaratik_sinifini_rutbe_degil_sinif_yazar(kitap):
+    # "Does she know that I'm a Tyrant now, too?" modelde `Sunny rutbesi Tyrant` olarak geliyordu;
+    # sınıf rütbe geçmişinde süzülüyor, rün listesine de hiç ulaşmıyordu.
+    glossary.set_term(KITAP, "Tyrant", "Tiran")
+    s, t = _kimlik("Sunny"), _kimlik("Tyrant")
+    vg.bag_ekle(KITAP, s, "rutbesi", t, 703, None, "model", 1.0, durum="aday")  # eski yanlış etiket
+    _bolum(1098, ["Sunny frowned. Does she know that I'm a Tyrant now, too?"], ["x"])
+    kd.bolum_isle(KITAP, 1098, cagir=lambda user, model: (json.dumps(
+        {"v": [], "g": [], "h": [], "b": [{"o": "Sunny", "r": "rutbesi", "n": "Tyrant", "p": 1,
+                                           "a": "Does she know that I'm a Tyrant now", "s": "konusma"}]}),
+        {"model": model, "giris": 1, "cikis": 1, "dusunme": 0}))
+    kd.uzlastir(KITAP)
+    baglar = {(b["iliski"], b["hedef"]): b for b in vg.baglar(KITAP, kimlik=s)}
+    assert baglar[("sinifi", "Tyrant")]["ilk_bolum"] == 1098
+    assert ("rutbesi", "Tyrant") not in baglar
+
