@@ -241,6 +241,10 @@ KITAP_PROFILLERI: dict[str, dict] = {
                           "(Nephis, Kai'nin lideri ya da amiri)",
             "defter_rutbe": "Sleeper, Awakened, Master, Saint…",
             "defter_hitap": "sir, Lady Nephis, Master, Captain",
+            # Rün ekranı açılmadan olan değişimler (ölçülen: 1090 beşinci çekirdek ve Tiran sınıfı).
+            "defter_durum": 'Sunny oldu cekirdek "5" ("His fifth one."); Sunny oldu sinif "Tyrant" ("he was a '
+                            'Tyrant");\n Sunny kaybetti ani "Azure Blade" (kılıç kırıldı); Sunny evrimlesti golge '
+                            '"Stone Saint" -> "Marble Saint"',
             "cikarim_nitelik": "Spell'in [Attribute] olarak adlandırdığı şeyler içindir (Fated, "
                                "Mark of Divinity)",
             "cikarim_gercek_ad": "Spell'in verdiği True Name içindir (rünlerde 'True Name: X' "

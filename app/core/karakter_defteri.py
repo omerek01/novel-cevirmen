@@ -39,7 +39,7 @@ from .varlik_cikarim import _normal, ad_temizle
 
 # v2 (2026-10-14, pilot elle denetimi): çoğul hitap ayrı (`cogul`), rütbe yalnız rütbe
 # dizisinden, Gerçek Ad yalnız "True Name" kanıtıyla, ad en az bir kez büyük harfle.
-ISTEM_SURUMU = "defter-v2"
+ISTEM_SURUMU = "defter-v3"  # v3: durum değişimleri (`d`)
 VARSAYILAN_MODEL = "vertex/gemini-3.8-flash"
 # Düşünme tokenları da bu tavandan düşer. Pilot (2026-10-14, 20 SS bölümü, model varsayılan
 # düşünmesi): düşünme bölüm başına 1,3k–6,5k token; 8000'lik tavanda 14 bölümün 5'i yarıda
@@ -125,7 +125,7 @@ Girdi: İngilizce kaynak paragrafları ve Türkçe çevirileri (aynı numara = a
 bölümde geçen kayıtlı adlar (`kayitli`; kimlikleri e1, e2…) ve hitap aranacak paragraf
 numaraları (`hitap_adaylari`).
 
-Yalnız JSON döndür: {"v":[...],"g":[...],"b":[...],"h":[...]}
+Yalnız JSON döndür: {"v":[...],"g":[...],"b":[...],"h":[...],"d":[...]}
 
 v — bu bölümde AD olarak geçen varlıklar (kişi, yer, örgüt/klan/grup, rütbe/unvan, yetenek, nesne):
  Yalnız BÜYÜK HARFLE yazılan özel adlar; küçük harfli cins sözcükler (beast, cohort, dark sea) girmez.
@@ -153,6 +153,19 @@ h — yalnız `hitap_adaylari` paragraflarında, konuşanın karşısındakine D
  hitap ediyorsa ("both of you", gruba konuşma) f="cogul" ve mu o kişilerden biri. Konuşan ya da muhatap
  metinden kesin anlaşılmıyorsa o paragrafı ATLA.$sistem
 
+d — bu bölümde bir karakterin DURUMUNUN DEĞİŞTİĞİ yerler. Sistem mesajı olmasa da anlatım açıkça
+ söylüyorsa yaz; sistem mesajındaki değişimi de yaz:
+ {"o":"kimin durumu (id ya da ad; metinde yalnız he/she geçse de o kişinin id'si ya da adı)",
+  "k":"ani|golge|yanki|nitelik|yetenek|rutbe|sinif|cekirdek","i":"kazandi|kaybetti|evrimlesti|oldu",
+  "n":"öğenin adı ya da yeni rütbe/sınıf adı; cekirdek için yeni TOPLAM sayı (rakamla)",
+  "y":"evrimlestiyse yeni ad, değilse null","p":paragraf_no,
+  "a":"değişimi gösteren İngilizce alıntı, AYNEN, en çok 20 sözcük"}
+ k: ani = sahip olunan büyülü eşya/anı, golge/yanki = sahip olunan yaratık, nitelik = kalıcı özellik,
+ yetenek = yeni beceri, rutbe/sinif = basamak, cekirdek = çekirdek sayısı. i: kazandi (aldı, edindi),
+ kaybetti (kırıldı, yok oldu, verdi, kaybetti), evrimlesti (n -> y), oldu (rutbe/sinif/cekirdek yeni
+ değeri). Örnekler: $defter_durum. Yalnız BU bölümde gerçekleşen değişim; hatırlanan, tasarlanan,
+ beklenen ya da olası değişim girmez.
+
 Kurallar: ad/o/n/ko/mu alanlarında kayıtlı id varsa id'yi yaz. Her öğenin paragraf numarası ve
 alıntısı o paragraftan BİREBİR olmalı. Emin olmadığını yazma; boş liste geçerli bir cevaptır.
 Açıklama yazma, yalnız JSON.""")
@@ -162,6 +175,8 @@ _NOTR_ORNEKLER = {
                   "Captain; Marcus takma_adi Old Wolf; Lena lideri Ada\n (Ada, Lena'nın lideri ya da amiri)",
     "defter_rutbe": "Captain, General, Elder…",
     "defter_hitap": "sir, Lady Ada, Master, Captain",
+    "defter_durum": 'Ada kaybetti ani "Iron Key" (anahtar kırıldı); Ada oldu sinif "Knight"; Marcus oldu '
+                    'cekirdek "3"\n (üçüncü çekirdeği oluştu); Lena evrimlesti golge "Grey Wolf" -> "Silver Wolf"',
 }
 _TALIMAT: contextvars.ContextVar[str | None] = contextvars.ContextVar("defter_talimati", default=None)
 
@@ -389,7 +404,7 @@ def ayristir(metin: str | None) -> dict:
     veri = json.loads(metin)
     if not isinstance(veri, dict):
         raise ValueError("Yanıt nesne değil.")
-    return {a: veri.get(a) if isinstance(veri.get(a), list) else [] for a in ("v", "g", "b", "h")}
+    return {a: veri.get(a) if isinstance(veri.get(a), list) else [] for a in ("v", "g", "b", "h", "d")}
 
 
 class _Cozucu:
@@ -408,6 +423,8 @@ class _Cozucu:
         self.sistem_sesi = sistem_sesi(p)
         # Alan yoksa Gerçek Ad bağı hiç kabul edilmez: kavram kitaba özgü (Spell'in verdiği ad).
         self.gercek_ad_sozcukleri = tuple(x.casefold() for x in p.get("gercek_ad_sozcugu", ()))
+        # Ana karakterin adları: bakış açısı anlatımında paragraflarca yalnız "he" geçer.
+        self.ana_adlar = [a for a in (p.get("ana_karakter"), *p.get("ana_karakter_adlari", ())) if a]
 
     def coz(self, ref) -> tuple[str | None, str, list[str]]:
         ref = ad_temizle(str(ref or "")).strip()
@@ -457,6 +474,21 @@ def _tr_var(alinti: str, metin: str) -> bool:
 def _yer_tutucu(ad: str) -> bool:
     ad = (ad or "").strip()
     return ad.casefold() in _YER_TUTUCULAR or ad == ad.lower()
+
+
+DURUM_KATEGORILERI = frozenset({"ani", "golge", "yanki", "nitelik", "yetenek", "rutbe", "sinif", "cekirdek"})
+DURUM_ISLEMLERI = frozenset({"kazandi", "kaybetti", "evrimlesti", "oldu"})
+_SIRA_SOZCUKLERI = {w: i for i, ws in enumerate((
+    (), ("one", "first"), ("two", "second"), ("three", "third"), ("four", "fourth"), ("five", "fifth"),
+    ("six", "sixth"), ("seven", "seventh"), ("eight", "eighth"), ("nine", "ninth"), ("ten", "tenth"))) for w in ws}
+
+
+def _sayi(metin: str) -> int | None:
+    """"5", "fifth", "five" -> 5. Model "rakamla" yazsa da sözcük de gelebilir."""
+    m = re.search(r"\d+", metin or "")
+    if m:
+        return int(m.group(0))
+    return _SIRA_SOZCUKLERI.get((metin or "").strip().casefold())
 
 
 def _paragraf(p, n: int) -> int | None:
@@ -526,6 +558,56 @@ def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozu
             return red("rutbe_degil")
         if iliski == "gercek_adi" and not any(s in pencere.casefold() for s in cozucu.gercek_ad_sozcukleri):
             return red("gercek_ad_kanitsiz")
+    elif tur == "durum":
+        ok, oad, oadlar = cozucu.coz(oge.get("o"))
+        kategori = str(oge.get("k") or "").strip().lower()
+        islem = str(oge.get("i") or "").strip().lower()
+        # Model kayıtlı öğede id yazar ("e12" = Devil): bağ iddiası gibi çözülür. Canlı verinin
+        # kopyasında (2026-10-22) çözülmeyince 11 bölümde 8 doğru iddia "ad_yok"la eleniyordu.
+        ham = ad_temizle(str(oge.get("n") or "")).strip()
+        nk, nad, nadlar = cozucu.coz(ham) if kategori != "cekirdek" else (None, ham, [ham])
+        yeni = str(oge.get("y") or "").strip()
+        yeni = cozucu.coz(yeni)[1] if yeni and yeni.casefold() not in ("null", "none") else None
+        kayit.update(ozne_ad=oad, ozne_kimlik=ok, iliski=kategori, nesne_ad=nad, nesne_kimlik=nk,
+                     en_alinti=str(oge.get("a") or "")[:300], anlatim="anlatici")
+        kayit["deger"] = {"i": islem, "y": yeni}
+        if kategori not in DURUM_KATEGORILERI or islem not in DURUM_ISLEMLERI:
+            return red("durum_yok")
+        if p is None:
+            return red("paragraf_yok")
+        if _yer_tutucu(oad) or not nad:
+            return red("yer_tutucu")
+        # Değişim iki kısa paragrafa yayılabilir (744: "[Child of Shadows] was gone." + "A new
+        # Attribute had replaced it."): alıntı p ile komşusunun birleşiminde de aranır.
+        if not any(_alinti_var(kayit["en_alinti"], " ".join(en_p[a:b]))
+                   for a, b in ((p - 1, p), (p - 1, min(n, p + 1)), (max(0, p - 2), p))):
+            return red("alinti_yok")
+        pencere = "\n".join(en_p[max(0, p - 6): min(n, p + 1)])
+        # Ana karakter bölümde adıyla geçiyorsa yeter: 1090'da "And... he was a Tyrant." paragrafının
+        # 6 paragraf öncesinde ad yoktu; aynı kural 40 rütbe iddiasını eledi (canlı, 2026-10-22).
+        ana = bool({glossary.fold_term(x) for x in oadlar} & {glossary.fold_term(a) for a in cozucu.ana_adlar})
+        if not (_geciyor(oadlar, pencere) or (ana and _geciyor([*oadlar, *cozucu.ana_adlar], "\n".join(en_p)))):
+            return red("ad_yok")
+        if kategori == "cekirdek":
+            # Çekirdek sözcüğü yakın paragraflarda yeter: 1090'da "...form a new Shadow Core." ve
+            # sonraki paragraf "His fifth one." (sayı ikincide, sözcük birincide).
+            sayi = _sayi(nad)
+            if sayi is None or not re.search(r"\bcores?\b", pencere, re.IGNORECASE):
+                return red("cekirdek_kanitsiz")
+            kayit["nesne_ad"] = str(sayi)
+        elif kategori in ("rutbe", "sinif"):
+            if nad.casefold() not in cozucu.rutbeler:
+                return red("rutbe_degil")
+            if not _geciyor(nadlar, pencere):
+                return red("ad_yok")
+        else:
+            if not _geciyor(nadlar, pencere):
+                return red("ad_yok")
+            # Öğe özel addır: "the fifth shadow" (1090) gölge adı değil, cins sözdür.
+            if not _geciyor(nadlar, pencere, buyuk=True):
+                return red("ad_kucuk")
+            if islem == "evrimlesti" and not kayit["deger"]["y"]:
+                return red("evrim_eksik")
     elif tur == "hitap":
         kk, kad, kadlar = cozucu.coz(oge.get("ko"))
         mk, mad, madlar = cozucu.coz(oge.get("mu"))
@@ -686,6 +768,7 @@ def bolum_isle(book_slug: str, bolum: int, *, cagir=None, kuru: bool = False, mo
         [dogrula("varlik", o, en_p, tr_p, cozucu) for o in veri["v"] if isinstance(o, dict)]
         + [dogrula("bag", o, en_p, tr_p, cozucu) for o in veri["b"] if isinstance(o, dict)]
         + [dogrula("hitap", o, en_p, tr_p, cozucu) for o in veri["h"] if isinstance(o, dict)]
+        + [dogrula("durum", o, en_p, tr_p, cozucu) for o in veri["d"] if isinstance(o, dict)]
         + _genel_kayitlari(veri["g"], kayitli)
     )
     sayac = Counter(k["tur"] for k in kayitlar)

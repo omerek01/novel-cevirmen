@@ -437,3 +437,9 @@ def tutarlilik(run: list[dict], golge_sayisi: int, sinif_sirasi: list[str]) -> l
         if golge_sayisi > n:
             uyarilar.append(f"{golge_sayisi} gölge var ama {n} çekirdek: gölge listesi ya da çekirdek eski.")
     return uyarilar
+
+
+def cekirdekten_sinif(cekirdek: int, sinif_sirasi: list[str]) -> str | None:
+    """Çekirdek sayısının sınıfı (5 -> Tyrant): anlatım çoğu zaman yalnız çekirdeği söyler
+    ("His fifth one.")."""
+    return sinif_sirasi[cekirdek - 1] if 1 <= cekirdek <= len(sinif_sirasi) else None

@@ -390,3 +390,94 @@ def test_kart_tutarli_degerde_uyari_yok_ve_eski_golge_sayilmaz(kitap):
     _bolum(300, ["Name: Sunless.", "Shadows: [Marble Saint], [Soul Serpent]."], ["x", "x"])
     dk.cikar(KITAP)
     assert any("2 gölge" in u for u in de.kart(KITAP, _kimlik("Sunny"), None)["uyarilar"])
+
+
+# ---------- Anlatımdaki durum değişimleri (`d`, istem defter-v3) ----------
+def _durum_isle(no, en, d):
+    _bolum(no, en, ["x"] * len(en))
+    sonuc = kd.bolum_isle(KITAP, no, cagir=lambda user, model: (
+        json.dumps({"v": [], "g": [], "b": [], "h": [], "d": d}), {"model": model, "giris": 1, "cikis": 1, "dusunme": 0}))
+    assert sonuc["durum"] == "completed", sonuc
+
+
+def _durum_iddialari(no):
+    conn = db.connect()
+    try:
+        return conn.execute("SELECT ozne_ad, iliski, nesne_ad, gecerli, red_nedeni FROM defter_iddia "
+                            "WHERE book_slug = ? AND bolum = ? AND tur = 'durum' ORDER BY id", (KITAP, no)).fetchall()
+    finally:
+        conn.close()
+
+
+def test_durum_iddiasi_ana_karakterde_zamirle_kabul_baskasinda_ret(kitap):
+    # 1090: "Sunny" adı paragraftan çok önce; çekirdek sözcüğü bir önceki paragrafta.
+    en = ["Sunny did not have to summon the runes."] + [f"Filler {i}." for i in range(8)] + [
+        "The soul was ready to form a new Shadow Core.", "His fifth one. He was about to become a Tyrant.",
+        "And... he was a Tyrant."]
+    _durum_isle(1090, en, [
+        {"o": "Sunny", "k": "cekirdek", "i": "oldu", "n": "fifth", "p": 11, "a": "His fifth one."},
+        {"o": "Sunny", "k": "sinif", "i": "oldu", "n": "Tyrant", "p": 12, "a": "And... he was a Tyrant"},
+        {"o": "Nephis", "k": "sinif", "i": "oldu", "n": "Tyrant", "p": 12, "a": "And... he was a Tyrant"},
+        {"o": "Sunny", "k": "sinif", "i": "oldu", "n": "Archer", "p": 12, "a": "And... he was a Tyrant"},
+        {"o": "Sunny", "k": "uçak", "i": "oldu", "n": "x", "p": 12, "a": "And... he was a Tyrant"},
+    ])
+    assert _durum_iddialari(1090) == [
+        ("Sunny", "cekirdek", "5", 1, None), ("Sunny", "sinif", "Tyrant", 1, None),
+        ("Nephis", "sinif", "Tyrant", 0, "ad_yok"), ("Sunny", "sinif", "Archer", 0, "rutbe_degil"),
+        ("Sunny", "uçak", "x", 0, "durum_yok")]
+
+
+def test_kart_anlatimdaki_cekirdek_ve_esya_degisimlerini_isler(kitap):
+    _sunny_runleri()
+    _bolum(700, ["Name: Sunless.", "Memories: [Azure Blade], [Silver Bell]."], ["x", "x"])
+    dk.cikar(KITAP)
+    _durum_isle(800, ["Sunny watched the Azure Blade shatter into sparks."], [
+        {"o": "Sunny", "k": "ani", "i": "kaybetti", "n": "Azure Blade", "p": 1, "a": "the Azure Blade shatter"}])
+    _durum_isle(900, ["Sunny received the Shadow Lantern."], [
+        {"o": "Sunny", "k": "ani", "i": "kazandi", "n": "Shadow Lantern", "p": 1, "a": "received the Shadow Lantern"}])
+    _durum_isle(1090, ["Sunny felt his soul form a new Shadow Core.", "His fifth one."], [
+        {"o": "Sunny", "k": "cekirdek", "i": "oldu", "n": "5", "p": 2, "a": "His fifth one."}])
+    s = _kimlik("Sunny")
+    k = de.kart(KITAP, s, 1099)
+    run = _run(k)
+    assert (run["sinifi"]["deger"], run["Shadow Cores"]["deger"], run["Shadow Fragments"]["deger"]) == \
+        ("Tyrant", "5/7", "?/5000")
+    anilar = {a["ad"]: a for a in k["anilar"]}
+    assert anilar["Azure Blade"]["alanlar"]["elde"] == "yok" and anilar["Azure Blade"]["elde_bolum"] == 800
+    assert anilar["Shadow Lantern"]["origin"] == "anlatim" and "elde" not in anilar["Silver Bell"]["alanlar"]
+    once = {a["ad"]: a for a in de.kart(KITAP, s, 799)["anilar"]}
+    assert "elde" not in once["Azure Blade"]["alanlar"] and "Shadow Lantern" not in once
+    # Rün kanıtı üstün: sonraki tam liste Azure Blade'i yine gösterirse anlatımdaki kayıp uygulanmaz.
+    _bolum(950, ["Name: Sunless.", "Memories: [Azure Blade], [Silver Bell], [Shadow Lantern]."], ["x", "x"])
+    dk.cikar(KITAP)
+    assert {a["ad"]: a for a in de.kart(KITAP, s, 1099)["anilar"]}["Azure Blade"]["alanlar"].get("elde") != "yok"
+
+
+def test_durum_iddiasi_kayitli_kimligi_cozer_cins_adi_reddeder(kitap):
+    # Vertex ölçümü: model kayıtlı öğeye id yazdı ("e12" = Devil) — 8 doğru iddia eleniyordu;
+    # "the fifth shadow" gölge adı sanıldı.
+    glossary.set_term(KITAP, "Devil", "Şeytan")
+    en = ["Name: Sunless.", "Class: Devil.", "Sunny was now in possession of the fifth shadow."]
+
+    def cagir(user, model):
+        idler = {k["ad"]: k["id"] for k in json.loads(user)["kayitli"]}
+        return json.dumps({"v": [], "g": [], "b": [], "h": [], "d": [
+            {"o": idler["Sunny"], "k": "sinif", "i": "oldu", "n": idler["Devil"], "p": 2, "a": "Class: Devil."},
+            {"o": "Sunny", "k": "golge", "i": "kazandi", "n": "fifth shadow", "p": 3,
+             "a": "in possession of the fifth shadow"}]}), {"model": model, "giris": 1, "cikis": 1, "dusunme": 0}
+
+    _bolum(702, en, ["x"] * 3)
+    kd.bolum_isle(KITAP, 702, cagir=cagir)
+    assert _durum_iddialari(702) == [("Sunny", "sinif", "Devil", 1, None),
+                                     ("Sunny", "golge", "fifth shadow", 0, "ad_kucuk")]
+
+
+def test_durum_alintisi_iki_paragrafa_yayilabilir(kitap):
+    # Vertex ölçümü (744): alıntı "[Child of Shadows] was gone. A new Attribute had replaced it." iki paragraf.
+    _durum_isle(744, ["Sunny studied the runes.", "Instead... [Child of Shadows] was gone.",
+                      "A new Attribute had replaced it.", "Attribute: [Master of Shadows]."], [
+        {"o": "Sunny", "k": "nitelik", "i": "evrimlesti", "n": "Child of Shadows", "y": "Master of Shadows",
+         "p": 2, "a": "Instead... [Child of Shadows] was gone. A new Attribute had replaced it."},
+        {"o": "Sunny", "k": "nitelik", "i": "kaybetti", "n": "Child of Shadows", "p": 1,
+         "a": "Sunny studied the runes. Instead... [Child of Shadows] was gone. A new Attribute"}])
+    assert [r[3:] for r in _durum_iddialari(744)] == [(1, None), (0, "alinti_yok")]

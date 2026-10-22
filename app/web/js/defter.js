@@ -330,7 +330,8 @@ function kartCiz() {
   ic.push(bolumBasligi(`Nitelikler · ${nitelikler.elde.length}`, dugme("+ Ekle", "pill", () => kayitFormuAc("nitelik", k.ad))));
   const nitelikCipi = (n) => {
     const [ad] = adMetni(n, kars);
-    return dugme(ad + (n.origin === "elle" ? " · elle" : ""), "defter-ad", () => kayitFormuAc("nitelik", k.ad, n));
+    return dugme(ad + (n.origin === "elle" ? " · elle" : n.origin === "anlatim" ? " · anlatımdan" : ""),
+      "defter-ad", () => kayitFormuAc("nitelik", k.ad, n));
   };
   const nit = oge("div", "defter-cipler");
   for (const n of nitelikler.elde) nit.append(nitelikCipi(n));
@@ -420,9 +421,12 @@ function aniSatiri(a, kars) {
   const baslik = oge("span", "defter-ani-ad", ad);
   if (en) baslik.append(oge("small", null, en));
   if (a.origin === "elle") baslik.append(oge("span", "defter-elle", "elle"));
+  if (a.origin === "anlatim") baslik.append(oge("span", "defter-elle", "anlatımdan"));
   const al = a.alanlar || {};
+  // Anlatımdan gelen kayıp/kazanç bölümü (rün listesi olmadan): "bölüm 1047'de gitti".
+  const elde = a.elde_bolum != null ? `${al.elde === "yok" ? "gitti" : "geri geldi"}: bölüm ${a.elde_bolum}` : null;
   const alt = [a.tur === "golge" ? "gölge" : a.tur === "yanki" ? "yankı" : null, tr(al.tur, kars), tr(al.rutbe, kars),
-    tr(al.sinif, kars), kademeMetni(al.kademe), ...sayacMetinleri(al)].filter(Boolean).join(" · ");
+    tr(al.sinif, kars), kademeMetni(al.kademe), ...sayacMetinleri(al), elde].filter(Boolean).join(" · ");
   kap.append(baslik, oge("span", "defter-bolum-no", a.ilk_bolum != null ? `bölüm ${a.ilk_bolum}` : ""));
   if (alt) kap.append(oge("span", "defter-ani-alt", alt));
   const cipler = [...(a.efsunlar || []).map((e) => adMetni(e, kars)[0]), ...(al.nitelikler || []).map((n) => tr(n, kars)),
@@ -582,6 +586,10 @@ function kayitFormuAc(tur, sahip, mevcut = null) {
     ek.push(oge("p", "terim-etiket defter-form-bolum",
       mevcut.origin === "anlatim" ? "Anlatımdan · köken" : "Rün mesajı · köken"),
       oge("p", "defter-kanit", mevcut.kanit));
+  }
+  if (mevcut && mevcut.elde_kanit) {
+    ek.push(oge("p", "terim-etiket defter-form-bolum", `Durum değişimi · bölüm ${mevcut.elde_bolum}`),
+      oge("p", "defter-kanit", mevcut.elde_kanit));
   }
   if (mevcut && !mevcut.kimlik && mevcut.tur !== "alan") {
     ek.push(dugme("Sözlüğe ekle (karşılığını sabitle)", "pill", () => sozlugeEkleFormu(mevcut.ad, null)));

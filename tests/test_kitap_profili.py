@@ -52,7 +52,7 @@ def test_dbdeki_dizi_sozluk_kapisina_ulasir():
 # sha256'sı. SS istemi profilden kurulunca bayt bayt aynı kalmalı; SS istemini BİLEREK
 # değiştiren iş bu özetleri günceller (ve istem sürümünü düşünür).
 _SS_ISTEM_OZETLERI = {
-    "defter": "4f0fdea02ea24395cc2ab3da3193858c074b0a86d3df58dada8ff54bc3e8cf7d",
+    "defter": "35d29a39c8e19be53a189a95138f2573efdefb45f6167f36eefa50adb10228a9",  # defter-v3: durum değişimleri (`d`)
     "cikarim": "65fd351d3f47f98bfac7b6aa31a13d0c90cb811cfb00276270020bc3e9a3e1fa",
     "cift": "b0a39c99a89ed7c39c1d8ec3fd5f9086a9784b2440b41b589424385bff38bdce",
 }
