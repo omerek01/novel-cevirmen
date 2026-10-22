@@ -62,6 +62,41 @@ def _tekil_run(kayitlar: list[dict]) -> list[dict]:
     return coklu + list(secili.values())
 
 
+ANLATIM = "anlatim"  # anlatımdan gelen/türetilen rün alanının kökeni (rün mesajı değil)
+
+
+def _anlatim_sinifi(book_slug: str, sahip: str, sahip_kimlik: str, run: list[dict],
+                    siniflar: list[dict]) -> list[dict]:
+    """Rün ekranı seyrek açılır; sınıf atlaması çoğu zaman YALNIZ anlatımda geçer (Sunny 1090:
+    "And... he was a Tyrant." — rünler en son 1026'da "Class: Devil."). Anlatımdan gelen `sinifi`
+    bağı rün değerinden hem SONRA hem daha YÜKSEK basamaktaysa güncel sınıf odur (sınıf geri
+    gitmez; sıra profilin `yaratik_sinifi` dizisi). Sonra gelen elle değer yine kazanır. Rün biçimi
+    sınıfa bağlı alanları (çekirdek sayısı, parça eşiği) `siniftan_turet` ile günceller."""
+    p = varlik_grafigi.profil(book_slug) or {}
+    sira = [x.casefold() for x in (p.get("diziler") or {}).get("yaratik_sinifi", ())]
+
+    def basamak(ad):
+        return sira.index(ad.casefold()) + 1 if (ad or "").casefold() in sira else 0
+
+    mevcut = next((k for k in run if k["ad"] == "sinifi"), None)
+    taban, bolum = (basamak(mevcut["deger"]), mevcut["ilk_bolum"] or 0) if mevcut else (0, 0)
+    adaylar = [s for s in siniflar if basamak(s["ad"]) > taban and (s["ilk_bolum"] or 0) > bolum]
+    if not adaylar:
+        return run
+    en = max(adaylar, key=lambda s: (basamak(s["ad"]), -(s["ilk_bolum"] or 0)))
+    sinif = {"anahtar": None, "tur": "alan", "sahip": mevcut["sahip"] if mevcut else sahip,
+             "sahip_kimlik": sahip_kimlik, "ad": "sinifi", "deger": en["ad"], "kimlik": None, "tr": None,
+             "alanlar": {}, "ilk_bolum": en["ilk_bolum"], "kanit": en["kanit"], "origin": ANLATIM}
+    run = [k for k in run if k is not mevcut] + [sinif]
+    bicim = runler.bicim(p)
+    if bicim is not None and hasattr(bicim, "siniftan_turet"):
+        run = bicim.siniftan_turet(run, sinif, basamak(en["ad"]))
+    for k in run:
+        if k["anahtar"] is None:
+            k["anahtar"] = defter_kayit.anahtar("alan", k["sahip"], k["ad"], k["deger"])
+    return run
+
+
 def _rutbe_gecmisi(book_slug: str, rutbeler) -> list[dict]:
     """Anlatımdan gelen rütbe bağları, bölüm sırasıyla. Kitap profilinde basamaklar varsa yalnız
     rütbeler kalır (canlı kart: Sunny "Awakened → Devil → Ascended" — Devil sınıftır) ve sonradan
@@ -296,7 +331,7 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
         tablo = karakter_defteri.hitap_tablosu(book_slug, konum, conn)
     finally:
         conn.close()
-    adlar, oneriler, baglar, rutbeler = [], [], [], {}
+    adlar, oneriler, baglar, rutbeler, siniflar = [], [], [], {}, []
     for b in (_baglar(book_slug, konum, kimlik) if kimlik in sozluk else []):
         giden = b["kaynak_kimlik"] == kimlik
         diger_k, diger, diger_tr = ((b["hedef_kimlik"], b["hedef"], b["hedef_karsilik"]) if giden
@@ -316,6 +351,8 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
                                                   "destek": 0, "origin": b["origin"]})
                 r["destek"] = max(r["destek"], destek[_destek_anahtari(kimlik, "rutbesi", diger_k)])
             continue
+        if b["iliski"] == "sinifi" and giden:
+            siniflar.append({"ad": diger, "ilk_bolum": b["ilk_bolum"], "kanit": b["kanit"]})
         if b["iliski"] in _KART_DISI_ILISKILER:
             continue
         tanim = varlik_grafigi.ILISKILER.get(b["iliski"], {})
@@ -357,7 +394,8 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
     for k in kayit["efsun"]:
         efsunlar[glossary.fold_term(k["sahip"])].append(k)
     anilar = [dict(k, efsunlar=efsunlar.get(glossary.fold_term(k["ad"]), [])) for k in sahibin("ani")]
-    run, yankilar = _tekil_run(sahibin("alan")), sahibin("golge") + sahibin("yanki")
+    run = _anlatim_sinifi(book_slug, ad, kimlik, _tekil_run(sahibin("alan")), siniflar)
+    yankilar = sahibin("golge") + sahibin("yanki")
     karsiliklar = _karsiliklar(book_slug, [*run, *anilar, *yankilar, *sahibin("yaratik")])
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
             "bolum_sayisi": sayi.get(kimlik) or (sozluksuz.get(kimlik) or {}).get("bolum", 0), "ilk_bolum": ilk,

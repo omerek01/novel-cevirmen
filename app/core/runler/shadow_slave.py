@@ -344,3 +344,47 @@ def evrimleri_esle(bulunan: list[tuple], durum: dict, bolum_no: int | None) -> l
             and bolum_no - bekleyen["bolum"] > EVRIM_PENCERESI:
         durum["bekleyen"] = None
     return out
+
+
+# Çekirdek sayısı sınıf basamağıdır (Beast 1 … Titan 7). Ölçülen (Sunny): 352 "Class: Monster" +
+# "Shadow Cores: [2/7]", 526 Demon + 3/7, 702 Devil + 4/7. Parça eşiği 1000 x çekirdek; yeni
+# çekirdekte sayaç sıfırlanır (354 "0/2000", 526 "0/3000", 702 "0/4000").
+_CEKIRDEK_SAYACLARI = (("Shadow Cores", "Shadow Fragments"), ("Soul Cores", "Soul Fragments"))
+_SAYAC = re.compile(r"^\s*(\d+)\s*/\s*(\d+)\s*$")
+PARCA_CARPANI = 1000
+
+
+def siniftan_turet(run: list[dict], sinif: dict, basamak: int) -> list[dict]:
+    """Anlatımla gelen sınıftan (`sinif`, rün alanı biçiminde) çekirdek sayısını ve parça eşiğini
+    türet. Ölçülen: 1090'da beşinci çekirdek "Sunny did not have to summon the runes" ile oluştu,
+    kart 1026'daki "4/7" ve 1047'deki "3857/4000"de kaldı.
+
+    Yalnız rünlerde zaten olan ve sınıftan ESKİ sayaç güncellenir; parça eşiği yalnız sahibin
+    son eşiği 1000 x çekirdek kuralına uyuyorsa yeniden yazılır. Güncel parça sayısı bilinmez
+    ("?/5000"): sıfır yazmak uydurma olurdu. Yeni kayıtların `anahtar`ı çağıran doldurur."""
+    alanlar = {k["ad"]: k for k in run}
+    eskiler, yeniler = set(), []
+    for cekirdek_ad, parca_ad in _CEKIRDEK_SAYACLARI:
+        cekirdek = alanlar.get(cekirdek_ad)
+        m = _SAYAC.match(cekirdek["deger"]) if cekirdek else None
+        if not m or int(m.group(1)) >= basamak or (cekirdek["ilk_bolum"] or 0) >= (sinif["ilk_bolum"] or 0):
+            continue
+        n = int(m.group(1))
+        eskiler.add(id(cekirdek))
+        yeniler.append(_turetilmis(cekirdek, f"{basamak}/{m.group(2)}", sinif,
+                                   f"Çekirdek sayısı sınıftan türetildi: {basamak}. sınıf, {basamak} çekirdek."))
+        parca = alanlar.get(parca_ad)
+        if parca and payda(parca["deger"]) == PARCA_CARPANI * n \
+                and (parca["ilk_bolum"] or 0) < (sinif["ilk_bolum"] or 0):
+            esik = PARCA_CARPANI * basamak
+            eskiler.add(id(parca))
+            yeniler.append(_turetilmis(parca, f"?/{esik}", sinif,
+                                       f"Yeni çekirdekte sayaç {esik} eşiğinden yeniden başlar; "
+                                       "güncel sayı rünlerde görünmedi."))
+    return [k for k in run if id(k) not in eskiler] + yeniler
+
+
+def _turetilmis(eski: dict, deger: str, sinif: dict, not_: str) -> dict:
+    kanit = "\n".join(x for x in (sinif.get("kanit"), f"({not_})") if x)
+    return {**eski, "anahtar": None, "deger": deger, "alanlar": {"deger": deger},
+            "ilk_bolum": sinif["ilk_bolum"], "kanit": kanit, "origin": sinif["origin"]}

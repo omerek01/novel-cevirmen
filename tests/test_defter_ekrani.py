@@ -313,6 +313,18 @@ def test_defter_uclari_service_worker_onbelleginden_gecmez():
 
 
 # ---------- Anlatımla gelen sınıf (canlı, 2026-10-22: Sunny 1090'da Tiran, kart "Şeytan") ----------
+def _sunny_runleri():
+    # 702: dördüncü çekirdek; 1047: başlıklı küme içinde parça sayacı. Sonra rün yok (1090 anlatım).
+    _bolum(702, ["Name: Sunless.", "Class: Devil.", "Shadow Cores: [4/7].", "Shadow Fragments: [0/4000]."],
+           ["x"] * 4)
+    _bolum(1047, ["Name: Sunless.", "Shadow Fragments: [3857/4000]."], ["x", "x"])
+    dk.cikar(KITAP)
+
+
+def _run(kart):
+    return {a["ad"]: a for a in kart["run"]}
+
+
 def test_uzlastir_yaratik_sinifini_rutbe_degil_sinif_yazar(kitap):
     # "Does she know that I'm a Tyrant now, too?" modelde `Sunny rutbesi Tyrant` olarak geliyordu;
     # sınıf rütbe geçmişinde süzülüyor, rün listesine de hiç ulaşmıyordu.
@@ -329,3 +341,31 @@ def test_uzlastir_yaratik_sinifini_rutbe_degil_sinif_yazar(kitap):
     assert baglar[("sinifi", "Tyrant")]["ilk_bolum"] == 1098
     assert ("rutbesi", "Tyrant") not in baglar
 
+
+def test_kart_anlatimdaki_ust_sinifi_ve_turetilen_cekirdegi_gosterir(kitap):
+    _sunny_runleri()
+    glossary.set_term(KITAP, "Tyrant", "Tiran")
+    s = _kimlik("Sunny")
+    vg.bag_ekle(KITAP, s, "sinifi", _kimlik("Tyrant"), 1098, "Does she know that I'm a Tyrant now, too?",
+                "model", 0.5, durum="aday")
+    run = _run(de.kart(KITAP, s, 1099))
+    assert (run["sinifi"]["deger"], run["sinifi"]["origin"], run["sinifi"]["ilk_bolum"]) == ("Tyrant", "anlatim", 1098)
+    assert run["Shadow Cores"]["deger"] == "5/7" and run["Shadow Cores"]["origin"] == "anlatim"
+    # Yeni çekirdekte sayaç yeni eşikten (1000 x çekirdek) başlar; güncel sayı rünlerde görünmedi.
+    assert run["Shadow Fragments"]["deger"] == "?/5000"
+    # Spoiler: konum anlatımdan önceyse rün değerleri kalır.
+    once = _run(de.kart(KITAP, s, 1050))
+    assert (once["sinifi"]["deger"], once["Shadow Cores"]["deger"], once["Shadow Fragments"]["deger"]) == \
+        ("Devil", "4/7", "3857/4000")
+
+
+def test_kart_runden_dusuk_ya_da_eski_anlatim_sinifini_almaz(kitap):
+    _sunny_runleri()
+    for ad in ("Demon", "Tyrant"):
+        glossary.set_term(KITAP, ad, ad)
+    s = _kimlik("Sunny")
+    vg.bag_ekle(KITAP, s, "sinifi", _kimlik("Demon"), 1098, None, "model", 1.0, durum="aday")  # geri gidemez
+    vg.bag_ekle(KITAP, s, "sinifi", _kimlik("Tyrant"), 600, None, "model", 1.0, durum="aday")  # rün 702 daha yeni
+    run = _run(de.kart(KITAP, s, None))
+    assert (run["sinifi"]["deger"], run["sinifi"]["origin"]) == ("Devil", "sistem")
+    assert run["Shadow Cores"]["deger"] == "4/7"

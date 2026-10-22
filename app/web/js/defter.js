@@ -289,7 +289,7 @@ function kartCiz() {
         const deger = tr(a.deger, kars);
         const metin = oge("span", "defter-run-deger", deger);
         const ince = [deger !== a.deger && a.deger, a.ilk_bolum != null && `bölüm ${a.ilk_bolum}`,
-          a.origin === "elle" && "elle"].filter(Boolean).join(" · ");
+          a.origin === "elle" && "elle", a.origin === "anlatim" && "anlatımdan"].filter(Boolean).join(" · ");
         if (ince) metin.append(oge("small", null, ince));
         dd.append(metin, dugme("düzenle", "defter-duzenle", () => kayitFormuAc("alan", k.ad, a)));
       }
@@ -555,7 +555,9 @@ function kayitFormuAc(tur, sahip, mevcut = null) {
     ek.push(dugme("+ efsun ekle", "defter-cizgili", () => kayitFormuAc("efsun", mevcut.ad)));
   }
   if (mevcut && mevcut.kanit) {
-    ek.push(oge("p", "terim-etiket defter-form-bolum", "Rün mesajı · köken"),
+    // Anlatımdan gelen alan (rün ekranı açılmadan oluşan sınıf/çekirdek) rün mesajı değildir.
+    ek.push(oge("p", "terim-etiket defter-form-bolum",
+      mevcut.origin === "anlatim" ? "Anlatımdan · köken" : "Rün mesajı · köken"),
       oge("p", "defter-kanit", mevcut.kanit));
   }
   if (mevcut && !mevcut.kimlik && mevcut.tur !== "alan") {
