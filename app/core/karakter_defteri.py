@@ -417,8 +417,7 @@ class _Cozucu:
         # `rutbesi` bağlarının nesneleri BİLEREK alınmaz: eski model bağları ("Kai rutbesi
         # Archer") denetimi kendi hatasıyla beslerdi.
         p = varlik_grafigi.profil(book_slug) or {}
-        self.rutbeler = {x.casefold() for dizi in p.get("diziler", {}).values() for x in dizi}
-        self.rutbeler |= {x.casefold() for x in p.get("ek_rutbeler", ())}
+        self.rutbeler = profil_rutbeleri(p)
         self.rutbeler |= {r["source"].casefold() for r in self._dugum.satirlar.values() if r.get("tur") == "rutbe"}
         self.sistem_sesi = sistem_sesi(p)
         # Alan yoksa Gerçek Ad bağı hiç kabul edilmez: kavram kitaba özgü (Spell'in verdiği ad).
@@ -476,6 +475,32 @@ def _yer_tutucu(ad: str) -> bool:
     return ad.casefold() in _YER_TUTUCULAR or ad == ad.lower()
 
 
+# Tür adı öğe adı değildir: canlı yeniden işlemede (2026-10-23) "[You have received a Memory.]",
+# "an Ascended Memory of the second tier", "Aspect Legacy Relic", "Echo", "Shadow" eşya sanıldı.
+# "of" bilerek yok: "Master of Shadows" (Master bir rütbe) ve "Child of Shadows" özel addır.
+_CINS_ADLARI = frozenset({
+    "memory", "memories", "echo", "echoes", "shadow", "shadows", "attribute", "attributes", "ability",
+    "abilities", "aspect", "legacy", "relic", "relics", "flaw", "flaws", "rune", "runes", "item", "items",
+    "artifact", "artifacts", "weapon", "weapons", "armor", "armour", "core", "cores", "fragment", "fragments",
+})
+_CINS_EKLERI = frozenset({"a", "an", "the", "new", "tier", "rank", "class", "grade", "level", "first",
+                          "second", "third"})
+
+
+def profil_rutbeleri(p: dict) -> set[str]:
+    """Kitap profilindeki rütbe/sınıf adları (küçük harf)."""
+    return {x.casefold() for dizi in p.get("diziler", {}).values() for x in dizi} | \
+        {x.casefold() for x in p.get("ek_rutbeler", ())}
+
+
+def cins_adi(ad: str, rutbeler=frozenset()) -> bool:
+    """Ad bir tür adı ve yalnız sıra/rütbe sözcüklerinden mi oluşuyor ("Ascended Memory")? Tür adı
+    yoksa genel değildir: Sunny'nin gölgesi "Saint" bir rütbe adı da olsa özel addır."""
+    sozcukler = re.findall(r"[^\W\d_]+", (ad or "").casefold())
+    return any(s in _CINS_ADLARI for s in sozcukler) and \
+        all(s in _CINS_ADLARI or s in _CINS_EKLERI or s in rutbeler for s in sozcukler)
+
+
 DURUM_KATEGORILERI = frozenset({"ani", "golge", "yanki", "nitelik", "yetenek", "rutbe", "sinif", "cekirdek"})
 DURUM_ISLEMLERI = frozenset({"kazandi", "kaybetti", "evrimlesti", "oldu"})
 _SIRA_SOZCUKLERI = {w: i for i, ws in enumerate((
@@ -502,7 +527,7 @@ def _paragraf(p, n: int) -> int | None:
 def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozucu) -> dict:
     """Tek öğeyi kayda çevir ve biçimsel olarak doğrula. Döner: `defter_iddia` alanları.
 
-    Red nedenleri: paragraf_yok, ad_yok, ad_kucuk, yer_tutucu, alinti_yok, tr_yok, iliski_yok,
+    Red nedenleri: paragraf_yok, ad_yok, ad_kucuk, cins_ad, yer_tutucu, alinti_yok, tr_yok, iliski_yok,
     rutbe_degil, gercek_ad_kanitsiz, bicim_yok, hitap_celiski. Anlam yargısı yok; yalnız pilot
     denetiminde ölçülen ve metinden denetlenebilen hata sınıfları — gerisi birikime kalır."""
     n = len(en_p)
@@ -608,6 +633,8 @@ def dogrula(tur: str, oge: dict, en_p: list[str], tr_p: list[str], cozucu: _Cozu
                 return red("ad_kucuk")
             if islem == "evrimlesti" and not kayit["deger"]["y"]:
                 return red("evrim_eksik")
+            if any(cins_adi(x, cozucu.rutbeler) for x in (nad, kayit["deger"]["y"]) if x):
+                return red("cins_ad")
     elif tur == "hitap":
         kk, kad, kadlar = cozucu.coz(oge.get("ko"))
         mk, mad, madlar = cozucu.coz(oge.get("mu"))

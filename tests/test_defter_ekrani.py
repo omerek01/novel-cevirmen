@@ -472,6 +472,40 @@ def test_durum_iddiasi_kayitli_kimligi_cozer_cins_adi_reddeder(kitap):
                                      ("Sunny", "golge", "fifth shadow", 0, "ad_kucuk")]
 
 
+_CINS_ORNEKLERI = [  # canlı defter-v3 yeniden işleme (2026-10-23): rün duyurusu ve tür adları öğe sanıldı
+    ("ani", "Memory", "[You have received a Memory.]"),
+    ("ani", "Aspect Legacy Relic", "[You have received an Aspect Legacy Relic.]"),
+    ("ani", "Ascended Memory", "One was an Ascended Memory of the second tier"),
+    ("nitelik", "Attribute", "[You have acquired a new Attribute.]"),
+    ("yanki", "Echo", "[You have received an Echo.]"),
+    ("golge", "Shadow", "[...You have received a Shadow.]"),
+]
+
+
+def test_durum_iddiasi_tur_adini_oge_saymaz(kitap):
+    en = ["Sunny looked at the runes."] + [f"Sunny heard: {a}" for _k, _n, a in _CINS_ORNEKLERI] + [
+        "Sunny held the Oath Key.", "Sunny commanded a new shadow, Saint."]
+    _durum_isle(358, en, [{"o": "Sunny", "k": k, "i": "kazandi", "n": n, "p": i + 2, "a": a}
+                          for i, (k, n, a) in enumerate(_CINS_ORNEKLERI)] + [
+        {"o": "Sunny", "k": "ani", "i": "kazandi", "n": "Oath Key", "p": len(en) - 1, "a": "held the Oath Key"},
+        # Saint bir rütbe adı da olsa gölgenin özel adıdır.
+        {"o": "Sunny", "k": "golge", "i": "kazandi", "n": "Saint", "p": len(en), "a": "a new shadow, Saint"}])
+    assert [(r[2], r[3], r[4]) for r in _durum_iddialari(358)] == \
+        [(n, 0, "cins_ad") for _k, n, _a in _CINS_ORNEKLERI] + [("Oath Key", 1, None), ("Saint", 1, None)]
+
+
+def test_kart_eski_veride_kalan_tur_adini_gostermez(kitap, monkeypatch):
+    # Kural gelmeden önce geçerli yazılmış iddialar: yeniden işleme olmadan karttan düşmeli.
+    _sunny_runleri()
+    with monkeypatch.context() as m:
+        m.setattr(kd, "cins_adi", lambda *a, **k: False)
+        for i, (k, n, a) in enumerate(_CINS_ORNEKLERI):
+            _durum_isle(900 + i, [f"Sunny heard: {a}"], [{"o": "Sunny", "k": k, "i": "kazandi", "n": n, "p": 1, "a": a}])
+    kart = de.kart(KITAP, _kimlik("Sunny"), 1099)
+    adlar = {e["ad"] for a in ("anilar", "yankilar", "nitelikler") for e in kart.get(a) or []}
+    assert not adlar & {n for _k, n, _a in _CINS_ORNEKLERI}
+
+
 def test_durum_alintisi_iki_paragrafa_yayilabilir(kitap):
     # Vertex ölçümü (744): alıntı "[Child of Shadows] was gone. A new Attribute had replaced it." iki paragraf.
     _durum_isle(744, ["Sunny studied the runes.", "Instead... [Child of Shadows] was gone.",

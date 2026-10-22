@@ -139,8 +139,13 @@ def _anlatim_olaylari(book_slug: str, kimlikler: set[str], konum: int | None) ->
     finally:
         conn.close()
     out = []
+    rutbeler = karakter_defteri.profil_rutbeleri(varlik_grafigi.profil(book_slug) or {})
     for bolum, kategori, ad, deger, kanit in satirlar:
         d = json.loads(deger or "{}") or {}
+        # `cins_ad` kuralından önce geçerli yazılmış "Memory", "Echo" gibi tür adları.
+        if kategori not in ("cekirdek", "rutbe", "sinif") and any(
+                karakter_defteri.cins_adi(x, rutbeler) for x in (ad, d.get("y")) if x):
+            continue
         out.append({"bolum": bolum, "k": kategori, "i": d.get("i"), "n": ad, "y": d.get("y"), "kanit": kanit})
     return out
 
