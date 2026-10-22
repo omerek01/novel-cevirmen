@@ -157,3 +157,14 @@ test("sistemAltMetni bölüm, anahtarlar ve hizasız çeviri notu", () => {
     "Bölüm 12 · Cooldown, Mana · İngilizce");
   assert.equal(sistemAltMetni({ bolum: 4, anahtarlar: [], turkce: true }), "Bölüm 4");
 });
+
+test("eldeAyir tam rün listesinden düşenleri ayırır", async () => {
+  const { eldeAyir } = await import("../../app/web/js/defter-yardimci.js");
+  const { elde, eski } = eldeAyir([
+    { ad: "Silver Bell", alanlar: { elde: "var" } }, { ad: "Azure Blade", alanlar: { elde: "yok" } },
+    { ad: "Dark Wing", alanlar: {} }, { ad: "Elle", alanlar: null },
+  ]);
+  assert.deepEqual(elde.map((k) => k.ad), ["Silver Bell", "Dark Wing", "Elle"]);
+  assert.deepEqual(eski.map((k) => k.ad), ["Azure Blade"]);
+  assert.deepEqual(eldeAyir(undefined), { elde: [], eski: [] });
+});

@@ -1042,6 +1042,8 @@ def bolumden_sistem_baglari(book_slug: str, chapter_no: int | None, metin: str) 
     conn = _connect()
     try:
         for ozne, iliski, nesne, kanit in bulunan:
+            if iliski == runler.ENVANTER:  # liste işareti, bağ değil (`defter_kayit` okur)
+                continue
             if iliski == runler.DEGER:
                 a = cozucu.coz(ozne)
                 if a:
@@ -1201,6 +1203,8 @@ def sistem_baglarini_cikar(book_slug: str, yaz: bool = True) -> dict:
                 if yaz:
                     bag_ekle(book_slug, s[0], s[1], s[2], bolum["chapter_no"], cumle, "manual", 1.0, conn=conn)
             for ozne, iliski, nesne, kanit in bulunan:
+                if iliski == runler.ENVANTER:  # liste işareti, bağ değil (`defter_kayit` okur)
+                    continue
                 if iliski == runler.DEGER:
                     a = cozucu.coz(ozne)
                     if a:

@@ -86,7 +86,8 @@ def _anlatim_sinifi(book_slug: str, sahip: str, sahip_kimlik: str, run: list[dic
     en = max(adaylar, key=lambda s: (basamak(s["ad"]), -(s["ilk_bolum"] or 0)))
     sinif = {"anahtar": None, "tur": "alan", "sahip": mevcut["sahip"] if mevcut else sahip,
              "sahip_kimlik": sahip_kimlik, "ad": "sinifi", "deger": en["ad"], "kimlik": None, "tr": None,
-             "alanlar": {}, "ilk_bolum": en["ilk_bolum"], "kanit": en["kanit"], "origin": ANLATIM}
+             "alanlar": {}, "ilk_bolum": en["ilk_bolum"], "son_bolum": en["ilk_bolum"], "kanit": en["kanit"],
+             "origin": ANLATIM}
     run = [k for k in run if k is not mevcut] + [sinif]
     bicim = runler.bicim(p)
     if bicim is not None and hasattr(bicim, "siniftan_turet"):
@@ -95,6 +96,18 @@ def _anlatim_sinifi(book_slug: str, sahip: str, sahip_kimlik: str, run: list[dic
         if k["anahtar"] is None:
             k["anahtar"] = defter_kayit.anahtar("alan", k["sahip"], k["ad"], k["deger"])
     return run
+
+
+def _uyarilar(book_slug: str, run: list[dict], yankilar: list[dict]) -> list[str]:
+    """Kartın kendi içindeki çelişkiler (rün biçiminin `tutarlilik` kuralları). Yalnız konumda
+    elde olan gölgeler sayılır: evrimleşmiş eski hâller (Stone/Marble Saint) çekirdek tutmaz."""
+    p = varlik_grafigi.profil(book_slug) or {}
+    bicim = runler.bicim(p)
+    if bicim is None or not hasattr(bicim, "tutarlilik"):
+        return []
+    golge = sum(1 for k in yankilar if k["tur"] == "golge" and (k.get("alanlar") or {}).get("elde") != "yok")
+    sira = [x.casefold() for x in (p.get("diziler") or {}).get("yaratik_sinifi", ())]
+    return bicim.tutarlilik(run, golge, sira)
 
 
 def _rutbe_gecmisi(book_slug: str, rutbeler) -> list[dict]:
@@ -398,6 +411,7 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
     yankilar = sahibin("golge") + sahibin("yanki")
     karsiliklar = _karsiliklar(book_slug, [*run, *anilar, *yankilar, *sahibin("yaratik")])
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
+            "uyarilar": _uyarilar(book_slug, run, yankilar),
             "bolum_sayisi": sayi.get(kimlik) or (sozluksuz.get(kimlik) or {}).get("bolum", 0), "ilk_bolum": ilk,
             "adlar": adlar, "oneriler": oneriler, "baglar": baglar, "hitaplar": hitaplar,
             "rutbeler": _rutbe_gecmisi(book_slug, rutbeler.values()),

@@ -7,10 +7,11 @@ evrim işaretleri. Saftır (veritabanı yok); `varlik_grafigi` düzenleyicisi pr
 """
 from __future__ import annotations
 
+import json
 import re
 from collections import deque
 
-from . import DEGER, payda
+from . import DEGER, ENVANTER, payda
 
 _RUN_SATIRI = re.compile(r"^([A-Z][A-Za-z ]{1,30}):\s*(.+?)\s*$")
 _KOSELI = re.compile(r"\[([^\[\]]+)\]")
@@ -122,6 +123,19 @@ _DURUM_DEVAM_ANAHTARLARI = frozenset(
      "Dream Anchor", "Attribute", "Aspect Ability", "Innate Ability",
      "Shadow Dance Mastery Level", "Soul Cores", "Soul Fragments")
 )
+
+
+# Çoğul durum satırı kişinin o anki TAM listesidir (tekil "Attribute:" yalnız yeni öğeyi söyler).
+# Ölçülen (2026-10-22): kart Sunny'de 48 anı gösteriyordu, 1026'daki tam liste 32; 1080'deki
+# "Shadows:" 4 gölge, kart 6 (Stone/Marble Saint, Onyx Saint'in eski hâlleri).
+_ENVANTER_ANAHTARLARI = {"Memories": "ani", "Shadows": "golge", "Echoes": "yanki", "Attributes": "nitelik"}
+
+
+def _tam_liste(deger: str) -> bool:
+    """Liste kesik değilse tam: köşeli öğelerin DIŞINDA üç nokta yok ("[Endless Spring]..."
+    — 241, 353; ad içindeki "[M... Un...old]" sayılmaz). "—" boş tam listedir ("Echoes: —")."""
+    dis = _KOSELI.sub("", deger)
+    return "..." not in dis and "…" not in dis
 
 
 def _ogeler(deger: str) -> list[str]:
@@ -288,6 +302,10 @@ def sistem_baglarini_bul(metin: str, ana_karakter: str, ana_adlar: tuple[str, ..
                 out.append((blok_ozne, _DURUM_SATIRLARI[anahtar], oge, paragraf))
                 if anahtar == "Aspect":
                     gorunus = oge
+            if anahtar in _ENVANTER_ANAHTARLARI and _tam_liste(deger):
+                out.append((blok_ozne, ENVANTER,
+                            f"{_ENVANTER_ANAHTARLARI[anahtar]}\t{json.dumps(_ogeler(deger), ensure_ascii=False)}",
+                            paragraf))
         elif blok_tur in _BLOK_ALT and anahtar in _BLOK_ALT[blok_tur] and blok_ozne:
             for oge in _ogeler(deger):
                 if anahtar == "Enchantment" and oge in efsunlar:
@@ -387,4 +405,35 @@ def siniftan_turet(run: list[dict], sinif: dict, basamak: int) -> list[dict]:
 def _turetilmis(eski: dict, deger: str, sinif: dict, not_: str) -> dict:
     kanit = "\n".join(x for x in (sinif.get("kanit"), f"({not_})") if x)
     return {**eski, "anahtar": None, "deger": deger, "alanlar": {"deger": deger},
-            "ilk_bolum": sinif["ilk_bolum"], "kanit": kanit, "origin": sinif["origin"]}
+            "ilk_bolum": sinif["ilk_bolum"], "son_bolum": sinif["ilk_bolum"], "kanit": kanit,
+            "origin": sinif["origin"]}
+
+
+def tutarlilik(run: list[dict], golge_sayisi: int, sinif_sirasi: list[str]) -> list[str]:
+    """Kartın kendi içinde çelişen değerleri (kitabın kuralları). DÜZELTMEZ, yalnız söyler: bir
+    tarafın eski ya da yanlış okunduğunu gösterir (ölçülen: Tiran sınıfı, 4/7 çekirdek, 3857/4000).
+
+    Kurallar: sınıf basamağı = çekirdek sayısı; parça eşiği = 1000 x çekirdek; gölge sayısı
+    çekirdeği aşamaz (her gölge bir çekirdekte durur)."""
+    alanlar = {k["ad"]: k for k in run}
+    uyarilar = []
+    sinif = alanlar.get("sinifi")
+    basamak = (sinif_sirasi.index(sinif["deger"].casefold()) + 1
+               if sinif and sinif["deger"].casefold() in sinif_sirasi else 0)
+    for cekirdek_ad, parca_ad in _CEKIRDEK_SAYACLARI:
+        cekirdek = alanlar.get(cekirdek_ad)
+        m = _SAYAC.match(cekirdek["deger"]) if cekirdek else None
+        if not m:
+            continue
+        n = int(m.group(1))
+        if basamak and n != basamak:
+            uyarilar.append(f"Sınıf {sinif['deger']} ({basamak}. basamak) ile {cekirdek_ad} {n} uyuşmuyor "
+                            f"(sınıf bölüm {sinif['ilk_bolum']}, çekirdek bölüm {cekirdek['ilk_bolum']}).")
+        parca = alanlar.get(parca_ad)
+        p = payda(parca["deger"]) if parca else None
+        if p is not None and p != PARCA_CARPANI * n:
+            uyarilar.append(f"{parca_ad} eşiği {p}, {n} çekirdek için {PARCA_CARPANI * n} olmalı "
+                            f"(parça bölüm {parca['ilk_bolum']}).")
+        if golge_sayisi > n:
+            uyarilar.append(f"{golge_sayisi} gölge var ama {n} çekirdek: gölge listesi ya da çekirdek eski.")
+    return uyarilar

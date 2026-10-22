@@ -6,8 +6,10 @@ sistem bağları yoktur (genel algılayıcı yalnız ham satırları listeler: `
 
 Biçim modülü arayüzü:
   * `sistem_baglarini_bul(metin, ana_karakter, ana_adlar=(), paydalar=None, anilar=None)`
-    -> [(özne, ilişki, nesne, kanıt)]; değer satırı ilişki olarak `DEGER` taşır,
-  * `evrimleri_esle(bulunan, durum, bolum_no)` -> dönüşüm bağlarıyla güncel liste.
+    -> [(özne, ilişki, nesne, kanıt)]; değer satırı ilişki olarak `DEGER` taşır, TAM envanter
+    listesi (`Memories: [..]`) ayrıca `ENVANTER` taşır (nesne: "tür\t[json adlar]"),
+  * `evrimleri_esle(bulunan, durum, bolum_no)` -> dönüşüm bağlarıyla güncel liste,
+  * isteğe bağlı `siniftan_turet(run, sinif, basamak)` ve `tutarlilik(run, golge_sayisi)`.
 """
 from __future__ import annotations
 
@@ -16,6 +18,9 @@ import re
 from types import ModuleType
 
 DEGER = "_deger"  # (özne, DEGER, "anahtar\tdeğer", kanıt)
+# (özne, ENVANTER, "ani|golge|yanki|nitelik\t[json adlar]", kanıt): öznenin o anki TAM listesi.
+# Bağ değildir; listede olmayan eski öğe "artık yok" sayılır (`defter_kayit`).
+ENVANTER = "_envanter"
 # Bilinen biçimler: profil değeri -> modül adı. Yeni kitap biçimi = yeni modül + kayıt.
 BICIMLER = {"shadow_slave": "shadow_slave"}
 _PAYDA = re.compile(r"^\s*\d+\s*/\s*(\d+)\s*$")

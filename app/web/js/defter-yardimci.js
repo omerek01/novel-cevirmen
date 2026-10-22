@@ -39,6 +39,15 @@ export function sayacMetinleri(alanlar) {
 export const RUN_ALANLARI = ["gercek_adi", "rutbesi", "sinifi", "gorunusu", "gorunus_rutbesi", "kusuru",
   "ruya_capasi", "yetenegi"];
 
+/* Tam rün listesinden düşen kayıtlar (`alanlar.elde === "yok"`) ayrı gösterilir: kart eskiden
+   kaybedilen anıları ve evrimleşmiş gölgelerin eski hâllerini güncel gibi sayıyordu. */
+export function eldeAyir(liste) {
+  const elde = [];
+  const eski = [];
+  for (const k of liste || []) (k.alanlar && k.alanlar.elde === "yok" ? eski : elde).push(k);
+  return { elde, eski };
+}
+
 /* Rün listesi satırları: bilinen alanlar sabit sırada, sonra sayaçlar; çok değerli alan
    (yetenekler) tek satırda toplanır. Her satır {ad, kayitlar: [...]} */
 export function runSatirlari(run) {

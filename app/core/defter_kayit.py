@@ -30,6 +30,8 @@ COKLU_ALANLAR = frozenset({"yetenegi"})
 LISTE_ALANLARI = frozenset({"nitelikler", "yetenekler"})
 _SAHIPLI = {"anisi": "ani", "golgesi": "golge", "yanki": "yanki"}
 _ESYA_ALANI = {"rutbesi": "rutbe", "sinifi": "sinif", "esya_turu": "tur", "yetenegi": "yetenekler"}
+# Anı/gölge/yankı/niteliğin konumdaki durumu: "var" | "yok" (tam rün listesinden; geçmişli).
+ELDE = "elde"
 _ACIKLAMA = re.compile(r"Enchantment Description:\s*\[?([^\]]+?)\]?\.?\s*$")
 _TIRNAK = "\"'“”‘’ "
 
@@ -62,6 +64,9 @@ CREATE INDEX IF NOT EXISTS defter_kayit_kitap ON defter_kayit (book_slug, tur);
 def _connect():
     conn = db.connect()
     conn.executescript(SEMA)
+    # TAZELİK: kaydın rünlerde GÖRÜLDÜĞÜ bölümler (json liste). Yalnız ilk bölüm tutulunca kart
+    # "4/7 · bölüm 702" diyordu; değer 1026'da yeniden görüldü mü, ne kadar eski, bilinmiyordu.
+    db.ensure_column(conn, "defter_kayit", "gorulme", "gorulme TEXT")
     return conn
 
 
@@ -89,6 +94,8 @@ class _Toplayici:
                                     "alanlar": {}, "ilk_bolum": bolum, "kanit": kanit}
         elif bolum is not None and (k["ilk_bolum"] is None or bolum < k["ilk_bolum"]):
             k["ilk_bolum"], k["kanit"] = bolum, kanit
+        if bolum is not None:
+            k.setdefault("_gorulme", set()).add(bolum)
         return k
 
     def _esya(self, ad):
@@ -101,12 +108,46 @@ class _Toplayici:
                 return k
         return None
 
+    def _envanter(self, sahip: str, tur: str, adlar: list[str], no: int | None) -> None:
+        """Tam rün listesi sahibin o anki envanteridir: listede olmayan eski öğe `elde`=yok, listeye
+        dönen yeniden var. Geçmişli tutulur; konumdaki durum gösterilir (spoiler yok). Kayıt
+        silinmez: kaybedilen anı da kitabın bilgisidir (Azure Blade, Drop of Ichor…)."""
+        icinde = {glossary.fold_term(_temiz(a)) for a in adlar}
+        s = glossary.fold_term(sahip)
+        for k in self.kayitlar.values():
+            if k["tur"] != tur or glossary.fold_term(k["sahip"]) != s:
+                continue
+            ilk = k.get("_ilk", k["ilk_bolum"])
+            if no is not None and ilk is not None and ilk > no:
+                continue
+            gecmis = k["alanlar"].get(ELDE)
+            onceki = gecmis[-1][0] if gecmis else k.get("_elde", "var")
+            simdi = "var" if glossary.fold_term(k["ad"]) in icinde else "yok"
+            if simdi != onceki:
+                _alan_ekle(k, ELDE, simdi, no)
+
+    def _yankidan_golgeye(self, sahip: str, ad: str, no: int | None) -> None:
+        """Yankı gölgeye dönüşür, iki kayıt birden güncel kalmaz (1047 "Echoes: [Ravenous Fiend]",
+        1080 "Shadows: [..], [Ravenous Fiend]"; arada tam yankı listesi yok, kart ikisini de sayıyordu)."""
+        k = self.kayitlar.get(anahtar("yanki", sahip, ad))
+        if k is None:
+            return
+        ilk = k.get("_ilk", k["ilk_bolum"])
+        gecmis = k["alanlar"].get(ELDE)
+        onceki = gecmis[-1][0] if gecmis else k.get("_elde", "var")
+        if onceki != "yok" and (no is None or ilk is None or ilk < no):
+            _alan_ekle(k, ELDE, "yok", no)
+
     def bolum(self, no: int | None, metin: str, ana: str, ana_adlar: tuple[str, ...]) -> None:
         anilar = {k["ad"] for k in self.kayitlar.values() if k["tur"] == "ani"}
         dortluler = self.bicim.sistem_baglarini_bul(metin, ana, ana_adlar, self.paydalar, anilar)
         olduruldu: dict[str, dict] = {}
         for ozne, iliski, nesne, kanit in dortluler:
             if iliski in ("_evrim", "donustu", "turu") or not nesne:
+                continue
+            if iliski == runler.ENVANTER:
+                tur, adlar = nesne.split("\t", 1)
+                self._envanter(_temiz(ozne), tur, json.loads(adlar), no)
                 continue
             ozne = _temiz(ozne)
             if iliski != runler.DEGER:
@@ -122,6 +163,8 @@ class _Toplayici:
                 tur = _SAHIPLI[iliski]
                 self.esyalar[glossary.fold_term(nesne)] = tur
                 self._kayit(tur, ozne, nesne, no, kanit)
+                if tur == "golge":
+                    self._yankidan_golgeye(ozne, nesne, no)
                 continue
             if iliski == "oldurdu":
                 olduruldu[glossary.fold_term(nesne)] = {"sahip": ozne, "ad": nesne, "kanit": kanit, "alan": {}}
@@ -184,21 +227,24 @@ def _yaz_sistem(conn, book_slug: str, kayitlar, birlestir: bool) -> None:
         eski = None
         if birlestir:
             eski = conn.execute(
-                "SELECT alanlar, ilk_bolum, kanit FROM defter_kayit WHERE book_slug = ? AND anahtar = ? "
+                "SELECT alanlar, ilk_bolum, kanit, gorulme FROM defter_kayit WHERE book_slug = ? AND anahtar = ? "
                 "AND origin = 'sistem'", (book_slug, k["anahtar"]),
             ).fetchone()
         alanlar, ilk, kanit = k["alanlar"], k["ilk_bolum"], k["kanit"]
+        gorulme = set(k.get("_gorulme") or ())
         if eski is not None:
             alanlar = _gecmis_birlestir(json.loads(eski[0] or "{}"), alanlar)
             if eski[1] is not None and (ilk is None or eski[1] <= ilk):
                 ilk, kanit = eski[1], eski[2]
+            gorulme |= set(json.loads(eski[3] or "[]"))
         conn.execute(
             "INSERT INTO defter_kayit (book_slug, anahtar, tur, sahip, ad, deger, alanlar, ilk_bolum, kanit, "
-            "origin, silindi, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sistem', 0, ?) "
+            "origin, silindi, updated_at, gorulme) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'sistem', 0, ?, ?) "
             "ON CONFLICT(book_slug, anahtar, origin) DO UPDATE SET alanlar = excluded.alanlar, "
-            "ilk_bolum = excluded.ilk_bolum, kanit = excluded.kanit, updated_at = excluded.updated_at",
+            "ilk_bolum = excluded.ilk_bolum, kanit = excluded.kanit, updated_at = excluded.updated_at, "
+            "gorulme = excluded.gorulme",
             (book_slug, k["anahtar"], k["tur"], k["sahip"], k["ad"], k["deger"],
-             json.dumps(alanlar, ensure_ascii=False), ilk, kanit, simdi),
+             json.dumps(alanlar, ensure_ascii=False), ilk, kanit, simdi, json.dumps(sorted(gorulme))),
         )
 
 
@@ -268,13 +314,16 @@ def bolumden(book_slug: str, bolum: int | None, metin: str) -> int:
             "SELECT ad, tur FROM defter_kayit WHERE book_slug = ? AND tur IN ('ani', 'golge', 'yanki')",
             (book_slug,))}
         t = _Toplayici(runler.bicim(p), esyalar, _paydalari_oku(conn, book_slug))
-        # Önceki bölümlerde görülen anının sahibini bilmek için mevcut kayıtlar tohumlanır.
+        # Önceki bölümlerde görülen anının sahibini bilmek için mevcut kayıtlar tohumlanır. Nitelikler
+        # ve bölüme kadarki `elde` durumu tam liste (envanter) karşılaştırması içindir.
         for satir in conn.execute(
-            "SELECT anahtar, tur, sahip, ad, deger FROM defter_kayit WHERE book_slug = ? AND origin = 'sistem' "
-            "AND tur IN ('ani', 'golge', 'yanki')", (book_slug,)):
+            "SELECT anahtar, tur, sahip, ad, deger, alanlar, ilk_bolum FROM defter_kayit WHERE book_slug = ? "
+            "AND origin = 'sistem' AND tur IN ('ani', 'golge', 'yanki', 'nitelik')", (book_slug,)):
+            elde = [d for d, b in json.loads(satir[5] or "{}").get(ELDE, [])
+                    if bolum is None or (b or 0) <= bolum]
             t.kayitlar[satir[0]] = {"anahtar": satir[0], "tur": satir[1], "sahip": satir[2], "ad": satir[3],
                                     "deger": satir[4], "alanlar": {}, "ilk_bolum": None, "kanit": None,
-                                    "_tohum": True}
+                                    "_tohum": True, "_ilk": satir[6], "_elde": elde[-1] if elde else "var"}
         t.bolum(bolum, metin, p["ana_karakter"], tuple(p.get("ana_karakter_adlari", ())))
         # Tohum kaydı yalnız bu bölümde alan kazandıysa yazılır; ilk bölümü eski kayıttan kalır.
         yeni = [k for k in t.kayitlar.values() if not k.get("_tohum") or k["alanlar"] or k["ilk_bolum"]]
@@ -400,7 +449,7 @@ def gorunum(book_slug: str, konum: int | None) -> dict:
     conn = _connect()
     try:
         satirlar = conn.execute(
-            "SELECT anahtar, tur, sahip, ad, deger, alanlar, ilk_bolum, kanit, origin, silindi "
+            "SELECT anahtar, tur, sahip, ad, deger, alanlar, ilk_bolum, kanit, origin, silindi, gorulme "
             "FROM defter_kayit WHERE book_slug = ? ORDER BY origin", (book_slug,),
         ).fetchall()
     finally:
@@ -413,14 +462,16 @@ def gorunum(book_slug: str, konum: int | None) -> dict:
     out: dict[str, list] = {t: [] for t in TURLER}
     tekil: dict[tuple, dict] = {}
     for s in secili.values():
-        (a, tur, sahip, ad, deger, alanlar, ilk, kanit, origin, silindi) = s
+        (a, tur, sahip, ad, deger, alanlar, ilk, kanit, origin, silindi, gorulme) = s
         if silindi or (konum is not None and (ilk or 0) > konum):
             continue
         kimlik = cozucu.coz(ad) if tur != "alan" else None
+        # Konuma kadar rünlerde son görüldüğü bölüm (spoiler: sonraki görülmeler sayılmaz).
+        son = max((b for b in json.loads(gorulme or "[]") if konum is None or b <= konum), default=ilk)
         kayit = {"anahtar": a, "tur": tur, "sahip": sahip, "sahip_kimlik": cozucu.coz(sahip),
                  "ad": ad, "deger": deger, "kimlik": kimlik, "tr": hedefler.get(kimlik) if kimlik else None,
                  "alanlar": _duz_alanlar(json.loads(alanlar or "{}"), konum), "ilk_bolum": ilk,
-                 "kanit": kanit, "origin": origin}
+                 "son_bolum": son, "kanit": kanit, "origin": origin}
         if tur == "alan" and ad not in COKLU_ALANLAR:
             # Tekil rün alanı (Rank…): konumdaki EN SON değer; eşitlikte elle.
             k = (glossary.fold_term(sahip), ad)

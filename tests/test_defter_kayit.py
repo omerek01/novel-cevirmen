@@ -256,3 +256,77 @@ def test_basliksiz_sayaclar_tek_bolum_akisinda_da_dogru_sahibe_yazilir():
     dk.bolumden(KITAP, 848, BOLUM_848)
     dk.bolumden(KITAP, 989, BOLUM_989)
     _sayaclari_dogrula()
+
+
+# ---------- Tam liste (envanter): kaybedilen/evrimleşen öğe güncel sayılmaz ----------
+ENVANTER_SONRA = """Name: Sunless.
+
+Memories: [Silver Bell], [Dark Wing].
+
+Shadows: [Marble Saint].
+
+Attributes: [Fated], [Ember of Divinity].
+
+Echoes: —"""
+
+
+def test_ayristirici_yalniz_tam_listeyi_envanter_sayar():
+    from core.runler import ENVANTER, shadow_slave as ss
+    tam = ss.sistem_baglarini_bul("Name: Sunless.\n\nMemories: [Silver Bell], [M... Un...old].\n\nEchoes: —",
+                                  "Sunny", ("Sunless",))
+    envanter = {n.split("\t")[0]: n.split("\t")[1] for o, i, n, _k in tam if i == ENVANTER}
+    assert envanter == {"ani": '["Silver Bell", "M... Un...old"]', "yanki": "[]"}
+    kesik = ss.sistem_baglarini_bul("Name: Sunless.\n\nMemories: [Silver Bell], [Endless Spring]...",
+                                    "Sunny", ("Sunless",))
+    assert all(i != ENVANTER for _o, i, _n, _k in kesik)
+
+
+def _elde(g, tur, ad):
+    return (_bul(g, tur, ad) or {}).get("alanlar", {}).get("elde", "var")
+
+
+def _envanter_dogrula():
+    g = dk.gorunum(KITAP, None)
+    # 16: Azure Blade; 40'taki tam listede yok -> kaybedildi. Silver Bell listede kalır.
+    assert _elde(g, "ani", "Azure Blade") == "yok" and _elde(g, "ani", "Silver Bell") == "var"
+    assert _elde(g, "golge", "Stone Saint") == "yok" and _elde(g, "golge", "Marble Saint") == "var"
+    assert _elde(g, "nitelik", "Fated") == "var"
+    # Spoiler: konum listeden önceyse kayıp henüz bilinmez.
+    assert _elde(dk.gorunum(KITAP, 39), "ani", "Azure Blade") == "var"
+
+
+def test_tam_liste_disindaki_oge_artik_yok_sayilir_bastan_kurulumda():
+    _bolum(16, RUNLER)
+    _bolum(40, ENVANTER_SONRA)
+    dk.cikar(KITAP)
+    _envanter_dogrula()
+
+
+def test_tam_liste_tek_bolum_akisinda_da_uygulanir_ve_geri_donen_var_olur():
+    _bolum(16, RUNLER)
+    dk.cikar(KITAP)
+    dk.bolumden(KITAP, 40, ENVANTER_SONRA)
+    _envanter_dogrula()
+    dk.bolumden(KITAP, 60, "Name: Sunless.\n\nMemories: [Silver Bell], [Azure Blade], [Dark Wing].")
+    assert _elde(dk.gorunum(KITAP, None), "ani", "Azure Blade") == "var"
+    assert _elde(dk.gorunum(KITAP, 50), "ani", "Azure Blade") == "yok"
+
+
+def test_alan_son_goruldugu_bolumu_konuma_gore_tasir():
+    # Canlı: kart "4/7 · bölüm 702" diyordu; 1026'da yeniden görüldüğü, sonra hiç görülmediği bilinmiyordu.
+    _bolum(16, RUNLER)
+    _bolum(30, "Name: Sunless.\n\nRank: Dreamer.")
+    dk.cikar(KITAP)
+    dk.bolumden(KITAP, 45, "Name: Sunless.\n\nRank: Dreamer.")
+    rutbe = lambda konum: next(k for k in dk.gorunum(KITAP, konum)["kayitlar"]["alan"] if k["ad"] == "rutbesi")
+    assert (rutbe(None)["ilk_bolum"], rutbe(None)["son_bolum"]) == (16, 45)
+    assert rutbe(40)["son_bolum"] == 30  # 45 konumdan sonra: spoiler değil
+
+
+def test_golgeye_donusen_yanki_artik_yanki_sayilmaz():
+    _bolum(1047, "Name: Sunless.\n\nEchoes: [Ravenous Fiend].")
+    _bolum(1080, "Name: Sunless.\n\nShadows: [Onyx Saint], [Ravenous Fiend].")
+    dk.cikar(KITAP)
+    assert _elde(dk.gorunum(KITAP, None), "yanki", "Ravenous Fiend") == "yok"
+    assert _elde(dk.gorunum(KITAP, None), "golge", "Ravenous Fiend") == "var"
+    assert _elde(dk.gorunum(KITAP, 1050), "yanki", "Ravenous Fiend") == "var"

@@ -2726,6 +2726,11 @@ span.defter-ad { min-height: 0; padding: 4px 12px; font-size: 15px; }
 }
 .defter-run dt:last-of-type, .defter-run dd:last-of-type { border-bottom: 0; }
 .defter-bos-not { margin: 6px 0 0; font-size: 14px; color: var(--ink-dim); }
+.defter-uyari { margin: 8px 0 0; padding: 8px 10px; font-size: 14px; border-left: 3px solid var(--warn); background: color-mix(in srgb, var(--warn) 10%, transparent); }
+/* Tam rün listesinden düşenler: kapalı grup, soluk. */
+.defter-eski { margin: 8px 0 0; color: var(--ink-dim); }
+.defter-eski > summary { cursor: pointer; font-size: 14px; padding: 6px 0; min-height: 44px; display: flex; align-items: center; }
+.defter-eski[open] > :not(summary) { opacity: 0.75; }
 .defter-secmeli .seg[disabled] { opacity: 0.55; }
 .defter-satir { animation: rafa-yerles 220ms cubic-bezier(0.2, 0, 0, 1) both; }
 .defter-satir:nth-child(2) { animation-delay: 25ms; }

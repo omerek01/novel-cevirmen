@@ -11,7 +11,7 @@ import { showView } from "./gezinme.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { el } from "./temel.js";
 import {
-  alanEtiketi, egoDugumleri, gorunenSekmeler, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
+  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
   sayacMetinleri, sekmeSatirlari, sinirMetni, sistemAltMetni, sistemSatirlari, tr,
 } from "./defter-yardimci.js";
 import { fetchBooks } from "./kutuphane.js";
@@ -288,7 +288,9 @@ function kartCiz() {
         const a = satir_.kayitlar[0];
         const deger = tr(a.deger, kars);
         const metin = oge("span", "defter-run-deger", deger);
+        // Tazelik: değer rünlerde en son ne zaman görüldü (eski bilgi kendini belli etsin).
         const ince = [deger !== a.deger && a.deger, a.ilk_bolum != null && `bölüm ${a.ilk_bolum}`,
+          a.son_bolum != null && a.son_bolum !== a.ilk_bolum && `son rün ${a.son_bolum}`,
           a.origin === "elle" && "elle", a.origin === "anlatim" && "anlatımdan"].filter(Boolean).join(" · ");
         if (ince) metin.append(oge("small", null, ince));
         dd.append(metin, dugme("düzenle", "defter-duzenle", () => kayitFormuAc("alan", k.ad, a)));
@@ -305,26 +307,40 @@ function kartCiz() {
     }
     if (!k.run.length && !k.rutbeler.length) tablo.append(oge("dd", "modal-hint", "Rün mesajında görülmedi."));
     ic.push(tablo);
+    // Kitabın kurallarıyla çelişen değerler: biri eski ya da yanlış okunmuş (kendiliğinden düzeltilmez).
+    for (const u of k.uyarilar || []) ic.push(oge("p", "defter-uyari", u));
   }
 
   // Anılar (efsunlarıyla)
-  ic.push(bolumBasligi(`Anılar · ${k.anilar.length}`, dugme("+ Ekle", "pill", () => kayitFormuAc("ani", k.ad))));
-  ic.push(...kisalt("anilar", k.anilar, (a) => aniSatiri(a, kars), "Tüm anılar"));
-  if (!k.anilar.length) ic.push(oge("p", "defter-bos-not", "Henüz anı yok. Rün mesajında görülünce eklenir; sen de ekleyebilirsin."));
+  // Tam rün listesinden düşenler (kaybedilen anı, evrimleşmiş gölgenin eski hâli) ayrı grupta.
+  const anilar = eldeAyir(k.anilar);
+  const yankilar = eldeAyir(k.yankilar);
+  const nitelikler = eldeAyir(k.nitelikler);
+  ic.push(bolumBasligi(`Anılar · ${anilar.elde.length}`, dugme("+ Ekle", "pill", () => kayitFormuAc("ani", k.ad))));
+  ic.push(...kisalt("anilar", anilar.elde, (a) => aniSatiri(a, kars), "Tüm anılar"));
+  if (!anilar.elde.length) ic.push(oge("p", "defter-bos-not", "Henüz anı yok. Rün mesajında görülünce eklenir; sen de ekleyebilirsin."));
+  if (anilar.eski.length) ic.push(eskiGrubu("Artık elinde olmayan anılar", anilar.eski, (a) => aniSatiri(a, kars)));
   // Gölgeler ve yankılar
-  ic.push(bolumBasligi(`Gölgeler ve yankılar · ${k.yankilar.length}`,
+  ic.push(bolumBasligi(`Gölgeler ve yankılar · ${yankilar.elde.length}`,
     dugme("+ Ekle", "pill", () => kayitFormuAc("yanki", k.ad))));
-  ic.push(...kisalt("yankilar", k.yankilar, (y) => aniSatiri(y, kars), "Tüm gölge ve yankılar"));
-  if (!k.yankilar.length) ic.push(oge("p", "defter-bos-not", "Gölge ya da yankı kaydı yok."));
+  ic.push(...kisalt("yankilar", yankilar.elde, (y) => aniSatiri(y, kars), "Tüm gölge ve yankılar"));
+  if (!yankilar.elde.length) ic.push(oge("p", "defter-bos-not", "Gölge ya da yankı kaydı yok."));
+  if (yankilar.eski.length) ic.push(eskiGrubu("Eski hâller ve gidenler", yankilar.eski, (y) => aniSatiri(y, kars)));
   // Nitelikler
-  ic.push(bolumBasligi(`Nitelikler · ${k.nitelikler.length}`, dugme("+ Ekle", "pill", () => kayitFormuAc("nitelik", k.ad))));
-  const nit = oge("div", "defter-cipler");
-  for (const n of k.nitelikler) {
+  ic.push(bolumBasligi(`Nitelikler · ${nitelikler.elde.length}`, dugme("+ Ekle", "pill", () => kayitFormuAc("nitelik", k.ad))));
+  const nitelikCipi = (n) => {
     const [ad] = adMetni(n, kars);
-    nit.append(dugme(ad + (n.origin === "elle" ? " · elle" : ""), "defter-ad", () => kayitFormuAc("nitelik", k.ad, n)));
-  }
-  if (!k.nitelikler.length) nit.append(oge("span", "defter-bos-not", "Nitelik kaydı yok."));
+    return dugme(ad + (n.origin === "elle" ? " · elle" : ""), "defter-ad", () => kayitFormuAc("nitelik", k.ad, n));
+  };
+  const nit = oge("div", "defter-cipler");
+  for (const n of nitelikler.elde) nit.append(nitelikCipi(n));
+  if (!nitelikler.elde.length) nit.append(oge("span", "defter-bos-not", "Nitelik kaydı yok."));
   ic.push(nit);
+  if (nitelikler.eski.length) {
+    const c = oge("div", "defter-cipler");
+    for (const n of nitelikler.eski) c.append(nitelikCipi(n));
+    ic.push(eskiGrubu("Evrimleşen ya da kalkan nitelikler", [c], (x) => x, nitelikler.eski.length));
+  }
 
   // Bağlar
   ic.push(bolumBasligi(`Bağlar · ${k.baglar.length}`, k.sozlukte ? dugme("+ Bağ ekle", "pill", bagFormu) : null));
@@ -388,6 +404,13 @@ function kisalt(anahtar, liste, ciz_, etiket) {
     out.push(dugme(`${etiket} (${liste.length})`, "pill defter-tumu", () => { p.acik.add(anahtar); kartCiz(); }));
   }
   return out;
+}
+
+/* Kapalı açılır grup: güncel listeyi kalabalıklaştırmadan geçmişi saklar. */
+function eskiGrubu(baslik, liste, ciz_, adet = liste.length) {
+  const kap = oge("details", "defter-eski");
+  kap.append(oge("summary", null, `${baslik} · ${adet}`), ...liste.map(ciz_));
+  return kap;
 }
 
 function aniSatiri(a, kars) {

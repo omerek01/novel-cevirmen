@@ -369,3 +369,24 @@ def test_kart_runden_dusuk_ya_da_eski_anlatim_sinifini_almaz(kitap):
     run = _run(de.kart(KITAP, s, None))
     assert (run["sinifi"]["deger"], run["sinifi"]["origin"]) == ("Devil", "sistem")
     assert run["Shadow Cores"]["deger"] == "4/7"
+
+
+def test_kart_kitap_kurallariyla_celisen_degeri_uyarir(kitap):
+    # Sınıf rünlerden Tyrant ama çekirdek 4/7: biri eski. Parça eşiği çekirdekle uyuşmalı.
+    _bolum(702, ["Name: Sunless.", "Class: Tyrant.", "Shadow Cores: [4/7].", "Shadow Fragments: [10/3000]."],
+           ["x"] * 4)
+    dk.cikar(KITAP)
+    uyarilar = de.kart(KITAP, _kimlik("Sunny"), None)["uyarilar"]
+    assert any("Tyrant" in u and "4" in u for u in uyarilar)
+    assert any("3000" in u and "4000" in u for u in uyarilar)
+
+
+def test_kart_tutarli_degerde_uyari_yok_ve_eski_golge_sayilmaz(kitap):
+    # 200'deki tam liste Stone Saint'i düşürür (evrim): tek çekirdekte tek GÜNCEL gölge, uyarı yok.
+    _bolum(100, ["Name: Sunless.", "Shadow Cores: [1/7].", "Shadows: [Stone Saint]."], ["x"] * 3)
+    _bolum(200, ["Name: Sunless.", "Shadows: [Marble Saint]."], ["x", "x"])
+    dk.cikar(KITAP)
+    assert de.kart(KITAP, _kimlik("Sunny"), None)["uyarilar"] == []
+    _bolum(300, ["Name: Sunless.", "Shadows: [Marble Saint], [Soul Serpent]."], ["x", "x"])
+    dk.cikar(KITAP)
+    assert any("2 gölge" in u for u in de.kart(KITAP, _kimlik("Sunny"), None)["uyarilar"])
