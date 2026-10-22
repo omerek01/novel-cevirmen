@@ -771,6 +771,9 @@ def uzlastir(book_slug: str) -> dict:
             if bolum < g["kanit"][0]:
                 g["kanit"] = (bolum, alinti)
         yazilan = yeni = 0
+        # Bir kez, yazma işlemi açılmadan: döngüde her bağ için yeniden okunması kilidi
+        # 15-36 sn tuttu, okuma konumu kaydı "database is locked" ile düştü (2026-10-22).
+        kurallar = varlik_grafigi.anlam_kurallari(book_slug)
         vconn = varlik_grafigi._connect()
         try:
             for (kaynak, iliski, hedef), g in gruplar.items():
@@ -784,7 +787,8 @@ def uzlastir(book_slug: str) -> dict:
                             or (ad and _kucuk_harf_orani(book_slug, ad[0], g["bolumler"], conn) >= 0.3)):
                         guven = min(guven, 0.6)
                 if varlik_grafigi.bag_ekle(book_slug, kaynak, iliski, hedef, min(g["bolumler"]),
-                                           g["kanit"][1], "model", guven=guven, durum="aday", conn=vconn):
+                                           g["kanit"][1], "model", guven=guven, durum="aday", conn=vconn,
+                                           kurallar=kurallar):
                     yeni += 1
                 yazilan += 1
             vconn.commit()

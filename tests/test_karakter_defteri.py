@@ -256,6 +256,17 @@ def test_uzlastir_idempotent_ve_reddedileni_diriltmez(kitap):
     assert _bag("Nephis", "takma_adi", "Changing Star")["durum"] == "reddedildi"
 
 
+def test_uzlastir_anlam_kurallarini_bir_kez_okur(kitap, monkeypatch):
+    # Her bağda yeniden okunması yazma kilidini 15-36 sn tuttu; okuma konumu kaydı
+    # "database is locked" ile düştü (canlı, 2026-10-22).
+    kd.bolum_isle(kitap, 1, cagir=_sahte({1: _bolum1}))
+    gercek = vg.anlam_kurallari
+    sayac = []
+    monkeypatch.setattr(vg, "anlam_kurallari", lambda slug: sayac.append(slug) or gercek(slug))
+    sonuc = kd.uzlastir(kitap)
+    assert sonuc["yazilan"] >= 2 and len(sayac) == 1
+
+
 def test_cins_ad_gibi_kullanilan_takma_ad_dusuk_guvende_kalir(kitap):
     _bolum_ekle(4, ["Nephis walked to the Hollow.", "The hollow was dark. A hollow log.", "hollow"],
                 ["Nephis Kovuk'a yürüdü.", "Kovuk karanlıktı.", "kovuk"])

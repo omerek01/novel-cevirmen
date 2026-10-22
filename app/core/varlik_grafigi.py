@@ -541,12 +541,17 @@ def bag_ekle(
     durum_bilgisi: str | None = None,
     gecerli_baslangic: int | None = None,
     gecerli_bitis: int | None = None,
+    kurallar: dict | None = None,
 ) -> bool:
     """Bağı ekle ya da birleştir. Yeni eklendiyse True.
 
     `ilk_bolum` learned_at'tir (spoiler ölçütü). `gecerli_*` hikâye zamanıdır ve
     BİLİNMİYORSA NULL bırakılır (bkz. modül başı ZAMAN notu). `durum_bilgisi`
     verilmezse: rün/elle -> confirmed, model -> NULL (değerlendirilmemiş).
+
+    `kurallar` (`anlam_kurallari`) toplu yazımda bir kez hesaplanıp verilir: her çağrı
+    sözlüğün tamamını okuyor; `conn`'un açık yazma işlemi içinde yüzlerce kez okunması
+    kilidi saniyelerce tutup okuma konumu kaydını düşürdü (2026-10-22).
 
     Birleştirme kuralları: `ilk_bolum` yalnız KÜÇÜLÜR (spoiler); kanıt en eski
     bölümünkidir; köken önceliği manual > sistem > model (güçlü kaynak zayıfı ezer,
@@ -556,7 +561,7 @@ def bag_ekle(
         raise ValueError(f"Bilinmeyen ilişki: {iliski!r}")
     # TEK yazma noktası: rün, model, elle ve sabit bağ hep buradan geçer; anlam
     # seçimi burada olunca hiçbir yol onu atlayamaz.
-    kaynak_kimlik, hedef_kimlik = anlam_sec(book_slug, kaynak_kimlik, iliski, hedef_kimlik)
+    kaynak_kimlik, hedef_kimlik = anlam_sec(book_slug, kaynak_kimlik, iliski, hedef_kimlik, kurallar)
     if kaynak_kimlik == hedef_kimlik:
         return False
     # SİMETRİK ilişki (yoldaş, akraba, düşman) tek bağdır: uçlar kimliğe göre
