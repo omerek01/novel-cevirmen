@@ -422,7 +422,12 @@ def notlar(book_slug: str, adlar: list[str], konum: int | None) -> dict:
             (book_slug, *sayfalar, konum if konum is not None else 10**9)).fetchall()
     finally:
         conn.close()
-    sonuc = [{"sayfa": s, "metin": m, "bolumler": json.loads(b), "bolum": e} for s, m, b, e in satirlar]
+    # Yönlendirme sayfası ("Sunless" -> "Sunny") aynı cümleleri ikinci kez getirir.
+    sonuc, gorulen = [], set()
+    for s, m, b, e in satirlar:
+        if (m, e) not in gorulen:
+            gorulen.add((m, e))
+            sonuc.append({"sayfa": s, "metin": m, "bolumler": json.loads(b), "bolum": e})
     return {"durum": "hazir" if cekilmis >= set(sayfalar) else "yukleniyor", "site_adi": k["site_adi"],
             "notlar": sonuc}
 

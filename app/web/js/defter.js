@@ -362,11 +362,12 @@ function kartCiz() {
     }
     const notlar = [...(wiki.notlar || [])].reverse();  // en yeni bölüm üstte
     if (notlar.length) {
-      ic.push(eskiGrubu("Wiki notları", notlar, (n) => {
+      const baslik = wiki.toplam > notlar.length ? `Wiki notları (en yeni ${notlar.length} gösteriliyor)` : "Wiki notları";
+      ic.push(eskiGrubu(baslik, notlar, (n) => {
         const p = oge("p", "defter-wiki-not", n.metin);
         p.prepend(oge("small", null, `bölüm ${n.bolum} · `));
         return p;
-      }));
+      }, wiki.toplam || notlar.length));
     }
   }
 

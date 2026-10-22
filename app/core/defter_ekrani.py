@@ -195,6 +195,9 @@ def _anlatim_esyalari(olaylar: list[dict], sahip: str, sahip_kimlik: str, listel
                 elde_yap(y, "yok", o)
 
 
+WIKI_NOT_EN_COK = 300
+
+
 def _wiki(book_slug: str, adlar: list[str], konum: int | None, kayitlar: list[dict]) -> dict:
     """Kişinin wiki notları (konuma kadar dipnotlu) ve wikide geçip defterde HİÇ olmayan köşeli
     adlar — defterin kaçırdığını gösteren dış kontrol. Sayfa henüz çekilmediyse arka planda başlar."""
@@ -207,6 +210,9 @@ def _wiki(book_slug: str, adlar: list[str], konum: int | None, kayitlar: list[di
             degerler += v if isinstance(v, list) else [v]
         bilinen |= {glossary.fold_term(d) for d in degerler if isinstance(d, str) and d}
     w["eksikler"] = wiki_arastirma.eksik_adlar(w["notlar"], bilinen)
+    # Kontrol bütün notlarla; karta yalnız en yeni `WIKI_NOT_EN_COK` (Sunny 1099'da 1042 not).
+    w["toplam"] = len(w["notlar"])
+    w["notlar"] = w["notlar"][-WIKI_NOT_EN_COK:]
     return w
 
 

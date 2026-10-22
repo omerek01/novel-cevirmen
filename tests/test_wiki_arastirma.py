@@ -34,7 +34,7 @@ def _sahte(sayfalar=("Sunny", "Sunny/Runes", "Nephis", "Main Page"), site="Shado
         if params.get("list") == "allpages":
             return {"query": {"allpages": [{"title": t} for t in sayfalar]}}
         if params.get("action") == "parse":
-            return {"parse": {"wikitext": {"*": RUNES if params["page"] == "Sunny/Runes" else ""}}}
+            return {"parse": {"wikitext": {"*": RUNES if params["page"].endswith("/Runes") else ""}}}
         return None
 
     getir.cagrilar = cagrilar
@@ -115,3 +115,12 @@ def test_elle_adres_tahminin_onune_gecer():
     w.arastir(KITAP, getir, bekleme=0)
     assert not any(p.get("meta") == "siteinfo" for _a, p in getir.cagrilar)
     assert w.kaynak(KITAP)["durum"] == "bulundu"
+
+
+def test_yonlendirme_sayfasinin_tekrari_notlarda_bir_kez_cikar():
+    _bolum(1)
+    _kisi("Sunny")
+    _kisi("Sunless")  # "Sunless" sayfası "Sunny"ye yönlendirir: aynı wikitext
+    w.arastir(KITAP, _sahte(sayfalar=("Sunny/Runes", "Sunless/Runes")), bekleme=0)
+    metinler = [n["metin"] for n in w.notlar(KITAP, ["Sunny", "Sunless"], 700)["notlar"]]
+    assert len(metinler) == len(set(metinler))
