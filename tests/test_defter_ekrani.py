@@ -508,3 +508,20 @@ def test_kart_wiki_notlarini_konuma_kadar_ve_defterde_olmayan_adlari_verir(kitap
     assert kart["wiki"]["eksikler"] == []
     lantern = next(a for a in kart["anilar"] if a["ad"] == "Shadow Lantern")
     assert lantern["origin"] == "elle" and lantern["kanit"].startswith("Wiki (Shadow Slave Wiki)")
+
+
+def test_kart_wiki_eksiginde_sozluk_durumu_gelir(kitap):
+    from core import wiki_arastirma as w
+
+    def getir(adres, params):
+        if params.get("meta") == "siteinfo":
+            return {"query": {"general": {"sitename": "Shadow Slave Wiki", "server": "https://shadowslave.fandom.com"}}}
+        if params.get("list") == "allpages":
+            return {"query": {"allpages": [{"title": "Sunny"}]}}
+        return {"parse": {"wikitext": {"*": "He got [Shadow Lantern].<ref>Chapter 653 y</ref>\n"
+                                             "He heard [Silenced].<ref>Chapter 653 y</ref>"}}}
+
+    glossary.set_term(KITAP, "Shadow Lantern", "Gölge Feneri")  # sözlükte var, defterde yok
+    w.arastir(KITAP, getir, bekleme=0)
+    eksik = {e["ad"]: e["sozluk"] for e in de.kart(KITAP, _kimlik("Sunny"), 700)["wiki"]["eksikler"]}
+    assert eksik["Shadow Lantern"]["target"] == "Gölge Feneri" and eksik["Silenced"] is None

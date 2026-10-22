@@ -11,7 +11,8 @@ import { showView } from "./gezinme.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { el } from "./temel.js";
 import {
-  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, WIKI_TURLERI, wikiDurumMetni, wikiKaydi, wikiTurTahmini, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
+  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, sozlukDurumMetni, sozlukTuru, WIKI_TURLERI,
+  wikiDurumMetni, wikiKaydi, wikiTurTahmini, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
   sayacMetinleri, sekmeSatirlari, sinirMetni, sistemAltMetni, sistemSatirlari, tr,
 } from "./defter-yardimci.js";
 import { fetchBooks } from "./kutuphane.js";
@@ -356,7 +357,7 @@ function kartCiz() {
       for (const e of wiki.eksikler) {
         const li = oge("li");
         const ad = oge("span", null, e.ad);
-        ad.append(oge("small", null, ` · bölüm ${e.bolum}`));
+        ad.append(oge("small", null, ` · bölüm ${e.bolum} · ${sozlukDurumMetni(e)}`));
         ad.title = e.metin;
         li.append(ad, dugme("Deftere ekle", "pill", () => wikiEkleFormu(e, wiki.site_adi)));
         liste.append(li);
@@ -645,20 +646,60 @@ function kayitFormuAc(tur, sahip, mevcut = null) {
    değiştirir; kanıt wiki cümlesidir. Wiki hayran yazımı: kendiliğinden eklenmez (kullanıcı kararı). */
 function wikiEkleFormu(e, siteAdi) {
   const k = p.kart;
+  const sozlukte = Boolean(e.sozluk);
+  const ek = [];
+  if (sozlukte) {
+    ek.push(oge("p", "terim-etiket defter-form-bolum", "Sözlük"),
+      oge("p", "defter-kanit", `Sözlükte var: ${e.ad} → ${e.sozluk.target || e.ad}`));
+  } else {
+    // Türkçe öneri: okurken kullanılan uç (`/glossary/suggest`); karakter adı İngilizce kalır.
+    // Öneri yalnız alanı doldurur; sözlüğe yazmak kullanıcının "Kaydet"idir.
+    ek.push(dugme("Türkçe öner", "pill", () => turkceOner(e)));
+  }
+  ek.push(oge("p", "terim-etiket defter-form-bolum", `Wikideki cümle${siteAdi ? ` · ${siteAdi}` : ""}`),
+    oge("p", "defter-kanit", e.metin));
   formAc({
     baslik: `${e.ad} · deftere ekle`,
     alanlar: [
       { ad: "tur", etiket: "Ne olarak eklensin?", tip: "secim", secenekler: WIKI_TURLERI, deger: wikiTurTahmini(e.metin) },
       { ad: "ad", etiket: "Ad (İngilizce)", tip: "metin", deger: e.ad },
       { ad: "ilk_bolum", etiket: "Bölüm", tip: "sayi", deger: e.bolum },
+      ...(sozlukte ? [] : [{ ad: "karsilik", etiket: "Türkçe karşılık (boş = sözlüğe eklenmez)", tip: "metin" }]),
     ],
-    ek: [oge("p", "terim-etiket defter-form-bolum", `Wikideki cümle${siteAdi ? ` · ${siteAdi}` : ""}`),
-      oge("p", "defter-kanit", e.metin)],
+    ek,
     kaydet: async (d) => {
       const kayit = wikiKaydi({ ...e, ad: d.ad }, d.tur, k.ad, d.ilk_bolum, siteAdi);
       await istek("/kayit", { method: "POST", body: JSON.stringify({ kayit, yerine: null }) });
+      const karsilik = String(d.karsilik || "").trim();
+      if (!sozlukte && karsilik) {
+        const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(p.slug)}/glossary`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ source: kayit.ad, target: karsilik, tur: sozlukTuru(d.tur) }),
+        }, ZAMAN_ASIMI_MS);
+        if (!res.ok) throw new Error(`deftere eklendi, sözlüğe eklenemedi (sunucu ${res.status})`);
+      }
     },
   });
+}
+
+async function turkceOner(e) {
+  const girdi = el("defterFormAlanlar").querySelector('[name="karsilik"]');
+  const ad = (el("defterFormAlanlar").querySelector('[name="ad"]')?.value || e.ad).trim();
+  if (!girdi || !ad) return;
+  const durum = el("defterFormDurum");
+  durum.textContent = "Türkçe karşılık öneriliyor…";
+  try {
+    const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(p.slug)}/glossary/suggest`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: ad, context: e.metin }),
+    }, 25000);  // model çağrısı
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    const veri = await res.json();
+    girdi.value = veri.target || ad;
+    durum.textContent = veri.is_character ? "Karakter adı: İngilizce kalır." : "Öneri alana yazıldı; değiştirebilirsin.";
+  } catch (hata) {
+    durum.textContent = `Öneri alınamadı: ${hata.message}`;
+  }
 }
 
 function bagFormu() {

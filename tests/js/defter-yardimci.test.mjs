@@ -192,3 +192,14 @@ test("wikiTurTahmini ve wikiKaydi wikideki eksik adı elle kayda çevirir", asyn
   assert.throws(() => wikiKaydi({ ad: "", metin: "x" }, "ani", "Sunny", "1"), /Ad boş/);
   assert.throws(() => wikiKaydi({ ad: "X", metin: "x" }, "ani", "Sunny", "-3"), /Bölüm/);
 });
+
+test("sozlukTuru ve sozlukDurumMetni wiki eksiğinin sözlük bağlantısını verir", async () => {
+  const { sozlukTuru, sozlukDurumMetni } = await import("../../app/web/js/defter-yardimci.js");
+  assert.equal(sozlukTuru("ani"), "nesne");
+  assert.equal(sozlukTuru("nitelik"), "yetenek");
+  assert.equal(sozlukTuru("yaratik"), "Canavar");
+  assert.equal(sozlukTuru("bilinmeyen"), "diger");
+  assert.equal(sozlukDurumMetni({ ad: "Silenced", sozluk: null }), "sözlükte yok");
+  assert.equal(sozlukDurumMetni({ ad: "Shadow Lantern", sozluk: { target: "Gölge Feneri" } }), "sözlükte: Gölge Feneri");
+  assert.equal(sozlukDurumMetni({ ad: "Kai", sozluk: { target: "Kai" } }), "sözlükte (İngilizce kalır)");
+});

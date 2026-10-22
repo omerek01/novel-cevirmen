@@ -69,6 +69,20 @@ export function wikiTurTahmini(metin) {
   return "ani";
 }
 
+/* Defter türü -> sözlük türü: canlı sözlükteki alışkanlık (Shadow Lantern ve Soul Serpent "nesne",
+   Fated "yetenek", Mirror Beast "Canavar", yankılar kullanıcının "Yankı" türü). */
+const SOZLUK_TURLERI = { ani: "nesne", golge: "nesne", nitelik: "yetenek", yaratik: "Canavar", yanki: "Yankı" };
+export function sozlukTuru(defterTuru) {
+  return SOZLUK_TURLERI[defterTuru] || "diger";
+}
+
+/* Eksik adın sözlük durumu: "sözlükte: Gölge Feneri" ya da "sözlükte yok". */
+export function sozlukDurumMetni(eksik) {
+  const s = eksik && eksik.sozluk;
+  if (!s) return "sözlükte yok";
+  return s.target && s.target !== eksik.ad ? `sözlükte: ${s.target}` : "sözlükte (İngilizce kalır)";
+}
+
 /* Wikiden deftere elle kayıt: kanıt wiki cümlesidir (kaynağı kartta görünsün). */
 export function wikiKaydi(eksik, tur, sahip, bolum, siteAdi) {
   const ad = String(eksik.ad || "").trim();

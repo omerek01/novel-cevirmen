@@ -198,9 +198,12 @@ def _anlatim_esyalari(olaylar: list[dict], sahip: str, sahip_kimlik: str, listel
 WIKI_NOT_EN_COK = 300
 
 
-def _wiki(book_slug: str, adlar: list[str], konum: int | None, kayitlar: list[dict]) -> dict:
+def _wiki(book_slug: str, adlar: list[str], konum: int | None, kayitlar: list[dict],
+          sozluk: dict[str, dict] | None = None) -> dict:
     """Kişinin wiki notları (konuma kadar dipnotlu) ve wikide geçip defterde HİÇ olmayan köşeli
-    adlar — defterin kaçırdığını gösteren dış kontrol. Sayfa henüz çekilmediyse arka planda başlar."""
+    adlar — defterin kaçırdığını gösteren dış kontrol. Sayfa henüz çekilmediyse arka planda başlar.
+    Eksik adın sözlük kaydı varsa karşılığı yanında gelir (`sozluk`); yoksa None — kullanıcı
+    "Deftere ekle" formunda sözlüğe de ekleyebilir."""
     wiki_arastirma.sayfa_gerekirse(book_slug, adlar)
     w = wiki_arastirma.notlar(book_slug, adlar, konum)
     bilinen: set[str] = set()
@@ -210,6 +213,10 @@ def _wiki(book_slug: str, adlar: list[str], konum: int | None, kayitlar: list[di
             degerler += v if isinstance(v, list) else [v]
         bilinen |= {glossary.fold_term(d) for d in degerler if isinstance(d, str) and d}
     w["eksikler"] = wiki_arastirma.eksik_adlar(w["notlar"], bilinen)
+    kaynaktan = {glossary.fold_term(r["source"]): r for r in (sozluk or {}).values()}
+    for e in w["eksikler"]:
+        r = kaynaktan.get(glossary.fold_term(e["ad"]))
+        e["sozluk"] = {"target": r.get("target"), "tur": r.get("tur")} if r else None
     # Kontrol bütün notlarla; karta yalnız en yeni `WIKI_NOT_EN_COK` (Sunny 1099'da 1042 not).
     w["toplam"] = len(w["notlar"])
     w["notlar"] = w["notlar"][-WIKI_NOT_EN_COK:]
@@ -535,7 +542,7 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
                                              "nitelik": nitelikler}, run)
     karsiliklar = _karsiliklar(book_slug, [*run, *anilar, *yankilar, *nitelikler, *sahibin("yaratik")])
     wiki = _wiki(book_slug, [ad, *(a["ad"] for a in adlar)], konum,
-                 [*(x for liste in kayit.values() for x in liste), *run, *anilar, *yankilar, *nitelikler])
+                 [*(x for liste in kayit.values() for x in liste), *run, *anilar, *yankilar, *nitelikler], sozluk)
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
             "wiki": wiki,
             "uyarilar": _uyarilar(book_slug, run, yankilar),
