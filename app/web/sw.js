@@ -1,8 +1,9 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v141"; // ön ısıtma bağlantı hatasında vazgeçmez
+const SHELL_CACHE = "novellink-shell-v142"; // Defter önbellekten bayat gösterilmez
 const DATA_CACHE = "novellink-data";
+const DEFTER_YOLU = /^\/api\/book\/[^/]+\/defter(?=\/|$)/;
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
 
 function sozlukYolu(url) {
@@ -123,6 +124,10 @@ async function migrateOldCaches() {
     }
     await caches.delete(key);
   }
+  // Defter artık önbelleğe alınmıyor; eskiden kalan kopyalar bir daha okunmasın.
+  for (const req of await data.keys()) {
+    if (DEFTER_YOLU.test(new URL(req.url).pathname)) await data.delete(req);
+  }
 }
 
 self.addEventListener("activate", (event) => {
@@ -233,6 +238,10 @@ self.addEventListener("fetch", (event) => {
   // networkFirst 4 sn'de önbelleğe düşüyor, önbellekte de olmadığı için istek ERR_FAILED
   // oluyordu (liste telefonda açılmıyor, "Doğru"dan sonraki tazeleme düşüyordu).
   if (url.pathname.endsWith("/glossary/review") || url.pathname.endsWith("/glossary/verify")) return;
+  // Defter de canlı hesaptır ve okuma konumuna göre süzülür: önbellekteki eski kopya
+  // YANLIŞ bilgidir. Liste 4 sn'yi aşınca networkFirst günlerce eski kopyayı gösterdi
+  // ("Bölüm 1003'e kadar", konum 1099'ken; 2026-10-22). Ekran zaten yalnız çevrimiçi.
+  if (DEFTER_YOLU.test(url.pathname)) return;
 
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(request)); // /api/books, /chapters, /glossary (GET)

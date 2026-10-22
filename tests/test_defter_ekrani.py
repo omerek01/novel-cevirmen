@@ -305,3 +305,8 @@ def test_baglar_sozluge_kimlik_indeksiyle_katilir(kitap):
         conn.close()
     assert "glossary_kimlik" in plan
 
+
+def test_defter_uclari_service_worker_onbelleginden_gecmez():
+    from pathlib import Path
+    sw = (Path(__file__).resolve().parents[1] / "app" / "web" / "sw.js").read_text(encoding="utf-8")
+    assert sw.index("DEFTER_YOLU.test(url.pathname)) return;") < sw.index("networkFirst(request)); // /api/books")
