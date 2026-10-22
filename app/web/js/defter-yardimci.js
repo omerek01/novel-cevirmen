@@ -39,6 +39,18 @@ export function sayacMetinleri(alanlar) {
 export const RUN_ALANLARI = ["gercek_adi", "rutbesi", "sinifi", "gorunusu", "gorunus_rutbesi", "kusuru",
   "ruya_capasi", "yetenegi"];
 
+/* Kartın wiki bölümünün durum notu; gösterilecek bir şey yoksa null. Notlar yalnız okuma
+   konumuna kadar dipnotlu cümlelerdir (sunucu süzer). */
+export function wikiDurumMetni(wiki) {
+  const d = wiki && wiki.durum;
+  if (d === "yok") return "Bu kitap için wiki bulunamadı.";
+  if (d === "yukleniyor") return "Wiki sayfaları hazırlanıyor; kartı yeniden açınca görünür.";
+  if (d === "aranmadi" || d === "bekliyor") return "Wiki henüz aranmadı.";
+  if (d === "hata") return "Wikiye ulaşılamadı; daha sonra yeniden denenecek.";
+  if (d === "hazir" && !(wiki.notlar || []).length) return "Wikide bu konuma kadar kaynak gösterilmiş bilgi yok.";
+  return null;
+}
+
 /* Tam rün listesinden düşen kayıtlar (`alanlar.elde === "yok"`) ayrı gösterilir: kart eskiden
    kaybedilen anıları ve evrimleşmiş gölgelerin eski hâllerini güncel gibi sayıyordu. */
 export function eldeAyir(liste) {

@@ -12,7 +12,7 @@ from __future__ import annotations
 import json
 from collections import Counter, defaultdict
 
-from . import db, defter_kayit, glossary, karakter_defteri, runler, varlik_grafigi
+from . import db, defter_kayit, glossary, karakter_defteri, runler, varlik_grafigi, wiki_arastirma
 from .runler import genel
 
 KISI_TURU = "kisi"
@@ -193,6 +193,21 @@ def _anlatim_esyalari(olaylar: list[dict], sahip: str, sahip_kimlik: str, listel
             y = bul("yanki", kazanilan)
             if y is not None and sonra_mi(y, o["bolum"]) and (y.get("alanlar") or {}).get("elde") != "yok":
                 elde_yap(y, "yok", o)
+
+
+def _wiki(book_slug: str, adlar: list[str], konum: int | None, kayitlar: list[dict]) -> dict:
+    """Kişinin wiki notları (konuma kadar dipnotlu) ve wikide geçip defterde HİÇ olmayan köşeli
+    adlar — defterin kaçırdığını gösteren dış kontrol. Sayfa henüz çekilmediyse arka planda başlar."""
+    wiki_arastirma.sayfa_gerekirse(book_slug, adlar)
+    w = wiki_arastirma.notlar(book_slug, adlar, konum)
+    bilinen: set[str] = set()
+    for k in kayitlar:
+        degerler = [k.get("ad"), k.get("deger")]
+        for v in (k.get("alanlar") or {}).values():
+            degerler += v if isinstance(v, list) else [v]
+        bilinen |= {glossary.fold_term(d) for d in degerler if isinstance(d, str) and d}
+    w["eksikler"] = wiki_arastirma.eksik_adlar(w["notlar"], bilinen)
+    return w
 
 
 def _uyarilar(book_slug: str, run: list[dict], yankilar: list[dict]) -> list[str]:
@@ -513,7 +528,10 @@ def kart(book_slug: str, kimlik: str, konum: int | None) -> dict | None:
     _anlatim_esyalari(olaylar, ad, kimlik, {"ani": anilar, "golge": yankilar, "yanki": yankilar,
                                              "nitelik": nitelikler}, run)
     karsiliklar = _karsiliklar(book_slug, [*run, *anilar, *yankilar, *nitelikler, *sahibin("yaratik")])
+    wiki = _wiki(book_slug, [ad, *(a["ad"] for a in adlar)], konum,
+                 [*(x for liste in kayit.values() for x in liste), *run, *anilar, *yankilar, *nitelikler])
     return {"kimlik": kimlik, "ad": ad, "tr": tr, "tur": tur, "sozlukte": kimlik in sozluk, "sinir": konum,
+            "wiki": wiki,
             "uyarilar": _uyarilar(book_slug, run, yankilar),
             "bolum_sayisi": sayi.get(kimlik) or (sozluksuz.get(kimlik) or {}).get("bolum", 0), "ilk_bolum": ilk,
             "adlar": adlar, "oneriler": oneriler, "baglar": baglar, "hitaplar": hitaplar,

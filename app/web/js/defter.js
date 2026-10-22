@@ -11,7 +11,7 @@ import { showView } from "./gezinme.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { el } from "./temel.js";
 import {
-  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
+  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, wikiDurumMetni, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
   sayacMetinleri, sekmeSatirlari, sinirMetni, sistemAltMetni, sistemSatirlari, tr,
 } from "./defter-yardimci.js";
 import { fetchBooks } from "./kutuphane.js";
@@ -341,6 +341,33 @@ function kartCiz() {
     const c = oge("div", "defter-cipler");
     for (const n of nitelikler.eski) c.append(nitelikCipi(n));
     ic.push(eskiGrubu("Evrimleşen ya da kalkan nitelikler", [c], (x) => x, nitelikler.eski.length));
+  }
+
+  // Wikiye göre: dış kontrol (hayran yazımı; defteri değiştirmez). Yalnız okuma konumuna kadar
+  // bölüm dipnotu olan cümleler gelir; dipnotsuz cümle spoiler olabileceği için hiç alınmaz.
+  const wiki = k.wiki || {};
+  if (wiki.durum && wiki.durum !== "sayfa_yok") {
+    ic.push(bolumBasligi(`Wikiye göre${wiki.site_adi ? ` · ${wiki.site_adi}` : ""}`));
+    const not = wikiDurumMetni(wiki);
+    if (not) ic.push(oge("p", "defter-bos-not", not));
+    if ((wiki.eksikler || []).length) {
+      ic.push(oge("p", "defter-uyari", `Wikide geçip defterde olmayan ${wiki.eksikler.length} ad:`));
+      const c = oge("div", "defter-cipler");
+      for (const e of wiki.eksikler) {
+        const cip = oge("span", "defter-efsun", `${e.ad} · ${e.bolum}`);
+        cip.title = e.metin;
+        c.append(cip);
+      }
+      ic.push(c);
+    }
+    const notlar = [...(wiki.notlar || [])].reverse();  // en yeni bölüm üstte
+    if (notlar.length) {
+      ic.push(eskiGrubu("Wiki notları", notlar, (n) => {
+        const p = oge("p", "defter-wiki-not", n.metin);
+        p.prepend(oge("small", null, `bölüm ${n.bolum} · `));
+        return p;
+      }));
+    }
   }
 
   // Bağlar

@@ -40,7 +40,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 from pydantic import BaseModel  # noqa: E402
 
 from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
-from core import ceviri_asamalari, profil_cikarim  # noqa: E402
+from core import ceviri_asamalari, profil_cikarim, wiki_arastirma  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -312,6 +312,10 @@ class DefterHitap(BaseModel):
     muhatap: str
     hitap: str
     ilk_bolum: int = 1
+
+
+class WikiIstegi(BaseModel):
+    adres: str | None = None  # boş: kitap adından yeniden tahmin
 
 
 class ProfilKarar(BaseModel):
@@ -1091,6 +1095,19 @@ def defter_hitap_karari(slug: str, req: DefterHitap) -> dict:
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     return {"ok": True}
+
+
+@app.post("/api/book/{slug}/wiki")
+def wiki_arastir(slug: str, req: WikiIstegi) -> dict:
+    """Wiki araştırmasını (yeniden) başlat; adres verilirse tahmin yerine o kullanılır. Arka planda."""
+    canonical = library.resolve_slug(slug)
+    if req.adres:
+        try:
+            wiki_arastirma.adres_yaz(canonical, req.adres)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+    basladi = wiki_arastirma.arka_planda_arastir(canonical)
+    return {"ok": True, "basladi": basladi, "kaynak": wiki_arastirma.kaynak(canonical)}
 
 
 @app.get("/api/book/{slug}/profil")

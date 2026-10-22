@@ -481,3 +481,23 @@ def test_durum_alintisi_iki_paragrafa_yayilabilir(kitap):
         {"o": "Sunny", "k": "nitelik", "i": "kaybetti", "n": "Child of Shadows", "p": 1,
          "a": "Sunny studied the runes. Instead... [Child of Shadows] was gone. A new Attribute"}])
     assert [r[3:] for r in _durum_iddialari(744)] == [(1, None), (0, "alinti_yok")]
+
+
+# ---------- Wikiye göre (dış kontrol) ----------
+def test_kart_wiki_notlarini_konuma_kadar_ve_defterde_olmayan_adlari_verir(kitap):
+    from core import wiki_arastirma as w
+
+    def getir(adres, params):
+        if params.get("meta") == "siteinfo":
+            return {"query": {"general": {"sitename": "Shadow Slave Wiki", "server": "https://shadowslave.fandom.com"}}}
+        if params.get("list") == "allpages":
+            return {"query": {"allpages": [{"title": "Sunny"}]}}
+        return {"parse": {"wikitext": {"*": "'''Memory:''' [Azure Blade].<ref>Chapter 15 x</ref>\n"
+                                             "He got [Shadow Lantern].<ref>Chapter 653 y</ref>\n"
+                                             "He got [Feather of Truth].<ref>Chapter 1500 z</ref>"}}}
+
+    w.arastir(KITAP, getir, bekleme=0)
+    wiki = de.kart(KITAP, _kimlik("Sunny"), 700)["wiki"]
+    assert wiki["durum"] == "hazir" and len(wiki["notlar"]) == 2  # 1500 konumdan sonra
+    assert [e["ad"] for e in wiki["eksikler"]] == ["Shadow Lantern"]  # Azure Blade defterde var
+    assert de.kart(KITAP, _kimlik("Nephis"), 700)["wiki"]["durum"] == "sayfa_yok"

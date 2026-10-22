@@ -36,6 +36,8 @@ def temp_db(tmp_path, monkeypatch):
     # Yeni kitapta otomatik profil çıkarımı thread açıp gerçek model çağırır; kendi testleri açar.
     monkeypatch.setenv("KITAP_PROFIL_OTOMATIK", "0")
     monkeypatch.setenv("SOZLUK_ON_TARAMA", "0")
+    # Wiki araştırması thread açıp Fandom'a gerçek istek atar; kendi testleri sahte `getir` verir.
+    monkeypatch.setenv("WIKI_ARASTIRMA", "0")
     yield
 
 

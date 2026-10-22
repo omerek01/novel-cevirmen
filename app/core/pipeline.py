@@ -11,7 +11,7 @@ import sqlite3
 import threading
 
 from . import api_durum, bilgi_delta, budget, cache, defter_kayit, glossary, karakter_defteri, library, sozluk_dogrulama, synthetic, varlik_grafigi
-from . import profil_cikarim, terim_ornek
+from . import profil_cikarim, terim_ornek, wiki_arastirma
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
 # `_chapter_no`: URL'den bölüm numarası. TEK tanım fetch.py'de — ikinci bir
@@ -285,6 +285,12 @@ def _sozluge_isle(
         # olmayan adlar dahil (defter ekranı). API'siz; hatası çeviriyi düşürmez.
         try:
             defter_kayit.bolumden(slug, chapter_no, kaynak_metin)
+        except sqlite3.Error:
+            pass
+        # WİKİ ARAŞTIRMASI: yeni kitapta İLK iş (ilk bölümde, profilden önce) — hayran wikisi
+        # bulunur, karakter sayfaları bölüm dipnotlarıyla saklanır. Ücretsiz, arka planda.
+        try:
+            wiki_arastirma.gerekirse_baslat(slug)
         except sqlite3.Error:
             pass
         # KİTAP PROFİLİ (Faz 3, soğuk başlangıç): yeni kitabın ilk bölümleri önbelleğe girince

@@ -168,3 +168,12 @@ test("eldeAyir tam rün listesinden düşenleri ayırır", async () => {
   assert.deepEqual(eski.map((k) => k.ad), ["Azure Blade"]);
   assert.deepEqual(eldeAyir(undefined), { elde: [], eski: [] });
 });
+
+test("wikiDurumMetni durumları okunur nota çevirir", async () => {
+  const { wikiDurumMetni } = await import("../../app/web/js/defter-yardimci.js");
+  assert.equal(wikiDurumMetni({ durum: "yok" }), "Bu kitap için wiki bulunamadı.");
+  assert.match(wikiDurumMetni({ durum: "yukleniyor", notlar: [] }), /hazırlanıyor/);
+  assert.match(wikiDurumMetni({ durum: "hazir", notlar: [] }), /kaynak gösterilmiş bilgi yok/);
+  assert.equal(wikiDurumMetni({ durum: "hazir", notlar: [{ metin: "x" }] }), null);
+  assert.equal(wikiDurumMetni(undefined), null);
+});
