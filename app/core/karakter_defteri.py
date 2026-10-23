@@ -29,12 +29,14 @@ import contextvars
 import json
 import os
 import re
+import sqlite3
 import string
 import threading
 import time
 from collections import Counter, defaultdict
 
-from . import api_durum, budget, db, glossary, translate, turkce_eslesme, varlik_grafigi
+from . import (api_durum, budget, db, glossary, settings, translate, turkce_eslesme,
+               varlik_grafigi)
 from .varlik_cikarim import _normal, ad_temizle
 
 # v2 (2026-10-14, pilot elle denetimi): çoğul hitap ayrı (`cogul`), rütbe yalnız rütbe
@@ -239,6 +241,41 @@ def sistem_sesi(p: dict | None) -> frozenset[str]:
 
 
 def model_adi() -> str:
+    """Defterin kullanacağı model: SEÇİLİ çeviri modeli > `DEFTER_MODELI` > varsayılan.
+
+    Önceden seçim HİÇ okunmuyordu ve sonuç ölçüldü (canlı `defter_isleme`, 1117
+    bölüm): kullanıcı okuyucudan `vertex/gemini-4-argon` seçmiş olduğu hâlde
+    defterin tamamı `vertex/gemini-3.8-flash` ile işlenmişti — 21,49 $'lık bir
+    harcama, seçtiğinden BAŞKA bir modele. "Hangi çeviri aracı açıksa defter de
+    onu yazsın" (kullanıcı kararı, 2026-10-23).
+
+    Öncelik `ceviri_asamalari` ile aynı yönde: kayıtlı ayar ortam değişkenini
+    EZER. Ters sıra, düğmede "Argon" yazarken defterin sessizce başka bir modele
+    para harcaması demekti — bu projede tam olarak bu sınıf arıza yaşandı.
+
+    Tanınmayan seçim SESSİZCE yok sayılır (`translate.zincir_kur` ile aynı
+    kural): ayar tablosunda elle bozulmuş bir değer defterin her çağrısını 404'e
+    çarptırır ve arıza "model meşgul" kılığına girerdi.
+
+    MALİYET: seçim defteri de sürüklediği için ücretli bir model seçmek defter
+    koşusunu da pahalılaştırır. Ölçülen defter token profiliyle (13,26M giriş +
+    3,08M çıkış) 3.8 Flash 21,49 $, Argon ~57 $ eder. Gösterge `kullanim`
+    tablosunda DEĞİL `defter_isleme`de birikir; Vertex kredisi göstergesi
+    (`vertex_kredi`) Google'ın ölçümünden saydığı için ikisini de kapsar.
+
+    TOKEN SAYIMI yalnız Gemini/Vertex yollarında doludur: Claude/NVIDIA
+    yanıtlarında `usage_metadata` yok, `translate._token_sayilari` (0, 0) döner
+    ve o koşunun harcaması `defter_isleme`de 0 görünür. Seçim yine uygulanır —
+    sessizce başka bir modele düşmek, eksik sayaçtan daha kötü.
+    """
+    try:
+        secili = (settings.get(translate.MODEL_AYAR_ANAHTARI) or "").strip()
+    except sqlite3.Error:
+        # Ayar okunamazsa (kilitli veritabanı) defter durmamalı: ortam
+        # değişkenine düş — `ceviri_asamalari._kayit` ile aynı desen.
+        secili = ""
+    if secili in translate.SECILEBILIR_ADLAR:
+        return secili
     return (os.getenv("DEFTER_MODELI") or VARSAYILAN_MODEL).strip()
 
 
