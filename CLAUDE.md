@@ -521,9 +521,29 @@ fiyat 3.6 ile aynı; kalite ÖLÇÜLMEDİ, yalnız listede. Yeni Vertex modeli e
 kullanıcı isteği). Gemini 4 sınıfı; ücretsiz katmanda YOK, bu projede yalnız Vertex'ten
 (kredi) erişilir. Kimlik resmî Google belgesinden (`publishers/google/models/gemini-4-argon`,
 `global` destekli); Google'ın kendi modeli olduğu için mevcut `generate_content` yolu
-aynen çalışır. **Ad sunucuda YOKLANMADI** (eklendiği ortamın sunucuya erişimi yoktu) ve
-kalite/uzunluk oranı ÖLÇÜLMEDİ — 3.8/3.7 Vertex gibi zincire değil yalnız listeye girer,
-listede Vertex grubunun BAŞINDA (sürüm sırası). **Fiyat** tanıtım 2,00/10,00 $ (1M,
+aynen çalışır. Ad artık YOKLANDI (canlı: 15/16 çağrı `STOP`, biri 429) ama zincire
+yine GİRMEZ — 3.8/3.7 Vertex gibi yalnız listeye girer, listede Vertex grubunun
+BAŞINDA (sürüm sırası).
+
+**DÜŞÜNME ÖLÇÜLDÜ** (2026-10-23, `scripts/argon_dusunme_kiyas.py`, SS #1095-1098 x
+4 kol): Argon ÜRETİMDE DÜŞÜNMÜYOR. `thoughts_token_count` `varsayilan` (alan hiç
+gönderilmez), `low` ve `medium` kollarının HEPSİNDE **0**; yalnız `high` düşünüyor
+(bölüm başına 5.691-7.223 token, çıkışın %73'ü). Üretim yolu `thinking_config=None`
+gönderdiği için (`GEMINI_DUSUNME_BUTCESI` None, `_DUSUNME_AYARI` yalnız defterde
+kurulur) okuma bugün SIFIR düşünmeyle çevriliyor. Kıyas: 3.8-flash'ta düşünme
+çıkışın %64'ü, 3.6'da %78 (`ceviri_izleri`, 455 ve 72 çağrı).
+
+**`high` KALİTEYİ ÖLÇÜLEBİLİR BİÇİMDE ARTIRMADI, maliyeti 2,77 KATINA çıkardı**
+(bölüm başına 0,0370 -> 0,1024 $; Aralık fiyatıyla ~0,205 $). Dört kolun hepsinde
+hizalama 4/4, İngilizce kalıntı 0, yabancı alfabe 0, sözlük ihlali 0. Uzunluk oranı
+`varsayilan` 0,976 -> `high` 0,985 (4 bölümün 3'ünde yüksek, +0,009): KISALMA eşiği
+0,70'in çok üstünde, yani fark gürültü mertebesinde ve uzunluk oranı zaten "özetledi
+mi" sorusunu ölçer, "daha iyi Türkçe mi" sorusunu ÖLÇMEZ. Anlam/akıcılık farkı için
+HAKEM modeli gerekir; deterministik ölçütler bunu göremez. **Süre karşılaştırması
+GEÇERSİZ**: ölçüm canlı sunucuda, okuma trafiğiyle aynı anda koştu (aynı kolda 32 sn
+ile 284 sn arası salınım). **Sonuç: `thinking_level` açmak bu kanıtla önerilmez.**
+
+**Fiyat** tanıtım 2,00/10,00 $ (1M,
 global) 2026-11-30'a kadar, **2026-12-01'den 4,00/20,00** — o gün `kullanim.FIYAT`
 güncellenmeli, yoksa gösterge harcamayı YARI fiyattan gösterir.
 **Düşünme bütçesini REDDEDER** (`thinking_budget` ve `thinking_level=minimal` → 400;
