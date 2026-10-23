@@ -305,8 +305,65 @@ def hitap_adaylari(en_paras: list[str], tr_paras: list[str]) -> list[int]:
 
 
 # ---------- bölüm ve kayıt defteri ----------
-def bolum_metni(book_slug: str, bolum: int, conn=None) -> tuple[list[str], list[str]] | str:
-    """Hizalı (EN, TR) paragraflar; yoksa neden: 'yok' (kaynak/çeviri yok) | 'hizasiz'."""
+# Paragraf eşleme (Gale & Church 1993, karakter uzunluğu): çevirmen bazen bir paragrafı ikiye böler
+# ya da ikisini birleştirir, kimi zaman bir paragrafı atlar (SS 101/156/192 bölme, 490 son paragraf
+# çevrilmemiş: 1103 bölümün 4'ü, hepsi tek fark). Eşleşme türünün
+# önsel bedeli -log P: 1-1 0,89, 1-2 / 2-1 0,089 (makaledeki oranlar).
+_HIZA_BEDEL = {(1, 1): 0.117, (1, 2): 2.42, (2, 1): 2.42}
+_HIZA_VARYANS = 6.8  # Türkçe/İngilizce karakter farkının paragraf uzunluğuyla büyüme katsayısı
+HIZA_EN_COK_FARK = 3
+_HIZA_KOPUK = 3.0  # |z| bundan büyük 1-1 eşleşme "kopuk" sayılır
+
+
+def paragraf_hizala(en_p: list[str], tr_p: list[str]) -> tuple[list[str], list[str]] | None:
+    """Sayısı tutmayan paragrafları uzunluğa göre 1-1 / 1-2 / 2-1 eşle; birleşenler tek paragraf
+    olur. Eşleme güvenilmezse None: fark büyük, gereğinden çok birleştirme ya da kopuk eşleşme."""
+    n, m = len(en_p), len(tr_p)
+    if not n or not m or abs(n - m) > HIZA_EN_COK_FARK:
+        return None
+    le, lt = [len(p) for p in en_p], [len(p) for p in tr_p]
+    oran = sum(lt) / max(1, sum(le))
+
+    def z(a, b):
+        return (b - oran * a) / ((max(a, 1) * _HIZA_VARYANS) ** 0.5)
+
+    sonsuz = float("inf")
+    bedel = [[sonsuz] * (m + 1) for _ in range(n + 1)]
+    geri: list[list[tuple[int, int] | None]] = [[None] * (m + 1) for _ in range(n + 1)]
+    bedel[0][0] = 0.0
+    for i in range(n + 1):
+        for j in range(m + 1):
+            if bedel[i][j] == sonsuz:
+                continue
+            for (a, b), onsel in _HIZA_BEDEL.items():
+                if i + a > n or j + b > m:
+                    continue
+                d = z(sum(le[i:i + a]), sum(lt[j:j + b]))
+                c = bedel[i][j] + onsel + d * d / 2
+                if c < bedel[i + a][j + b]:
+                    bedel[i + a][j + b], geri[i + a][j + b] = c, (a, b)
+    if bedel[n][m] == sonsuz:
+        return None
+    adimlar = []
+    i, j = n, m
+    while i or j:
+        a, b = geri[i][j]
+        i, j = i - a, j - b
+        adimlar.append((i, j, a, b))
+    adimlar.reverse()
+    birlesik = [s for s in adimlar if (s[2], s[3]) != (1, 1)]
+    kopuk = sum(1 for i, j, a, b in adimlar if (a, b) == (1, 1) and abs(z(le[i], lt[j])) > _HIZA_KOPUK)
+    if len(birlesik) > abs(n - m) + 2 or kopuk > max(2, len(adimlar) // 10):
+        return None
+    return ([" ".join(en_p[i:i + a]) for i, j, a, b in adimlar],
+            [" ".join(tr_p[j:j + b]) for i, j, a, b in adimlar])
+
+
+def bolum_metni(book_slug: str, bolum: int, conn=None, hizala: bool = True) -> tuple[list[str], list[str]] | str:
+    """Hizalı (EN, TR) paragraflar; yoksa neden: 'yok' (kaynak/çeviri yok) | 'hizasiz'.
+
+    Sayı tutmazsa `paragraf_hizala` dener; birleşen paragraflar tek paragraf olur. Paragrafı
+    çeviriye GERİ YAZAN yol `hizala=False` vermeli: yoksa çevirideki iki paragraf birleşir."""
     kendi = conn is None
     conn = conn or db.connect()
     try:
@@ -323,7 +380,7 @@ def bolum_metni(book_slug: str, bolum: int, conn=None) -> tuple[list[str], list[
     en_p = [p.strip() for p in satir[0].split("\n\n")]
     tr_p = [p.strip() for p in satir[1].split("\n\n")]
     if len(en_p) != len(tr_p):
-        return "hizasiz"
+        return (paragraf_hizala(en_p, tr_p) if hizala else None) or "hizasiz"
     return en_p, tr_p
 
 
@@ -1095,7 +1152,7 @@ def hitap_onar(book_slug: str, bolum: int, sapma: list[dict], *, uret=None) -> d
     hedef = [s for s in sapma if s.get("paragraf") and (s.get("elle") or s.get("beklenen"))]
     if not hedef:
         return sayac
-    metin = bolum_metni(book_slug, bolum)
+    metin = bolum_metni(book_slug, bolum, hizala=False)  # paragraflar çeviriye geri yazılır
     if isinstance(metin, str):
         return sayac
     en_p, tr_p = metin

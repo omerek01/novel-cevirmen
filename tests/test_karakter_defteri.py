@@ -186,7 +186,7 @@ def test_kayit_defteri_gelecek_bolumun_kaydini_vermez(kitap):
 
 
 def test_hizasiz_bolum_model_cagirmaz(kitap):
-    _bolum_ekle(3, ["a", "b"], ["tek paragraf"])
+    _bolum_ekle(3, ["a", "b", "c", "d", "e"], ["tek paragraf"])  # fark 3'ten büyük: eşlenemez
     cagir = _sahte({})
     assert kd.bolum_isle(kitap, 3, cagir=cagir)["durum"] == "hizasiz"
     assert cagir.cagrilar == []
@@ -886,3 +886,40 @@ def test_kart_min_destek_incelenmemis_model_bagini_suzer(kitap, monkeypatch):
     snap = kd.ceviri_kartlari(KITAP, 10)
     assert snap["varliklar"].get(k["Nephis"], {}).get("takma", []) == []
     assert snap["iliskiler"] == [{"o": k["Sunny"], "r": "lideri", "n": k["Kai"]}]  # elle bağ kalır
+
+
+# ---------- Paragraf eşleme (sayısı tutmayan çeviri) ----------
+_EN_P = ["The gate stood open at dawn.",
+         "Sunny looked at the ruined towers for a long while and then turned toward the shore. Nephis frowned.",
+         '"We leave now," she said quietly, and nobody argued with her.',
+         "The wind carried the smell of salt and ash across the empty square."]
+_TR_P = ["Kapı şafakta açık duruyordu.",
+         "Sunny yıkık kulelere uzun süre baktı ve ardından kıyıya döndü.", "Nephis kaşlarını çattı.",
+         '"Şimdi gidiyoruz," dedi sessizce ve kimse ona itiraz etmedi.',
+         "Rüzgâr tuz ve kül kokusunu boş meydanın üzerinden taşıdı."]
+
+
+def test_bolunmus_ceviri_paragrafi_birlesir():
+    # SS 101/156/192: çevirmen bir paragrafın son cümlesini ayrı paragraf yaptı.
+    en, tr = kd.paragraf_hizala(_EN_P, _TR_P)
+    assert en == _EN_P and tr[1] == f"{_TR_P[1]} {_TR_P[2]}" and tr[2:] == _TR_P[3:]
+
+
+def test_birlesmis_ceviri_paragrafi_kaynakta_birlesir():
+    # İki kaynak paragrafı tek Türkçe paragrafa düştü. (SS 490'da kaynağın son paragrafı hiç
+    # çevrilmemiş; eşleme onu bir öncekine bağlar, sonuç aynı biçimdedir.)
+    tr = [_TR_P[0], f"{_TR_P[1]} {_TR_P[2]}", f"{_TR_P[3]} {_TR_P[4]}"]
+    en, tr2 = kd.paragraf_hizala(_EN_P, tr)
+    assert tr2 == tr and en[2] == f"{_EN_P[2]} {_EN_P[3]}"
+
+
+def test_esleme_guvenilmezse_hizasiz_kalir():
+    assert kd.paragraf_hizala(_EN_P, _TR_P[:1]) is None  # fark 3'ten büyük değil ama uzunluk tutmaz
+    assert kd.paragraf_hizala(_EN_P * 3, _TR_P[:4] * 2) is None  # fark > 3
+
+
+def test_bolum_metni_esler_geri_yazan_yol_eslemez(kitap):
+    _bolum_ekle(30, _EN_P, _TR_P)
+    en, tr = kd.bolum_metni(KITAP, 30)
+    assert len(en) == len(tr) == 4
+    assert kd.bolum_metni(KITAP, 30, hizala=False) == "hizasiz"
