@@ -18,6 +18,12 @@ TASAN_OGELER = """() => [...document.querySelectorAll('body *')]
 
 
 def _tasma_yok(sayfa, yer):
+    # Yerleşim OTURDUKTAN sonra ölç: yazı tipi yüklemesi ve geçiş animasyonu sırasındaki
+    # ara kare geçici taşma gösterebiliyor. Önceki test tarayıcının yazı tipi önbelleğini
+    # doldurunca zamanlama kaydı ve 195 px'de 5 px'lik ara kare yakalandı (2026-10-23).
+    sayfa.evaluate("() => document.fonts.ready.then(() => new Promise((ok) => "
+                   "requestAnimationFrame(() => requestAnimationFrame(ok))))")
+    sayfa.evaluate("() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => 0)))")
     fazla = sayfa.evaluate(TASMA)
     assert fazla <= 1, f"{yer}: {fazla}px yatay taşma — {sayfa.evaluate(TASAN_OGELER)}"
 
