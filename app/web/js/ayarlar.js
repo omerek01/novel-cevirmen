@@ -3,6 +3,7 @@
 
 import { asamaGovdesi, asamaSureMetni, olcumOzeti } from "./asama-yardimci.js";
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
+import { bitisMetni, dokumMetni, hizMetni, kaynakMetni, ozet, zamanOrani } from "./kredi-yardimci.js";
 import { refreshStreamEnd, setStatus } from "./okuyucu.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { ICONS, THEME_ICON, el, markSegment } from "./temel.js";
@@ -158,6 +159,104 @@ export async function loadModelSecim() {
     kutu.innerHTML = "";
     const notu = el("modelNotu");
     if (notu) notu.textContent = "Sunucuya ulaşılamadı — model seçimi okunamadı.";
+  }
+}
+
+/* ---------- Vertex kredisi ---------- */
+/* Rakam Google'ın token ölçümünden gelir (betikler dahil); kalan kredi ve bitiş tarihinin
+   Google API'si yok, kullanıcı bir kez girer. Eşitleme Google'a gittiği için ayrı uç ve
+   ayrı istek: model seçimi beklemesin. */
+let krediVerisi = null;
+
+export function cizKredi(d) {
+  const kutu = el("kredi");
+  if (!kutu) return;
+  krediVerisi = d;
+  kutu.setAttribute("aria-busy", "false");
+  const o = ozet(d);
+  const hiz = hizMetni(d);
+  const zaman = zamanOrani(d);
+  el("krediTutar").textContent = o.baslik;
+  el("krediToplam").textContent = o.toplam;
+  el("krediAlt").textContent = o.alt;
+  const serit = el("krediSerit");
+  serit.style.setProperty("--kredi-oran", `${Math.min(100, (d.oran || 0) * 100)}%`);
+  serit.setAttribute("aria-valuenow", String(o.yuzde));
+  serit.setAttribute("aria-valuetext", o.alt);
+  const isaret = serit.querySelector(".kredi-zaman");
+  isaret.hidden = zaman === null;
+  if (zaman !== null) serit.style.setProperty("--kredi-zaman", `${zaman * 100}%`);
+  kutu.classList.toggle("uyari", hiz.uyari);
+  const bitis = el("krediBitis");
+  bitis.textContent = zaman === null ? bitisMetni(d) : `${bitisMetni(d)} (çizgi: geçen süre)`;
+  bitis.classList.toggle("zamanli", zaman !== null);
+  const hizSatiri = el("krediHiz");
+  hizSatiri.textContent = hiz.metin;
+  hizSatiri.classList.toggle("uyari", hiz.uyari);
+  el("krediKaynak").textContent = kaynakMetni(d);
+  el("krediDokum").textContent = dokumMetni(d);
+  const hata = el("krediHata");
+  hata.hidden = !d.hata;
+  hata.textContent = d.hata || "";
+  el("krediOkumaSil").hidden = !d.okuma;
+}
+
+export async function loadKredi() {
+  const kutu = el("kredi");
+  if (!kutu) return;
+  kutu.setAttribute("aria-busy", "true");
+  try {
+    // Eşitleme Google'a gider (en çok saatte bir): ilk açılış birkaç saniye sürebilir.
+    const res = await fetchWithTimeout("/api/settings/kredi", { cache: "no-store" }, 20000);
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    cizKredi(await res.json());
+  } catch {
+    kutu.setAttribute("aria-busy", "false");
+    if (!krediVerisi) el("krediTutar").textContent = "—";
+    const hata = el("krediHata");
+    hata.hidden = false;
+    hata.textContent = "Sunucuya ulaşılamadı — kredi bilgisi okunamadı.";
+  }
+}
+
+function krediFormuAc(ac) {
+  const form = el("krediForm");
+  form.hidden = !ac;
+  el("krediDuzenle").setAttribute("aria-expanded", String(ac));
+  el("krediFormDurum").textContent = "";
+  if (!ac) return;
+  const d = krediVerisi || {};
+  el("krediTutarGir").value = d.tutar ?? 300;
+  el("krediBitisGir").value = d.bitis || "";
+  el("krediOkumaGir").value = "";
+  el("krediOkumaGir").placeholder = d.okuma ? `Son okuma ${d.okuma.tutar} $` : "İsteğe bağlı";
+  el("krediTutarGir").focus();
+}
+
+async function krediKaydet(govde, durumMetni) {
+  const durum = el("krediFormDurum");
+  const dugme = el("krediForm").querySelector('[type="submit"]');
+  dugme.disabled = true;
+  durum.textContent = "Kaydediliyor…";
+  try {
+    const res = await fetch("/api/settings/kredi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(govde),
+    });
+    if (res.status === 400) {
+      durum.textContent = "Kaydedilemedi: tutar pozitif, tarih geçerli olmalı.";
+      return;
+    }
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    cizKredi(await res.json());
+    krediFormuAc(false);
+    setStatus(durumMetni);
+    el("krediDuzenle").focus();
+  } catch {
+    durum.textContent = "Kaydedilemedi: sunucuya ulaşılamadı.";
+  } finally {
+    dugme.disabled = false;
   }
 }
 
@@ -466,8 +565,20 @@ export function kur() {
     diyalogAc("settingsPanel");
     showShellVersion();
     loadModelSecim();
+    loadKredi();
     loadAsamalar();
   });
+
+  el("krediDuzenle").addEventListener("click", () => krediFormuAc(el("krediForm").hidden));
+  el("krediForm").addEventListener("submit", (ev) => {
+    ev.preventDefault();
+    const govde = { tutar: Number(el("krediTutarGir").value), bitis: el("krediBitisGir").value };
+    const okuma = el("krediOkumaGir").value.trim();
+    if (okuma !== "") govde.okuma_tutar = Number(okuma.replace(",", "."));
+    krediKaydet(govde, "Kredi bilgisi kaydedildi.");
+  });
+  el("krediOkumaSil").addEventListener("click", () =>
+    krediKaydet({ okuma_sil: true }, "Konsol okuması silindi — rakam yalnız Google ölçümünden."));
 
   el("shellReset")?.addEventListener("click", async () => {
     const btn = el("shellReset");

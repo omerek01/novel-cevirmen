@@ -2868,3 +2868,53 @@ body:has(#terimPaneli[open]) .okuyucu-alt { display: none; }
 .paragraf-oneri .pill:disabled { opacity: 0.55; cursor: progress; }
 /* Kaynak satırının ardındaki öneri düğmesi: satıra yapışık durur, paragraf aralığını korur. */
 .reader-body .paragraf-oneri-kaynak { margin: -0.9em 0 1.3em; padding-left: calc(0.85em + 3px); }
+
+/* ---------- VERTEX KREDİSİ (ayarlar, js/kredi-yardimci.js) ----------
+   Bir hesap defteri sayfası: büyük rakam kitap başlığı harfiyle, altında şerit.
+   Şerit harcamayı, pirinç çizgi geçen süreyi gösterir; harcama süreyi geçince
+   şerit mühür rengine döner (renk tek gösterge değil: satırda da yazar). */
+.kredi { padding: 12px 0 16px; border-bottom: 1px solid var(--border); }
+.kredi[aria-busy="true"] .kredi-tutar { color: var(--ink-dim); }
+.kredi-ust { display: flex; align-items: baseline; gap: 8px; margin: 0; font-variant-numeric: tabular-nums lining-nums; }
+.kredi-tutar { font: 400 34px/1.1 var(--display); color: var(--ink); letter-spacing: -0.01em; }
+.kredi-toplam { font: 700 15px var(--caps); letter-spacing: 0.08em; color: var(--ink-dim); }
+.kredi-serit {
+  position: relative; height: 12px; margin: 12px 0 6px; overflow: visible;
+  border: 1px solid var(--border); border-radius: 3px; background: var(--surface-2);
+}
+.kredi-dolu {
+  position: absolute; inset: 0 auto 0 0; width: var(--kredi-oran, 0%);
+  border-radius: 2px 0 0 2px; background: var(--accent);
+  transition: width 400ms cubic-bezier(0.2, 0.7, 0.2, 1), background-color 200ms;
+}
+.kredi.uyari .kredi-dolu { background: var(--stamp); }
+.kredi-zaman {
+  position: absolute; top: -5px; bottom: -5px; left: var(--kredi-zaman, 0%); width: 2px;
+  margin-left: -1px; border-radius: 1px; background: var(--brass);
+  box-shadow: 0 0 0 1px var(--surface);
+}
+.kredi-alt { margin: 0 0 8px; font: 600 15px var(--sans); color: var(--ink-soft); font-variant-numeric: tabular-nums; }
+.kredi-satir { margin: 4px 0 0; font: 400 15px/1.45 var(--sans); color: var(--ink); font-variant-numeric: tabular-nums; }
+.kredi-satir.zamanli::before {
+  content: ""; display: inline-block; width: 2px; height: 13px; margin-right: 8px;
+  vertical-align: -1px; border-radius: 1px; background: var(--brass);
+}
+.kredi-satir.uyari { color: var(--stamp); font-weight: 600; }
+.kredi-kucuk { margin: 6px 0 0; font: 400 13.5px/1.45 var(--sans); color: var(--ink-dim); }
+.kredi-kucuk a { color: var(--accent); text-underline-offset: 2px; }
+.kredi-dokum { font-variant-numeric: tabular-nums; }
+.kredi-hata {
+  margin: 10px 0 0; padding: 8px 12px; border-left: 3px solid var(--warn);
+  background: var(--surface-2); font: 400 14px/1.45 var(--sans); color: var(--ink);
+}
+.kredi-duzenle { min-height: 44px; margin-top: 12px; padding: 0 16px; }
+.kredi-form { display: grid; gap: 12px; margin-top: 12px; padding: 14px 16px; border: 1px dashed var(--border); border-radius: var(--r); }
+.kredi-alan { display: grid; gap: 4px; font: 600 14px var(--sans); color: var(--ink-soft); }
+.kredi-alan input {
+  min-height: 44px; padding: 0 2px; border: 0; border-bottom: 1.5px solid var(--border); border-radius: 0;
+  background: transparent; color: var(--ink); font: 400 17px var(--sans); font-variant-numeric: tabular-nums;
+}
+.kredi-alan input:focus { outline: 0; border-bottom-color: var(--accent); }
+.kredi-form-eylem { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
+.kredi-form-eylem .pill, .kredi-form-eylem .next-btn { min-height: 44px; padding: 0 18px; }
+@media (prefers-reduced-motion: reduce) { .kredi-dolu { transition: none; } }

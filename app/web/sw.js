@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v148"; // Defter: wiki eksiğinde sözlük durumu, sözlüğe ekleme, Türkçe öneri
+const SHELL_CACHE = "novellink-shell-v149"; // Ayarlar: Vertex kredisi göstergesi
 const DATA_CACHE = "novellink-data";
 const DEFTER_YOLU = /^\/api\/book\/[^/]+\/defter(?=\/|$)/;
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
@@ -48,6 +48,7 @@ const SHELL = [
   "/js/kitap.js",
   "/js/kitap-profili.js",
   "/js/kitap-profili-yardimci.js",
+  "/js/kredi-yardimci.js",
   "/js/paragraf-oneri.js",
   "/js/paragraf-oneri-yardimci.js",
   "/js/konum.js",
@@ -232,6 +233,8 @@ self.addEventListener("fetch", (event) => {
   // yanıtı zamanıyla tutup "bayat" diye işaretliyor. Kural genel /api/ dalından
   // ÖNCE durmalı (tests/test_api_durum_uclar.py tutar).
   if (url.pathname.startsWith("/api/settings/api-")) return;
+  // Kredi de canlıdır ve eşitleme 4 sn'yi aşabilir: networkFirst bayat rakama düşmesin.
+  if (url.pathname === "/api/settings/kredi") return;
   // Sözlük uyarısı da canlıdır: çevrimdışı bayat sayı yanlış bilgidir.
   if (url.pathname.endsWith("/glossary/uyari")) return;
   // İnceleme listesi ve doğrulama durumu da canlı HESAPTIR ve ilk hesap 4 sn'yi aşabiliyor:

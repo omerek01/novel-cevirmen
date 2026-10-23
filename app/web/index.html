@@ -720,6 +720,48 @@
            gözlemi ve zincirin neden aşağı indiği. Kota TÜKETMEZ, yalnız kaydı okur. -->
       <button id="apiDurumAc" class="pill api-durum-ac">API durumu</button>
     </div>
+    <p class="ayar-bolumu">Vertex kredisi</p>
+    <!-- Google'ın ölçtüğü token × fiyat tablosu (/api/settings/kredi); betiklerin
+         çağrıları da sayılır. Kalan kredi ve bitiş tarihinin Google API'si yok:
+         kullanıcı bir kez girer, konsolda gördüğü tutarı da girerse ona bağlanır. -->
+    <section id="kredi" class="kredi" aria-label="Vertex kredisi" aria-busy="true">
+      <p class="kredi-ust">
+        <span id="krediTutar" class="kredi-tutar">…</span>
+        <span id="krediToplam" class="kredi-toplam"></span>
+      </p>
+      <div id="krediSerit" class="kredi-serit" role="meter" aria-label="Kullanılan kredi"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <span class="kredi-dolu"></span>
+        <span class="kredi-zaman" hidden></span>
+      </div>
+      <p id="krediAlt" class="kredi-alt"></p>
+      <p id="krediBitis" class="kredi-satir"></p>
+      <p id="krediHiz" class="kredi-satir"></p>
+      <p id="krediKaynak" class="kredi-kucuk"></p>
+      <p id="krediDokum" class="kredi-kucuk kredi-dokum"></p>
+      <p id="krediHata" class="kredi-hata" role="alert" hidden></p>
+      <button id="krediDuzenle" type="button" class="pill kredi-duzenle"
+              aria-expanded="false" aria-controls="krediForm">Kredi bilgisini düzenle</button>
+      <form id="krediForm" class="kredi-form" hidden>
+        <label class="kredi-alan">Kredi tutarı ($)
+          <input id="krediTutarGir" type="number" inputmode="decimal" min="1" step="1" required>
+        </label>
+        <label class="kredi-alan">Bitiş tarihi
+          <input id="krediBitisGir" type="date">
+        </label>
+        <label class="kredi-alan">Konsolda görünen kullanılan ($)
+          <input id="krediOkumaGir" type="number" inputmode="decimal" min="0" step="0.01" placeholder="İsteğe bağlı">
+        </label>
+        <p class="kredi-kucuk">Kalan kredi ve bitiş tarihi Google Cloud'daki
+          <a href="https://console.cloud.google.com/billing/credits" target="_blank" rel="noopener">Krediler sayfasında</a>
+          yazar. Kullanılan tutarı girersen gösterge o andan sonrasını ekler.</p>
+        <p id="krediFormDurum" class="kredi-kucuk" role="status" aria-live="polite"></p>
+        <div class="kredi-form-eylem">
+          <button id="krediOkumaSil" type="button" class="pill" hidden>Konsol okumasını sil</button>
+          <button type="submit" class="next-btn">Kaydet</button>
+        </div>
+      </form>
+    </section>
     <p class="ayar-bolumu">Çeviri aşamaları</p>
     <!-- Satırlar SUNUCUDAN çizilir (/api/settings/asamalar): aşama listesi ve süreleri
          tek yerde durur. Süreler gerçek çağrı kaydından (api_olay) gelir, kota harcamaz. -->
