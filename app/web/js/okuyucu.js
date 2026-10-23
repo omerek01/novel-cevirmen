@@ -584,6 +584,10 @@ export function buildChapterEntry(url, data) {
     // "bu paragrafı hiç çevirmedin" der; ikisini tek sayaçta toplamak, okuyucunun
     // hangisine baktığını belirsizleştirirdi.
     ingilizceKalinti: data.ingilizce_kalinti || null,
+    // ALFABE: sözcük çevrilmiş ama YANLIŞ yazı sisteminde (Tayca/Korece/Çince...).
+    // Kalıntıdan AYRI sınıf — o "çevirmedin" der, bu "çevirdin ama yanlış
+    // alfabede yazdın" der; tek sayaçta toplamak hangisine baktığını gizlerdi.
+    alfabeKalintisi: data.alfabe_kalintisi || null,
     ceviriKalitesi: data.ceviri_kalitesi || null,
     // KISALMA: model çevirmek yerine ÖZETLEDİ mi. Kararı SUNUCU veriyor (eşik
     // orada); okuyucuda ikinci bir eşik tutmak, model listesinde kaçınılan
@@ -801,6 +805,9 @@ export function kunyeKarti(entry) {
   // Çevrilmeden İngilizce kalan paragraflar (onarım turundan SONRA kalanlar).
   const kalinti = entry.ingilizceKalinti || {};
   const kalintiIndeksleri = Object.keys(kalinti);
+  // Yabancı alfabeye kayan sözcükler (onarım turundan SONRA kalanlar).
+  const alfabe = entry.alfabeKalintisi || {};
+  const alfabeIndeksleri = Object.keys(alfabe);
   const denetlenmeyen = entry.kosulluDenetlenmeyen || [];
   const supheler = entry.ceviriKalitesi?.supheli || [];
   // KAYDET, İŞARETLE (2026-10-11): kalite denetimi tamamlanamasa da çeviri kaydedilir;
@@ -820,6 +827,7 @@ export function kunyeKarti(entry) {
     adlar.length === 0 &&
     ihlalAdlari.length === 0 &&
     kalintiIndeksleri.length === 0 &&
+    alfabeIndeksleri.length === 0 &&
     denetlenmeyen.length === 0 &&
     yeniKayitlar.length === 0 &&
     !kisalmis && supheler.length === 0 && !denetlenemedi && !damga
@@ -827,7 +835,8 @@ export function kunyeKarti(entry) {
     return null;
 
   const uyariVar =
-    ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0 || kisalmis || supheler.length > 0 ||
+    ihlalAdlari.length > 0 || kalintiIndeksleri.length > 0 || alfabeIndeksleri.length > 0 ||
+    kisalmis || supheler.length > 0 ||
     denetlenemedi;
   const kutu = document.createElement("details");
   kutu.className = "kunye" + (uyariVar ? " kunye-uyarili" : "");
@@ -850,6 +859,15 @@ export function kunyeKarti(entry) {
   }
   if (kalintiIndeksleri.length)
     uyarilar.push(`${kalintiIndeksleri.length} paragraf İngilizce kaldı`);
+  // Sızan sözcüğün KENDİSİ yazılır: "1 paragrafta yabancı alfabe" dedirtip hangi
+  // sözcük olduğunu gizlemek, okuru bütün paragrafı taramaya zorlardı.
+  if (alfabeIndeksleri.length)
+    uyarilar.push(
+      `${alfabeIndeksleri.length} paragrafta yabancı alfabe (${alfabeIndeksleri
+        .map((i) => alfabe[i])
+        .join(" · ")
+        .slice(0, 60)})`,
+    );
   if (ihlalAdlari.length)
     uyarilar.push(`${ihlalAdlari.length} terim sözlüğe uymadı`);
   ozet.textContent = uyarilar.length

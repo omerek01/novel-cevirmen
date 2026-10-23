@@ -578,6 +578,9 @@ def _do_fetch_translate_save(
         # İngilizce kalıntı bayrağı: onarım turundan SONRA hâlâ çevrilmemiş
         # paragraflar. Boş = temiz.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        # Alfabe bayrağı: onarım turundan SONRA hâlâ yabancı yazı sisteminde
+        # kalan sözcükler. Boş = temiz.
+        "alfabe_kalintisi": result.get("alfabe_kalintisi") or {},
         # Karşılık sapması: terim kayıttan FARKLI Türkçeyle çevrilmiş. None = ölçülmedi.
         "karsilik_sapmasi": result.get("karsilik_sapmasi"),
         "sayi_uyumsuzlugu": result.get("sayi_uyumsuzlugu"),
@@ -774,6 +777,8 @@ def fetch_into_book(
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.
         "ingilizce_kalinti": result.get("ingilizce_kalinti") or {},
+        # Alfabe bayrağı da `_fetch_translate_save` ile AYNI (künye kuralı).
+        "alfabe_kalintisi": result.get("alfabe_kalintisi") or {},
         # Karşılık sapması da `_fetch_translate_save` ile AYNI (künye kuralı).
         "karsilik_sapmasi": result.get("karsilik_sapmasi"),
         "sayi_uyumsuzlugu": result.get("sayi_uyumsuzlugu"),

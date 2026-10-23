@@ -1033,6 +1033,7 @@ export async function bolumuTazele(url) {
       entry.source = data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
       entry.glossaryLeaks = data.glossary_leaks || null;
       entry.ingilizceKalinti = data.ingilizce_kalinti || null;
+      entry.alfabeKalintisi = data.alfabe_kalintisi || null;
       entry.kisalmis = data.kisalmis === true;
       entry.uzunlukOrani = data.uzunluk_orani ?? null;
       entry.model = data.model || entry.model;

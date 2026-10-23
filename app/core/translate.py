@@ -1622,6 +1622,7 @@ def _translate_chapter_impl(
     # İNGİLİZCE KALAN paragrafları onar. Hizalama tutmadıysa ölçüt uygulanamaz:
     # hangi Türkçe paragrafın hangi İngilizce paragrafa karşılık geldiği bilinmiyor.
     kalinti: dict[int, str] = {}
+    alfabe: dict[int, str] = {}
     if aligned:
         kalinti = ingilizce_kalinti(tr_paras, en_paras, glossary)
         if kalinti:
@@ -1630,6 +1631,17 @@ def _translate_chapter_impl(
             with api_durum.baglam(asama="kalinti_onarimi"):
                 kalinti = _kalintiyi_onar(
                     client_factory, models, tr_paras, en_paras, kalinti,
+                    glossary, used_models, new_names, new_terms, kosullar,
+                )
+        # YABANCI ALFABEYE kayan sözcükleri onar (bkz. ALFABE DENETİMİ). Kalıntı
+        # onarımından SONRA koşar: o tur paragrafı zaten yenilemiş olabilir,
+        # önce ölçmek boşa bir istek attırırdı. Aşama düğmesi YOK — sızıntı tam
+        # da ek aşamalar kapalıyken kalıcı önbelleğe giriyor.
+        alfabe = alfabe_kalintisi(tr_paras, en_paras)
+        if alfabe:
+            with api_durum.baglam(asama="alfabe_onarimi"):
+                alfabe = _alfabeyi_onar(
+                    client_factory, models, tr_paras, en_paras, alfabe,
                     glossary, used_models, new_names, new_terms, kosullar,
                 )
         # SÖZLÜK ihlalini de onar. Tespit tek başına yetmiyordu: bayrak künyeye
@@ -1696,6 +1708,7 @@ def _translate_chapter_impl(
             yeni_sapma = karsilik_sapmasi_paragraflari(glossary, paragraflar, en_paras, kosullar)
             return (set(sozluk_ihlali_paragraflari(glossary, paragraflar, en_paras, kosullar))
                     | set(ingilizce_kalinti(paragraflar, en_paras, glossary))
+                    | set(alfabe_kalintisi(paragraflar, en_paras))
                     | {i for i, s in yeni_sapma.items() if len(s) > len(sapma_oncesi.get(i, {}))})
         # Henüz sözlüğe yazılmamış yeni adlar da metinde korunur. Mevcut kullanıcı
         # karşılıkları önceliklidir; bu geçici liste kalıcı sözlük kuralı olmaz.
@@ -1730,7 +1743,10 @@ def _translate_chapter_impl(
             degisen = {i for i, t in enumerate(yeni) if t != tr_paras[i]}
             ihlal = sozluk_ihlali_paragraflari(glossary, yeni, en_paras, kosullar)
             kalan = ingilizce_kalinti(yeni, en_paras, glossary)
-            if degisen.intersection(ihlal) or degisen.intersection(kalan):
+            # Onarım, değiştirdiği paragrafa yabancı ALFABE de getiremez.
+            yabanci = alfabe_kalintisi(yeni, en_paras)
+            if (degisen.intersection(ihlal) or degisen.intersection(kalan)
+                    or degisen.intersection(yabanci)):
                 return False
             # Onarım, değiştirdiği paragrafa YENİ karşılık sapması getiremez.
             simdi = karsilik_sapmasi_paragraflari(glossary, tr_paras, en_paras, kosullar)
@@ -1761,6 +1777,11 @@ def _translate_chapter_impl(
         for model in kalite_metrik.get("onarim_modelleri") or []:
             used_models[model] = None
         kalinti = ingilizce_kalinti(tr_paras, en_paras, glossary)
+        # Alfabe bayrağı da yeniden ölçülür: cilalama/kalite turları paragrafı
+        # yenilemiş olabilir. Ölçüm var, YENİ onarım turu yok — kabul kapıları
+        # (`cilala_ihlalleri`, `kabul_kontrolu`) yeni sızıntıyı zaten reddediyor,
+        # dolayısıyla burada kalan bayrak onarılamamış olandır.
+        alfabe = alfabe_kalintisi(tr_paras, en_paras)
         # Ayrıntılı kaynak/önce/sonra izleri teknik kayıtta kalır; okuyucuya
         # yalnız sayaç/şüphe özeti taşınır, bölüm yanıtı iki kez şişirilmez.
         if iz is not None:
@@ -1810,6 +1831,11 @@ def _translate_chapter_impl(
         # daha asla çeviri tetiklemeyecek bozuk bir önbellek satırıyla kalması
         # demekti.
         "ingilizce_kalinti": kalinti,
+        # Onarımdan SONRA hâlâ yabancı alfabede kalan sözcükler (bkz. ALFABE
+        # DENETİMİ). Aynı gerekçe: bayrak künyeye yazılır ve okuyucuda görünür,
+        # yoksa kullanıcı bir daha çeviri tetiklemeyecek bozuk bir önbellek
+        # satırıyla kalır.
+        "alfabe_kalintisi": alfabe,
         # Onarımdan SONRA hâlâ sözlüğe uymayan terimler. Ölçüt bilerek BÖLÜM
         # geneli ve hizalamadan BAĞIMSIZ: onarım hizalama ister (hangi paragraf
         # bozuk?), denetim istemez (düz metin karşılaştırması). Hizalama
@@ -3043,6 +3069,111 @@ def _kalintiyi_onar(
     ):
         return kalinti
     return ingilizce_kalinti(tr_paras, en_paras, glossary)
+
+
+# ---------------------------------------------------------------------------
+# ALFABE DENETİMİ — dördüncü kalite ölçütü (2026-10-23)
+# ---------------------------------------------------------------------------
+# Arıza: model doğru SÖZCÜĞÜ üretiyor ama YANLIŞ ALFABEDE. Cümlenin kalanı
+# kusursuz Türkçe, içinde tek sözcük başka bir yazı sistemine kayıyor. Canlı
+# önbellekte ve `ceviri_arsivi`nde ölçülen gerçek vakalar:
+#     ss#1110  Saniyeninสี่'te biri        สี่ = Tayca "dört"
+#     ss#1107  tespit할 hiçbir yöntemi     Korece fiil eki
+#     ss#1116  dehşet கலந்த bir hayranlık  கலந்த = Tamilce "karışık"
+#     ss#1093  "İyilik пе... lanet olsun"  Kiril
+#     ss#957   o lanet bücür едва          Rusça "ancak"
+# Sıklık 14/1384 bölüm (%1). Kaynakta o karakterler YOK: sızıntı modelden
+# geliyor, kaynaktan değil.
+#
+# Bu arızayı MEVCUT denetimlerin HİÇBİRİ göremiyordu, sebebi yapısal:
+#   * `ingilizce_kalinti` tokeni `_KALINTI_TOK`, yani YALNIZ Latin harf sınıfı —
+#     Tayca/Korece/Tamilce bir sözcük token olarak bile EŞLEŞMİYOR.
+#   * `sozluk_ihlalleri`  yalnız KAYITLI terimlere bakıyor.
+#   * `uzunluk_orani`     düz karakter sayımı; tek sözcük oranı oynatmıyor.
+#
+# Ek aşamalar (cilalama/kalite) açıkken paragraf başka bir gerekçeyle modele
+# ikinci kez gidiyor ve sözcük çoğu zaman ŞANS ESERİ düzeliyor — arşivdeki #1107
+# ve #1110 taslakları tam olarak bunu gösteriyor (sızıntılı taslak değiştirilmiş,
+# canlı sürüm temiz). Hepsi kapalıyken ikinci tur YOK: ilk taslak kalıcı
+# önbelleğe yazılıyor ve önbellek isabeti bir daha çeviri tetiklemediği için
+# kullanıcı o sözcüğü SONSUZA DEK yabancı alfabede görüyor. Denetim bu yüzden
+# `ingilizce_kalinti` ile aynı yerde, aşama düğmelerinden BAĞIMSIZ koşar.
+#
+# Türkçe çeviride beklenen harfler Latin bloklarındadır: ASCII, Latin-1,
+# Latin Ext-A/B (Türkçe ş ğ ı İ ö ü ç ile Avrupa dillerinin aksanlıları) ve
+# Latin Extended Additional (Vietnamca özel adlar: Nguyễn). Dışındaki her harf
+# yabancı bir yazı sistemidir. Noktalama, sayı ve birleşen aksan işaretleri
+# `str.isalpha()` elemesinden geçmez, yani ölçüt yalnız HARFE bakar.
+_LATIN_HARF = re.compile(r"[A-Za-zÀ-ɏḀ-ỿ]")
+_ALFABE_TOK = re.compile(r"\S+")
+
+
+def _yabanci_harfler(metin: str) -> set[str]:
+    """Metindeki Latin DIŞI harfler."""
+    return {ch for ch in metin if ch.isalpha() and not _LATIN_HARF.match(ch)}
+
+
+def alfabe_kalintisi(
+    tr_paras: list[str],
+    en_paras: list[str],
+) -> dict[int, str]:
+    """Yabancı alfabeye kayan sözcükleri bulur (indeks -> sızan sözcükler).
+
+    Deterministiktir ve API çağırmaz — `ingilizce_kalinti` gibi bedavaya koşar.
+    `glossary` almaz: sözlük karşılıkları Türkçe/Latin yazılır, yabancı bir yazı
+    sistemini meşrulaştıran bir kayıt yok.
+
+    KAYNAKTA da geçen harf sızıntı SAYILMAZ: kaynak o yazı sistemini zaten
+    taşıyorsa model onu sadakatle aktarmıştır. Gerçek vaka
+    `reincarnation-of-the-strongest-sword-god`: İngilizce metnin kendisi
+    Çinceden fan çevirisi ve 12 bölümünün kaynağında `叮`, `卜` gibi ses
+    efektleri var (hiçbiri çeviriye sızmamıştı). Onarım turu orada işe yaramaz —
+    model aynı karakteri yine getirir — ve her bölümde bir istek daha PARA
+    harcardı.
+
+    Hizalama tutmadıysa UYGULANAMAZ: hangi Türkçe paragrafın hangi İngilizce
+    paragrafa karşılık geldiği bilinmiyor, "kaynakta da var mı" sorulamaz.
+    """
+    out: dict[int, str] = {}
+    if len(tr_paras) != len(en_paras):
+        return out
+    for i, (tr, en) in enumerate(zip(tr_paras, en_paras)):
+        if not (tr or "").strip() or not (en or "").strip():
+            continue
+        kaynakta = _yabanci_harfler(en)
+        sizan = [t for t in _ALFABE_TOK.findall(tr) if _yabanci_harfler(t) - kaynakta]
+        if sizan:
+            out[i] = " ".join(sizan)
+    return out
+
+
+def _alfabeyi_onar(
+    client_factory,
+    models: tuple[str, ...],
+    tr_paras: list[str],
+    en_paras: list[str],
+    kalinti: dict[int, str],
+    glossary: dict[str, str],
+    used_models: dict[str, None],
+    new_names: set[str],
+    new_terms: dict[str, str],
+    kosullar: dict[str, str] | None = None,
+) -> dict[int, str]:
+    """Yabancı alfabeye kayan paragrafları TEK turda yeniden çevirir; KALANI döner.
+
+    `tr_paras` YERİNDE güncellenir. Desen `_kalintiyi_onar` ile birebir aynı ve
+    gerekçesi de aynı: tipik vaka 60 paragraflık bölümde 1 paragraf, bölümün
+    tamamını yeniden çevirmek her sızıntıyı tam bölüm maliyetine çıkarırdı.
+    TEK tur bilinçlidir — sızıntı modelin dikkat kaymasıdır, kısa ve odaklı bir
+    istek onu çoğunlukla düzeltir; düzeltmiyorsa döngü kurmak maliyeti katlar.
+    Onarılamayan sızıntı bayrak olarak yukarı taşınır ve okuyucuda görünür.
+    """
+    if not _paragraflari_yeniden_cevir(
+        client_factory, models, tr_paras, en_paras, sorted(kalinti),
+        glossary, used_models, new_names, new_terms, kosullar,
+    ):
+        return kalinti
+    return alfabe_kalintisi(tr_paras, en_paras)
 
 
 def _paragraflari_yeniden_cevir(
