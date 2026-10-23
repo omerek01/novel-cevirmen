@@ -29,6 +29,9 @@ FIYAT = {
     # uygular (token saklanır, maliyet türetilir); güncellenmezse gösterge Aralık
     # harcamasını YARI fiyattan gösterir — tehlikeli yön, kredi olduğundan hızlı biter.
     "vertex/gemini-4-argon": {"giris": 2.00, "cikis": 10.00},
+    # Çeviride değil, ölçüm/hakem betiklerinde kullanıldı (kredi göstergesi Google
+    # ölçümünden sayar). 200K token üstü istem daha pahalıdır; betiklerimiz altında kalır.
+    "vertex/gemini-2.5-pro": {"giris": 1.25, "cikis": 10.00},
     "claude-haiku-4-5": {"giris": 1.00, "cikis": 5.00},
     "claude-sonnet-5": {"giris": 2.00, "cikis": 10.00},
 }

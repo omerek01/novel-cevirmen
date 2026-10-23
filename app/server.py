@@ -39,7 +39,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 
 from pydantic import BaseModel  # noqa: E402
 
-from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi  # noqa: E402
+from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi, vertex_kredi  # noqa: E402
 from core import ceviri_asamalari, profil_cikarim, wiki_arastirma  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
@@ -64,6 +64,12 @@ library.backfill_from_cache()
 def resume_bulk_jobs() -> None:
     """Sunucu açılırken yarım kalan toplu işleri checkpoint'lerinden sürdür."""
     jobs.resume_running(API_KEY)
+
+
+@app.on_event("startup")
+def vertex_kredi_esitle() -> None:
+    """Google token ölçümü 6 hafta tutulur; açılışta bir kez kendi tablomuza yazılır."""
+    vertex_kredi.arka_planda_esitle()
 
 
 @app.on_event("startup")
@@ -1569,6 +1575,32 @@ def set_ceviri_modeli(req: CeviriModeliRequest) -> dict:
         raise HTTPException(status_code=400, detail="Bilinmeyen model.")
     settings.set(translate_mod.MODEL_AYAR_ANAHTARI, req.model)
     return {"secili": req.model, "zincir": list(translate_mod.zincir_kur(req.model))}
+
+
+class KrediRequest(BaseModel):
+    tutar: float | None = None
+    bitis: str | None = None  # YYYY-MM-DD; "" siler
+    okuma_tutar: float | None = None  # konsolda görülen KULLANILAN tutar
+    okuma_sil: bool = False
+
+
+@app.get("/api/settings/kredi")
+def get_kredi(response: Response) -> dict:
+    """Vertex kredisi: Google'ın ölçtüğü token × fiyat tablosu (en çok saatte bir eşitlenir).
+
+    Ayrı uç, çünkü eşitleme Google'a gider ve saniyeler sürebilir; model seçimi beklemesin."""
+    response.headers["Cache-Control"] = "no-store"
+    return vertex_kredi.durum()
+
+
+@app.post("/api/settings/kredi")
+def set_kredi(req: KrediRequest, response: Response) -> dict:
+    response.headers["Cache-Control"] = "no-store"
+    try:
+        vertex_kredi.ayarla(req.tutar, req.bitis, req.okuma_tutar, req.okuma_sil)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Tutar pozitif, tarih YYYY-AA-GG olmalı.")
+    return vertex_kredi.durum(esitle_once=False)
 
 
 # ---------- API durum paneli (salt okunur) ----------

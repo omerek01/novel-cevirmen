@@ -38,6 +38,8 @@ def temp_db(tmp_path, monkeypatch):
     monkeypatch.setenv("SOZLUK_ON_TARAMA", "0")
     # Wiki araştırması thread açıp Fandom'a gerçek istek atar; kendi testleri sahte `getir` verir.
     monkeypatch.setenv("WIKI_ARASTIRMA", "0")
+    # Kredi göstergesi Google Monitoring'e gerçek istek atar; kendi testleri sahte seri verir.
+    monkeypatch.setenv("VERTEX_KREDI", "0")
     yield
 
 
