@@ -19,7 +19,8 @@ def _ayarlar(sayfa):
 def test_ayarlar_bolumleri_ve_tema_ornekleri(sayfa):
     panel = _ayarlar(sayfa)
     expect(panel.locator(".ayar-bolumu")).to_have_text(
-        ["Sayfa", "Çeviri modeli", "Vertex kredisi", "Çeviri aşamaları", "Bakım"])
+        ["Sayfa", "Çeviri modeli", "Vertex kredisi", "Çeviri aşamaları",
+         "Karakter defteri", "Bakım"])
     expect(panel.locator("[data-theme-opt] i.theme-swatch")).to_have_count(3)
 
 
@@ -51,3 +52,34 @@ def test_kredi_bilgisi_girilir_ve_gosterge_guncellenir(sayfa):
     kredi.locator("#krediOkumaSil").click()
     expect(kredi.locator("#krediTutar")).to_have_text("≈0,00 $")
     expect(kredi.locator("#krediOkumaSil")).to_be_hidden()
+
+
+def test_karakter_defteri_acilip_kapanir(sayfa):
+    """Defter düğmesi SUNUCUYA yazar ve panel yeniden açıldığında kayıtlı durumu gösterir.
+
+    Gerekçe para: defter çeviriden ayrı bir model çağrısı yapıyor ve ölçülen faturada
+    en pahalı kalem. Önceden kapatmak sunucuya girip servisi yeniden başlatmak demekti.
+    """
+    panel = _ayarlar(sayfa)
+    kutu = panel.locator("#defterAnahtari")
+    satir = kutu.locator(".asama-satir")
+    expect(satir).to_have_count(1)
+    expect(satir.locator(".asama-ad")).to_have_text("Karakter defteri")
+    # Masrafın büyüklüğü satırda YAZILI olmalı: düğmenin ne işe yaradığı bu.
+    expect(satir.locator(".asama-aciklama")).to_contain_text("EN PAHALI")
+    # Testlerde `KARAKTER_DEFTERI` kapalı ve düğmeye dokunulmadı -> kaynak ortam.
+    expect(satir.locator(".asama-sure")).to_contain_text("KARAKTER_DEFTERI")
+    expect(kutu.locator('[data-defter="0"]')).to_have_attribute("aria-pressed", "true")
+
+    kutu.locator('[data-defter="1"]').click()
+    expect(kutu.locator('[data-defter="1"]')).to_have_attribute("aria-pressed", "true")
+    # Yazıldıktan sonra kaynak DÜĞME olur; "neden açık" sorusunun cevabı değişti.
+    expect(satir.locator(".asama-sure")).to_contain_text("Bu düğmeyle ayarlandı")
+
+    # Panel kapanıp açıldığında durum SUNUCUDAN gelir (yerel bir bayrak değil).
+    # Modal açıkken alt sekme tıklanamaz (diyalog işaretçiyi yakalar); Escape kapatır.
+    sayfa.keyboard.press("Escape")
+    expect(panel).to_be_hidden()
+    sayfa.locator('.navtab[data-tab="settings"]').click()
+    expect(panel.locator('#defterAnahtari [data-defter="1"]')).to_have_attribute(
+        "aria-pressed", "true")

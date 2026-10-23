@@ -767,6 +767,13 @@
          tek yerde durur. Süreler gerçek çağrı kaydından (api_olay) gelir, kota harcamaz. -->
     <div id="asamaSecim" class="asama-secim"></div>
     <p id="asamaOzet" class="gloss-hint model-notu asama-ozet"></p>
+    <!-- Karakter defteri AŞAMALARDAN AYRI bölüm: bir çeviri aşaması değil, çeviriden
+         sonra koşan arka plan kuyruğu. Aşama panelinin süre ölçümü (`api_olay`, yalnız
+         çeviri amaçları) onu 0 sn gösterirdi — en pahalı kalemi "bedava" sandıran bir
+         gösterge, göstergesizlikten kötü olurdu. Satır SUNUCUDAN çizilir
+         (/api/settings/defter): durum, kaynak ve hangi modele para gittiği oradan gelir. -->
+    <p class="ayar-bolumu">Karakter defteri</p>
+    <div id="defterAnahtari" class="asama-secim"></div>
     <div class="setting-row">
       <span>Bu bölüm</span>
       <button id="retranslate" class="pill">Yeniden çevir</button>

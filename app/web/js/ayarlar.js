@@ -2,6 +2,7 @@
    seçimi, harcama göstergesi, kabuk sürümü ve sıfırlama. */
 
 import { asamaGovdesi, asamaSureMetni, olcumOzeti } from "./asama-yardimci.js";
+import { defterNotu } from "./defter-anahtar-yardimci.js";
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { bitisMetni, dokumMetni, hizMetni, kaynakMetni, ozet, zamanOrani } from "./kredi-yardimci.js";
 import { refreshStreamEnd, setStatus } from "./okuyucu.js";
@@ -344,6 +345,66 @@ export async function loadAsamalar() {
   }
 }
 
+/* ---------- karakter defteri (aç/kapa) ---------- */
+/* Çeviri aşamalarından AYRI: defter çeviriden sonra koşan arka plan kuyruğudur.
+   Buraya konmasının gerekçesi PARA — ölçülen faturada en pahalı kalem (canlı
+   `defter_isleme`, 1117 bölüm = 21,49 $, bölüm başına ~1,9 cent) ve kapatmak
+   önceden sunucuya girip servisi yeniden başlatmak demekti. Model seçimiyle aynı
+   gerekçeyle SUNUCUDA durur: prefetch ve toplu çeviri istemci olmadan koşuyor. */
+let defterVerisi = null;
+
+export function cizDefter(veri) {
+  const kutu = el("defterAnahtari");
+  if (!kutu) return;
+  defterVerisi = veri;
+  kutu.innerHTML = "";
+  const satir = document.createElement("div");
+  satir.className = "setting-row asama-satir";
+  const metin = document.createElement("div");
+  metin.className = "asama-metin";
+  const ad = document.createElement("span");
+  ad.className = "asama-ad";
+  ad.id = "defter-anahtar-ad";
+  ad.textContent = veri.etiket || "Karakter defteri";
+  const aciklama = document.createElement("span");
+  aciklama.className = "asama-aciklama";
+  aciklama.textContent = veri.aciklama || "";
+  const not = document.createElement("span");
+  not.className = "asama-sure";
+  not.textContent = defterNotu(veri);
+  metin.append(ad, aciklama, not);
+  const grup = document.createElement("div");
+  grup.className = "segmented";
+  grup.setAttribute("role", "group");
+  grup.setAttribute("aria-labelledby", ad.id);
+  for (const [deger, yazi] of [["1", "Açık"], ["0", "Kapalı"]]) {
+    const b = document.createElement("button");
+    b.className = "seg";
+    b.dataset.defter = deger;
+    b.textContent = yazi;
+    b.setAttribute("aria-pressed", String(veri.acik === (deger === "1")));
+    grup.appendChild(b);
+  }
+  satir.append(metin, grup);
+  kutu.appendChild(satir);
+}
+
+export async function loadDefter() {
+  const kutu = el("defterAnahtari");
+  if (!kutu) return;
+  try {
+    const res = await fetchWithTimeout("/api/settings/defter", {}, 8000);
+    if (!res.ok) throw new Error(`sunucu ${res.status}`);
+    cizDefter(await res.json());
+  } catch {
+    kutu.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "gloss-hint model-notu";
+    p.textContent = "Sunucuya ulaşılamadı — defter ayarı okunamadı.";
+    kutu.appendChild(p);
+  }
+}
+
 /* ---------- kabuk sürümü + sıfırlama (bayat kabuk kaçış kapısı) ---------- */
 export const KABUK_ONEK = "novellink-shell-";
 export const VERI_ONBELLEK = "novellink-data";
@@ -557,6 +618,33 @@ export function kur() {
     }
   });
 
+  el("defterAnahtari").addEventListener("click", async (ev) => {
+    const b = ev.target.closest("[data-defter]");
+    if (!b || b.getAttribute("aria-pressed") === "true" || !defterVerisi) return;
+    const onceki = defterVerisi;
+    const acik = b.dataset.defter === "1";
+    // İyimser: dokunuş anında geri bildirim. Kaynak da "ayar"a çevrilir, yoksa satır
+    // bir an "sunucu ayarından geliyor" yazarken düğme tersini gösterirdi.
+    cizDefter({ ...onceki, acik, kaynak: "ayar" });
+    try {
+      const res = await fetch("/api/settings/defter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acik }),
+      });
+      if (!res.ok) throw new Error(`sunucu ${res.status}`);
+      cizDefter(await res.json());
+      /* Kapatmanın BEKLEYEN kuyruğu da durdurduğu söylenir: düğmenin tek işi
+         harcamayı kesmek ve kullanıcı "kapattım ama hâlâ işliyor" sanmasın. */
+      setStatus(acik
+        ? "Karakter defteri açıldı — yeni bölümler çeviriden sonra işlenir."
+        : "Karakter defteri kapatıldı — bekleyen kuyruk da bölüm sonunda durur.");
+    } catch {
+      cizDefter(onceki); // yazılamadı: gerçeğe geri dön
+      setStatus("Defter ayarı kaydedilemedi — sunucuya ulaşılamadı.");
+    }
+  });
+
   el("settingsBtn").addEventListener("click", () => {
     if (diyalogAcikMi("settingsPanel")) {
       diyalogKapat("settingsPanel");
@@ -567,6 +655,7 @@ export function kur() {
     loadModelSecim();
     loadKredi();
     loadAsamalar();
+    loadDefter();
   });
 
   el("krediDuzenle").addEventListener("click", () => krediFormuAc(el("krediForm").hidden));
