@@ -1731,9 +1731,28 @@ raporlara girmez.
   incelenmemiş model bağı N ayrı bölüm desteği olmadan karta girmez. Karta giren 101
   model adayı bağın 42'si desteksiz, 26'sı tek bölümlük.
 
+* **Yabancı alfabe** (`translate.alfabe_kalintisi` + `_alfabeyi_onar`, künye
+  `chapters.alfabe_kalintisi`, 2026-10-23): model doğru SÖZCÜĞÜ üretiyor ama YANLIŞ
+  ALFABEDE — Türkçe cümlenin ortasında tek sözcük başka yazı sistemine kayıyor
+  (`Saniyeninสี่'te biri` #1110, `tespit할` #1107, `dehşet கலந்த` #1116, `едва` #957).
+  Ölçüm (canlı önbellek + `ceviri_arsivi`, 1384 bölüm): 14 bölüm (%1); argon 4/38,
+  2.5-flash 6/70, vertex/3.6-flash 2/125, gemini-3.6-flash 1/479. Mevcut denetimlerin
+  HİÇBİRİ göremiyordu: `ingilizce_kalinti` tokeni yalnız Latin harf sınıfını tarıyor
+  (yabancı sözcük token olarak bile eşleşmiyor), `sozluk_ihlalleri` yalnız kayıtlı
+  terimlere bakıyor, `uzunluk_orani` düz karakter sayımı. Ölçüt: Latin blokları
+  (ASCII + Latin-1 + Ext-A/B + Ext Additional) DIŞI her harf — Türkçe şapkalılar ve
+  Nguyễn/Łukasz gibi özel adlar meşru kalır. **Kaynakta da geçen harf sızıntı
+  SAYILMAZ:** RSSG kaynaklarının 12 bölümünde `叮`/`卜` var (İngilizce metin Çinceden
+  fan çevirisi), orada onarım turu işe yaramaz ve yalnız para harcardı. Onarım
+  `_kalintiyi_onar` deseniyle TEK tur; aşama düğmesi YOK, çünkü sızıntı tam da ek
+  aşamalar (cilalama/kalite) kapalıyken kalıcı önbelleğe giriyor — açıkken paragraf
+  başka bir gerekçeyle modele ikinci kez gidip şans eseri düzeliyordu (#1107/#1110
+  arşiv taslakları bunu gösteriyor).
+
 Onarımların ortak kabul ilkesi MQM-APE'dir (Lu ve ark. 2025): hata ancak düzeltilmiş
 hâl gerçekten iyileşmişse (ölçülen kusur azalmış, yeni sözlük ihlali / kalıntı /
-sapma yok, paragraf kısalmamış) düzeltilir; aksi hâlde özgün metin kalır.
+sapma / yabancı alfabe yok, paragraf kısalmamış) düzeltilir; aksi hâlde özgün metin
+kalır.
 
 ## Ortam değişkenleri (`.env`, kök dizinde)
 
@@ -1758,7 +1777,7 @@ sapma yok, paragraf kısalmamış) düzeltilir; aksi hâlde özgün metin kalır
 | `CEVIRI_OZET` | Hayır | `1` → bölüm özeti zinciri (`core/ozet_zinciri.py`, AI Novel Translation yöntemi): çeviriden önce tek çağrıyla bu bölümün kısa Türkçe özeti çıkarılır (girdi: önceki bölümün kayıtlı özeti + ilgili sözlük + bölüm); çeviri istemine yalnız bu bölümün özeti eklenir, özet `ozet_zinciri` tablosuna yazılıp sonraki bölüme gider. Yeni adlar sözlüğe otomatik yazılmaz. Varsayılan kapalı; ölçülmeden açılmaz |
 | `SOZLUK_SIRADAN` | Hayır | `1` → büyük harfli sözlük kaydı parçada cümle ortasında hiç büyük harfle geçmiyorsa satırına `translate.SIRADAN_ISARETI` konur; model sıradan kelimeye büyük harfli terim basmaz ("armor" → "Zırhları" sınıfı). Varsayılan kapalı; bayrak kapalıyken prompt bayt bayt aynıdır |
 | `CEVIRI_GRAFIK` | Hayır | `1` → çeviri isteğine karakter defteri kartı (`karakter_defteri.kart_metni`): yalnız parçada geçen kişilerin takma adı, hitabı belirleyen ilişkisi (lideri/öğretmeni/akrabası) ve kararlı sen/siz çifti; "KURAL DEĞİLDİR" başlıklı bağlam. Yalnız N−1'e kadarki bilgi. Varsayılan kapalı; kapalıyken istem bayt bayt aynı. Ölçüm kolu `anlam_kiyas.py` J (H + kart), gürültü tabanı H2 |
-| `KARAKTER_DEFTERI` | Hayır | `1` → karakter defteri canlı kuyruğu (`core/karakter_defteri.py`): kaydedilen her bölüm için ARKA PLANDA tek çağrı (hizalı EN+TR → varlık, bağ, sen/siz hitabı, sıradan sözcük). Okuma süren çeviri varken bekler (`budget.etkilesimli_var`), hata çeviriyi etkilemez. Varsayılan kapalı. Kitap listesi `KARAKTER_DEFTERI_KITAPLAR` (boş/verilmemiş = profili olan her kitap: kod kaydı ya da onaylı DB satırı), model `DEFTER_MODELI` (varsayılan `vertex/gemini-3.8-flash`, tek halka, düşme yok), düşünme `DEFTER_DUSUNME` (boş = model varsayılanı; `low`/`high` düzey, sayı bütçe) |
+| `KARAKTER_DEFTERI` | Hayır | `1` → karakter defteri canlı kuyruğu (`core/karakter_defteri.py`): kaydedilen her bölüm için ARKA PLANDA tek çağrı (hizalı EN+TR → varlık, bağ, sen/siz hitabı, sıradan sözcük). Okuma süren çeviri varken bekler (`budget.etkilesimli_var`), hata çeviriyi etkilemez. Varsayılan kapalı. Kitap listesi `KARAKTER_DEFTERI_KITAPLAR` (boş/verilmemiş = profili olan her kitap: kod kaydı ya da onaylı DB satırı), model **SEÇİLİ çeviri modeli** > `DEFTER_MODELI` > `vertex/gemini-3.8-flash` (tek halka, düşme yok; 2026-10-23 kullanıcı kararı "defter hangi çeviri aracı açıksa o yazsın" — önce seçim HİÇ okunmuyordu ve ölçüm 1117 bölümün tamamının seçilenden BAŞKA modelle, 21,49 $'a işlendiğini gösterdi; seçim defteri de sürüklediği için ücretli model seçmek defter koşusunu da pahalılaştırır, aynı profille Argon ~57 $), düşünme `DEFTER_DUSUNME` (boş = `low`; `low`/`high` düzey, sayı bütçe — Argon bütçeyi ve `minimal`i 400 ile reddeder, bkz. `_DUSUNME_BUTCESI_REDDEDENLER`) |
 
 Sunucuda bu bayraklar `.env` yerine systemd ek dosyasıyla verilir
 (`/etc/systemd/system/novel-cevirmen.service.d/*.conf`, `Environment=AD=değer`):
