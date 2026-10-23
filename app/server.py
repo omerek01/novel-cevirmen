@@ -1535,6 +1535,30 @@ def set_ceviri_asamasi(req: AsamaRequest) -> dict:
     return _asama_yaniti()
 
 
+class DefterAnahtariRequest(BaseModel):
+    acik: bool
+
+
+@app.get("/api/settings/defter")
+def get_defter_anahtari() -> dict:
+    """Karakter defteri canlı kuyruğunun durumu (açık mı, kaynak, hangi model)."""
+    return karakter_defteri.ayar_durumu()
+
+
+@app.post("/api/settings/defter")
+def set_defter_anahtari(req: DefterAnahtariRequest) -> dict:
+    """Defteri aç/kapa. Yeniden başlatma GEREKMEZ ve kapatmak BEKLEYEN kuyruğu da
+    durdurur (bölüm sınırında) — düğmenin tek işi harcamayı kesmek.
+
+    Aşama uçlarından AYRI tutuldu: defter bir çeviri aşaması değil, çeviriden
+    sonra koşan arka plan kuyruğu. Aşama panelinin süre ölçümü (`api_olay`,
+    yalnız çeviri amaçları) defteri 0 sn gösterirdi — en pahalı kalemi "bedava"
+    sandıran bir gösterge, göstergesizlikten kötü olurdu.
+    """
+    karakter_defteri.ayarla(req.acik)
+    return karakter_defteri.ayar_durumu()
+
+
 @app.get("/api/settings/model")
 def get_ceviri_modeli() -> dict:
     """Seçili çeviri modeli + seçenekler (etiket ve ölçüm notlarıyla).

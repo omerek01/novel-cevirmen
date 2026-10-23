@@ -208,9 +208,57 @@ def defter_talimati(book_slug: str) -> str:
 
 
 # ---------- ayarlar ----------
+AYAR_ANAHTARI = "karakter_defteri"
+ETIKET = "Karakter defteri"
+ACIKLAMA = (
+    "Çeviriden sonra arka planda bölümü okuyup kişi, bağ ve sen/siz hitabını çıkarır. "
+    "EN PAHALI kalem: çeviriden ayrı bir model çağrısı yapar (ölçüm: 1117 bölüm = "
+    "21,49 $, bölüm başına ~1,9 cent — aynı dönemdeki Argon çevirisinin 11,7 katı). "
+    "Kapatmak okumayı ve mevcut defter kayıtlarını etkilemez; yalnız YENİ bölümler "
+    "için çıkarım yapılmaz ve bekleyen kuyruk durur."
+)
+
+
+def _ayar_kaydi() -> str:
+    try:
+        return settings.get(AYAR_ANAHTARI)
+    except sqlite3.Error:
+        # Ayar okunamazsa (kilitli veritabanı) akış durmamalı: ortam değişkenine
+        # düş — `ceviri_asamalari._kayit` ile aynı desen.
+        return ""
+
+
 def acik_mi() -> bool:
-    """Canlı kuyruk (çeviriden sonra arka plan çıkarımı). Varsayılan KAPALI."""
+    """Canlı kuyruk açık mı: kayıtlı ayar > ortam değişkeni > varsayılan KAPALI.
+
+    Ayar okuyucunun ayarlar panelinden değişir ve yeniden başlatma İSTEMEZ
+    (2026-10-23, kullanıcı isteği: "para tasarrufu istersem bunu aç kapat
+    yapabileyim"). Öncelik `ceviri_asamalari` ile aynı yönde — kayıtlı ayar
+    ortam değişkenini EZER. Ters sıra, panelde "kapalı" yazarken defterin para
+    harcamaya devam etmesi demekti.
+
+    Düğmeye hiç dokunulmadıysa davranış birebir eskisi gibidir (`KARAKTER_DEFTERI`).
+    """
+    kayit = _ayar_kaydi()
+    if kayit in ("0", "1"):
+        return kayit == "1"
     return os.getenv("KARAKTER_DEFTERI", "0") == "1"
+
+
+def ayarla(acik: bool) -> None:
+    settings.set(AYAR_ANAHTARI, "1" if acik else "0")
+
+
+def ayar_durumu() -> dict:
+    """Okuyucu paneli için: durum, KAYNAK (ayar mı ortam değişkeni mi) ve model.
+
+    Kaynak gösterilir çünkü "neden açık" sorusunun iki farklı cevabı var ve
+    `ceviri_asamalari.durum()` aynı ayrımı zaten gösteriyor. Model de gösterilir:
+    defter artık seçili çeviri modelini takip ediyor, yani ücret o seçime bağlı.
+    """
+    return {"acik": acik_mi(),
+            "kaynak": "ayar" if _ayar_kaydi() in ("0", "1") else "ortam",
+            "etiket": ETIKET, "aciklama": ACIKLAMA, "model": model_adi()}
 
 
 def kitaplar() -> set[str] | None:
@@ -1776,6 +1824,55 @@ def _siradaki(book_slug: str) -> int | None:
         conn.close()
 
 
+def _isle_simdi(book_slug: str) -> None:
+    """İşçi gövdesi, EŞZAMANLI. `arka_planda_isle` bunu bir iş parçacığında koşturur;
+    testler doğrudan çağırır (iş parçacığı sınanamayan tek yoldu)."""
+    islenen = 0
+    temiz = False
+    try:
+        while True:
+            # DEFTER ANAHTARI her bölümde YENİDEN sorulur: kullanıcı okuyucudan
+            # kapattığında BEKLEYEN kuyruk da durmalı. Yalnız `kuyruga_ekle`yi
+            # kapatmak yetmezdi — canlıda 1101 bölümlük bir yeniden işleme kuyruğu
+            # vardı, "kapattım" diyen kullanıcıya yüzlerce ücretli çağrı daha
+            # fatura edilirdi. Kapanış bölüm SINIRINDA olur: uçuştaki çağrı
+            # yarıda kesilmez, tokenları zaten ödendi.
+            if not acik_mi():
+                break
+            bolum = _siradaki(book_slug)
+            if bolum is None:
+                break
+            bitis = time.time() + OKUMA_BEKLEME_SN
+            while budget.etkilesimli_var() and time.time() < bitis:
+                time.sleep(2)
+            # `threading.Thread` bağlamı KOPYALAMAZ: API kaydı amacı burada kurulur.
+            with budget.DEFTER_SEM, api_durum.islem("karakter_defteri"):
+                sonuc = bolum_isle(book_slug, bolum)
+            if sonuc["durum"] == "completed":
+                islenen += 1
+                sapma = hitap_denetle(book_slug, bolum)
+                if sapma and os.getenv("CEVIRI_HITAP_ONARIM", "0") == "1":
+                    with budget.DEFTER_SEM, api_durum.islem("hitap_onarimi"):
+                        hitap_onar(book_slug, bolum, sapma)
+            elif sonuc["durum"] == "hata":
+                time.sleep(60)  # kota/geçici arıza: geri çekil, sonra kalan denemeyle sür
+        if islenen:
+            uzlastir(book_slug)
+        SON_DURUM[book_slug] = {"zaman": time.time(), "islenen": islenen}
+        temiz = True
+    except Exception as hata:  # noqa: BLE001 — arka plan işi çeviriyi asla düşürmez
+        SON_DURUM[book_slug] = {"zaman": time.time(), "hata": str(hata)[:300]}
+    finally:
+        with _KILIT:
+            _CALISAN.discard(book_slug)
+    # YARIŞ: işçi kapanırken kuyruğa giren bölüm `kuyruga_ekle`de "çalışıyor" görülüp
+    # sahipsiz kalıyordu (test yakaladı). Temiz bitişte kuyruk bir kez daha yoklanır;
+    # hata sonrası yoklanmaz — kalıcı bir arıza sonsuz yeniden başlatma doğurmasın.
+    # Defter KAPALIYSA yeniden başlatılmaz: kuyruk boşalmamış olsa da durmalı.
+    if temiz and acik_mi() and _siradaki(book_slug) is not None:
+        arka_planda_isle(book_slug)
+
+
 def arka_planda_isle(book_slug: str) -> bool:
     """Kitap başına tek uçuşlu işçi: bekleyen bölümleri artan sırayla işler. Okuma (etkileşimli
     çeviri) sürerken bekler — kota okuyucunundur. Başladıysa True."""
@@ -1783,45 +1880,8 @@ def arka_planda_isle(book_slug: str) -> bool:
         if book_slug in _CALISAN:
             return False
         _CALISAN.add(book_slug)
-
-    def is_():
-        islenen = 0
-        temiz = False
-        try:
-            while True:
-                bolum = _siradaki(book_slug)
-                if bolum is None:
-                    break
-                bitis = time.time() + OKUMA_BEKLEME_SN
-                while budget.etkilesimli_var() and time.time() < bitis:
-                    time.sleep(2)
-                # `threading.Thread` bağlamı KOPYALAMAZ: API kaydı amacı burada kurulur.
-                with budget.DEFTER_SEM, api_durum.islem("karakter_defteri"):
-                    sonuc = bolum_isle(book_slug, bolum)
-                if sonuc["durum"] == "completed":
-                    islenen += 1
-                    sapma = hitap_denetle(book_slug, bolum)
-                    if sapma and os.getenv("CEVIRI_HITAP_ONARIM", "0") == "1":
-                        with budget.DEFTER_SEM, api_durum.islem("hitap_onarimi"):
-                            hitap_onar(book_slug, bolum, sapma)
-                elif sonuc["durum"] == "hata":
-                    time.sleep(60)  # kota/geçici arıza: geri çekil, sonra kalan denemeyle sür
-            if islenen:
-                uzlastir(book_slug)
-            SON_DURUM[book_slug] = {"zaman": time.time(), "islenen": islenen}
-            temiz = True
-        except Exception as hata:  # noqa: BLE001 — arka plan işi çeviriyi asla düşürmez
-            SON_DURUM[book_slug] = {"zaman": time.time(), "hata": str(hata)[:300]}
-        finally:
-            with _KILIT:
-                _CALISAN.discard(book_slug)
-        # YARIŞ: işçi kapanırken kuyruğa giren bölüm `kuyruga_ekle`de "çalışıyor" görülüp
-        # sahipsiz kalıyordu (test yakaladı). Temiz bitişte kuyruk bir kez daha yoklanır;
-        # hata sonrası yoklanmaz — kalıcı bir arıza sonsuz yeniden başlatma doğurmasın.
-        if temiz and _siradaki(book_slug) is not None:
-            arka_planda_isle(book_slug)
-
-    threading.Thread(target=is_, name=f"karakter-defteri-{book_slug}", daemon=True).start()
+    threading.Thread(target=_isle_simdi, args=(book_slug,),
+                     name=f"karakter-defteri-{book_slug}", daemon=True).start()
     return True
 
 
