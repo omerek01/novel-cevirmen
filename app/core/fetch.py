@@ -632,6 +632,83 @@ def _looks_like_challenge(page) -> bool:
         return False
 
 
+# Kazıma karşıtı FİLİGRAN: freewebnovel paragraf metnine Unicode "matematiksel
+# alfanumerik" bloktan (U+1D400-U+1D7FF) harflerle kendi alan adını gömüyor. O
+# blok gerçek metinde kullanılmaz (formül dizgisi için ayrılmıştır), o yüzden
+# süzmek güvenli. Ölçüldü (2026-10-25, canlı DB): 257 bölümün İngilizce
+# kaynağında vardı ve 7 bölümde ÇEVİRİYE sızmıştı — model filigranı metin sanıp
+# olduğu gibi aktarıyor.
+FILIGRAN_RE = re.compile(r"[\U0001D400-\U0001D7FF\U0001F100-\U0001F1FF]")
+
+# Paragraf SIRA işareti. Site HTML'e karışık sırada yazıyor, doğru sırayı bu iki
+# sinyalde taşıyor. İkisi birden okunur çünkü her biri tek başına kırılgan: veri
+# niteliğinin adı değişirse stil kalır, CSS bırakılırsa nitelik kalır.
+_SIRA_NITELIGI = "data-reader-order-index"
+_SIRA_STIL_RE = re.compile(r"\border\s*:\s*(\d+)")
+# Kapsayıcıdaki koruma imzası: varsa sayfa KESİN sıra korumalıdır.
+_SIRA_KAPSAYICI_NITELIKLERI = ("data-reader-order", "data-reader-order-count")
+
+
+def _paragraf_sirasi(p) -> int | None:
+    """Paragrafın GERÇEK okuma sırası; işaret yoksa None."""
+    ham = (p.get(_SIRA_NITELIGI) or "").strip()
+    if ham.isdigit():
+        return int(ham)
+    eslesme = _SIRA_STIL_RE.search(p.get("style") or "")
+    return int(eslesme.group(1)) if eslesme else None
+
+
+def _sira_korumali(content_el, isaretli: int, toplam: int) -> bool:
+    """Sayfa paragraf sırasını gizliyor mu? (işaret çözülemediğinde alarm ölçütü)"""
+    if any(content_el.has_attr(ad) for ad in _SIRA_KAPSAYICI_NITELIKLERI):
+        return True
+    # Tek tük `order:` stili sayfa düzeni amaçlı olabilir; alarm için paragrafların
+    # YARIDAN çoğunun işaretli olmasını şart koşarız.
+    return toplam > 0 and isaretli * 2 >= toplam
+
+
+def _sirali_paragraflar(content_el) -> list[str]:
+    """Bölüm paragrafları, GERÇEK okuma sırasında (filigran süzülmüş).
+
+    freewebnovel 2026-10-24 civarında bir kazıma karşıtı önlem devreye aldı:
+    `<p>` etiketlerini HTML'e KARIŞIK sırada yazıyor, doğru sırayı her paragrafta
+    `data-reader-order-index` / `style="order:N"` ile taşıyor ve kapsayıcıyı
+    `display:flex; flex-direction:column` yaparak tarayıcıda düzeltiyor. İnsan
+    doğru sırayı görür; HTML sırasını okuyan kazıyıcı görmez.
+
+    Ölçüldü (2026-10-25, shadow-slave 1134): HTML sırası `1, 2, 42, 43, 26, ...`;
+    bu sırayla kaydedilen bölüm okunurken sahne ortasında başka yere atlıyordu.
+    Hizalama, uzunluk oranı, sözlük ve kalıntı denetimlerinin HEPSİ temiz geçti —
+    paragraf İÇİ ölçütler sıra bozulmasını göremez, arızayı ancak kullanıcı
+    bildirdi. En az dokuz bölüm (1092, 1099, 1104, 1122, 1128, 1131, 1133-1135)
+    böyle kaydedilmişti.
+
+    İşaret HİÇ yoksa davranış eskisiyle aynıdır (HTML sırası): işaretsiz siteler
+    ve eski sayfalar etkilenmez. Eksik indeks sorun DEĞİL — site bazı yuvaları
+    `data-reader-order-optional` ile boş bırakıyor, sıralama boşluğa aldırmaz.
+    """
+    ps = content_el.find_all("p")
+    anahtarlar = [_paragraf_sirasi(p) for p in ps]
+    isaretli = [k for k in anahtarlar if k is not None]
+    # Sıralama ancak HER paragraf işaretliyse ve indeksler TEKİLSE kurulur; yarım
+    # bir eşlemeyle dizmek paragrafları rastgele yere taşırdı.
+    if ps and len(isaretli) == len(ps) and len(set(isaretli)) == len(ps):
+        ps = [p for _, p in sorted(zip(anahtarlar, ps), key=lambda ikili: ikili[0])]
+    elif _sira_korumali(content_el, len(isaretli), len(ps)):
+        # GÜRÜLTÜLÜ başarısızlık bilinçli: sessizce HTML sırasına düşmek, bozuk
+        # metnin kalıcı önbelleğe yazılması demekti ve önbellek isabeti bir daha
+        # çeviri tetiklemediği için kullanıcı o bölümü SONSUZA DEK karışık okurdu.
+        raise FetchError(
+            "Sayfa paragraf sırası korumalı ama sıra işareti çözülemedi "
+            f"({len(isaretli)}/{len(ps)} paragrafta işaret var). Ayrıştırıcı "
+            "güncellenmeli; karışık sırada kaydetmemek için çekim durduruldu."
+        )
+    return [
+        t for p in ps
+        if (t := FILIGRAN_RE.sub("", p.get_text(" ", strip=True)).strip())
+    ]
+
+
 def _parse(html: str, base_url: str, site: dict) -> dict:
     soup = BeautifulSoup(html, "html.parser")
     webnovel = site.get("nav_mode") == "webnovel_ids"
@@ -648,9 +725,10 @@ def _parse(html: str, base_url: str, site: dict) -> dict:
     for junk in content_el.select("script, style, ins, .ads, .adsbygoogle"):
         junk.decompose()
 
-    paragraphs = [p.get_text(" ", strip=True) for p in content_el.find_all("p")]
-    paragraphs = [p for p in paragraphs if p]
-    text = "\n\n".join(paragraphs) if paragraphs else content_el.get_text("\n", strip=True)
+    paragraphs = _sirali_paragraflar(content_el)
+    text = "\n\n".join(paragraphs) if paragraphs else FILIGRAN_RE.sub(
+        "", content_el.get_text("\n", strip=True)
+    ).strip()
 
     title = ""
     for sel in site["title"]:
