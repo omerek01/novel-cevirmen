@@ -113,6 +113,38 @@ reddediliyor. `_http_get` içindeki `impersonate="chrome"` ile sunucudan da 200 
 `tests/test_fetch_duz_http.py` tel tuzağıyla tutar. Ders: "403 geldi → IP engellendi"
 sezgisi bu projede yanlış çıktı, önce TLS katmanını ölç.
 
+**PARAGRAF SIRASI KORUMASI: sırayı İŞARETTEN oku, HTML sırasından DEĞİL**
+(2026-10-25, ölçüldü). freewebnovel `<p>` etiketlerini HTML'e **karışık sırada**
+yazıyor; doğru sırayı her paragrafta `data-reader-order-index` ve
+`style="order:N"` ile taşıyıp kapsayıcıyı (`#article[data-reader-order="pending"]`)
+`display:flex; flex-direction:column` yaparak tarayıcıda düzeltiyor. İnsan doğru
+sırayı görür; HTML sırasını okuyan kazıyıcı görmez. Ölçüm (shadow-slave 1134):
+HTML sırası `1, 2, 42, 43, 26, …`, yani o sırayla kaydedilen bölüm okunurken
+sahne ortasında başka yere atlıyordu. `_sirali_paragraflar` iki sinyalden dizer
+(nitelik adı değişirse stil kalır, CSS bırakılırsa nitelik kalır); işaret HİÇ
+yoksa davranış eskisiyle bayt bayt AYNIDIR, o yüzden işaretsiz siteler ve eski
+sayfalar etkilenmez. Eksik indeks normaldir — site bazı yuvaları
+`data-reader-order-optional` ile boş bırakıyor. **Koruma imzası varken sıra
+çözülemezse `FetchError` fırlatılır**: sessizce HTML sırasına düşmek bozuk metni
+kalıcı önbelleğe yazardı ve önbellek isabeti bir daha çeviri tetiklemediği için
+kullanıcı o bölümü SONSUZA DEK karışık okurdu.
+
+**Ders: paragraf İÇİ kalite ölçütleri sıra bozulmasını GÖREMEZ.** 1134'te
+hizalama tuttu (45 TR = 45 EN), `uzunluk_orani` 1.0018, `glossary_leaks` ve
+`ingilizce_kalinti` boş — bütün kapılar temiz geçti, çünkü hepsi tek paragrafın
+içine bakıyor. Arızayı yalnız kullanıcı bildirdi. Bozulma tarihe göre temiz bir
+sınır çizmiyor, bölüm bölüm dağınık (ölçülen bozuklar: 1092, 1099, 1104, 1122,
+1128, 1131, 1133-1135; aralarındaki bölümler temiz). **Onarım `refresh=1&refetch=1`
+ister** — `refresh` TEK BAŞINA yetmez, önbellekteki İngilizce kaynağın kendisi de
+karışıktır (`_onbellek_kaynagi` onu yeniden kullanır).
+
+Aynı önlem paragraf metnine Unicode **matematiksel alfanumerik** blokla
+(U+1D400-U+1D7FF) sitenin alan adını filigran olarak gömüyor; `FILIGRAN_RE`
+ayrıştırma anında süzer. Ölçüm (canlı DB): 257 bölümün İngilizce kaynağında
+vardı ve 7 bölümde ÇEVİRİYE sızmıştı — model filigranı metin sanıp aktarıyor.
+`tests/test_fetch_sira.py` iki yönü de (sıralama kurulur / işaretsizde değişmez)
+tel tuzağıyla tutar.
+
 Site-özel ayrıştırma kuralları `SITES` sözlüğünde (yeni site = yeni kayıt),
 bilinmeyen host için `GENERIC_SITE`. Çözülen CF cookie'si `cache/.pw-profile`'da
 kalıcı. **Tüm çekimler tek `_FETCH_GATE` (iki-öncelikli kapı) ile serileşir** — tek kalıcı profil eşzamanlı
