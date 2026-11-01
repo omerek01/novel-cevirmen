@@ -76,3 +76,22 @@ def test_kapat_alt_cubugu_geri_getirir(sayfa):
     y = sayfa.evaluate("scrollY")
     sayfa.wait_for_timeout(400)
     assert sayfa.evaluate("scrollY") == y
+
+
+def test_secili_sozcuk_varken_durur_secim_kalkinca_surer(sayfa):
+    """Uzun basıp sözcük seçince akış seçimin altından kaymamalı (kullanıcı bulgusu)."""
+    _okuyucu(sayfa)
+    _baslat(sayfa)
+    sayfa.evaluate("""() => {
+        const p = document.querySelector('#readerBody p[data-idx]');
+        const r = document.createRange();
+        r.setStart(p.firstChild, 0); r.setEnd(p.firstChild, 4);
+        getSelection().removeAllRanges(); getSelection().addRange(r);
+    }""")
+    sayfa.wait_for_timeout(150)
+    y = sayfa.evaluate("scrollY")
+    sayfa.wait_for_timeout(500)
+    assert sayfa.evaluate("scrollY") == y
+    expect(sayfa.locator("#otoKaydir")).to_be_visible()
+    sayfa.evaluate("getSelection().removeAllRanges()")
+    sayfa.wait_for_function(f"scrollY > {y + 3}")

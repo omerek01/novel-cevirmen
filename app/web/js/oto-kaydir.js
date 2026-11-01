@@ -48,13 +48,21 @@ function kilitBirak() {
   kilit = null;
 }
 
+// Seçili metin varken akış durur: uzun basınca tarayıcı sözcük seçimini devralıp
+// `pointercancel` gönderiyor, "parmak kalktı" sanılıp seçim altından kayıyordu
+// (kullanıcı bulgusu 2026-11-01). Seçim kalkınca kendiliğinden sürer.
+function seciliMetinVar() {
+  const secim = window.getSelection?.();
+  return !!secim && !secim.isCollapsed && secim.toString().trim() !== "";
+}
+
 function dongu(zaman) {
   kare = 0;
   if (durum !== "akiyor") return;
   if (!okuyucuAcik()) {
     // Okuyucudan çıkıldıysa tamamen kapat; diyalog açıksa yalnız bekle.
     if (el("readerView")?.hidden) return kapat();
-  } else if (!parmakla) {
+  } else if (!parmakla && !seciliMetinVar()) {
     const sonuc = adim(birikim, hiz(seviye()), sonZaman ? zaman - sonZaman : 0);
     birikim = sonuc.birikim;
     if (sonuc.px) window.scrollBy(0, sonuc.px);
