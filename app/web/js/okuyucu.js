@@ -2,7 +2,6 @@
    bölümde arama, köken odağı. */
 
 import { kalanDakika, sonrakiHal } from "./alt-cubuk.js";
-import { modelNedeniniBagla } from "./api-durum.js";
 import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { settings } from "./ayarlar.js";
 import { warmOffline } from "./cevrimdisi.js";
@@ -10,6 +9,7 @@ import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
 import { oneriDugmesi } from "./paragraf-oneri.js";
 import { damgaOzeti, damgaSatiri } from "./paragraf-oneri-yardimci.js";
+import { modelAdlari, sureYaz } from "./kunye-yardimci.js";
 import { openBook } from "./kitap.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
 import { saveTerm, tazelemeyiPlanla, terimiSilGeriAlinabilir } from "./sozluk.js";
@@ -603,6 +603,8 @@ export function buildChapterEntry(url, data) {
     // Bu bölümde geçen KOŞULLU / ek anlamlı kayıtlar: deterministik denetim dışı.
     // Künye "sözlüğe uyuldu" DİYEMEZ; "bağlam nedeniyle denetlenmedi" der (belge).
     kosulluDenetlenmeyen: data.kosullu_denetlenmeyen || [],
+    // Süre dökümü: toplam, aşama ve model başına süre (eski bölümlerde null).
+    sureDokumu: data.sure_dokumu || null,
     el: null,
     loaded: false,
     empty: false,
@@ -794,6 +796,111 @@ export function kunyeYeniKayitOzeti(kayitlar) {
   return `${kayitlar.length} yeni kayıt bulundu (${parcalar.join(", ")})`;
 }
 
+/* ---------- künye: süre ve modeller ----------
+   Kullanıcı isteği (2026-11-01): bölüm altında "çeviri ne kadar sürdü, hangi model
+   ne kadar çalıştı, kalite denetimi / cilalama ne kadar süre harcattı" açıkça
+   yazsın; anlaşılmayan teknik satırlar (motor rozeti, sözlük sürümü, ham model
+   kimliği, "neden bu model") yazmasın. Süreler sunucuda çeviri anında toplanır
+   (`ceviri_asamalari.sure_dokumu`). */
+function sureSatiri(liste, etiket, sn, toplam, sinif = "") {
+  const li = document.createElement("li");
+  li.className = "kunye-sure-satir" + (sinif ? " " + sinif : "");
+  const ad = document.createElement("span");
+  ad.className = "kunye-sure-ad";
+  ad.textContent = etiket;
+  const deger = document.createElement("span");
+  deger.className = "kunye-sure-deger";
+  deger.textContent = sureYaz(sn);
+  li.append(ad, deger);
+  // Satırın altındaki ince çizgi toplam süredeki payı gösterir (sayı zaten yazılı).
+  if (toplam > 0) li.style.setProperty("--pay", `${Math.min(100, (sn / toplam) * 100).toFixed(1)}%`);
+  liste.appendChild(li);
+  return li;
+}
+
+export function sureBolumu(entry) {
+  const sure = entry.sureDokumu;
+  const bolum = document.createElement("section");
+  bolum.className = "kunye-sure";
+  const baslik = document.createElement("p");
+  baslik.className = "kunye-sure-baslik";
+  if (!sure) {
+    // Süre kaydı eklenmeden önce çevrilmiş bölüm: yalnız model söylenebilir.
+    baslik.textContent = `Çeviren model: ${modelAdlari(entry.model || entry.engine)}`;
+    bolum.appendChild(baslik);
+    const not = document.createElement("p");
+    not.className = "gloss-hint kunye-satir";
+    not.textContent = "Bu bölüm süre ölçümü eklenmeden önce çevrildiği için süre bilgisi yok.";
+    bolum.appendChild(not);
+    return bolum;
+  }
+  const toplam = sure.toplam_sn || 0;
+  const vurgu = document.createElement("strong");
+  vurgu.textContent = sureYaz(toplam);
+  baslik.append("Bu bölümün çevirisi ", vurgu, " sürdü");
+  bolum.appendChild(baslik);
+
+  const asamaBaslik = document.createElement("p");
+  asamaBaslik.className = "kunye-sure-alt";
+  asamaBaslik.textContent = "Süre nereye gitti";
+  bolum.appendChild(asamaBaslik);
+  const asamalar = document.createElement("ul");
+  asamalar.className = "kunye-sure-liste";
+  if (sure.indirme_sn >= 1) sureSatiri(asamalar, "Bölümü siteden indirme", sure.indirme_sn, toplam);
+  if (sure.bekleme_sn >= 1)
+    sureSatiri(asamalar, "Sırada bekleme (önceki bölüm çevriliyordu)", sure.bekleme_sn, toplam);
+  for (const a of sure.asamalar || []) sureSatiri(asamalar, a.etiket, a.sn, toplam);
+  if (sure.oteki_sn >= 1)
+    sureSatiri(asamalar, "Öteki işler (sözlük, yerel denetimler)", sure.oteki_sn, toplam, "kunye-sure-oteki");
+  bolum.appendChild(asamalar);
+
+  const modeller = sure.modeller || [];
+  if (modeller.length) {
+    const mb = document.createElement("p");
+    mb.className = "kunye-sure-alt";
+    mb.textContent = modeller.length > 1 ? "Kullanılan modeller" : "Kullanılan model";
+    bolum.appendChild(mb);
+    const ml = document.createElement("ul");
+    ml.className = "kunye-sure-liste";
+    for (const m of modeller) {
+      const li = sureSatiri(ml, m.etiket, m.sn, toplam);
+      const ek = document.createElement("span");
+      ek.className = "kunye-sure-ek";
+      const parcalar = [`${m.istek} istek`];
+      if (m.basarisiz) {
+        const nedenler = Object.entries(m.nedenler || {})
+          .map(([n, k]) => (k > 1 ? `${n} ×${k}` : n))
+          .join(", ");
+        parcalar.push(
+          `${m.basarisiz} deneme başarısız (${nedenler}), ${sureYaz(m.basarisiz_sn)} boşa gitti`,
+        );
+        li.classList.add("kunye-sure-kayip");
+      }
+      ek.textContent = parcalar.join(" · ");
+      li.appendChild(ek);
+    }
+    bolum.appendChild(ml);
+  }
+
+  const kalite = entry.ceviriKalitesi;
+  if (kalite && kalite.durum === "denetlendi" && kalite.denetlenen) {
+    const k = document.createElement("p");
+    k.className = "gloss-hint kunye-satir";
+    const n = (kalite.onarilan || []).length;
+    k.textContent =
+      `Kalite denetimi ${kalite.denetlenen} paragrafı kaynakla karşılaştırdı` +
+      (n ? `, ${n} paragrafı düzeltti.` : "; düzeltilecek bir şey bulmadı.");
+    bolum.appendChild(k);
+  }
+  if ((sure.kapali || []).length) {
+    const k = document.createElement("p");
+    k.className = "gloss-hint kunye-satir kunye-sure-kapali";
+    k.textContent = `Kapalıydı, süre harcamadı: ${sure.kapali.join(", ")}`;
+    bolum.appendChild(k);
+  }
+  return bolum;
+}
+
 export function kunyeKarti(entry) {
   const motor = entry.engine;
   const terimler = entry.addedTerms || {};
@@ -808,7 +915,6 @@ export function kunyeKarti(entry) {
   // Yabancı alfabeye kayan sözcükler (onarım turundan SONRA kalanlar).
   const alfabe = entry.alfabeKalintisi || {};
   const alfabeIndeksleri = Object.keys(alfabe);
-  const denetlenmeyen = entry.kosulluDenetlenmeyen || [];
   const supheler = entry.ceviriKalitesi?.supheli || [];
   // KAYDET, İŞARETLE (2026-10-11): kalite denetimi tamamlanamasa da çeviri kaydedilir;
   // okur bunu görmeli, yoksa denetlenmemiş bölüm "temiz" sanılır.
@@ -821,6 +927,7 @@ export function kunyeKarti(entry) {
   // olmaz), yani öteki koşullara bağlansaydı en bozuk bölüm sessiz kalırdı.
   const kisalmis = entry.kisalmis === true;
   const damga = damgaOzeti(entry.sozlukDegisen);
+  const sure = entry.sureDokumu;
   // Eski önbellekteki bölümde künye yok: "bilinmiyor" yazmak yanıltıcı olur, sessizce atla.
   if (
     !motor &&
@@ -828,9 +935,8 @@ export function kunyeKarti(entry) {
     ihlalAdlari.length === 0 &&
     kalintiIndeksleri.length === 0 &&
     alfabeIndeksleri.length === 0 &&
-    denetlenmeyen.length === 0 &&
     yeniKayitlar.length === 0 &&
-    !kisalmis && supheler.length === 0 && !denetlenemedi && !damga
+    !kisalmis && supheler.length === 0 && !denetlenemedi && !damga && !sure
   )
     return null;
 
@@ -870,9 +976,12 @@ export function kunyeKarti(entry) {
     );
   if (ihlalAdlari.length)
     uyarilar.push(`${ihlalAdlari.length} terim sözlüğe uymadı`);
+  // Kapalı satır: önce süre ve model (her bölümde merak edilen), sonra terim haberleri.
+  const kisaModel = entry.model ? modelAdlari(entry.model) : "";
   ozet.textContent = uyarilar.length
     ? `⚠ ${uyarilar.join(" · ")}`
-    : [adlar.length ? `Sözlüğe ${adlar.length} terim eklendi` : "",
+    : [sure ? sureYaz(sure.toplam_sn) : "", kisaModel,
+       adlar.length ? `sözlüğe ${adlar.length} terim eklendi` : "",
        yeniKayitlar.length ? kunyeYeniKayitOzeti(yeniKayitlar) : ""]
         .filter(Boolean).join(" · ") || "Çeviri bilgisi";
   kutu.appendChild(ozet);
@@ -914,55 +1023,7 @@ export function kunyeKarti(entry) {
       govde.appendChild(oneriDugmesi(entry.url, bulgu.paragraf, "onar", { mevcutGoster: true }));
     }
   }
-  if (motor) {
-    const rozet = document.createElement("span");
-    rozet.className = "style-badge";  // mevcut pill rozet dili
-    /* Motor FİİLEN çeviren sağlayıcıdan geliyor. Bugün tek motor var ("gemini")
-       ama rozet SABİT YAZMAZ: bir dönem tam olarak öyle yapılmıştı ve ikinci bir
-       sağlayıcı zincire girince doğrudan yanlış bilgiye dönüştü — o sağlayıcının
-       çevirdiği bölüm "GEMINI ile çevrildi" diyordu. Ad olduğu gibi büyütülür,
-       böylece motor bir daha değişirse burada ayrıca bir dal açmak gerekmez.
-       DB'de kaldırılmış motorlardan kalma "mistral"/"claude" satırları duruyor ve
-       bu yolla doğru etiketlenmeye devam ederler. */
-    rozet.textContent = motor
-      .split(" + ")
-      .map((m) => m.trim().toUpperCase())
-      .join(" + ");
-    const satir = document.createElement("p");
-    satir.className = "gloss-hint kunye-satir";
-    satir.append(rozet, document.createTextNode(" ile çevrildi"));
-    // Motorun İÇİNDEKİ model: zincir tökezleyince alt halkaya düşülüyor ve üslup
-    // farkı oradan geliyor. "gemini-" öneki kırpılır — rozet zaten motoru söylüyor.
-    // Parçalar farklı halkalara düştüyse sunucu " + " ile birleştirip gönderir.
-    if (entry.model) {
-      // Sağlayıcı öneki kırpılır (`mistral:`, `openrouter:`, …). Bugünkü zincirde
-      // önekli ad ÜRETİLMİYOR (Gemini-tek) ama önbellekte o dönemden kalma satırlar
-      // var ve kırpma onlar için hâlâ gerekli: adı iki kez yazmak
-      // "mistral:mistral-medium-latest" gibi okunmaz bir satır üretiyordu.
-      // Model adının içindeki `/` korunur ("minimax/minimax-m3:free" gibi).
-      const kisa = entry.model
-        .split(" + ")
-        .map((m) => m.replace(/^[a-z0-9]+:/, "").replace(/^gemini-/, ""))
-        .join(" + ");
-      satir.append(document.createTextNode(` · ${kisa}`));
-    }
-    // Sözlük sürümü: bölüm çevrildikten sonra sözlük değiştiyse "bu bölümde eski
-    // karşılıklar olabilir" sorusu buradan okunur.
-    if (entry.sozlukSurumu != null) {
-      satir.append(document.createTextNode(` · sözlük s.${entry.sozlukSurumu}`));
-    }
-    govde.appendChild(satir);
-    // "3.6 seçiliyken neden 3.5?" — rozet açılınca sunucunun kaydından sorulur.
-    if (entry.model) modelNedeniniBagla(kutu, govde, entry.url);
-  }
-  if (denetlenmeyen.length) {
-    const not = document.createElement("p");
-    not.className = "gloss-hint kunye-satir kunye-denetlenmedi";
-    not.textContent =
-      "Bağlam nedeniyle otomatik denetlenmedi: " + denetlenmeyen.join(", ") +
-      " (koşullu ya da çok anlamlı kayıt — hangi karşılığın geçerli olduğu ölçülemez).";
-    govde.appendChild(not);
-  }
+  if (motor || sure) govde.appendChild(sureBolumu(entry));
   if (kalintiIndeksleri.length) {
     const uyari = document.createElement("p");
     uyari.className = "gloss-hint kunye-satir kunye-ihlal";

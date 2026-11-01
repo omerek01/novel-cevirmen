@@ -4,7 +4,6 @@
   * boş kayıt, beş anahtarlı kartlar ve dar ekran;
   * sunucu hatasında eski veri zamanıyla kalır ve BAYAT diye işaretlenir;
   * yalnız panel GÖRÜNÜRKEN yenilenir, istekler üst üste binmez;
-  * künyedeki "neden bu model?" satırı.
 
 Test sunucusu bilerek ANAHTARSIZ açılır (`sunucu.py`): beş anahtarlı görünüm,
 sunucu yanıtı Playwright ile değiştirilerek sınanır. Yenileme aralığı (15 sn)
@@ -255,40 +254,3 @@ def test_istekler_UST_USTE_binmez(sayfa):
 
 
 # ---------------------------------------------------------------- künye
-
-def _model_yaz(url, model):
-    conn = sqlite3.connect(db.db_path(), timeout=10)
-    try:
-        conn.execute("UPDATE chapters SET model = ? WHERE url = ?", (model, url))
-        conn.commit()
-    finally:
-        conn.close()
-
-
-def _okuyucuda_kunyeyi_ac(sayfa):
-    sayfa.goto(sayfa.taban + "/")
-    sayfa.locator("#shelves .spine[data-slug]").first.click()
-    sayfa.locator("#chapterList .chapter-row").last.click()
-    expect(sayfa.locator("#readerView")).to_be_visible()
-    kunye = sayfa.locator("#readerBody article.chapter").first.locator(".kunye")
-    with sayfa.expect_response(lambda r: "/api/settings/api-neden" in r.url):
-        kunye.locator("summary").click()
-    return kunye
-
-
-def test_kunye_yedek_modelle_kaydedilen_bolumun_nedenini_soyler(sayfa):
-    urller = tohum.kitap()
-    _model_yaz(urller[0], "gemini-3.5-flash")
-    kunye = _okuyucuda_kunyeyi_ac(sayfa)
-    satir = kunye.locator(".kunye-neden")
-    expect(satir).to_be_visible()
-    expect(satir).to_contain_text("Neden bu model?")
-    expect(satir).to_contain_text("3.5-flash")
-    expect(satir).to_contain_text("daha önce")
-
-
-def test_kunye_tercihle_cevrilen_bolumde_neden_satiri_GORUNMEZ(sayfa):
-    tohum.kitap()  # model: gemini-3.6-flash (tercih edilen)
-    kunye = _okuyucuda_kunyeyi_ac(sayfa)
-    sayfa.wait_for_timeout(200)
-    expect(kunye.locator(".kunye-neden")).to_be_hidden()

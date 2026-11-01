@@ -404,11 +404,27 @@ başına SON sonuç). Okuma: `scripts/api_durum_rapor.py` (Google'a istek ATMAZ;
 Manga görsel yolu (`import_translate._manga_regions`) havuzu kullanmaz ve kayda
 GİRMEZ (kullanıcı kararı: kapsam dışı).
 
+**KÜNYE SÜRE DÖKÜMÜ** (2026-11-01, kullanıcı isteği). Bölüm altındaki künye artık
+"çeviri ne kadar sürdü, nereye gitti" der: toplam süre, indirme, sırada bekleme, aşama
+başına süre (Çeviri, Bölüm analizi, Kalite denetimi, Türkçe cilalama, düzeltme turları),
+model başına süre + istek sayısı + başarısız denemeler (zaman aşımı/kota/meşgul) ve
+o an KAPALI olan aşamalar. Süre çeviri ANINDA toplanır
+(`ceviri_asamalari.sure_dokumu`: bu işlemin bu URL için `api_olay` istekleri) ve
+`chapters.sure_dokumu`'na yazılır; `api_olay` budandığı için sonradan hesaplanamaz,
+eski bölümde yalnız "Çeviren model" yazar. Üreten iki nokta: `_do_fetch_translate_save`
+ve `fetch_into_book` (künye kuralı: ikisini birden güncelle). **Kullanıcı kararı:
+künyede anlaşılmayan teknik satır yok** — motor rozeti ("GEMINI ile çevrildi"), sözlük
+sürümü ("sözlük s.N"), ham model kimliği, "Neden bu model?" ve "bağlam nedeniyle
+denetlenmedi" notu kaldırıldı. Yeni satır eklerken okur için anlamı yoksa EKLEME.
+Saf yardımcılar `js/kunye-yardimci.js` (node testli), tarayıcı testi
+`tests/tarayici/test_kunye_sure.py`.
+
 **API DURUM PANELİ** (2026-09-18, `js/api-durum.js` + saf `js/api-durum-yardimci.js`).
 Ayarlar → "API durumu" ayrı bir GÖRÜNÜMDE açılır (`view: "apidurum"`, iç içe modal
 yok); geri düğmesi ve telefonun geri tuşu ayarlara döner. Üç salt-okunur uç:
 `GET /api/settings/api-status` (kartlar, sayaçlar, soğuma), `/api-events` (sayfalı
-geçiş listesi, `cursor`), `/api-neden?url=` (künye rozetindeki "Neden bu model?").
+geçiş listesi, `cursor`), `/api-neden?url=` (eskiden künyedeki "Neden bu model?";
+2026-11-01'den beri künye onu ÇAĞIRMAZ, uç yalnız panel için durur).
 Kurallar:
 * **Uçlar Google'a istek ATMAZ**, rotasyonu ilerletmez, anahtar değeri ya da
   KİMLİĞİ döndürmez (yalnız "Anahtar N"; `.env`'den çıkarılan anahtar "Çıkarılmış

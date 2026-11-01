@@ -1573,6 +1573,55 @@ body.reading .bildirim { bottom: calc(env(safe-area-inset-bottom) + var(--s-base
 .kunye-uyarili > .kunye-ozet { color: var(--warn); }
 .kunye-ihlal { color: var(--warn); display: block; }
 
+/* Künye: süre ve modeller (2026-11-01). Defter sayfası düzeni: solda ad, sağda
+   hizalı süre; satır altındaki pirinç kıl çizgi o satırın toplam süredeki PAYI.
+   Sayı her satırda yazılı, çizgi yalnız göz gezdirmek için (renk tek ipucu değil). */
+.kunye-sure { margin: 0 0 0.9rem; font-family: var(--sans); color: var(--ink); }
+.kunye-sure-baslik { margin: 0 0 0.6rem; font-size: 0.95rem; line-height: 1.5; }
+.kunye-sure-baslik strong { font-variant-numeric: tabular-nums; }
+.kunye-sure-alt {
+  margin: 0.7rem 0 0.25rem;
+  font-family: var(--caps);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.kunye-sure-liste { list-style: none; margin: 0; padding: 0; }
+.kunye-sure-satir {
+  position: relative;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.15rem 0.75rem;
+  padding: 0.4rem 0 0.45rem;
+  font-size: 0.86rem;
+  line-height: 1.45;
+  border-bottom: 1px solid color-mix(in oklab, var(--ink) 9%, transparent);
+}
+.kunye-sure-satir::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  height: 2px;
+  width: var(--pay, 0%);
+  background: var(--brass);
+  border-radius: 2px;
+}
+.kunye-sure-ad { flex: 1 1 12rem; min-width: 0; }
+.kunye-sure-deger { flex: 0 0 auto; font-variant-numeric: tabular-nums; font-weight: 600; }
+.kunye-sure-ek {
+  flex: 1 0 100%;
+  font-size: 0.78rem;
+  color: var(--ink-soft);
+}
+.kunye-sure-oteki .kunye-sure-ad { color: var(--ink-soft); }
+.kunye-sure-kayip .kunye-sure-ek { color: var(--warn); }
+.kunye-sure-kayip::after { background: var(--warn); }
+.kunye-sure-kapali { color: var(--ink-soft); }
+
 /* ---------- ePub alanları ---------- */
 .epub-fields {
   display: grid;
