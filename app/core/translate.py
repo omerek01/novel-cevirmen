@@ -299,6 +299,12 @@ VERTEX_MODELLER = {
     # düşünürse gerçek maliyet daha yüksek olur.
     "vertex/gemini-4-argon": {
         "model": "gemini-4-argon",
+        # SÜRE (2026-11-01, sunucu ölçümü): 90 sn'lik ortak süre SDK'da
+        # `X-Server-Timeout: 90` başlığına dönüşüyor ve Google üretimi ~87. sn'de
+        # 504 ile KESİYOR. O gün 120 argon çağrısının 32'si böyle öldü (başarılı
+        # olanların en uzunu da 89 sn, yani tavana dayalıydı); bölüm ücretsiz
+        # halkaya düşüp 5-11 dk sürüyordu. Argon uzun parçayı 90 sn'de bitiremiyor.
+        "zaman_asimi_ms": 300_000,
         "etiket": "4 Argon (Vertex, kredi)",
         "kisa": "4 Argon",
         "not": "ÜCRETLİ ~$0,09+/bölüm (3.6'nın ~3 katı), deneme kredisinden düşer; "
@@ -3858,7 +3864,7 @@ def _gemini_yapilandirmasi(
     )
 
 
-_VERTEX_ISTEMCI: dict[tuple[str, str], genai.Client] = {}
+_VERTEX_ISTEMCI: dict[tuple[str, str, int], genai.Client] = {}
 
 
 def _vertex_uret(model: str, user: str, system: str, max_tokens: int):
@@ -3879,18 +3885,20 @@ def _vertex_uret(model: str, user: str, system: str, max_tokens: int):
         raise atla
     konum = (os.getenv(VERTEX_KONUM_ENV) or "global").strip()
     try:
-        istemci = _VERTEX_ISTEMCI.get((proje, konum))
+        # Süre model başına (bkz. argon kaydı); istemci süreyle birlikte önbelleklenir.
+        sure_ms = VERTEX_MODELLER[model].get("zaman_asimi_ms", GEMINI_ISTEK_ZAMAN_ASIMI_MS)
+        istemci = _VERTEX_ISTEMCI.get((proje, konum, sure_ms))
         if istemci is None:
             istemci = genai.Client(
                 vertexai=True,
                 project=proje,
                 location=konum,
                 http_options=types.HttpOptions(
-                    timeout=GEMINI_ISTEK_ZAMAN_ASIMI_MS,
+                    timeout=sure_ms,
                     retry_options=types.HttpRetryOptions(attempts=1),
                 ),
             )
-            _VERTEX_ISTEMCI[(proje, konum)] = istemci
+            _VERTEX_ISTEMCI[(proje, konum, sure_ms)] = istemci
         api_modeli = VERTEX_MODELLER[model]["model"]
         yanit = istemci.models.generate_content(
             model=api_modeli,

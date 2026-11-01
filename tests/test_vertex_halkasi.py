@@ -241,3 +241,14 @@ def test_argon_vertex_cagrisi_API_kimligiyle_ve_butcesiz_gider(monkeypatch):
     istek = cagrilar[1]
     assert istek["model"] == "gemini-4-argon"
     assert istek["config"].thinking_config is None
+
+
+def test_argon_uzun_sure_alir_oteki_vertexler_90_sn_kalir(monkeypatch):
+    """90 sn SDK'da X-Server-Timeout olur; Google argonu ~87 sn'de 504 ile keserdi."""
+    monkeypatch.setenv("VERTEX_PROJE", "proje-x")
+    cagrilar = []
+    _sahte_istemci(monkeypatch, _Yanit(), cagrilar)
+    translate._generate_with_fallback(_fabrika_kullanilmamali, (ARGON,), "p")
+    translate._generate_with_fallback(_fabrika_kullanilmamali, (VERTEX,), "p")
+    sureler = [c["kurulum"]["http_options"].timeout for c in cagrilar if "kurulum" in c]
+    assert sureler == [300_000, translate.GEMINI_ISTEK_ZAMAN_ASIMI_MS]
