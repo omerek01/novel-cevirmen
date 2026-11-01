@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v152"; // Künye: çeviri süresi ve modeller
+const SHELL_CACHE = "novellink-shell-v153"; // Okuyucu: otomatik kaydırma
 const DATA_CACHE = "novellink-data";
 const DEFTER_YOLU = /^\/api\/book\/[^/]+\/defter(?=\/|$)/;
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
@@ -34,6 +34,8 @@ const SHELL = [
   // tests/test_modul_kabugu.py her `js/*.js` dosyasının burada olduğunu tutar.
   "/js/alt-cubuk.js",
   "/js/kunye-yardimci.js",
+  "/js/oto-kaydir.js",
+  "/js/oto-kaydir-yardimci.js",
   "/js/api-durum.js",
   "/js/api-durum-yardimci.js",
   "/js/asama-yardimci.js",

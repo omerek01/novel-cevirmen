@@ -11,6 +11,7 @@ import { oneriDugmesi } from "./paragraf-oneri.js";
 import { damgaOzeti, damgaSatiri } from "./paragraf-oneri-yardimci.js";
 import { modelAdlari, sureYaz } from "./kunye-yardimci.js";
 import { openBook } from "./kitap.js";
+import { otoKaydirBaslat, otoKaydirKur } from "./oto-kaydir.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
 import { saveTerm, tazelemeyiPlanla, terimiSilGeriAlinabilir } from "./sozluk.js";
 import { ICONS, SVG, el, escapeHtml, localDay } from "./temel.js";
@@ -1745,6 +1746,13 @@ export function kur() {
     const e = activeEntry();
     const slug = (e && e.bookSlug) || durum.currentBookSlug;
     altGit(slug ? { view: "glossary", slug } : null);
+  });
+  // Otomatik kaydırma: çubuk kapanır, yerini kaydırma kumandası alır.
+  otoKaydirKur();
+  el("altKaydir").addEventListener("click", () => {
+    altHal = "kapali";
+    altCubukCiz();
+    otoKaydirBaslat();
   });
   // Ayarlar → "Bu bölüm — Yeniden çevir": AKTİF bölümü yerinde yeniden çevirir
   // (akışı sıfırlamaz — dikişler korunur).

@@ -2446,8 +2446,8 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 .okuyucu-alt {
   position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 30;
   transform: translateX(-50%);
-  width: min(352px, calc(100% - 28px)); height: 56px;
-  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)) 40px; align-items: center;
+  width: min(400px, calc(100% - 28px)); height: 56px;
+  display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)) 40px; align-items: center;
   padding: 4px;
   background: var(--surface);
   border: 1px solid var(--border); border-radius: 16px;
@@ -2479,6 +2479,55 @@ details[open] > .api-yedek-ozet::after { transform: rotate(180deg); }
 /* Metnin sonu çubuğun altında kalmasın. */
 #readerView .reader-body { padding-bottom: 96px; }
 @media (prefers-reduced-motion: reduce) { .okuyucu-alt { transition: none; } }
+
+/* OTOMATİK KAYDIRMA kumandası (2026-11-01). Alt çubukla AYNI yerde, aynı yüzeyde:
+   kaydırma açıkken çubuğun yerini alır (iki yüzen öğe metni iki yerden kapatmasın).
+   Hız merdiveni: 12 pirinç çentik, seviyeye kadar dolu; sayı yanında yazılı. */
+body.oto-kaydiriyor .okuyucu-alt { display: none; }
+.oto-kaydir {
+  position: fixed; left: 50%; bottom: calc(14px + env(safe-area-inset-bottom)); z-index: 30;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 2px;
+  height: 52px; padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border); border-radius: 999px;
+  box-shadow: 0 12px 26px -18px rgb(var(--shadow-rgb) / 0.75);
+}
+.oto-kaydir[hidden] { display: none; }
+.ok-dugme {
+  flex: 0 0 44px; width: 44px; height: 44px;
+  display: grid; place-items: center;
+  border: 0; border-radius: 999px; background: none; cursor: pointer;
+  font: 400 22px/1 var(--sans); color: var(--ink-soft);
+  transition: background-color 160ms ease, color 160ms ease;
+}
+.ok-dugme:hover:not(:disabled) { background: color-mix(in oklab, var(--ink) 7%, transparent); color: var(--ink); }
+.ok-dugme:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.ok-dugme:disabled { opacity: 0.35; cursor: default; }
+.ok-dugme svg { width: 20px; height: 20px; fill: currentColor; }
+.ok-ana { background: var(--accent); color: var(--on-accent); }
+.ok-ana:hover:not(:disabled) { background: var(--accent); color: var(--on-accent); filter: brightness(1.08); }
+.ok-kapat { font-size: 16px; color: var(--ink-dim); }
+.ok-hiz {
+  display: grid; justify-items: center; gap: 4px;
+  min-width: 78px; padding: 0 4px;
+}
+.ok-hiz-etiket {
+  font-family: var(--caps); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.ok-hiz-etiket b { color: var(--ink); font-variant-numeric: tabular-nums; }
+.ok-centik { display: flex; align-items: flex-end; gap: 2px; height: 10px; }
+.ok-centik i {
+  width: 3px; border-radius: 1px; background: var(--border);
+  transition: background-color 160ms ease;
+}
+/* Çentikler soldan sağa yükselir: merdiven hızın arttığını şekliyle de söyler. */
+.ok-centik i:nth-child(n) { height: 4px; }
+.ok-centik i:nth-child(n+4) { height: 6px; }
+.ok-centik i:nth-child(n+7) { height: 8px; }
+.ok-centik i:nth-child(n+10) { height: 10px; }
+.ok-centik i.dolu { background: var(--brass); }
 
 /* ---------- ORTAK DENETİMLER (Okuma Salonu, 2026-10-13) ----------
    Eski "editoryal" sistemdeki kalın siyah çerçeveli hap düğmeler ve kutular

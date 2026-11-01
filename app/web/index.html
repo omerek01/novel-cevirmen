@@ -329,9 +329,24 @@
       <button id="altOnceki" class="alt-oge" type="button"><span aria-hidden="true">‹</span>Önceki</button>
       <button id="altBolumler" class="alt-oge" type="button"><span aria-hidden="true">☰</span>Bölümler</button>
       <button id="altSozluk" class="alt-oge" type="button"><span aria-hidden="true">Aa</span>Sözlük</button>
+      <button id="altKaydir" class="alt-oge" type="button"><span aria-hidden="true">⇣</span>Kaydır</button>
       <button id="altSonraki" class="alt-oge alt-sonraki" type="button"><span aria-hidden="true">›</span>Sonraki</button>
       <button id="altKapat" class="alt-kapat" type="button" aria-label="Gezinmeyi kapat">⌄</button>
     </nav>
+    <!-- OTOMATİK KAYDIRMA kumandası: yalnız kaydırma açıkken görünür, alt çubuğun yerini
+         alır. Mantık js/oto-kaydir.js, hız hesabı js/oto-kaydir-yardimci.js (Node testli). -->
+    <div id="otoKaydir" class="oto-kaydir" role="group" aria-label="Otomatik kaydırma" hidden>
+      <button id="otoKaydirDurdur" class="ok-dugme ok-ana" type="button" aria-pressed="false"
+              aria-label="Kaydırmayı duraklat"></button>
+      <button id="otoKaydirYavas" class="ok-dugme" type="button" aria-label="Yavaşlat">−</button>
+      <div class="ok-hiz" aria-live="polite">
+        <span class="ok-hiz-etiket">Hız <b id="otoKaydirDeger">4</b></span>
+        <span id="otoKaydirCentik" class="ok-centik" aria-hidden="true"></span>
+      </div>
+      <button id="otoKaydirHizli" class="ok-dugme" type="button" aria-label="Hızlandır">+</button>
+      <button id="otoKaydirKapat" class="ok-dugme ok-kapat" type="button"
+              aria-label="Otomatik kaydırmayı kapat">✕</button>
+    </div>
   </section>
 
   <!-- KİTAP EKLE -->
