@@ -9,8 +9,9 @@ from __future__ import annotations
 import os
 import sqlite3
 import threading
+import time
 
-from . import api_durum, bilgi_delta, budget, cache, defter_kayit, glossary, karakter_defteri, library, sozluk_dogrulama, synthetic, varlik_grafigi
+from . import api_durum, bilgi_delta, budget, cache, ceviri_asamalari, defter_kayit, glossary, karakter_defteri, library, sozluk_dogrulama, synthetic, varlik_grafigi
 from . import profil_cikarim, terim_ornek, wiki_arastirma
 from . import fetch as _fetch_mod
 from . import translate as _translate_mod
@@ -454,6 +455,9 @@ def _do_fetch_translate_save(
     # metin yolundan ÖNCE — bu bölümler paragraf-çeviri değil, sayfa render / HTML üretir.
     if staged is not None and staged.get("content_type") == "html":
         return _render_import_page(url, staged, api_key)
+    # KÜNYE SÜRESİ: bölüm altında "nereye ne kadar süre gitti" dökümü için.
+    baslangic = time.time()
+    indirme_sn = bekleme_sn = 0.0
     if staged is not None and staged.get("raw_source"):
         # İçe aktarılmış ham kaynak var → web'e GİTME, raw_source'tan çevir.
         # Şemadan bağımsız (raw_source-öncelikli routing): hem saf `paste://`
@@ -485,6 +489,7 @@ def _do_fetch_translate_save(
         chapter = fetch_chapter(
             url, priority="bulk" if background else "interactive", ticket=ticket
         )
+        indirme_sn = time.time() - baslangic
 
     # Birleştirilmiş kitap: slug'ı kanonikleştir, böylece bölüm/sözlük tek kitapta toplanır.
     book_slug = library.resolve_slug(chapter["book_slug"])
@@ -527,7 +532,9 @@ def _do_fetch_translate_save(
     if background:
         # Karar #13 / E-12: aynı anda en fazla 1 arka plan çevirisi — kapı yalnız
         # çekimi serileştiriyordu; çeviri aşaması da Gemini kotasını korur.
+        sira_basi = time.time()
         with budget.BG_TRANSLATE_SEM:
+            bekleme_sn = time.time() - sira_basi
             result = translate_chapter(
                 chapter["text"], api_key=api_key, glossary=book_glossary,
                 prev_context=prev_context, kosullar=book_kosullar,
@@ -551,6 +558,10 @@ def _do_fetch_translate_save(
     # künyesini kaybetmiyor.
     eklenen = _sozluge_isle(book_slug, result, chapter.get("chapter_no"), chapter.get("text"))
     ihlaller = _uyum_denetimi(result)
+    sure = ceviri_asamalari.sure_dokumu(
+        api_durum.mevcut_baglam().get("islem"), url, baslangic, time.time(),
+        indirme_sn, bekleme_sn,
+    )
 
     payload = {
         "title": chapter["title"],
@@ -603,6 +614,7 @@ def _do_fetch_translate_save(
         "sozluk_degisen": [],  # taze çeviri bugünkü sözlükle yapıldı
         # Kullanım örneği verilen terimler (CEVIRI_TERIM_ORNEK=1); künye/ölçüm için, saklanmaz.
         "terim_ornekleri": [o["source"] for o in terim_ornekleri or ()],
+        "sure_dokumu": sure,
         "cached": False,
     }
     cache.save_chapter(url, payload)
@@ -686,7 +698,9 @@ def fetch_into_book(
     """
     if not _translate_mod.ceviri_anahtari_var_mi(api_key):
         raise TranslateError(_translate_mod.ANAHTAR_YOK_MESAJI)
+    baslangic = time.time()  # künye süresi (`_do_fetch_translate_save` ile AYNI)
     chapter = fetch_chapter(url, priority="interactive")
+    indirme_sn = time.time() - baslangic
     # Bölünme fix: bu web serisinin host-türevli slug'ını (örn. renegade-immortal)
     # hedef kitaba alias'la → kullanıcı SONRAKI BÖLÜM ile normal okuyucudan devam
     # ettiğinde de bölümler AYRI kitap açmaz, resolve_slug hedefe çözer.
@@ -747,6 +761,8 @@ def fetch_into_book(
             anlam_denetimi=_anlam_tanimlari(target_slug), bolum_no=no,
             **_roman_baglami(target_slug, url, prev_url, no),
         )
+        sure = ceviri_asamalari.sure_dokumu(
+            api_durum.mevcut_baglam().get("islem"), url, baslangic, time.time(), indirme_sn)
     book_title = (book and book.get("title")) or chapter["book_title"]
     eklenen = _sozluge_isle(target_slug, result, no, chapter["text"])  # künyeye girecek, kayıttan ÖNCE
     payload = {
@@ -792,6 +808,7 @@ def fetch_into_book(
         "sozluk_surumu": sozluk_surumu,
         "sozluk_damgasi": sozluk_damgasi,
         "sozluk_degisen": [],  # taze çeviri bugünkü sözlükle yapıldı
+        "sure_dokumu": sure,
         "cached": False,
     }
     cache.save_chapter(url, payload)

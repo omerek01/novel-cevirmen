@@ -79,6 +79,8 @@ def _connect() -> sqlite3.Connection:
     # görmüyordu — `ingilizce_kalinti` tokeni yalnız LATİN harf sınıfını tarıyor.
     # NULL = hiç denetlenmedi (eski satır), "{}" = denetlendi ve temiz.
     db.ensure_column(conn, "chapters", "alfabe_kalintisi", "alfabe_kalintisi TEXT")
+    # Künye süre dökümü (JSON): toplam, aşama ve model başına süre. NULL = eski bölüm.
+    db.ensure_column(conn, "chapters", "sure_dokumu", "sure_dokumu TEXT")
     # Çift anlamlı ad denetiminin sayaçları (Faz 1H): JSON. NULL = denetlenmedi.
     # Okura GÖSTERİLMEZ; `scripts/anlam_denetle.py --metrik` toplar.
     db.ensure_column(conn, "chapters", "anlam_denetimi", "anlam_denetimi TEXT")
@@ -356,7 +358,7 @@ def get_chapter(url: str) -> dict | None:
             "next_url, detected_names, chunk_count, prev_url, source_text, content_type, "
             "engine, added_terms, model, glossary_leaks, ingilizce_kalinti, sozluk_surumu, "
             "created_at, uzunluk_orani, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu, "
-            "sozluk_damgasi, alfabe_kalintisi "
+            "sozluk_damgasi, alfabe_kalintisi, sure_dokumu "
             "FROM chapters WHERE url = ? AND translation IS NOT NULL",
             (url,),
         ).fetchone()
@@ -400,6 +402,7 @@ def get_chapter(url: str) -> dict | None:
         "sayi_uyumsuzlugu": json.loads(row[21] or "{}"),
         # NULL (damgasız eski bölüm) None kalır: "boş damga" (bölümde kayıt yok) ayrıdır.
         "sozluk_damgasi": json.loads(row[22]) if row[22] else None,
+        "sure_dokumu": json.loads(row[24]) if row[24] else None,
         "cached": True,
     }
 
@@ -838,8 +841,8 @@ def save_chapter(url: str, data: dict) -> None:
                  prev_url, source_text, content_type, engine, added_terms, model,
                  glossary_leaks, ingilizce_kalinti, uzunluk_orani, sozluk_surumu, anlam_denetimi,
                  onerilen_terimler, ceviri_kalitesi, karsilik_sapmasi, sayi_uyumsuzlugu,
-                 sozluk_damgasi, alfabe_kalintisi)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                 sozluk_damgasi, alfabe_kalintisi, sure_dokumu)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(url) DO UPDATE SET
                 book_slug = excluded.book_slug, book_title = excluded.book_title,
                 title = excluded.title, chapter_no = excluded.chapter_no,
@@ -863,6 +866,7 @@ def save_chapter(url: str, data: dict) -> None:
                 sozluk_damgasi = COALESCE(excluded.sozluk_damgasi, sozluk_damgasi),
                 alfabe_kalintisi = COALESCE(
                     excluded.alfabe_kalintisi, alfabe_kalintisi),
+                sure_dokumu = COALESCE(excluded.sure_dokumu, sure_dokumu),
                 ceviri_kalitesi = CASE
                     WHEN excluded.ceviri_kalitesi IS NOT NULL THEN excluded.ceviri_kalitesi
                     WHEN excluded.translation IS translation AND excluded.source_text IS source_text
@@ -925,6 +929,8 @@ def save_chapter(url: str, data: dict) -> None:
                 # glossary_leaks ile AYNI kural (None vs boş dict ayrımı).
                 json.dumps(data["alfabe_kalintisi"], ensure_ascii=False)
                 if data.get("alfabe_kalintisi") is not None else None,
+                json.dumps(data["sure_dokumu"], ensure_ascii=False)
+                if data.get("sure_dokumu") is not None else None,
             ),
         )
         conn.commit()

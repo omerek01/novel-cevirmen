@@ -178,3 +178,47 @@ def test_uc_paragraf_kapsamini_yazar():
 ])
 def test_uc_gecersiz_paragraf_isteginde_400(govde):
     assert _client().post("/api/settings/asamalar", json=govde).status_code == 400
+
+
+def _istek(conn, islem, url, asama, model, ms, sonuc="basari", kod=200, zaman=None):
+    conn.execute(
+        "INSERT INTO api_olay (zaman, islem, amac, asama, url, tur, model, sonuc, http_kodu,"
+        " sure_ms) VALUES (?, ?, 'prefetch', ?, ?, 'istek', ?, ?, ?, ?)",
+        (zaman or time.time(), islem, asama, url, model, sonuc, kod, ms),
+    )
+
+
+def test_sure_dokumu_asama_model_ve_basarisiz_denemeleri_ayirir(monkeypatch):
+    """Bölüm künyesi: aşama + model başına süre, boşa giden denemeler, kapalı aşamalar."""
+    monkeypatch.setenv("CEVIRI_CILALA", "0")
+    api_durum._connect().close()
+    basla = time.time()
+    conn = db.connect()
+    try:
+        argon = "vertex/gemini-4-argon"
+        _istek(conn, "i1", "u1", None, argon, 87_000, "gecici", 504)  # zaman aşımı
+        _istek(conn, "i1", "u1", None, argon, 70_000)
+        _istek(conn, "i1", "u1", "kalite_denetimi", argon, 30_000)
+        _istek(conn, "i1", "u1", "kalite_onarimi", "gemini-3.6-flash", 5_000)
+        _istek(conn, "i1", "u1", "kalinti_onarimi", argon, 3_000)
+        _istek(conn, "i1", "baska-url", None, argon, 99_000)  # başka bölüm: sayılmaz
+        _istek(conn, "i2", "u1", None, argon, 99_000)  # başka işlem: sayılmaz
+        conn.commit()
+    finally:
+        conn.close()
+    d = ca.sure_dokumu("i1", "u1", basla, basla + 200, indirme_sn=2, bekleme_sn=1)
+    asama = {a["etiket"]: a["sn"] for a in d["asamalar"]}
+    assert asama == {"Çeviri": 157.0, "Kalite denetimi": 35.0,
+                     "Düzeltme: İngilizce kalan paragraflar": 3.0}
+    assert d["toplam_sn"] == 200 and d["oteki_sn"] == 2.0  # 200 - 195 - 2 - 1
+    m = {x["model"]: x for x in d["modeller"]}
+    assert m[argon]["etiket"] == "4 Argon · ücretli"
+    assert m[argon]["istek"] == 4 and m[argon]["basarisiz"] == 1
+    assert m[argon]["basarisiz_sn"] == 87.0 and m[argon]["nedenler"] == {"zaman aşımı": 1}
+    assert d["modeller"][0]["model"] == argon  # en çok süre alan önce
+    assert "Türkçe cilalama" in d["kapali"]
+
+
+def test_sure_dokumu_islem_yoksa_bos_doner():
+    d = ca.sure_dokumu(None, "u1", 100.0, 130.0)
+    assert d["asamalar"] == [] and d["modeller"] == [] and d["toplam_sn"] == 30.0
