@@ -48,6 +48,7 @@ KALIP = "kalip_tutarsizligi"
 IHLAL_SUPHESI = "ihlal_suphesi"
 DOGRULAMA = "dogrulama"
 COGUL_BICIM = "cogul_bicim"
+PARCA_CELISKISI = "parca_celiskisi"
 
 # ---------- normalizasyon ----------
 _BASTAKI_BELIRTEC = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
@@ -118,6 +119,9 @@ _EDAT = r"of|by|in|from|with|for|to|on|at|under|beyond"
 # eki gelir (`Mahlukları`, `Bakireleri`, `Tohumları`).
 _TR_COGUL = re.compile(r"l[ae]r(?:[ıiuü]|[ıiuü]n|n[ıiuü]n|[ıi]n[ıi])?$", re.IGNORECASE)
 _SOZCUK = re.compile(r"[^\s\-–—/]+")
+_SAYI_ILE_BASLAR = re.compile(
+    r"^(?:the\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve"
+    r"|thirteen|hundred|thousand)\b", re.IGNORECASE)
 
 
 def _bas_sozcuk(kaynak: str) -> str:
@@ -196,6 +200,8 @@ def sayi_uyumsuzlugu(kaynak: str, hedef: str) -> str | None:
     if not hedef or ingilizce_korunan(kaynak, hedef):
         return None
     k_cogul, h_cogul = kaynak_cogul_mu(kaynak), hedef_cogul_mu(hedef)
+    if k_cogul and not h_cogul and _SAYI_ILE_BASLAR.match(kaynak.strip()):
+        return None  # Türkçede sayıdan sonra ad tekildir: `Five Plagues -> Beş Bela`
     if not k_cogul and h_cogul:
         return ("Tekil kaynak çoğul karşılığa bağlanmış. Sıradan bir sözcükse "
                 "(seven, lost) metindeki her geçişi grup adına çevirir; grup adıysa "
@@ -394,6 +400,29 @@ def kapi_denetle(
                     "aciklama": f"'{hedef}' karşılığı '{yasak_sahibi}' kaydında YASAK olarak işaretli.",
                     "ilgili": [yasak_sahibi],
                 })
+
+    if korunan:
+        # `Aletheia of the Nine -> Aletheia of the Nine` (2026-11-04): `Nine -> Dokuzlar`
+        # kayıtlıyken bileşik İngilizce kalınca model parçayı da İngilizce bıraktı.
+        # Ölçüm (1209 kayıt): yalnız 5 isabet, 4'ü elle onaylı (kapı elle kayda uygulanmaz).
+        parcalar = _sozcukler(kaynak)
+        celisen = []
+        for r in mevcut:
+            p = _sozcukler(r["source"])
+            if (p and len(p) < len(parcalar) and r.get("target")
+                    and not ingilizce_korunan(r["source"], r["target"])
+                    and any(parcalar[i:i + len(p)] == p for i in range(len(parcalar) - len(p) + 1))):
+                celisen.append(r["source"])
+        if celisen:
+            nedenler.append({
+                "tur": PARCA_CELISKISI,
+                "aciklama": ("İngilizce bırakılan adın parçası sözlükte Türkçe kayıtlı: "
+                             + ", ".join(f"{k} → {next(r['target'] for r in mevcut if r['source'] == k)}"
+                                         for k in celisen)
+                             + ". Bileşik ayrı kayıt olmadan parçalar ekleriyle çevrilir; "
+                             "gerçekten İngilizce kalacak bir özel adsa onayla."),
+                "ilgili": celisen,
+            })
 
     yakin = [k for k, i in iliskiler.items() if i == TEK_HARF]
     if yakin:

@@ -44,6 +44,7 @@ const NEDEN_ETIKETI = {
   sozcuk_karismasi: "SINIF SÖZCÜĞÜ",
   ad_tutarliligi: "AD POLİTİKASI",
   cogul_bicim: "ÇOĞUL BİÇİM",
+  parca_celiskisi: "PARÇA ÇELİŞKİSİ",
   // Karakter defteri (sunucu `karakter_defteri.sozluk_nedenleri`).
   grafik_takma_ad: "TAKMA AD?",
   grafik_genel_sozcuk: "SIRADAN SÖZCÜK",

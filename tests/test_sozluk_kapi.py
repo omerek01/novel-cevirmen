@@ -63,8 +63,30 @@ def test_sayi_bas_sozcuge_ve_istisnalara_bakar():
         ("Tenacious", "Azimli"),  # -ous
         ("Kuluçka", "Kuluçka"),
         ("Brood beasts", "Kuluçka Mahlukları"),  # iyelikli çoğul
+        ("Five Plagues", "Beş Bela"),  # Türkçede sayıdan sonra ad tekil
+        ("Six Heralds of the Estuary", "Nehir Ağzı'nın Altı Müjdecisi"),
     ]:
         assert sozluk_kapi.SAYI_UYUMSUZLUGU not in _neden_turleri(kaynak, hedef), kaynak
+    assert sozluk_kapi.SAYI_UYUMSUZLUGU in _neden_turleri("Nine", "Dokuzlar")  # istisna yalnız çoğul kaynakta
+
+
+# ---------- parça çelişkisi ----------
+def test_ingilizce_bilesik_turkce_parcayla_celisirse_tutulur():
+    mevcut = [_m("Nine", "Dokuzlar"), _m("Aletheia", "Aletheia")]
+    assert sozluk_kapi.PARCA_CELISKISI in _neden_turleri("Aletheia of the Nine", "Aletheia of the Nine", mevcut)
+    assert sozluk_kapi.PARCA_CELISKISI in _neden_turleri(
+        "Golden Serpent", "Golden Serpent", [_m("Serpent", "Yılan")])
+
+
+def test_parca_celiskisi_mesru_kayitlara_dokunmaz():
+    # Türkçe bileşik, İngilizce parça, ardışık olmayan parça ve tek sözcük denetlenmez.
+    assert sozluk_kapi.PARCA_CELISKISI not in _neden_turleri(
+        "Aletheia of the Nine", "Dokuzların Aletheia'sı", [_m("Nine", "Dokuzlar")])
+    assert sozluk_kapi.PARCA_CELISKISI not in _neden_turleri(
+        "Aletheia of the Nine", "Aletheia of the Nine", [_m("Aletheia", "Aletheia")])
+    assert sozluk_kapi.PARCA_CELISKISI not in _neden_turleri(
+        "Golden Winged Serpent", "Golden Winged Serpent", [_m("Golden Serpent", "Altın Yılan")])
+    assert sozluk_kapi.PARCA_CELISKISI not in _neden_turleri("Serpent", "Serpent", [_m("Serpent", "Yılan")])
 
 
 # ---------- varyant ----------
