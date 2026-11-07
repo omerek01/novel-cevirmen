@@ -197,3 +197,21 @@ def test_kucuk_harfli_kullanimda_yabanci_ad_ozel_ad_gibi_yazilir():
     cikti, _ = sy.yeniden_yaz(tr, en, translate._term_regex("Abomination"), "Ucube",
                               "Abomination", kaynak="Abomination")
     assert cikti[0].startswith("Bir Abomination'")
+
+
+def test_iyeligi_kesin_olmayan_yeni_kok_ekli_geciste_belirsiz_kalir():
+    """`Ordu`, `Kedi`, `Tilki` ı/i/u/ü ile biter ama iyelik taşımaz: sezgi onları iyelikli
+    sayıp "Kızıl Ordu'na" (doğrusu Ordu'ya) üretiyordu. İki okuma farklı biçim veriyorsa
+    geçiş belirsiz kalır; eksiz geçişte okumalar aynıdır, değiştirilir."""
+    tr = ["Kızıl Lejyon'a doğru yürüdüler.", "Kızıl Lejyon geldi."]
+    en = ["They marched toward the Crimson Legion.", "The Crimson Legion came."]
+    cikti, oz = _yaz(tr, en, "Crimson Legion", "Kızıl Lejyon", "Kızıl Ordu")
+    assert cikti == ["Kızıl Lejyon'a doğru yürüdüler.", "Kızıl Ordu geldi."]
+    assert oz.degisen == 1 and oz.belirsiz == ["cok_anlamli"]
+
+
+def test_iyeligi_yazimdan_kesin_yeni_kok_cekimlenir():
+    tr = ["Kovan Dağı'na tırmandılar."]
+    en = ["They climbed Hollow Mountain."]
+    cikti, oz = _yaz(tr, en, "Hollow Mountain", "Kovan Dağı", "Oyuk Tepesi")
+    assert cikti == ["Oyuk Tepesi'ne tırmandılar."] and oz.degisen == 1

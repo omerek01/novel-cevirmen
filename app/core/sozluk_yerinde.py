@@ -20,7 +20,7 @@ from __future__ import annotations
 import hashlib
 import re
 from collections import Counter
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from typing import Iterable
 
 from . import turkce_ek
@@ -88,6 +88,11 @@ def _yabanci_mi(sozcuk: str, kaynak: str | None) -> bool:
     if kaynak and s in tr_kucuk(kaynak).split():
         return True
     return bool(_INGILIZCE_IZ.search(s))
+
+
+# 3. kişi iyeliğin yazımdan kesin olduğu sonlar: ünlüden sonra -sI (Tepesi, Ustası) ya da
+# yumuşamış ğ + I (Dağı, Yaratığı). d/c/b dışarıda: kökün kendisinde de çok (ordu, avcı).
+_IYELIK_KESIN = re.compile(r"(?:[aeıioöuü]s|ğ)[ıiuü]$")
 
 
 def kok(karsilik: str, kesmeli: bool = False, unlu: str | None = None) -> turkce_ek.Kok:
@@ -221,8 +226,14 @@ def _yeni_yuzey(g: Gecis, eski: str, yeni: str, kaynak: str | None = None,
                and not _yabanci_mi(yeni.split()[-1].strip(turkce_ek.KESME), kaynak))
     if siradan:
         yeni_kok = kok(yeni, kesmeli=False, unlu=yeni_kok.unlu)
-    yeni_son = turkce_ek.kur_tek(g.kok or kok(eski, g.kesmeli), son_sozcuk, yeni_kok)
+    eski_kok = g.kok or kok(eski, g.kesmeli)
+    yeni_son = turkce_ek.kur_tek(eski_kok, son_sozcuk, yeni_kok)
     if yeni_son is None:
+        return None
+    # İyelik yalnız ünlüyle bitmekten anlaşılmaz: "Kızıl Ordu" ordu+∅, "Oyuk Dağı" dağ+ı.
+    # Yazımdan kesin değilse (-sI ya da yumuşamış ğI) iki okuma kurulur; farklıysa bilinmez.
+    if (yeni_kok.iyelikli and not _IYELIK_KESIN.search(yeni_kok.sozcuk)
+            and turkce_ek.kur_tek(eski_kok, son_sozcuk, replace(yeni_kok, iyelikli=False)) != yeni_son):
         return None
     bicim = "k" if siradan else _karsilik_bicimi(eski_bicim, yeni)
     return _yuzeye(yeni, yeni_son, bicim, _kesme(g.yuzey) if yeni_kok.kesmeli else "")
