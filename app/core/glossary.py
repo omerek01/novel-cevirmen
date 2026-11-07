@@ -1667,6 +1667,40 @@ class YazimCakismasi(ValueError):
     """Alternatif yazım başka bir kaydın ya da başka bir yazımın anahtarıyla aynı."""
 
 
+def kaynagi_degistir(book_slug: str, source: str, yeni: str,
+                     taban_surum: int | None = None) -> dict | None:
+    """Kaydın KAYNAK adını değiştir; kayıt aynı kalır (kimlik, köken cümlesi, ilk bölüm,
+    karşılık, yazımlar, ek anlamlar, geçmiş). Kayıt yoksa None.
+
+    Kullanıcı vakası (2026-11-07): inceleme "Chaos Beings" için tekil öneriyordu; panelde
+    "Chaos Being" yazıp kaydedince yeni, kökensiz kayıt açılıyor ve yakalandığı paragraf
+    kayboluyordu. Bağlı tablolar kimlikle tutulduğu için tek UPDATE yeter."""
+    yeni = normalize_source(yeni)
+    if not yeni:
+        raise YazimCakismasi("Boş kaynak.")
+    anahtar = fold_term(yeni)
+
+    def is_(conn, satir):
+        baska = _bul(conn, book_slug, yeni)
+        if baska and baska["kimlik"] != satir["kimlik"]:
+            raise YazimCakismasi(f"'{baska['source']}' zaten ayrı bir kayıt; birleştirmek için yazım ekle.")
+        yazim_sahibi = conn.execute(
+            "SELECT kimlik FROM sozluk_yazim WHERE book_slug = ? AND anahtar = ?", (book_slug, anahtar)
+        ).fetchone()
+        if yazim_sahibi and yazim_sahibi[0] != satir["kimlik"]:
+            raise YazimCakismasi("Bu ad başka bir kaydın alternatif yazımı.")
+        # Kaydın kendi yazımı ana ad olunca yazım listesinden düşer (ikisi aynı olmaz).
+        conn.execute("DELETE FROM sozluk_yazim WHERE book_slug = ? AND kimlik = ? AND anahtar = ?",
+                     (book_slug, satir["kimlik"], anahtar))
+        conn.execute("UPDATE glossary SET source = ? WHERE book_slug = ? AND source = ?",
+                     (yeni, book_slug, satir["source"]))
+        _kayit_degisti(conn, book_slug, {**satir, "source": yeni}, "kaynak",
+                       {"eski_kaynak": satir["source"]})
+        return _bul(conn, book_slug, yeni)
+
+    return _islem(book_slug, source, taban_surum, is_)
+
+
 def yazim_ekle(book_slug: str, source: str, yazim: str, taban_surum: int | None = None) -> list[str] | None:
     """Kayda onaylı alternatif yazım ekle; kaydın yazımlarını döndürür (kayıt yoksa None)."""
     yazim = normalize_source(yazim)

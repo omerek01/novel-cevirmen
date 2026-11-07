@@ -275,6 +275,12 @@ class GlossaryYazim(BaseModel):
     taban_surum: int | None = None
 
 
+class GlossaryKaynak(BaseModel):
+    source: str
+    yeni: str
+    taban_surum: int | None = None
+
+
 class GlossaryAnlam(BaseModel):
     target: str
     kosul: str
@@ -905,6 +911,21 @@ def _kayit(slug: str, source: str) -> dict | None:
         (r for r in glossary.get_glossary_rows(slug) if glossary.fold_term(r["source"]) == anahtar),
         None,
     )
+
+
+@app.post("/api/book/{slug}/glossary/kaynak")
+def rename_glossary_source(slug: str, req: GlossaryKaynak) -> dict:
+    """Kaydın kaynak adını değiştir (Chaos Beings -> Chaos Being); kayıt aynı kalır:
+    köken cümlesi, ilk bölüm, karşılık, yazımlar ve geçmiş korunur."""
+    try:
+        kayit = glossary.kaynagi_degistir(slug, req.source, req.yeni, taban_surum=req.taban_surum)
+    except glossary.SurumCakismasi as exc:
+        raise _surum_cakismasi(exc) from exc
+    except glossary.YazimCakismasi as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    if kayit is None:
+        raise _kayit_bulunamadi()
+    return {"kayit": _kayit(slug, kayit["source"])}
 
 
 @app.post("/api/book/{slug}/glossary/yazim")
