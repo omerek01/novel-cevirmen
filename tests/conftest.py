@@ -3,10 +3,17 @@
 `NOVEL_DB_PATH` env'i geçici dosyaya yönlendirilir; db.db_path() bunu her
 çağrıda okuduğu için modül reload gerekmez.
 """
+import os
 import sys
+import tempfile
 from pathlib import Path
 
 import pytest
+
+# TOPLAMA ANI: test modülleri fikstürlerden ÖNCE içe aktarılır ve `server` importu
+# `library.backfill_from_cache()` koşturur. Yol burada ayarlanmazsa o yazım GERÇEK
+# `cache/chapters.db`'ye giderdi (sunucuda test koşulunca canlı veritabanı).
+os.environ["NOVEL_DB_PATH"] = str(Path(tempfile.mkdtemp(prefix="nc-test-")) / "toplama.db")
 
 APP_DIR = Path(__file__).resolve().parent.parent / "app"
 if str(APP_DIR) not in sys.path:
