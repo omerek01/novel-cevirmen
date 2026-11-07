@@ -6,6 +6,7 @@ aynı mantığı kullanır (DRY). FetchError/TranslateError yukarı sızar; ça�
 """
 from __future__ import annotations
 
+import logging
 import os
 import sqlite3
 import threading
@@ -207,6 +208,20 @@ def _anlam_tanimlari(book_slug: str) -> list[dict] | None:
         return varlik_grafigi.ceviri_anlamlari(book_slug) or None
     except sqlite3.Error:
         return None
+
+
+def _yan_is(varsayilan, fn, *args, **kwargs):
+    """Çeviri kaydından ÖNCE koşan künye işi (sözlük, uyum, süre) best-effort'tur.
+
+    Bunlardan biri patlarsa (kilitli DB, beklenmedik veri) parası ödenmiş çeviri
+    kaydedilmeden düşüyordu ve her yeniden deneme çeviriyi baştan ödüyordu.
+    Hata günlüğe yazılır, künye alanı boş kalır, çeviri kaydedilir."""
+    try:
+        return fn(*args, **kwargs)
+    except Exception:
+        logging.getLogger(__name__).exception(
+            "%s başarısız; çeviri yine kaydediliyor", getattr(fn, "__name__", fn))
+        return varsayilan
 
 
 def _sozluge_isle(
@@ -556,9 +571,11 @@ def _do_fetch_translate_save(
     # Sözlüğe işleme uçuşun İÇİNDE: eklenen terimler künyenin parçası ve bölümle
     # birlikte cache'e yazılıyor, böylece bölüm ikinci açılışta (önbellek isabeti)
     # künyesini kaybetmiyor.
-    eklenen = _sozluge_isle(book_slug, result, chapter.get("chapter_no"), chapter.get("text"))
-    ihlaller = _uyum_denetimi(result)
-    sure = ceviri_asamalari.sure_dokumu(
+    eklenen = _yan_is({}, _sozluge_isle, book_slug, result, chapter.get("chapter_no"),
+                      chapter.get("text"))
+    ihlaller = _yan_is({}, _uyum_denetimi, result)
+    sure = _yan_is(
+        None, ceviri_asamalari.sure_dokumu,
         api_durum.mevcut_baglam().get("islem"), url, baslangic, time.time(),
         indirme_sn, bekleme_sn,
     )
@@ -761,10 +778,12 @@ def fetch_into_book(
             anlam_denetimi=_anlam_tanimlari(target_slug), bolum_no=no,
             **_roman_baglami(target_slug, url, prev_url, no),
         )
-        sure = ceviri_asamalari.sure_dokumu(
+        sure = _yan_is(
+            None, ceviri_asamalari.sure_dokumu,
             api_durum.mevcut_baglam().get("islem"), url, baslangic, time.time(), indirme_sn)
     book_title = (book and book.get("title")) or chapter["book_title"]
-    eklenen = _sozluge_isle(target_slug, result, no, chapter["text"])  # künyeye girecek, kayıttan ÖNCE
+    # Künyeye girecek, kayıttan ÖNCE; hata çeviriyi düşürmez.
+    eklenen = _yan_is({}, _sozluge_isle, target_slug, result, no, chapter["text"])
     payload = {
         "title": chapter["title"],
         "translation": result["translation"],
@@ -788,7 +807,7 @@ def fetch_into_book(
         # Uyum bayrağı da `_fetch_translate_save` ile AYNI: künyeyi üreten dört
         # noktadan biri eksik kalırsa o yoldan gelen bölüm sessizce denetimsiz olur
         # — `model` alanında tam bu hata yaşandı.
-        "glossary_leaks": _uyum_denetimi(result),
+        "glossary_leaks": _yan_is({}, _uyum_denetimi, result),
         # Kalıntı bayrağı da `_fetch_translate_save` ile AYNI: bayrağı üreten
         # noktalardan biri eksik kalırsa o yoldan gelen bölüm sessizce
         # denetimsiz olur — `model` alanında tam bu hata yaşandı.

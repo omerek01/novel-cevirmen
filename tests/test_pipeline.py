@@ -258,3 +258,25 @@ def test_uc_refetch_bayragini_gecirir(monkeypatch):
     istemci.get("/api/chapter", params={"url": "u1", "refresh": 1, "refetch": 1})
     assert gorulen["refetch"] is True        # zorlanınca siteye iner
 
+
+
+def test_yan_is_hatasi_odenmis_ceviriyi_kaybettirmez(monkeypatch):
+    """Sözlük işleme / süre dökümü kayıttan ÖNCE koşuyor; biri patlarsa (kilitli DB)
+    çeviri yine kaydedilmeli — yoksa her yeniden deneme çeviriyi baştan öder."""
+    import sqlite3
+
+    from core import ceviri_asamalari
+
+    def kilitli(*a, **k):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(pipeline, "fetch_chapter", lambda url, **kw: _chapter())
+    monkeypatch.setattr(pipeline, "translate_chapter", lambda *a, **k: _translation())
+    monkeypatch.setattr(pipeline, "_sozluge_isle", kilitli)
+    monkeypatch.setattr(pipeline, "_uyum_denetimi", kilitli)
+    monkeypatch.setattr(ceviri_asamalari, "sure_dokumu", kilitli)
+
+    result = pipeline.get_or_translate("u1", "anahtar")
+
+    assert result["translation"] == "Yeni çeviri"
+    assert cache.get_chapter("u1")["translation"] == "Yeni çeviri"
