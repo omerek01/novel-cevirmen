@@ -3249,6 +3249,10 @@ ANLAM_ONARIM_INSTRUCTION = (
 # Onarım paragrafın geri kalanına dokunmamalı: ölçüt benzerlik. Model talimata
 # rağmen paragrafı yeniden yazarsa onarım REDDEDİLİR, eski çeviri korunur.
 ANLAM_ONARIM_MIN_BENZERLIK = 0.85
+# Her işaretli paragraf AYRI bir model çağrısı. Ücretli model seçiliyken tavansız
+# döngü, adın sık geçtiği bir bölümde onlarca ücretli çağrı demekti. Tavanı aşan
+# paragraflar onarılmaz; `kalan` sayacında görünür.
+ANLAM_ONARIM_MAX = 5
 
 
 def _anlam_onarim_istemi(tanim: dict, kosul: str | None, en_paras: list[str], tr: str, i: int) -> str:
@@ -3305,6 +3309,8 @@ def _anlam_denetle_ve_onar(
         for x in liste:
             i = x["paragraf"]
             metrik["saint_flags"] += 1
+            if metrik["saint_repairs_attempted"] >= ANLAM_ONARIM_MAX:
+                continue  # tavan: kalan ihlaller onarılmadan `kalan`a sayılır
             metrik["saint_repairs_attempted"] += 1
             istem = _anlam_onarim_istemi(tanim, (kosullar or {}).get(kayit), en_paras, tr_paras[i], i)
             try:

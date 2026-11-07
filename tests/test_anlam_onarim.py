@@ -66,3 +66,21 @@ def test_temiz_bolumde_istek_atilmaz(monkeypatch):
     tr = ["Sunny salona girdi.", "Saint'i çağırdı ve bekledi.", "Hiçbir şey kıpırdamadı."]
     yeni, m, istemler = _calistir(monkeypatch, tr, {"degisiklik": False})
     assert yeni == tr and istemler == [] and m["saint_flags"] == 0 and m["saint_checks"] == 1
+
+
+def test_onarim_cagrisi_bolum_basina_tavanli(monkeypatch):
+    """Her işaretli paragraf ayrı bir model çağrısı: ücretli model seçiliyken tavansız
+    40 paragraf 40 ücretli çağrı demekti. Tavanı aşanlar onarılmaz, `kalan`da sayılır."""
+    en = ["He summoned Saint and waited."] * 8
+    tr = ["Aziz'i çağırdı ve bekledi."] * 8
+    istemler = []
+
+    def sahte(_f, models, user, system=None, max_tokens=None):
+        istemler.append(user)
+        return _Yanit({"degisiklik": True, "ceviri": "Saint'i çağırdı ve bekledi."}), models[0]
+
+    monkeypatch.setattr(translate, "_generate_with_fallback", sahte)
+    m = translate._anlam_denetle_ve_onar(lambda: None, ("m",), tr, en, TANIM, 400, {}, {})
+    assert m["saint_flags"] == 8
+    assert len(istemler) == translate.ANLAM_ONARIM_MAX == m["saint_repairs_attempted"]
+    assert m["kalan"] == 8 - translate.ANLAM_ONARIM_MAX
