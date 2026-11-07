@@ -23,6 +23,10 @@ import { ICONS, SVG, el, escapeHtml, localDay } from "./temel.js";
 export let stream = []; // [{url,no,title,paras,source,nextUrl,prevUrl,bookSlug,bookTitle,el,loaded,empty}]
 export let activeUrl = null; // reader-bar alt çizgisini geçen son bölümün url'i
 export let streamBusy = false; // append/prepend uçuşta — çift tetiği engelle
+// Akış NESLİ: resetStream her çağrıda artırır. Bölüm isteği 30-60 sn sürebilir; bu sürede
+// okur başka bölüm açarsa (ya da Sonraki'ye art arda basarsa) geç gelen ESKİ yanıt yeni
+// akışa yazılıp konumu yanlış bölüme kaydediyordu. Bekleme sonrası nesil değiştiyse atılır.
+let akisNesli = 0;
 export let bottomObserver = null; // akış sonu gözlemcisi (sonrakini otomatik ekle)
 export const loggedReads = new Set(); // bu oturumda reading-log'a yazılmış url'ler
 export const prefetched = new Set(); // ısıtma (prefetch) tetiklenmiş next url'leri
@@ -417,10 +421,12 @@ export async function loadChapter(url, opts = {}) {
   closeFind();
   diyalogKapat("settingsPanel");
   resetStream();
+  const nesil = akisNesli;
   setStatus(refresh ? "Yeniden çevriliyor…" : "Yükleniyor…");
 
   try {
     const data = await fetchChapterData(url, refresh);
+    if (nesil !== akisNesli) return; // bu arada başka bölüm açıldı
     setStatus(null);
     failedAttempts = 0;
     isNavigating = false;
@@ -445,6 +451,7 @@ export async function loadChapter(url, opts = {}) {
     // SW önbelleğine girer ve telefon çevrimdışıyken de indirilmiş bölümlere devam eder.
     ensureChapterList(entry.bookSlug);
   } catch (err) {
+    if (nesil !== akisNesli) return; // eski isteğin hatası yeni bölümü bozmasın
     isNavigating = false;
     isRestoring = false;
     renderError(err, url, refresh);
@@ -480,6 +487,7 @@ export function fetchChapterData(url, refresh, track = true, refetch = false) {
 
 export function resetStream() {
   altOlay("kapat"); // yeniden açılan bölüm önceki çubuğun hâlini devralmaz
+  akisNesli += 1; // uçuştaki append/prepend/loadChapter yanıtları artık geçersiz
   stream = [];
   activeUrl = null;
   streamBusy = false;
@@ -1320,11 +1328,13 @@ export async function maybeAppendNext() {
   const last = stream[stream.length - 1];
   if (last.translating) return; // sayfa çevriliyorsa sıradakini bekle
   streamBusy = true;
+  const nesil = akisNesli;
   let ok = false;
   const s = el("streamEnd");
   try {
     // Zincir + bölüm listesi (liste ilk kullanımda çekilir; çevrimdışıysa SW verir).
     await ensureChapterList(last.bookSlug);
+    if (nesil !== akisNesli) return; // akış sıfırlandı: eski kitabın devamı yazılmaz
     let targetUrl = pickNextTarget(last);
     // Sıradaki bölüm yok ama manga'nın site'de devamı olabilir → otomatik devam.
     const mangaContinue =
@@ -1342,6 +1352,7 @@ export async function maybeAppendNext() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slug: last.bookSlug }),
       }).then((r) => r.json());
+      if (nesil !== akisNesli) return;
       if (!cont.available || !cont.first_url) {
         mangaNextExhausted = true; // son bölüm / devam yok → bir daha deneme
         s.replaceChildren();
@@ -1354,6 +1365,7 @@ export async function maybeAppendNext() {
     }
     // track=false: önden eklenen bölüm okunmuş sayılmaz → konumu ilerletmez.
     const data = await fetchChapterData(targetUrl, false, false);
+    if (nesil !== akisNesli) return;
     const entry = buildChapterEntry(targetUrl, data);
     stream.push(entry);
     el("readerBody").insertBefore(entry.el, s);
@@ -1362,6 +1374,7 @@ export async function maybeAppendNext() {
     prefetchNext(entry);
     ok = true;
   } catch (err) {
+    if (nesil !== akisNesli) return;
     // D-B8: dikiş hatası → tam-ekran kart DEĞİL, ince satır-içi bant + TEKRAR DENE.
     s.replaceChildren();
     const band = document.createElement("div");
@@ -1378,6 +1391,8 @@ export async function maybeAppendNext() {
     band.append(msg, retry);
     s.appendChild(band);
   } finally {
+    // Akış sıfırlandıysa yeni akışın kendi uçuşu olabilir: onun meşgul bayrağına dokunma.
+    if (nesil !== akisNesli) return;
     streamBusy = false;
     // Kısa bölümlerde (PDF sayfası) sentinel margin İÇİNDE kalabilir; IntersectionObserver
     // kenar-tetiklemeli olduğundan yeniden ateşlenmez ve akış "hazırlanıyor"da takılır.
@@ -1489,12 +1504,14 @@ export async function prependPrev(btn) {
   const first = stream[0];
   if (!first || !first.prevUrl) return;
   streamBusy = true;
+  const nesil = akisNesli;
   btn.textContent = "Yükleniyor…";
   btn.disabled = true;
   const beforeH = document.documentElement.scrollHeight;
   try {
     // track=false: geri eklenen bölüm de konumu ilerletmez (aktif = okunan).
     const data = await fetchChapterData(first.prevUrl, false, false);
+    if (nesil !== akisNesli) return; // bu arada başka bölüm açıldı
     const entry = buildChapterEntry(first.prevUrl, data);
     stream.unshift(entry);
     // Üst kart ile eski ilk bölüm arasına ekle → yeni ilk bölüm olur.
@@ -1506,11 +1523,12 @@ export async function prependPrev(btn) {
     prefetchNext(entry);
     updateActiveChapter();
   } catch (err) {
+    if (nesil !== akisNesli) return;
     btn.disabled = false;
     btn.textContent = "↑ ÖNCEKİ BÖLÜM";
     alert("Önceki bölüm yüklenemedi.");
   } finally {
-    streamBusy = false;
+    if (nesil === akisNesli) streamBusy = false;
   }
 }
 
