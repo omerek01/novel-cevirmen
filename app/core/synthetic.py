@@ -147,6 +147,9 @@ def stage_url_chapter(
             "SELECT chapter_no FROM chapters WHERE url = ?", (url,)
         ).fetchone()
         if existing is not None:
+            # Var olan çeviri NULL'lanmadan önce arşive: sonraki save_chapter eski metni
+            # NULL göreceği için arşivleyemez, çeviri geri dönüşsüz kaybolurdu.
+            cache._arsivle(conn, url, "")
             conn.execute(
                 "UPDATE chapters SET book_slug = ?, book_title = ?, title = ?, "
                 "raw_source = ?, translation = NULL WHERE url = ?",

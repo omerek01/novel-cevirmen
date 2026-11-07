@@ -229,6 +229,11 @@ def test_paste_url_refill_updates_raw_and_renulls_translation():
     synthetic.stage_url_chapter("solo", "Solo", "B2", "yeni metin", "http://s/2")
     staged = cache.get_staged("http://s/2")
     assert staged["raw_source"] == "yeni metin" and staged["translation"] is None
+    # Eski çeviri NULL'lanmadan ÖNCE arşive girer: kaybolmaz, geri yüklenebilir.
+    arsiv = cache.arsiv_listesi("http://s/2")
+    assert len(arsiv) == 1
+    assert cache.arsivden_geri_yukle("http://s/2", arsiv[0]["id"])
+    assert cache.get_chapter("http://s/2")["translation"] == "eski"
 
 
 def test_paste_url_endpoint_stages_and_validates(monkeypatch):
