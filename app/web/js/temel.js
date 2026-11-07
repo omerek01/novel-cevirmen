@@ -36,10 +36,11 @@ export function markSegment(group, value, attr) {
   }
 }
 
+// Tırnaklar da kaçırılır: değer `src="..."` gibi bir niteliğe de basılıyor (kapak adresi
+// bir sitenin og:image'ından gelir). textContent→innerHTML yolu tırnağı kaçırmıyordu.
+const KACIS = { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" };
 export function escapeHtml(s) {
-  const d = document.createElement("div");
-  d.textContent = s;
-  return d.innerHTML;
+  return String(s ?? "").replace(/[&<>"']/g, (c) => KACIS[c]);
 }
 
 export function isSyntheticSlug(slug) {
