@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
+import re
 import sqlite3
 import threading
 import time
@@ -945,6 +946,7 @@ def yerinde_guncelle(book_slug: str, source: str, urls: list[str] | None = None,
         return sonuc
     secim = set(urls) if urls is not None else None
     desen = _translate_mod._term_regex(source)
+    koru = _bilesik_koruma(book_slug, source, eskiler, guncel)
     bolumler = cache.kaynak_bolumleri(book_slug)
     # Söyleniş uyumu kitabın kendi çevirilerinden (Knight'ın / Reaper'a) öğrenilir.
     uyum = sozluk_yerinde.Uyum(b.get("translation") or "" for b in bolumler)
@@ -957,7 +959,7 @@ def yerinde_guncelle(book_slug: str, source: str, urls: list[str] | None = None,
         for eski in eskiler:
             onceki = yeni_p
             yeni_p, oz = sozluk_yerinde.yeniden_yaz(onceki, en_p, desen, eski, guncel,
-                                                    kaynak=source, uyum=uyum)
+                                                    kaynak=source, uyum=uyum, koru=koru)
             degisen += oz.degisen
             # İngilizce paragrafta terim yoksa Türkçe sözcük bu terimin karşılığı değildir
             # ("Şeytan" = devil, daemon değil): doğru bırakılmıştır, belirsiz sayılmaz.
@@ -1007,6 +1009,29 @@ def yerinde_otomatik(book_slug: str, source: str) -> threading.Thread:
     is_ = threading.Thread(target=calis, name="sozluk-yerinde", daemon=True)
     is_.start()
     return is_
+
+
+def _bilesik_koruma(book_slug: str, source: str, eskiler: list[str], guncel: str) -> list:
+    """Eski karşılığı İÇEREN başka kayıtların karşılık desenleri (şimdiki ve eski).
+
+    Canlı vaka (2026-11-07): `Dread` Dehşet -> Korku olunca İngilizcesinde "Dread Wolves"
+    geçen paragrafta `Dehşet Kurtlarına` da değişiyordu; oysa `Dread Wolf -> Dehşet Kurdu`
+    ayrı kayıt. Bu desenlerle çakışan geçiş o kaydındır, dokunulmaz."""
+    from . import glossary as _sozluk
+    from .turkce_eslesme import karsilik_deseni, tr_kucuk
+
+    parcalar = [re.compile(rf"(?<!\w){re.escape(tr_kucuk(e))}(?!\w)") for e in eskiler]
+    haric = {tr_kucuk(e) for e in eskiler} | {tr_kucuk(guncel)}
+    anahtar = _sozluk.fold_term(source)
+    hedefler: set[str] = set()
+    for s, t in _sozluk.get_glossary(book_slug).items():
+        if _sozluk.fold_term(s) == anahtar:
+            continue
+        adaylar = {t, *_karsilik_gecmisi(book_slug, s)[1]} if any(
+            p.search(tr_kucuk(t or "")) for p in parcalar) else set()
+        hedefler |= {a for a in adaylar
+                     if a and tr_kucuk(a) not in haric and any(p.search(tr_kucuk(a)) for p in parcalar)}
+    return [karsilik_deseni(h) for h in sorted(hedefler)]
 
 
 def _karsilik_gecmisi(book_slug: str, source: str) -> tuple[str | None, list[str]]:

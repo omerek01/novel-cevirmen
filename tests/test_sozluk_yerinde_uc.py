@@ -209,3 +209,19 @@ def test_karsilik_elle_degisince_eski_bolumler_kendiliginden_guncellenir(monkeyp
                     json={"source": "Silver Tower", "target": "Ak Kule", "tur": "yer"})
     assert len(baslatilan) == 1
     assert cache.arsiv_listesi(url)  # eski metin geri alınabilir
+
+
+def test_baska_kaydin_bilesik_adina_dokunulmaz():
+    """Canlı vaka (2026-11-07): `Dread` karşılığı Dehşet → Korku olunca, İngilizcesinde
+    "Dread Wolves" geçen paragrafta `Dehşet Kurtlarına` da `Korku Kurtlarına` oluyordu;
+    oysa `Dread Wolf -> Dehşet Kurdu` ayrı kayıt ve değişmedi. Bileşik kaydın karşılığı
+    (şimdiki ve eski) korunur, terimin kendi geçişi yine güncellenir."""
+    en = ["The Dread Wolves howled, and dread filled him."]
+    tr = ["Dehşet Kurtları uludu ve onu dehşet kapladı."]
+    url = _bolum(1, tr=tr, en=en)
+    glossary.set_term(KITAP, "Dread Wolf", "Dehşet Kurdu")
+    glossary.set_term(KITAP, "Dread", "Dehşet")
+    glossary.set_term(KITAP, "Dread", "Korku")
+    o = pipeline.yerinde_guncelle(KITAP, "Dread", None, uygula=True)
+    assert _ceviri(url) == "Dehşet Kurtları uludu ve onu korku kapladı."
+    assert o["degisen"] == 1

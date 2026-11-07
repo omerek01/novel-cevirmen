@@ -289,16 +289,22 @@ class Sonuc:
 
 def yeniden_yaz(tr_paragraflar: list[str], en_paragraflar: list[str] | None, kaynak_desen,
                 eski: str, yeni: str, *, kaynak: str | None = None,
-                uyum: Uyum | None = None) -> tuple[list[str], Sonuc]:
+                uyum: Uyum | None = None, koru: Iterable = ()) -> tuple[list[str], Sonuc]:
     """Hizalı paragraflarda eski karşılığı yenisiyle değiştir. ``en_paragraflar`` None ise
-    (hizasız bölüm) hiçbir şey değişmez, bütün geçişler belirsiz sayılır."""
+    (hizasız bölüm) hiçbir şey değişmez, bütün geçişler belirsiz sayılır.
+
+    ``koru``: başka kayıtların Türkçe karşılık desenleri (Dread Wolf -> Dehşet Kurdu).
+    Onlarla çakışan geçiş bu terimin değildir: atlanır, belirsiz de sayılmaz."""
+    koru = list(koru)
     ozet = Sonuc("")
     cikti = list(tr_paragraflar)
     hizali = en_paragraflar is not None and len(en_paragraflar) == len(tr_paragraflar)
     # Biri çoğul biri tekilse ("Kayıplar" -> "Kayıp") çoğul anlam kalmalı mı bilinmez.
     cogul_uyumsuz = _cogul_mu(eski) != _cogul_mu(yeni)
     for i, p in enumerate(tr_paragraflar):
-        gs = gecisler(p, eski, uyum)
+        korunan = [(m.start(), m.end()) for d in koru for m in d.finditer(p)]
+        gs = [g for g in gecisler(p, eski, uyum)
+              if not any(a < g.son and g.bas < b for a, b in korunan)]
         if not gs:
             continue
         if cogul_uyumsuz:
