@@ -153,3 +153,19 @@ def test_eski_semali_arsivde_YENIDEN_CEVIR_calisir():
     assert cache.get_chapter("uA")["translation"] == "YENİDEN çevrildi"
     arsiv = cache.arsiv_listesi("uA")
     assert len(arsiv) == 1 and arsiv[0]["uzunluk_orani"] == 0.9
+
+
+def test_kitap_bolum_sorgusu_indeks_kullanir():
+    """Önceki bölüm, bölüm listesi, bellek havuzu `book_slug` (+ `chapter_no`) ile
+    sorguluyor; indeks yokken her çağrı büyük metin sütunlu tabloyu baştan tarıyordu."""
+    from core import cache
+
+    conn = cache._connect()
+    try:
+        plan = " ".join(r[-1] for r in conn.execute(
+            "EXPLAIN QUERY PLAN SELECT translation FROM chapters "
+            "WHERE book_slug = ? AND chapter_no < ? ORDER BY chapter_no DESC LIMIT 1",
+            ("k", 5)))
+    finally:
+        conn.close()
+    assert "USING INDEX" in plan or "USING COVERING INDEX" in plan, plan

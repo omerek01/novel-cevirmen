@@ -140,6 +140,9 @@ def _connect() -> sqlite3.Connection:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS ceviri_arsivi_url ON ceviri_arsivi (url, id)")
+    # Önceki bölüm, bölüm listesi, bellek havuzu kitap + bölüm no ile sorgular; indeks
+    # yokken her çağrı büyük metin sütunlu tabloyu baştan sona tarıyordu.
+    conn.execute("CREATE INDEX IF NOT EXISTS chapters_kitap ON chapters (book_slug, chapter_no)")
     # ARŞİV TABLOSUNUN DA GÖÇE İHTİYACI VAR. `CREATE TABLE IF NOT EXISTS` var olan
     # tabloya sütun EKLEMEZ, yani yukarıdaki bildirime sütun yazmak YALNIZ sıfırdan
     # kurulan veritabanında (testler, yeni kurulum) işe yarar — canlı sunucuda tablo
