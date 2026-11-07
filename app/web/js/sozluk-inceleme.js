@@ -71,6 +71,33 @@ async function takmaAdKarari(slug, n, karar, kart) {
   await incelemeyiYukle(slug);
 }
 
+// İncelenen kaydı çakıştığı kayda alternatif yazım olarak bağla. Sunucu ayrı kaydı
+// siler ve yazımlarını ana kayda taşır (`glossary.yazim_ekle`).
+async function yazimYap(slug, x, ana, kart) {
+  kart.classList.add("inceleme-isleniyor");
+  kart.querySelectorAll("button").forEach((b) => (b.disabled = true));
+  try {
+    const res = await fetchWithTimeout(`/api/book/${encodeURIComponent(slug)}/glossary/yazim`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: ana, yazim: x.source }),
+    });
+    const veri = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error((veri && veri.detail) || "sunucu " + res.status);
+  } catch (err) {
+    kart.classList.remove("inceleme-isleniyor");
+    kart.querySelectorAll("button").forEach((b) => (b.disabled = false));
+    bildir(`Yazım eklenemedi (${err.message}).`);
+    return;
+  }
+  kart.remove();
+  incelenecekler.delete(anahtarla(x.source));
+  sayaciAzalt();
+  bildir(`${x.source}, “${ana}” kaydına yazım olarak eklendi.`);
+  await sunucudaSilindi(slug, x.source);
+  await tazele(slug);
+}
+
 function dugme(metin, fn, sinif = "pill") {
   const b = document.createElement("button");
   b.type = "button";
@@ -255,6 +282,16 @@ function satir(slug, x) {
         dugme("Aynı kişi", () => takmaAdKarari(slug, n, "ayni", kart), "pill"),
         dugme("Ayrı", () => takmaAdKarari(slug, n, "ayri", kart), "pill")
       );
+      kart.appendChild(e);
+    }
+    // KISAYOL: aynı karşılık / yakın yazım uyarısı çakışan kaydı `ilgili`de taşır. Okur
+    // "bu ne ile aynı" diye sözlükte aramasın: düğme kaydı adıyla söyler ve bağlar.
+    if ((n.tur === "karsilik_cakismasi" || n.tur === "yakin_yazim") && n.ilgili?.length) {
+      const e = document.createElement("div");
+      e.className = "inceleme-eylem";
+      for (const ana of n.ilgili) {
+        e.append(dugme(`“${ana}” yazımı yap`, () => yazimYap(slug, x, ana, kart), "pill"));
+      }
       kart.appendChild(e);
     }
   }

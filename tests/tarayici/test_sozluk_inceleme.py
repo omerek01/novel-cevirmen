@@ -238,3 +238,28 @@ def test_karakter_defteri_takma_ad_onerisi_karar_dugmeleriyle_kapanir(sayfa):
         0, timeout=15000)
     bag = [b for b in varlik_grafigi.baglar(SLUG, durumlar=("reddedildi",)) if b["iliski"] == "takma_adi"]
     assert [(b["kaynak"], b["hedef"]) for b in bag] == [("Nephis", "Changing Star")]
+
+
+def test_ayni_karsilik_uyarisindan_tek_dokunusla_yazim_yapilir(sayfa):
+    """Yeni kayıt başka bir kaynakla aynı Türkçe karşılığı alınca kullanıcı hangi kayıtla
+    aynı olduğunu sözlükte arıyordu. Kart çakışan kaydı adıyla gösterir; düğme yeni
+    sözcüğü o kayda alternatif yazım olarak bağlar ve ayrı kaydı kaldırır."""
+    from core import glossary
+
+    tohum.kitap()
+    glossary.set_term(SLUG, "Lord of Shadows", "Gölgelerin Efendisi")
+    glossary.set_term(SLUG, "Shadow Lord", "Gölgelerin Efendisi")
+    _sozluge_git(sayfa)
+    kutu = sayfa.locator("#glossReviewBox")
+    kutu.locator("summary").click()
+    kart = kutu.locator(".inceleme-kart[data-sozluk-kaynak='Shadow Lord']")
+    expect(kart).to_contain_text("Lord of Shadows")
+    dugme = kart.get_by_role("button", name="“Lord of Shadows” yazımı yap")
+    assert dugme.bounding_box()["height"] >= 44
+    dugme.click()
+    expect(kart).to_have_count(0)
+    expect(sayfa.locator("#bildirim")).to_contain_text("Lord of Shadows")
+    js_bekle(sayfa, _sozlukte(
+        "!('Shadow Lord' in v.terms) && v.ekler['Lord of Shadows'].yazimlar.includes('Shadow Lord')"))
+    # Karşı kart da (Lord of Shadows: "aynı karşılık Shadow Lord'da") liste tazelenince düşer.
+    expect(kutu.locator(".inceleme-kart")).to_have_count(0, timeout=10000)
