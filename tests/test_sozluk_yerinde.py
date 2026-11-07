@@ -215,3 +215,14 @@ def test_iyeligi_yazimdan_kesin_yeni_kok_cekimlenir():
     en = ["They climbed Hollow Mountain."]
     cikti, oz = _yaz(tr, en, "Hollow Mountain", "Kovan Dağı", "Oyuk Tepesi")
     assert cikti == ["Oyuk Tepesi'ne tırmandılar."] and oz.degisen == 1
+
+
+def test_ozel_adin_kesmesiz_kisi_ekli_gecisi_baska_sozcuktur():
+    """Desen son sözcüğü önek olarak eşler: `Kale` kaydı `kalemi`yi (kalem) kale+m+i diye
+    ayrıştırıp "hisarımı" yazıyordu. Özel ada kişi eki kesmeyle gelir (Kale'm); kesmesiz
+    1./2. kişi iyelikli geçiş belirsiz kalır. 3. kişi (peleriniyle) etkilenmez."""
+    tr = ["Kale'de kaldı, kalemi aldı."]
+    en = ["He stayed in the Castle and left the Castle with a pen."]
+    cikti, oz = _yaz(tr, en, "Castle", "Kale", "Hisar")
+    assert cikti == ["Hisar'da kaldı, kalemi aldı."]
+    assert oz.degisen == 1 and oz.belirsiz == ["kisi_iyeligi"]

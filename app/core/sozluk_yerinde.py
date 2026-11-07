@@ -93,6 +93,7 @@ def _yabanci_mi(sozcuk: str, kaynak: str | None) -> bool:
 # 3. kişi iyeliğin yazımdan kesin olduğu sonlar: ünlüden sonra -sI (Tepesi, Ustası) ya da
 # yumuşamış ğ + I (Dağı, Yaratığı). d/c/b dışarıda: kökün kendisinde de çok (ordu, avcı).
 _IYELIK_KESIN = re.compile(r"(?:[aeıioöuü]s|ğ)[ıiuü]$")
+_KISI_IYELIGI = {"(I)m", "(I)n", "(I)mIz", "(I)nIz"}  # 1. ve 2. kişi iyelik
 
 
 def kok(karsilik: str, kesmeli: bool = False, unlu: str | None = None) -> turkce_ek.Kok:
@@ -316,6 +317,12 @@ def yeniden_yaz(tr_paragraflar: list[str], en_paragraflar: list[str] | None, kay
         parcalar, imlec = [], 0
         for g in gs:
             kesme_sonrasi = _kesme_sonrasi(p, g.son)
+            # Özel ada kişi eki kesmeyle gelir (Kale'm); kesmesiz 1./2. kişi iyelikli geçiş
+            # büyük olasılıkla başka bir sözcüktür: `Kale` deseni `kalemi`yi (kalem) yakalıyordu.
+            if (eski[:1].isupper() and not g.kesmeli and g.ekler
+                    and all(set(d) & _KISI_IYELIGI for d in g.ekler)):  # Kulenin: ilgi eki de aday
+                ozet.belirsiz.append("kisi_iyeligi")
+                continue
             yeni_yuzey = (_yeni_yuzey(g, eski, yeni, kaynak, uyum)
                           if g.ekler and not kesme_sonrasi else None)
             # Genel yol vazgeçtiyse baş sözcük aynı kalan karşılıkta ek hiç değişmez.
