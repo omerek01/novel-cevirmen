@@ -17,6 +17,12 @@ let kare = 0;
 let sonZaman = 0;
 let birikim = 0;
 let kilit = null;
+let kilitIstegi = null; // yanıtı beklenen kilit isteği: ikinci istek açılmasın
+let sonY = 0; // önceki karedeki kaydırma konumu
+let sonHareket = 0; // konumun en son değiştiği an (sayfa sonu algısı)
+// Sayfa sonunda bu kadar ilerleyemezse ve sonraki bölüm yüklenmiyorsa durur: döngü
+// boşuna dönüp ekran kilidini saatlerce tutmasın. Yükleme sürerken bekler.
+const DIP_BEKLEME_MS = 4000;
 
 const ikonlar = {
   durdur: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg>',
@@ -34,12 +40,24 @@ function okuyucuAcik() {
 }
 
 async function kilitAl() {
-  if (kilit || !("wakeLock" in navigator) || document.visibilityState !== "visible") return;
+  if (kilit || kilitIstegi || !("wakeLock" in navigator) || document.visibilityState !== "visible")
+    return;
   try {
-    kilit = await navigator.wakeLock.request("screen");
-    kilit.addEventListener("release", () => (kilit = null));
+    kilitIstegi = navigator.wakeLock.request("screen");
+    const yeni = await kilitIstegi;
+    // İstek yanıtlanana dek okur duraklatmış ya da kapatmış olabilir: kilit tutulmaz.
+    if (durum !== "akiyor") {
+      yeni.release().catch(() => {});
+      return;
+    }
+    kilit = yeni;
+    yeni.addEventListener("release", () => {
+      if (kilit === yeni) kilit = null;
+    });
   } catch {
-    kilit = null; // pil tasarrufu ya da izin yok: kaydırma yine çalışır
+    // pil tasarrufu ya da izin yok: kaydırma yine çalışır
+  } finally {
+    kilitIstegi = null;
   }
 }
 
@@ -66,6 +84,12 @@ function dongu(zaman) {
     const sonuc = adim(birikim, hiz(seviye()), sonZaman ? zaman - sonZaman : 0);
     birikim = sonuc.birikim;
     if (sonuc.px) window.scrollBy(0, sonuc.px);
+    const y = window.scrollY;
+    if (y !== sonY || document.querySelector("#streamEnd .stream-loading")) sonHareket = zaman;
+    sonY = y;
+    if (zaman - sonHareket > DIP_BEKLEME_MS) return duraklat();
+  } else {
+    sonHareket = zaman; // diyalog / parmak / seçim beklemesi sayfa sonu sayılmaz
   }
   sonZaman = zaman;
   kare = requestAnimationFrame(dongu);
@@ -74,6 +98,8 @@ function dongu(zaman) {
 function calistir() {
   sonZaman = 0;
   birikim = 0;
+  sonY = window.scrollY;
+  sonHareket = performance.now();
   if (!kare) kare = requestAnimationFrame(dongu);
 }
 
@@ -140,6 +166,12 @@ export function otoKaydirKur() {
     sonZaman = 0; // duraklamadaki süre bir kerede kaydırılmasın
   };
   for (const ad of ["pointerup", "pointercancel"]) window.addEventListener(ad, birak, { passive: true });
+
+  // Okuyucudan çıkılınca kapat: duraklatılmışken döngü koşmadığı için kapanış hiç
+  // tetiklenmiyor, eski kumanda sonraki açılışta alt çubuğun yerinde kalıyordu.
+  new MutationObserver(() => {
+    if (el("readerView").hidden && durum !== "kapali") kapat();
+  }).observe(el("readerView"), { attributes: true, attributeFilter: ["hidden"] });
 
   document.addEventListener("visibilitychange", () => {
     if (document.visibilityState === "visible" && durum === "akiyor") {

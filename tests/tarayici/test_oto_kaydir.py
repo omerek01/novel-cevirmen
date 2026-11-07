@@ -95,3 +95,51 @@ def test_secili_sozcuk_varken_durur_secim_kalkinca_surer(sayfa):
     expect(sayfa.locator("#otoKaydir")).to_be_visible()
     sayfa.evaluate("getSelection().removeAllRanges()")
     sayfa.wait_for_function(f"scrollY > {y + 3}")
+
+
+def test_okuyucudan_cikinca_duraklatilmis_kumanda_kapanir(sayfa):
+    """Duraklatılmışken döngü koşmadığı için kapanış hiç tetiklenmiyor, eski kumanda
+    sonraki her açılışta alt çubuğun yerinde kalıyordu."""
+    _okuyucu(sayfa)
+    _baslat(sayfa)
+    sayfa.locator("#otoKaydirDurdur").click()
+    sayfa.evaluate("async () => { const g = await import('/js/gezinme.js'); g.showView('library'); }")
+    sayfa.evaluate("async () => { const g = await import('/js/gezinme.js'); g.showView('reader'); }")
+    expect(sayfa.locator("#otoKaydir")).to_be_hidden()  # geri dönünce eski kumanda yok
+
+
+def test_sayfa_sonunda_yukleme_yoksa_kendiliginden_duraklar(sayfa):
+    """Son bölümün dibinde döngü her karede boşuna dönüyor, ekran kilidi tutuluyordu."""
+    sayfa.set_viewport_size({"width": 390, "height": 420})
+    tohum.kitap(bolum_sayisi=1)
+    sayfa.goto(sayfa.taban + "/")
+    sayfa.locator("#shelves .spine[data-slug]").first.click()
+    sayfa.locator("#chapterList .chapter-row").last.click()
+    expect(sayfa.locator("#readerBody article.chapter p[data-idx]")).to_have_count(len(tohum.TR))
+    _baslat(sayfa)
+    sayfa.evaluate("scrollTo(0, document.documentElement.scrollHeight)")
+    expect(sayfa.locator("#otoKaydirDurdur")).to_have_attribute(
+        "aria-label", "Kaydırmayı sürdür", timeout=9000)
+
+
+def test_kilit_istegi_yanitlanmadan_duraklatilirsa_kilit_birakilir(sayfa):
+    """Kaydır'a basıp hemen duraklatınca bekleyen kilit sonradan çözülüyor ve hiç
+    bırakılmıyordu: duraklatılmış ekran kararmıyor, pil tükeniyordu."""
+    sayfa.add_init_script("""
+        window.__kilitler = [];
+        Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: {
+            request: () => new Promise((coz) => setTimeout(() => {
+                const k = new EventTarget();
+                k.birakildi = false;
+                k.release = async () => { k.birakildi = true; k.dispatchEvent(new Event('release')); };
+                window.__kilitler.push(k);
+                coz(k);
+            }, 400)),
+        }});
+    """)
+    _okuyucu(sayfa)
+    _baslat(sayfa)
+    sayfa.locator("#otoKaydirDurdur").click()
+    sayfa.wait_for_timeout(900)
+    assert sayfa.evaluate("window.__kilitler.length") >= 1
+    assert sayfa.evaluate("window.__kilitler.every((k) => k.birakildi)")
