@@ -983,6 +983,32 @@ def yerinde_guncelle(book_slug: str, source: str, urls: list[str] | None = None,
     return sonuc
 
 
+# Aynı anda tek otomatik güncelleme: art arda değiştirilen terimler aynı bölümlere
+# yazdığı için sırayla koşar (her yazım kendi işleminde, okurken değişen bölüm ezilmez).
+_YERINDE_KILIDI = threading.Lock()
+
+
+def yerinde_otomatik(book_slug: str, source: str) -> threading.Thread:
+    """Karşılık ELLE değişince eski bölümleri arka planda yerinde güncelle (kullanıcı
+    kararı 2026-11-07: "Yerinde güncelle" ayrı bir adım olmasın). `yerinde_guncelle`in
+    güvenli kuralları aynen geçerli: kaynakta terim olmayan ve emin olunmayan geçişe
+    dokunulmaz, eski metin arşive düşer. Ücretsiz, model çağırmaz."""
+    def calis():
+        with _YERINDE_KILIDI:
+            try:
+                o = yerinde_guncelle(book_slug, source, None, uygula=True)
+                logging.getLogger(__name__).info(
+                    "yerinde otomatik %s / %s: %s yer değişti, %s belirsiz",
+                    book_slug, source, o["degisen"], o["belirsiz"])
+            except Exception:
+                logging.getLogger(__name__).exception(
+                    "yerinde otomatik başarısız: %s / %s", book_slug, source)
+
+    is_ = threading.Thread(target=calis, name="sozluk-yerinde", daemon=True)
+    is_.start()
+    return is_
+
+
 def _karsilik_gecmisi(book_slug: str, source: str) -> tuple[str | None, list[str]]:
     """(bugünkü karşılık, sözlük geçmişindeki ESKİ karşılıklar — yeniden eskiye, tekrarsız).
 

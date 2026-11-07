@@ -181,3 +181,31 @@ def test_uc_bos_kaynak_reddedilir():
     with TestClient(server.app) as client:
         assert client.post(f"/api/book/{KITAP}/glossary/yerinde",
                            json={"source": " "}).status_code == 400
+
+
+def test_karsilik_elle_degisince_eski_bolumler_kendiliginden_guncellenir(monkeypatch):
+    """Kullanıcı kararı (2026-11-07): karşılığı değiştirince eski bölümler ayrı bir
+    "Yerinde güncelle" adımı beklemeden güncellenmeli. Aynı güvenli kurallar geçerli."""
+    from fastapi.testclient import TestClient
+
+    import server
+
+    baslatilan = []
+    asil = pipeline.yerinde_otomatik
+    monkeypatch.setattr(pipeline, "yerinde_otomatik",
+                        lambda *a, **k: baslatilan.append(asil(*a, **k)))
+    url = _bolum(1)
+    glossary.set_term(KITAP, "Silver Tower", "Gümüş Kule")
+    with TestClient(server.app) as client:
+        r = client.post(f"/api/book/{KITAP}/glossary",
+                        json={"source": "Silver Tower", "target": "Ak Kule"})
+        assert r.status_code == 200
+        for is_ in baslatilan:
+            is_.join(10)
+        assert len(baslatilan) == 1
+        assert "Ak Kule'nin çanı" in _ceviri(url)
+        # Karşılık değişmeyen yazım (yalnız tür) güncelleme başlatmaz.
+        client.post(f"/api/book/{KITAP}/glossary",
+                    json={"source": "Silver Tower", "target": "Ak Kule", "tur": "yer"})
+    assert len(baslatilan) == 1
+    assert cache.arsiv_listesi(url)  # eski metin geri alınabilir

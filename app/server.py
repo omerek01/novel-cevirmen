@@ -854,6 +854,7 @@ def set_book_glossary(slug: str, term: GlossaryTerm, spoiler: bool = Query(False
     # Karşılık + koşul TEK işlemde yazılır: iki ayrı yazım iki sürüm artışı ve
     # arada yarım bir kayıt demekti. KOŞUL yalnız ALANI GÖNDERİLDİĞİNDE yazılır —
     # okuyucunun çevrimdışı kuyruğu çoğu zaman {source, target} gönderiyor.
+    onceki = _kayit(slug, term.source)
     try:
         kayit = glossary.terimi_yaz(
             slug, term.source, term.target,
@@ -863,6 +864,10 @@ def set_book_glossary(slug: str, term: GlossaryTerm, spoiler: bool = Query(False
         )
     except glossary.SurumCakismasi as exc:
         raise _surum_cakismasi(exc) from exc
+    # Karşılık değiştiyse eski bölümler de güncellensin (arka planda, ücretsiz).
+    sonraki = _kayit(slug, term.source)
+    if onceki and sonraki and onceki.get("target") != sonraki.get("target"):
+        pipeline.yerinde_otomatik(library.resolve_slug(slug), sonraki["source"])
     if term.ornek is not None:
         glossary.ornek_doldur(slug, term.source, term.ornek.kaynak_cumle, term.ornek.bolum)
     if term.kosul:
