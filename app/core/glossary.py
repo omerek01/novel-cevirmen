@@ -1692,10 +1692,13 @@ def kaynagi_degistir(book_slug: str, source: str, yeni: str,
         # Kaydın kendi yazımı ana ad olunca yazım listesinden düşer (ikisi aynı olmaz).
         conn.execute("DELETE FROM sozluk_yazim WHERE book_slug = ? AND kimlik = ? AND anahtar = ?",
                      (book_slug, satir["kimlik"], anahtar))
-        conn.execute("UPDATE glossary SET source = ? WHERE book_slug = ? AND source = ?",
-                     (yeni, book_slug, satir["source"]))
-        _kayit_degisti(conn, book_slug, {**satir, "source": yeni}, "kaynak",
-                       {"eski_kaynak": satir["source"]})
+        yeni_surum = (satir.get("surum") or 1) + 1
+        conn.execute(
+            "UPDATE glossary SET source = ?, surum = ?, updated_at = ? WHERE book_slug = ? AND source = ?",
+            (yeni, yeni_surum, time.time(), book_slug, satir["source"]))
+        _gecmise_yaz(conn, book_slug, "kaynak", satir, {**satir, "source": yeni, "surum": yeni_surum},
+                     "manual", _kitap_surumunu_artir(conn, book_slug),
+                     ek={"eski_kaynak": satir["source"]})
         return _bul(conn, book_slug, yeni)
 
     return _islem(book_slug, source, taban_surum, is_)
