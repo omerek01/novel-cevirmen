@@ -263,3 +263,25 @@ def test_ayni_karsilik_uyarisindan_tek_dokunusla_yazim_yapilir(sayfa):
         "!('Shadow Lord' in v.terms) && v.ekler['Lord of Shadows'].yazimlar.includes('Shadow Lord')"))
     # Karşı kart da (Lord of Shadows: "aynı karşılık Shadow Lord'da") liste tazelenince düşer.
     expect(kutu.locator(".inceleme-kart")).to_have_count(0, timeout=10000)
+
+
+def test_duzenle_ile_kaynagi_tekile_cevirmek_kokeni_korur(sayfa):
+    """Kullanıcı vakası (2026-11-07): inceleme "Chaos Beings" için tekil öneriyordu;
+    Düzenle'de "Chaos Being" yazıp kaydedince yeni, kökensiz kayıt açılıyor ve kaydın
+    yakalandığı paragraf kayboluyordu. Ad değişir, kayıt aynı kalır."""
+    from core import glossary
+
+    tohum.kitap()
+    glossary.merge_terms(SLUG, {"Chaos Beings": "Kaos Varlıkları"}, "auto", 1,
+                         {"Chaos Beings": "The Chaos Beings swarmed the gate."})
+    _sozluge_git(sayfa)
+    kutu = sayfa.locator("#glossReviewBox")
+    kutu.locator("summary").click()
+    kutu.locator(".inceleme-kart[data-sozluk-kaynak='Chaos Beings']").get_by_role(
+        "button", name="Düzenle").click()
+    sayfa.locator("#terimKaynak").fill("Chaos Being")
+    sayfa.locator("#terimKaydet").click()
+    js_bekle(sayfa, _sozlukte(
+        "!('Chaos Beings' in v.terms) && v.terms['Chaos Being'] === 'Kaos Varlıkları'"
+        " && v.rows.find((r) => r.source === 'Chaos Being').kaynak_cumle"
+        " === 'The Chaos Beings swarmed the gate.'"))

@@ -20,15 +20,22 @@ def ac(sayfa):
     sayfa.locator("#glossList .gloss-row[data-sozluk-kaynak='Great']").click()
 
 
-def test_yeni_kaynak_eski_karsiligi_ve_kosulu_tasimaz(sayfa):
+def test_acik_kaydin_adi_degisince_yeniden_adlandirilir_ikinci_kayit_acilmaz(sayfa):
+    """2026-10-10'da yeni ad eski karşılığı YENİ bir kayda taşıyordu (iki kayıt karışıyordu).
+    Kullanıcı kararı (2026-11-07, "Chaos Beings" -> "Chaos Being"): açık kaydın adı alandan
+    değiştirilince bu yeniden adlandırmadır; karşılık ve koşul alanda kalır, kaydedince
+    YENİ kayıt açılmaz, aynı kaydın adı değişir."""
     ac(sayfa)
     sayfa.locator("#terimKosul").fill("rütbe olarak")
-    sayfa.locator("#terimKaynak").fill("yeni ad")
+    sayfa.locator("#terimKaynak").fill("Greater")
     sayfa.locator("#terimKaynak").press("Enter")
-    expect(sayfa.locator("#terimKarsilik")).to_have_value("")
-    expect(sayfa.locator("#terimKosul")).to_have_value("")
-    expect(sayfa.locator("#terimAynen")).not_to_be_checked()
-    expect(sayfa.locator("#terimPaneli")).to_be_visible()
+    expect(sayfa.locator("#terimKarsilik")).to_have_value("Ulu")
+    expect(sayfa.locator("#terimKosul")).to_have_value("rütbe olarak")
+    expect(sayfa.locator("#terimDurum")).to_contain_text("«Great» → «Greater»")
+    sayfa.locator("#terimKaydet").click()
+    js_bekle(sayfa, "async () => { const v = await (await fetch('/api/book/gumus-kule/glossary')).json();"
+             " return !('Great' in v.terms) && v.terms.Greater === 'Ulu'"
+             " && v.kosullar.Greater === 'rütbe olarak'; }")
 
 
 def test_alternatif_yazim_harften_bagimsiz_kayitli_adi_getirir(sayfa):

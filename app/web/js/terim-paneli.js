@@ -165,7 +165,7 @@ function adaylariCiz() {
 }
 
 /* Kaynak terim belirlendi: kayıtlıysa kaydı yükle, değilse (isteğe bağlı) öner. */
-function kaynagiSec(kaynak, { oner = false } = {}) {
+function kaynagiSec(kaynak, { oner = false, alandan = false } = {}) {
   if (!panel) return;
   kaynak = trimSecim(kaynak);
   el("terimKaynak").value = kaynak;
@@ -174,6 +174,15 @@ function kaynagiSec(kaynak, { oner = false } = {}) {
   // Aynı kaydı yeniden seçmek yazılan karşılığı ve koşulu sıfırlamamalı.
   if (kayitli && panel.kayitli === kayitli) {
     el("terimKaynak").value = kayitli;
+    return;
+  }
+  // Açık kaydın adı alandan değiştirildi ve yeni ad başka bir kayıt değil: bu YENİDEN
+  // ADLANDIRMA. Panel yeni terim kipine geçip karşılığı ve kökeni silmemeli (kullanıcı
+  // vakası: "Chaos Beings" -> "Chaos Being"); kaydet adı kayıt korunarak değiştirir.
+  if (alandan && !kayitli && kaynak && panel.kayitli &&
+      kayitliAnahtar(terms, panel.kayitli) !== undefined) {
+    yaz("terimDurum", `Kaydedince kaynak adı «${panel.kayitli}» → «${kaynak}» olur; ` +
+      "karşılık ve yakalandığı paragraf korunur.");
     return;
   }
   if (!kayitli && kaynak && panel.kaynak === kaynak && !panel.kayitli) return;
@@ -309,6 +318,12 @@ function kaydet() {
   }
   const { terms, kosullar } = gorunenSozluk(panel.slug);
   const kayitli = kayitliAnahtar(terms, kaynak);
+  // Var olan kaydın ADI değiştirildi (Chaos Beings -> Chaos Being): yeni kayıt açılmaz,
+  // kayıt yeniden adlandırılır; köken cümlesi, ilk bölüm, yazımlar korunur.
+  if (!kayitli && panel.kayitli && kayitliAnahtar(terms, panel.kayitli) !== undefined) {
+    adiDegistirVeKaydet(panel.kayitli, kaynak);
+    return;
+  }
   const ad = kayitli || kaynak;
   const hedef = el("terimAynen").checked ? ad : el("terimKarsilik").value.trim() || ad;
   const yeniKosul = el("terimKosul").value.trim();
@@ -336,6 +351,37 @@ function kaydet() {
     );
   }
   durumuIzle(ad);
+}
+
+/* Yeniden adlandırma çevrimiçi yapılır (kuyruğa girmez): sonucu anında söylenir,
+   ardından karşılık/koşul/tür değişiklikleri normal kaydet yolundan yeni adla gider. */
+async function adiDegistirVeKaydet(eski, yeni) {
+  const slug = panel.slug;
+  yaz("terimDurum", "Kaynak adı değiştiriliyor…");
+  let veri;
+  try {
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/glossary/kaynak`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: eski, yeni, taban_surum: cakismaTabani(eski) }),
+    });
+    veri = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(veri.detail?.message || veri.detail || "sunucu " + res.status);
+  } catch (err) {
+    yaz("terimDurum", "Ad değiştirilemedi: " + err.message);
+    return;
+  }
+  const terms = await fetchGlossary(slug, { taze: true });
+  if (slug === durum.currentBookSlug && !views.glossary.hidden) renderGlossary(terms);
+  const ad = veri.kayit?.source || yeni;
+  if (!panel || panel.slug !== slug) return;
+  panel.kayitli = ad;
+  el("terimKaynak").value = ad;
+  if (kayitliAnahtar(gorunenSozluk(slug).terms, ad) === undefined) {
+    yaz("terimDurum", "Ad değişti; sözlük tazelenemedi, paneli yeniden aç.");
+    return;
+  }
+  kaydet(); // artık kayıtlı: karşılık / koşul / tür normal yoldan yazılır
 }
 
 /* Çakışma tabanı: kullanıcının GÖRDÜĞÜ kayıt sürümü. Sunucuda kaydı olmayan terim
@@ -1126,13 +1172,13 @@ export function kur() {
   });
   // Kaynak elle değiştirilince kayıt yeniden aranır (yazım varyantı dahil).
   el("terimKaynak").addEventListener("change", () => {
-    if (panel) kaynagiSec(el("terimKaynak").value);
+    if (panel) kaynagiSec(el("terimKaynak").value, { alandan: true });
   });
   for (const id of ["terimKaynak", "terimKarsilik"]) {
     el(id).addEventListener("keydown", (e) => {
       if (e.key !== "Enter") return;
       e.preventDefault();
-      if (id === "terimKaynak") kaynagiSec(el("terimKaynak").value);
+      if (id === "terimKaynak") kaynagiSec(el("terimKaynak").value, { alandan: true });
       else kaydet();
     });
   }
