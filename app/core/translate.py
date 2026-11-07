@@ -4402,7 +4402,9 @@ def _tek_anahtarla_uret(
                 raise atla from exc
             if code in RETRY_CODES:
                 _kayit(api_durum.GECICI, bas, kayit_kodu)
-                if attempt < tekrar_sayisi - 1:
+                # Süre aşımı (Vertex 504) aynı modelde tekrarlanmaz: model o isteği o
+                # sürede bitiremiyor; argonda 3 deneme ~15 dk ve 3 ücretli çağrıydı.
+                if attempt < tekrar_sayisi - 1 and kayit_kodu != 504:
                     time.sleep(delay)
                     delay *= 2
                     continue
@@ -4447,7 +4449,8 @@ def _tek_anahtarla_uret(
             # sonra sıradaki model. Tek motor kaldığından bu yolun dayanıklılığı
             # artık çevirinin TAMAMININ dayanıklılığıdır.
             _kayit(api_durum.BAGLANTI, bas)
-            if attempt < tekrar_sayisi - 1:
+            # Okuma zaman aşımı da tekrarlanmaz (yukarıdaki 504 kuralı); kopan bağlantı tekrarlanır.
+            if attempt < tekrar_sayisi - 1 and not isinstance(exc, httpx.TimeoutException):
                 time.sleep(delay)
                 delay *= 2
                 continue

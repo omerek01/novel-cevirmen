@@ -252,3 +252,28 @@ def test_argon_uzun_sure_alir_oteki_vertexler_90_sn_kalir(monkeypatch):
     translate._generate_with_fallback(_fabrika_kullanilmamali, (VERTEX,), "p")
     sureler = [c["kurulum"]["http_options"].timeout for c in cagrilar if "kurulum" in c]
     assert sureler == [300_000, translate.GEMINI_ISTEK_ZAMAN_ASIMI_MS]
+
+
+@pytest.mark.parametrize("hata", [_APIHatasi(504), "okuma_zaman_asimi"])
+def test_sure_asimi_ayni_modelde_tekrarlanmaz(monkeypatch, hata):
+    """Argon ~300 sn'de 504 verince aynı ücretli modelde 3 kez beklemek ~15 dk ve
+    3 ücretli deneme demekti. Süre aşımı tek denemedir; sıradaki halkaya inilir."""
+    import httpx
+
+    if hata == "okuma_zaman_asimi":
+        hata = httpx.ReadTimeout("zaman aşımı")
+    monkeypatch.setenv("VERTEX_PROJE", "proje-x")
+    cagrilar = []
+    _sahte_istemci(monkeypatch, hata, cagrilar)
+    with pytest.raises(translate.TranslateError):
+        translate._generate_with_fallback(_fabrika_kullanilmamali, (ARGON,), "p")
+    assert len([c for c in cagrilar if "kurulum" not in c]) == 1
+
+
+def test_mesguliyet_yine_geri_cekilmeyle_tekrarlanir(monkeypatch):
+    monkeypatch.setenv("VERTEX_PROJE", "proje-x")
+    cagrilar = []
+    _sahte_istemci(monkeypatch, _APIHatasi(503), cagrilar)
+    with pytest.raises(translate.TranslateError):
+        translate._generate_with_fallback(_fabrika_kullanilmamali, (ARGON,), "p")
+    assert len([c for c in cagrilar if "kurulum" not in c]) == translate.MAX_RETRIES
