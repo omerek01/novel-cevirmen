@@ -1180,7 +1180,17 @@ def merge_terms(
                 "SELECT anahtar FROM sozluk_red WHERE book_slug = ?", (book_slug, book_slug),
             )
         }
-        eklenecek = {k: h for k, h in seen.items() if fold_term(k) not in mevcut}
+        # Ret ZARARSIZ varyantları da kapsar: 'Lost' reddedilince 'The Lost',
+        # 'Temple of the Chalice' reddedilince 'Temple of Chalice' geri gelmemeli.
+        from . import sozluk_kapi  # döngüsel içe aktarma: sozluk_kapi glossary'yi kullanır
+
+        red_varyant = {
+            sozluk_kapi.varyant_anahtari(r[0]) for r in conn.execute(
+                "SELECT source FROM sozluk_red WHERE book_slug = ?", (book_slug,))
+        }
+        eklenecek = {k: h for k, h in seen.items()
+                     if fold_term(k) not in mevcut
+                     and sozluk_kapi.varyant_anahtari(k) not in red_varyant}
         etkili: dict[str, str] = {}
         if eklenecek:
             simdi = time.time()

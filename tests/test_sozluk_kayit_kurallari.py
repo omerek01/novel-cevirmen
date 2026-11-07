@@ -119,3 +119,15 @@ def test_eski_ret_semayi_yukseltirken_veri_korunur_ve_geri_alma_tekildir():
     assert {r["source"] for r in glossary.red_listesi("kitap")} == {"Abel", "Abele"}
     glossary.reddi_kaldir("kitap", "Abel")
     assert {r["source"] for r in glossary.red_listesi("kitap")} == {"Abele"}
+
+
+def test_reddedilen_terim_belirtecli_ya_da_of_the_varyantiyla_geri_gelmez():
+    """Ret yalnız fold_term'le karşılaştırılıyordu: 'Lost' reddedildikten sonra model
+    'The Lost' önerince 'thelost' != 'lost' olduğu için yeni satır açılıyordu."""
+    glossary.set_term("kitap", "Lost", "Kayıplar")
+    glossary.reddet("kitap", "Lost")
+    glossary.set_term("kitap", "Temple of the Chalice", "Kadeh Tapınağı")
+    glossary.reddet("kitap", "Temple of the Chalice")
+    assert glossary.merge_terms("kitap", {"The Lost": "Kayıplar",
+                                          "Temple of Chalice": "Kadeh Tapınağı"}) == {}
+    assert glossary.get_glossary("kitap") == {}
