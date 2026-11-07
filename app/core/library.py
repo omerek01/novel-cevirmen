@@ -10,7 +10,7 @@ from __future__ import annotations
 import sqlite3
 import time
 
-from . import db, glossary
+from . import db, glossary, media
 
 
 def _connect() -> sqlite3.Connection:
@@ -380,8 +380,9 @@ def set_manga_source(slug: str, source_url: str | None, next_url: str | None) ->
 
 def delete_book(slug: str) -> bool:
     """Kitabı ve ona bağlı HER ŞEYİ kalıcı sil: bölümler, sözlük, okuma günlüğü,
-    alias'lar, books satırı. Bölümü olmayan (mükerrer içe aktarım kalıntısı) kitap
-    da silinir. Herhangi bir satır silindiyse True. Geri alınamaz.
+    alias'lar, books satırı, `book_slug` sütunu taşıyan her tablo (defter, grafik,
+    profil, özetler, wiki…) ve medya klasörü. Bölümü olmayan (mükerrer içe aktarım
+    kalıntısı) kitap da silinir. Herhangi bir satır silindiyse True. Geri alınamaz.
 
     Sentetik kitaplar merge'e sokulmaz (E-8) ama SİLİNEBİLİR — zincir tümüyle
     kalkar, kalan bir referans olmaz."""
@@ -398,6 +399,8 @@ def delete_book(slug: str) -> bool:
             # Arşiv url ile bağlı: bölümler silinmeden ÖNCE temizlenir.
             ("DELETE FROM ceviri_arsivi WHERE url IN "
              "(SELECT url FROM chapters WHERE book_slug = ?)", (slug,)),
+            ("DELETE FROM ceviri_izleri WHERE url IN "
+             "(SELECT url FROM chapters WHERE book_slug = ?)", (slug,)),
             ("DELETE FROM chapters WHERE book_slug = ?", (slug,)),
             ("DELETE FROM glossary WHERE book_slug = ?", (slug,)),
             ("DELETE FROM sozluk_gecmis WHERE book_slug = ?", (slug,)),
@@ -412,7 +415,17 @@ def delete_book(slug: str) -> bool:
                 deleted += conn.execute(stmt, params).rowcount
             except sqlite3.OperationalError:
                 pass
+        # Geri kalan her kitap tablosu (defter, grafik, profil, özet, wiki…) şemadan
+        # bulunur: elle liste yeni tabloyu unutuyordu ve aynı roman yeniden eklenince
+        # (slug başlıktan türer) eski bağlam yeni kitabın çeviri istemine sızıyordu.
+        for (tablo,) in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'").fetchall():
+            sutunlar = {r[1] for r in conn.execute(f'PRAGMA table_info("{tablo}")')}
+            if "book_slug" in sutunlar:
+                deleted += conn.execute(
+                    f'DELETE FROM "{tablo}" WHERE book_slug = ?', (slug,)).rowcount
         conn.commit()
+        media.delete_book_media(slug)
         return deleted > 0
     except BaseException:
         conn.rollback()

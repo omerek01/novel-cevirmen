@@ -112,3 +112,70 @@ def test_merge_yazim_varyanti_hedefte_ikinci_satir_acmaz():
 
     assert glossary.get_glossary("dst") == {"Ore Empire": "Ork İmparatorluğu"}
     assert glossary.get_glossary("src") == {}
+
+
+def _tum_semalari_kur():
+    """Uygulamanın kurduğu her tablo: modüller şemayı tembel kurar (`_connect`)."""
+    import importlib
+    import pkgutil
+
+    import core
+
+    for m in pkgutil.iter_modules(core.__path__):
+        try:
+            mod = importlib.import_module(f"core.{m.name}")
+        except ImportError:
+            continue
+        kur = getattr(mod, "_connect", None)
+        if callable(kur):
+            try:
+                kur().close()
+            except Exception:  # şeması olmayan modül (_connect başka iş yapıyor)
+                pass
+
+
+def _tohum_satir(conn, tablo, slug):
+    """book_slug'ı `slug` olan, NOT NULL sütunları sahte değerle dolu bir satır."""
+    sutunlar = conn.execute(f"PRAGMA table_info({tablo})").fetchall()
+    rowid_pk = [s for s in sutunlar if s[5]]
+    rowid_pk = rowid_pk[0][1] if len(rowid_pk) == 1 and "INT" in (rowid_pk[0][2] or "").upper() else None
+    adlar, degerler = [], []
+    for _cid, ad, tur, notnull, varsayilan, pk in sutunlar:
+        if ad == "book_slug":
+            adlar.append(ad)
+            degerler.append(slug)
+        elif (notnull or pk) and varsayilan is None and ad != rowid_pk:
+            adlar.append(ad)
+            degerler.append(0 if any(t in (tur or "").upper() for t in ("INT", "REAL")) else f"x-{ad}")
+    conn.execute(f"INSERT INTO {tablo} ({', '.join(adlar)}) VALUES ({', '.join('?' * len(adlar))})",
+                 degerler)
+
+
+def test_delete_book_kitaba_bagli_hicbir_satir_ve_medya_birakmaz():
+    """Silinen kitabın defteri, grafiği, profili, özetleri kalıyordu; aynı roman yeniden
+    eklenince (slug başlıktan türer) eski bağlam yeni kitabın çeviri istemine sızıyordu."""
+    import sqlite3
+
+    from core import db, media
+
+    _seed_book("gid", "uGid")
+    _tum_semalari_kur()
+    conn = sqlite3.connect(db.db_path())
+    tablolar = [t for (t,) in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")
+                if "book_slug" in {r[1] for r in conn.execute(f"PRAGMA table_info({t})")}]
+    assert len(tablolar) > 20, tablolar
+    for t in tablolar:
+        if not conn.execute(f"SELECT 1 FROM {t} WHERE book_slug = 'gid'").fetchone():
+            _tohum_satir(conn, t, "gid")
+    conn.commit()
+    conn.close()
+    media.write_bytes("gid", "src-1", b"\x89PNG")
+
+    assert library.delete_book("gid")
+
+    conn = sqlite3.connect(db.db_path())
+    kalan = [t for t in tablolar
+             if conn.execute(f"SELECT COUNT(*) FROM {t} WHERE book_slug = 'gid'").fetchone()[0]]
+    conn.close()
+    assert kalan == []
+    assert not (media.media_root() / "gid").exists()
