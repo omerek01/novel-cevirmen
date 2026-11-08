@@ -65,3 +65,26 @@ def test_obek_sinirini_asan_arama_eslesmesi_tek_sayilir(sayfa):
     sayfa.locator("#findInput").fill("yaktı ve")  # "Kaan fenerini yaktı" | "ve dar geçidin"
     expect(sayfa.locator("#findCount")).to_have_text("1/1")
     assert sayfa.locator("mark").count() >= 2
+
+
+def test_kilavuz_cizgi_okuma_hiziyla_obekten_obege_kayar_ve_durur(sayfa):
+    sayfa.add_init_script(
+        "localStorage.setItem('novellink:settings', JSON.stringify({kaydirmaHizi: 4500}))")
+    _okuyucu(sayfa)
+    _kumanda(sayfa)
+    cizgi = sayfa.locator("#obekCizgi")
+    expect(cizgi).to_be_hidden()
+    sayfa.locator("#obekOynat").click()
+    expect(sayfa.locator("#obekOynat")).to_have_attribute("aria-pressed", "true")
+    expect(cizgi).to_be_visible()
+    konum = cizgi.evaluate("e => e.style.transform")
+    sayfa.wait_for_function(f"document.querySelector('#obekCizgi').style.transform !== {konum!r}")
+    sayfa.locator("#obekOynat").click()  # duraklat
+    expect(sayfa.locator("#obekOynat")).to_have_attribute("aria-pressed", "false")
+    durdu = cizgi.evaluate("e => e.style.transform")
+    sayfa.wait_for_timeout(700)
+    assert cizgi.evaluate("e => e.style.transform") == durdu
+    # Hız kumandası kel/dk gösterir ve ayara yazar.
+    expect(sayfa.locator("#obekKumanda")).to_contain_text("kel/dk")
+    sayfa.locator("#obekYavas").click()
+    assert sayfa.evaluate("JSON.parse(localStorage.getItem('novellink:settings')).kaydirmaHizi") == 4275

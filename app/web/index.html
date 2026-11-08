@@ -339,14 +339,26 @@
          alır. Mantık js/oto-kaydir.js, hız hesabı js/oto-kaydir-yardimci.js (Node testli). -->
     <!-- ÖBEK kumandası: öbek boyu 2-6 sözcük (görme alıştırması, hızlı okuma planı §7). -->
     <div id="obekKumanda" class="oto-kaydir obek-kumanda" role="group" aria-label="Öbek modu" hidden>
-      <button id="obekKucult" class="ok-dugme" type="button" aria-label="Öbeği küçült">−</button>
-      <div class="ok-hiz" aria-live="polite">
-        <span class="ok-hiz-etiket"><b id="obekBoyu">3</b> sözcük</span>
+      <div class="ok-sira">
+        <button id="obekOynat" class="ok-dugme ok-ana" type="button" aria-pressed="false"
+                aria-label="Kılavuzu başlat">▶</button>
+        <button id="obekKucult" class="ok-dugme" type="button" aria-label="Öbeği küçült">−</button>
+        <div class="ok-hiz" aria-live="polite">
+          <span class="ok-hiz-etiket"><b id="obekBoyu">3</b> sözcük</span>
+        </div>
+        <button id="obekBuyut" class="ok-dugme" type="button" aria-label="Öbeği büyüt">+</button>
+        <button id="obekTamam" class="ok-dugme ok-kapat" type="button" aria-label="Kumandayı gizle">✓</button>
       </div>
-      <button id="obekBuyut" class="ok-dugme" type="button" aria-label="Öbeği büyüt">+</button>
-      <button id="obekKapat" class="ok-dugme ok-metin" type="button">Kapat</button>
-      <button id="obekTamam" class="ok-dugme ok-kapat" type="button" aria-label="Kumandayı gizle">✓</button>
+      <div class="ok-sira">
+        <button id="obekYavas" class="ok-dugme" type="button" aria-label="Kılavuzu yavaşlat">−</button>
+        <div class="ok-hiz" aria-live="polite">
+          <span class="ok-hiz-etiket"><b id="obekHiz">230</b> kel/dk</span>
+        </div>
+        <button id="obekHizli" class="ok-dugme" type="button" aria-label="Kılavuzu hızlandır">+</button>
+        <button id="obekKapat" class="ok-dugme ok-metin" type="button">Kapat</button>
+      </div>
     </div>
+    <div id="obekCizgi" class="obek-cizgi" aria-hidden="true" hidden></div>
     <div id="otoKaydir" class="oto-kaydir" role="group" aria-label="Otomatik kaydırma" hidden>
       <button id="otoKaydirDurdur" class="ok-dugme ok-ana" type="button" aria-pressed="false"
               aria-label="Kaydırmayı duraklat"></button>

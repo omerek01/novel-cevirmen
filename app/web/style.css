@@ -3016,9 +3016,26 @@ article.obekli span.obek {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-article.obekli span.obek:nth-of-type(even) {
-  background: color-mix(in srgb, currentColor 7%, transparent);
+/* Gri zemin yerine silik alt çizgi (kullanıcı isteği 2026-11-08); öbekler arasındaki
+   boşluk çizgisiz kalır, öbekler ayrık görünür. */
+article.obekli span.obek {
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, currentColor 22%, transparent);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 5px;
 }
+/* Kılavuz çizgi: okuma hızıyla öbekten öbeğe kayar. */
+.obek-cizgi {
+  position: absolute; left: 0; top: 0; z-index: 5;
+  height: 3px; border-radius: 2px;
+  background: var(--accent);
+  pointer-events: none;
+  transition: transform 180ms linear, width 180ms linear;
+}
+.obek-cizgi[hidden] { display: none; }
+@media (prefers-reduced-motion: reduce) { .obek-cizgi { transition: none; } }
+.obek-kumanda { flex-direction: column; height: auto; border-radius: 22px; padding: 4px 6px; }
+.obek-kumanda .ok-sira { display: flex; align-items: center; gap: 2px; }
 .alt-oge[aria-pressed="true"] { color: var(--accent, currentColor); font-weight: 600; }
 body.obek-ayarliyor .okuyucu-alt { display: none; }
 /* Kaydırma da açıksa öbek kumandası onun üstünde durur. */

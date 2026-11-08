@@ -4,7 +4,8 @@
 import { kalanDakika, sonrakiHal } from "./alt-cubuk.js";
 import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { saveSettings, settings } from "./ayarlar.js";
-import { OBEK_EN_BUYUK, OBEK_EN_KUCUK, obekBoyuSinirla, parcalar, sabitObekler } from "./obek-yardimci.js";
+import { OBEK_EN_BUYUK, OBEK_EN_KUCUK, obekBoyuSinirla, obekSuresiMs, parcalar, sabitObekler } from "./obek-yardimci.js";
+import { sozcukDk } from "./okuma-hizi-yardimci.js";
 import { warmOffline } from "./cevrimdisi.js";
 import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
@@ -12,8 +13,9 @@ import { oneriDugmesi } from "./paragraf-oneri.js";
 import { damgaOzeti, damgaSatiri } from "./paragraf-oneri-yardimci.js";
 import { modelAdlari, sureYaz } from "./kunye-yardimci.js";
 import { openBook } from "./kitap.js";
-import { otoKaydirAkiyor, otoKaydirBaslat, otoKaydirKur } from "./oto-kaydir.js";
-import { bolumHarfi, kisiselHdk, okumaHiziAktif, okumaHiziAtlama, okumaHiziKarisik, okumaHiziKaydir, okumaHiziKur } from "./okuma-hizi.js";
+import { kapat as otoKaydirKapat, otoKaydirAkiyor, otoKaydirBaslat, otoKaydirKur } from "./oto-kaydir.js";
+import { hizAdimi, hizSinirla } from "./oto-kaydir-yardimci.js";
+import { bolumHarfi, kisiselHdk, okumaHiziAktif, okumaHiziEtkinlik, okumaHiziAtlama, okumaHiziKarisik, okumaHiziKaydir, okumaHiziKur } from "./okuma-hizi.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
 import { saveTerm, tazelemeyiPlanla, terimiSilGeriAlinabilir } from "./sozluk.js";
 import { ICONS, SVG, el, escapeHtml, localDay } from "./temel.js";
@@ -1741,6 +1743,108 @@ function hepsiniYenidenCiz() {
       if (e.loaded && !e.html && !e.empty && e.el && Array.isArray(e.paras)) renderParagraphs(e, aktifAramaSorgusu(e));
     }
   });
+  // Öbekler yeniden kuruldu: kılavuz ekrandaki ilk öbekten sürer.
+  kilavuzSpan = null;
+  if (kilavuz) {
+    clearTimeout(kilavuz.zaman);
+    kilavuzAdim();
+  } else {
+    el("obekCizgi").hidden = true;
+  }
+}
+
+/* Kılavuz çizgi (kullanıcı isteği 2026-11-08: "öbek altına çizgi atalım ve okuma hızına
+   göre bu öbekler altındaki çizgi kayarak devam etsin"): tek bir çizgi okuma hızıyla
+   (harf/dk, kaydırmayla aynı `kaydirmaHizi`) öbekten öbeğe kayar; çizgi ekranın altına
+   yaklaşınca sayfa kendiliğinden kayar. Metne dokunmak, diyalog ya da gizlenen sekme
+   duraklatır. Bu okumalar hız ölçümünde tempo sayılır. */
+let kilavuz = null; // { span, zaman } — akıyorsa zamanlayıcı
+let kilavuzSpan = null;
+
+export function obekKilavuzAkiyor() {
+  return !!kilavuz;
+}
+
+function kilavuzHizi() {
+  return hizSinirla(settings.kaydirmaHizi || (kisiselHdk() ? kisiselHdk() * 1.1 : 1600));
+}
+
+function cizgiYerlestir(span) {
+  const c = el("obekCizgi");
+  if (!span || !span.isConnected) {
+    c.hidden = true;
+    return;
+  }
+  const kutular = span.getClientRects();
+  const r = kutular[kutular.length - 1] || span.getBoundingClientRect();
+  c.hidden = false;
+  c.style.width = `${Math.max(8, r.width)}px`;
+  c.style.transform = `translate(${r.left + window.scrollX}px, ${r.bottom + window.scrollY + 2}px)`;
+}
+
+function tumObekler() {
+  return [...document.querySelectorAll("#readerBody article.obekli span.obek")];
+}
+
+function ilkGorunenObek() {
+  const cizgi = readerBarBottom();
+  return tumObekler().find((s) => s.getBoundingClientRect().top >= cizgi) || null;
+}
+
+function kilavuzAdim() {
+  if (!kilavuz) return;
+  if (document.visibilityState !== "visible" || document.querySelector("dialog[open]")) {
+    kilavuz.zaman = setTimeout(kilavuzAdim, 400); // bekle, ilerleme
+    return;
+  }
+  const liste = tumObekler();
+  let i = kilavuzSpan ? liste.indexOf(kilavuzSpan) : -1;
+  if (i < 0) {
+    kilavuzSpan = ilkGorunenObek();
+  } else if (i + 1 < liste.length) {
+    kilavuzSpan = liste[i + 1];
+  } else {
+    obekKilavuzDurdur(); // akışın sonu: sonraki bölüm eklenince okur yeniden başlatır
+    return;
+  }
+  if (!kilavuzSpan) return obekKilavuzDurdur();
+  cizgiYerlestir(kilavuzSpan);
+  const r = kilavuzSpan.getBoundingClientRect();
+  if (r.bottom > window.innerHeight * 0.62) {
+    window.scrollBy({ top: r.top - window.innerHeight * 0.35, behavior: "smooth" });
+    setTimeout(() => cizgiYerlestir(kilavuzSpan), 350);
+  }
+  const harf = kilavuzSpan.textContent.replace(/\s+/g, "").length;
+  kilavuz.zaman = setTimeout(kilavuzAdim, obekSuresiMs(harf, kilavuzHizi()));
+}
+
+export function obekKilavuzBaslat() {
+  if (kilavuz) return;
+  if (otoKaydirAkiyor()) otoKaydirKapat(); // iki ayrı tempo aynı anda akmaz
+  if (!settings.obekModu) obekModuDegistir(true);
+  if (kilavuzSpan && !kilavuzSpan.isConnected) kilavuzSpan = null;
+  kilavuz = { zaman: 0 };
+  okumaHiziEtkinlik(); // okur başlattı: ekranda
+  obekKumandaCiz();
+  if (kilavuzSpan) {
+    cizgiYerlestir(kilavuzSpan);
+    const harf = kilavuzSpan.textContent.replace(/\s+/g, "").length;
+    kilavuz.zaman = setTimeout(kilavuzAdim, obekSuresiMs(harf, kilavuzHizi()));
+  } else {
+    kilavuzAdim();
+  }
+}
+
+export function obekKilavuzDurdur() {
+  if (kilavuz) clearTimeout(kilavuz.zaman);
+  kilavuz = null;
+  obekKumandaCiz();
+}
+
+function obekHiziDegistir(yon) {
+  settings.kaydirmaHizi = hizAdimi(kilavuzHizi(), yon);
+  saveSettings();
+  obekKumandaCiz();
 }
 
 function obekKumandaCiz() {
@@ -1751,6 +1855,15 @@ function obekKumandaCiz() {
   el("obekBoyu").textContent = String(boy);
   el("obekKucult").disabled = boy <= OBEK_EN_KUCUK;
   el("obekBuyut").disabled = boy >= OBEK_EN_BUYUK;
+  const e = activeEntry();
+  el("obekHiz").textContent = String(sozcukDk(kilavuzHizi(), e && e.harf, e && e.sozcuk));
+  const oynat = el("obekOynat");
+  oynat.innerHTML = kilavuz
+    ? '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg>'
+    : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z"/></svg>';
+  oynat.setAttribute("aria-label", kilavuz ? "Kılavuzu duraklat" : "Kılavuzu başlat");
+  oynat.setAttribute("aria-pressed", String(!!kilavuz));
+  if (!acik) el("obekCizgi").hidden = true;
 }
 
 function obekKumandaGoster(goster) {
@@ -1760,6 +1873,10 @@ function obekKumandaGoster(goster) {
 
 export function obekModuDegistir(acik) {
   if (!!settings.obekModu === !!acik) return;
+  if (!acik) {
+    obekKilavuzDurdur();
+    kilavuzSpan = null;
+  }
   settings.obekModu = !!acik;
   saveSettings();
   okumaHiziKarisik(); // mod oturum ortasında değişti: bu bölüm ölçülmez
@@ -1877,8 +1994,9 @@ export function kur() {
   });
   // Otomatik kaydırma: çubuk kapanır, yerini kaydırma kumandası alır.
   otoKaydirKur();
-  okumaHiziKur({ aktifBolum: activeEntry, tempoAkiyor: otoKaydirAkiyor,
+  okumaHiziKur({ aktifBolum: activeEntry, tempoAkiyor: () => otoKaydirAkiyor() || obekKilavuzAkiyor(),
     obekModu: () => (settings.obekModu ? obekBoyuSinirla(settings.obekBoyu) : 0) });
+  // Kılavuz akarken okuma tempo sayılır (hız ölçümü): iki tempo kaynağı tek işlevde.
   // Öbek kumandası: alt çubuğun yerini alır (kaydırma kumandası gibi); mod açılır.
   el("altObek").addEventListener("click", () => {
     altHal = "kapali";
@@ -1886,6 +2004,12 @@ export function kur() {
     obekModuDegistir(true);
     obekKumandaGoster(true);
   });
+  el("obekOynat").addEventListener("click", () => (kilavuz ? obekKilavuzDurdur() : obekKilavuzBaslat()));
+  el("obekYavas").addEventListener("click", () => obekHiziDegistir(-1));
+  el("obekHizli").addEventListener("click", () => obekHiziDegistir(1));
+  // Metne dokunmak kılavuzu duraklatır (okur yeri elle düzeltecek ya da terime bakacak).
+  el("readerBody").addEventListener("pointerdown", () => { if (kilavuz) obekKilavuzDurdur(); }, { passive: true });
+  window.addEventListener("resize", () => cizgiYerlestir(kilavuzSpan));
   el("obekKucult").addEventListener("click", () => obekBoyuDegistir(-1));
   el("obekBuyut").addEventListener("click", () => obekBoyuDegistir(1));
   el("obekTamam").addEventListener("click", () => obekKumandaGoster(false));
@@ -1894,12 +2018,17 @@ export function kur() {
     obekKumandaGoster(false);
   });
   new MutationObserver(() => {
-    if (el("readerView").hidden) obekKumandaGoster(false);
+    if (!el("readerView").hidden) return;
+    obekKumandaGoster(false);
+    obekKilavuzDurdur();
+    kilavuzSpan = null;
+    el("obekCizgi").hidden = true;
   }).observe(el("readerView"), { attributes: true, attributeFilter: ["hidden"] });
   obekKumandaCiz();
   el("altKaydir").addEventListener("click", () => {
     altHal = "kapali";
     altCubukCiz();
+    obekKilavuzDurdur(); // iki ayrı tempo aynı anda akmaz
     otoKaydirBaslat();
   });
   // Ayarlar → "Bu bölüm — Yeniden çevir": AKTİF bölümü yerinde yeniden çevirir

@@ -8,6 +8,13 @@ export const OBEK_EN_KUCUK = 2;
 export const OBEK_EN_BUYUK = 6;
 const CUMLE_SONU = /[.!?…:;]["”’)]*$/;
 
+// Kılavuz çizginin bir öbekte kalma süresi (ms): öbeğin harfi ÷ harf/dk. Çok kısa
+// öbekte (tek harf, noktalama) göz yine de bir an durur: en az 150 ms.
+export function obekSuresiMs(harf, hizHdk) {
+  if (!(hizHdk > 0)) return 150;
+  return Math.max(150, Math.round((Math.max(0, harf) / hizHdk) * 60_000));
+}
+
 export function obekBoyuSinirla(boy) {
   const b = Math.round(Number(boy));
   if (!Number.isFinite(b)) return 3;

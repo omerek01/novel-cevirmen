@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gecerliSinirlar, obekBoyuSinirla, parcalar, sabitObekler } from "../../app/web/js/obek-yardimci.js";
+import { gecerliSinirlar, obekBoyuSinirla, obekSuresiMs, parcalar, sabitObekler } from "../../app/web/js/obek-yardimci.js";
 
 const P = "Kaan fenerini yaktı ve dar geçidin sonundaki kapıya baktı.";
 const S = [19, 34, 58];  // "Kaan fenerini yaktı" | " ve dar geçidin" | " sonundaki kapıya baktı."
@@ -58,4 +58,10 @@ test("sabit öbekler parçalara dönünce metin aynen korunur", () => {
   for (const boy of [2, 3, 4, 5, 6]) {
     assert.equal(parcalar(m, sabitObekler(m, boy), "").map((x) => x.t).join(""), m);
   }
+});
+
+test("kılavuz öbekte harf ÷ hız kadar kalır, en az 150 ms", () => {
+  assert.equal(obekSuresiMs(30, 1800), 1000);  // 30 harf, 1800 harf/dk = 30 harf/sn
+  assert.equal(obekSuresiMs(1, 4500), 150);
+  assert.equal(obekSuresiMs(30, 0), 150);
 });
