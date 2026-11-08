@@ -37,7 +37,7 @@ from fastapi.responses import FileResponse  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from starlette.concurrency import run_in_threadpool  # noqa: E402
 
-from pydantic import BaseModel  # noqa: E402
+from pydantic import BaseModel, Field, model_validator  # noqa: E402
 
 from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi, vertex_kredi  # noqa: E402
 from core import ceviri_asamalari, profil_cikarim, wiki_arastirma  # noqa: E402
@@ -417,6 +417,26 @@ class ReadingLogRequest(BaseModel):
     url: str
 
 
+class ReadingSpeedRequest(BaseModel):
+    """Bir bölüm okuma oturumu (hızlı okuma planı §1). `gecerli` istemcinin ön kararı;
+    sunucu sınırları yeniden denetler."""
+    oturum_id: str = Field(pattern=r"^[A-Za-z0-9-]{8,64}$")
+    day: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    slug: str = Field(min_length=1, max_length=2000)
+    url: str = Field(min_length=1, max_length=2000)
+    mode: str = Field(pattern=r"^(serbest|tempo)$")
+    chars: int = Field(ge=0, le=2_000_000)
+    words: int = Field(ge=0)
+    active_ms: int = Field(ge=0, le=86_400_000)
+    gecerli: bool
+
+    @model_validator(mode="after")
+    def _sozcuk_harften_cok_olamaz(self):
+        if self.words > self.chars:
+            raise ValueError("words chars'tan büyük olamaz")
+        return self
+
+
 class StatusRequest(BaseModel):
     status: str  # okunuyor | beklemede | bitti
 
@@ -712,6 +732,20 @@ def post_reading_log(req: ReadingLogRequest) -> dict:
     loglama mümkün değil. Günde bölüm başına bir satır (UNIQUE ile tekil)."""
     logged = reading_log.log_read(req.day, library.resolve_slug(req.slug), req.url)
     return {"ok": logged}
+
+
+@app.post("/api/reading-speed")
+def post_reading_speed(req: ReadingSpeedRequest) -> dict:
+    """Okuma hızı oturumu (best-effort). Aynı `oturum_id` tekrar gelince satır güncellenir."""
+    sonuc = reading_log.log_speed(req.oturum_id, req.day, library.resolve_slug(req.slug), req.url,
+                                  req.mode, req.chars, req.words, req.active_ms, req.gecerli)
+    return {"ok": sonuc is not None, "gecerli": bool(sonuc and sonuc["gecerli"])}
+
+
+@app.get("/api/reading-speed/stats")
+def get_reading_speed_stats(day: str = Query(..., description="İstemcinin yerel günü (YYYY-MM-DD)")) -> dict:
+    """Kişisel okuma hızı, başlangıç çizgisi, değişim, son 30 gün, bugünkü dakika."""
+    return reading_log.speed_stats(day)
 
 
 @app.get("/api/stats")
