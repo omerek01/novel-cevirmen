@@ -749,6 +749,10 @@ export function renderParagraphs(entry, query) {
   // Öbek modu (hızlı okuma planı §7): sabit boylu öbekler çizimde hesaplanır.
   const boy = settings.obekModu ? obekBoyuSinirla(settings.obekBoyu) : 0;
   art.classList.toggle("obekli", boy > 0);
+  // Blok okuma: öbek içi sözcükler yakın, öbekler arası geniş. Gölge: kılavuzun geçtiği
+  // öbekler soluklaşır (geri bakmak yine mümkün). İkisi de öbek kumandasından açılır.
+  art.classList.toggle("blok", boy > 0 && !!settings.obekBlok);
+  art.classList.toggle("golge", boy > 0 && !!settings.obekGolge);
   entry.paras.forEach((para, i) => {
     const p = document.createElement("p");
     p.dataset.idx = i;
@@ -1821,6 +1825,7 @@ function kilavuzAdim() {
   if (i < 0) {
     kilavuzSpan = ilkGorunenObek();
   } else if (i + 1 < liste.length) {
+    kilavuzSpan.classList.add("okundu"); // gölge modunda soluklaşır
     kilavuzSpan = liste[i + 1];
   } else {
     obekKilavuzDurdur(); // akışın sonu: sonraki bölüm eklenince okur yeniden başlatır
@@ -1860,6 +1865,19 @@ export function obekKilavuzDurdur() {
   obekKumandaCiz();
 }
 
+function obekGorunumDegistir(anahtar) {
+  settings[anahtar] = !settings[anahtar];
+  saveSettings();
+  obekKumandaCiz();
+  // Sınıf değişimi yeterli; satır kırılımı değiştiği için konum korunarak uygulanır.
+  konumKoruyarak(() => {
+    for (const art of document.querySelectorAll("#readerBody article.obekli")) {
+      art.classList.toggle("blok", !!settings.obekBlok);
+      art.classList.toggle("golge", !!settings.obekGolge);
+    }
+  });
+}
+
 function obekHiziDegistir(yon) {
   settings.kaydirmaHizi = hizAdimi(kilavuzHizi(), yon);
   saveSettings();
@@ -1882,6 +1900,8 @@ function obekKumandaCiz() {
     : '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z"/></svg>';
   oynat.setAttribute("aria-label", kilavuz ? "Kılavuzu duraklat" : "Kılavuzu başlat");
   oynat.setAttribute("aria-pressed", String(!!kilavuz));
+  el("obekBlok").setAttribute("aria-pressed", String(!!settings.obekBlok));
+  el("obekGolge").setAttribute("aria-pressed", String(!!settings.obekGolge));
   if (!acik) el("obekCizgi").hidden = true;
 }
 
@@ -2025,6 +2045,8 @@ export function kur() {
   });
   el("obekOynat").addEventListener("click", () => (kilavuz ? obekKilavuzDurdur() : obekKilavuzBaslat()));
   el("obekYavas").addEventListener("click", () => obekHiziDegistir(-1));
+  el("obekBlok").addEventListener("click", () => obekGorunumDegistir("obekBlok"));
+  el("obekGolge").addEventListener("click", () => obekGorunumDegistir("obekGolge"));
   el("obekHizli").addEventListener("click", () => obekHiziDegistir(1));
   // Metne dokunmak kılavuzu duraklatır (okur yeri elle düzeltecek ya da terime bakacak).
   el("readerBody").addEventListener("pointerdown", () => { if (kilavuz) obekKilavuzDurdur(); }, { passive: true });

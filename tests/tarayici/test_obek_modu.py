@@ -91,3 +91,30 @@ def test_kilavuz_cizgi_okuma_hiziyla_obekten_obege_kayar_ve_durur(sayfa):
     expect(sayfa.locator("#obekKumanda")).to_contain_text("kel/dk")
     sayfa.locator("#obekYavas").click()
     assert sayfa.evaluate("JSON.parse(localStorage.getItem('novellink:settings')).kaydirmaHizi") == 4275
+
+
+def test_blok_okuma_ve_golge_modu_kumandadan_acilir(sayfa):
+    sayfa.add_init_script(
+        "localStorage.setItem('novellink:settings', JSON.stringify({kaydirmaHizi: 4500}))")
+    _okuyucu(sayfa)
+    _kumanda(sayfa)
+    makale = sayfa.locator("#readerBody article.chapter").first
+    # Blok: öbekler arası boşluk açılır, ayar kalıcı.
+    sayfa.locator("#obekBlok").click()
+    expect(sayfa.locator("#obekBlok")).to_have_attribute("aria-pressed", "true")
+    expect(makale).to_have_class(__import__("re").compile(r"\bblok\b"))
+    assert float(sayfa.locator("span.obek").first.evaluate(
+        "e => parseFloat(getComputedStyle(e).marginRight)")) > 0
+    # Gölge: kılavuzun geçtiği öbekler soluklaşır, metin silinmez.
+    sayfa.locator("#obekGolge").click()
+    sayfa.locator("#obekOynat").click()
+    sayfa.wait_for_function("document.querySelectorAll('article.golge span.obek.okundu').length >= 2")
+    sayfa.locator("#obekOynat").click()
+    gecilen = sayfa.locator("span.obek.okundu").first
+    sayfa.wait_for_timeout(500)
+    assert float(gecilen.evaluate("e => getComputedStyle(e).opacity")) < 0.5
+    assert gecilen.inner_text().strip() != ""
+    ayar = sayfa.evaluate("JSON.parse(localStorage.getItem('novellink:settings'))")
+    assert ayar["obekBlok"] is True and ayar["obekGolge"] is True
+    sayfa.locator("#obekGolge").click()  # kapatınca soluklaşma kalkar
+    assert float(gecilen.evaluate("e => getComputedStyle(e).opacity")) == 1

@@ -3035,3 +3035,13 @@ body.obek-ayarliyor .okuyucu-alt { display: none; }
 /* Kaydırma da açıksa öbek kumandası onun üstünde durur. */
 body.oto-kaydiriyor .obek-kumanda { bottom: calc(76px + env(safe-area-inset-bottom)); }
 .obek-kumanda .ok-metin { width: auto; padding: 0 12px; font-size: 13px; }
+/* Blok okuma (kullanıcı isteği 2026-11-08): öbek içi sözcükler birbirine yaklaşır,
+   öbekler arasına geniş boşluk girer; göz öbeği tek parça görsün. */
+article.obekli.blok span.obek { word-spacing: -0.04em; }
+article.obekli.blok span.obek + span.obek,
+article.obekli.blok span.obek { margin-right: 0.55em; }
+/* Gölge modu: kılavuzun geçtiği öbekler soluklaşır. Tamamen silinmez: geri bakmayı
+   engellemek anlamayı düşürür (Schotter ve ark. 2012), soluk metin yine okunur. */
+article.obekli.golge span.obek.okundu { opacity: 0.28; transition: opacity 400ms ease; }
+@media (prefers-reduced-motion: reduce) { article.obekli.golge span.obek.okundu { transition: none; } }
+.ok-dugme.ok-metin[aria-pressed="true"] { color: var(--accent); font-weight: 700; }
