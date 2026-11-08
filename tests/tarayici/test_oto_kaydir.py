@@ -58,7 +58,7 @@ def test_hiz_kel_dk_gosterilir_yuzde_5_adimla_ayarlanir_ve_saklanir(sayfa):
     _okuyucu(sayfa)
     _baslat(sayfa)
     deger = sayfa.locator("#otoKaydirDeger")
-    expect(sayfa.locator(".ok-hiz-etiket")).to_contain_text("kel/dk")
+    expect(sayfa.locator("#otoKaydir .ok-hiz-etiket")).to_contain_text("kel/dk")
     assert _ayar(sayfa, "kaydirmaHizi") == 1600  # ne eski seviye ne kişisel hız: başlangıç
     ilk = int(deger.inner_text())
     sayfa.locator("#otoKaydirHizli").click()
