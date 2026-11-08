@@ -3045,3 +3045,28 @@ article.obekli.blok span.obek { margin-right: 0.55em; }
 article.obekli.golge span.obek.okundu { opacity: 0.28; transition: opacity 400ms ease; }
 @media (prefers-reduced-motion: reduce) { article.obekli.golge span.obek.okundu { transition: none; } }
 .ok-dugme.ok-metin[aria-pressed="true"] { color: var(--accent); font-weight: 700; }
+/* Tempo yoklaması şeridi (Adım B): kumandaların üstünde, akışı durdurmaz. */
+.yoklama-serit {
+  position: fixed; left: 50%; transform: translateX(-50%); z-index: 31;
+  bottom: calc(76px + env(safe-area-inset-bottom));
+  display: flex; flex-direction: column; gap: 6px; align-items: center;
+  width: max-content; max-width: calc(100vw - 32px); padding: 8px 10px;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+  box-shadow: 0 12px 26px -18px rgb(var(--shadow-rgb) / 0.75);
+}
+.yoklama-serit[hidden] { display: none; }
+body.obek-ayarliyor .yoklama-serit { bottom: calc(132px + env(safe-area-inset-bottom)); }
+.yoklama-dugmeler { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+.yoklama-dugmeler button {
+  min-height: 44px; padding: 0 14px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--border); background: transparent; color: inherit; font: inherit;
+}
+/* Okuma hızı kartı (Adım B, ayarlar). */
+.hiz-karti p { margin: 4px 0; }
+.hiz-karti .hk-bugun b { font-size: 30px; }
+.hiz-karti span, .hiz-karti .hk-bilgi { opacity: 0.75; font-size: 0.9em; }
+.hiz-karti .hk-grafik { width: 100%; max-width: 320px; height: 64px; display: block; margin: 6px 0; }
+.hiz-karti .hk-grafik path { fill: none; stroke-width: 2; }
+.hiz-karti .hk-serbest { stroke: var(--accent); }
+.hiz-karti .hk-tempo { stroke: currentColor; opacity: 0.5; stroke-dasharray: 4 3; }
+.hiz-karti .hk-obek { margin: 4px 0; padding-left: 18px; }

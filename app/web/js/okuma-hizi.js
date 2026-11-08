@@ -19,6 +19,7 @@ const TIK_MS = 1000;
 let aktifBolum = () => null;
 let tempoAkiyor = () => false;
 let obekModu = () => false;
+let bolumBittiHaber = () => {};
 const oturumlar = new Map(); // url → açık oturum (geri kaydırınca duraklar, dönünce sürer)
 const bitenler = new Set(); // bu okuyucu ziyaretinde biten url'ler: yeniden ölçülmez
 let aktifUrl = null;
@@ -120,6 +121,7 @@ function bitir(url, bitti) {
   oturumlar.delete(url);
   bitenler.add(url);
   gonder(o, bitti);
+  if (bitti) bolumBittiHaber(o.tempo, o.tempoEtkin); // tempo yoklaması (Adım B)
 }
 
 function tikla() {
@@ -199,6 +201,7 @@ export function okumaHiziKur(baglanti) {
   aktifBolum = baglanti.aktifBolum;
   tempoAkiyor = baglanti.tempoAkiyor;
   if (baglanti.obekModu) obekModu = baglanti.obekModu;
+  if (baglanti.bolumBitti) bolumBittiHaber = baglanti.bolumBitti;
   if (!tik) tik = setInterval(tikla, TIK_MS);
   // Sekme gizlenince o anki durum aynı oturum_id ile gider; Android PWA'da pagehide
   // çoğu zaman gelmez. Oturum kapanmaz, dönünce sürer.

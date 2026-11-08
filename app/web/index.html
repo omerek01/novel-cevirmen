@@ -363,6 +363,11 @@
       </div>
     </div>
     <div id="obekCizgi" class="obek-cizgi" aria-hidden="true" hidden></div>
+    <!-- TEMPO YOKLAMASI (hızlı okuma planı Adım B): diyalog değil, akışı durdurmaz. -->
+    <div id="yoklama" class="yoklama-serit" role="status" aria-live="polite" hidden>
+      <span id="yoklamaMetin"></span>
+      <div id="yoklamaDugmeler" class="yoklama-dugmeler"></div>
+    </div>
     <div id="otoKaydir" class="oto-kaydir" role="group" aria-label="Otomatik kaydırma" hidden>
       <button id="otoKaydirDurdur" class="ok-dugme ok-ana" type="button" aria-pressed="false"
               aria-label="Kaydırmayı duraklat"></button>
@@ -764,6 +769,8 @@
         <button class="seg" data-obekboy="6">6</button>
       </div>
     </div>
+    <p class="ayar-bolumu">Okuma hızı</p>
+    <div id="hizKarti" class="hiz-karti"></div>
     <p class="ayar-bolumu">Çeviri modeli</p>
     <div class="setting-row setting-row-dikey">
       <span>Çeviri modeli</span>

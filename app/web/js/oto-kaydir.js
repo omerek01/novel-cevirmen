@@ -161,6 +161,11 @@ function ciz() {
   el("otoKaydirHizli").disabled = h >= HIZ_UST;
 }
 
+// Hız dışarıdan (tempo yoklaması) değişince kumanda yeniden çizilir.
+export function otoKaydirCiz() {
+  ciz();
+}
+
 export function otoKaydirBaslat() {
   durum = "akiyor";
   ciz();

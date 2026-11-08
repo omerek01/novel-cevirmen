@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v167"; // Blok okuma ve gölge modu
+const SHELL_CACHE = "novellink-shell-v168"; // Tempo yoklaması ve okuma hızı kartı
 const DATA_CACHE = "novellink-data";
 const DEFTER_YOLU = /^\/api\/book\/[^/]+\/defter(?=\/|$)/;
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
@@ -39,6 +39,9 @@ const SHELL = [
   "/js/okuma-hizi.js",
   "/js/okuma-hizi-yardimci.js",
   "/js/obek-yardimci.js",
+  "/js/yoklama.js",
+  "/js/yoklama-yardimci.js",
+  "/js/hiz-karti-yardimci.js",
   "/js/api-durum.js",
   "/js/api-durum-yardimci.js",
   "/js/asama-yardimci.js",

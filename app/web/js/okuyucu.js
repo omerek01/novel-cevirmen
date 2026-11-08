@@ -13,7 +13,8 @@ import { oneriDugmesi } from "./paragraf-oneri.js";
 import { damgaOzeti, damgaSatiri } from "./paragraf-oneri-yardimci.js";
 import { modelAdlari, sureYaz } from "./kunye-yardimci.js";
 import { openBook } from "./kitap.js";
-import { kapat as otoKaydirKapat, otoKaydirAkiyor, otoKaydirBaslat, otoKaydirKur } from "./oto-kaydir.js";
+import { kapat as otoKaydirKapat, otoKaydirAkiyor, otoKaydirBaslat, otoKaydirCiz, otoKaydirKur } from "./oto-kaydir.js";
+import { tempoBolumuBitti, yoklamaKur } from "./yoklama.js";
 import { hizAdimi, hizSinirla } from "./oto-kaydir-yardimci.js";
 import { bolumHarfi, kisiselHdk, okumaHiziAktif, okumaHiziEtkinlik, okumaHiziAtlama, okumaHiziKarisik, okumaHiziKaydir, okumaHiziKur } from "./okuma-hizi.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
@@ -2034,7 +2035,19 @@ export function kur() {
   // Otomatik kaydırma: çubuk kapanır, yerini kaydırma kumandası alır.
   otoKaydirKur();
   okumaHiziKur({ aktifBolum: activeEntry, tempoAkiyor: () => otoKaydirAkiyor() || obekKilavuzAkiyor(),
-    obekModu: () => (settings.obekModu ? obekBoyuSinirla(settings.obekBoyu) : 0) });
+    obekModu: () => (settings.obekModu ? obekBoyuSinirla(settings.obekBoyu) : 0),
+    bolumBitti: tempoBolumuBitti });
+  yoklamaKur({
+    tempoDurdur: () => {
+      if (otoKaydirAkiyor()) otoKaydirKapat();
+      obekKilavuzDurdur();
+    },
+    etkinlik: okumaHiziEtkinlik,
+    hizDegisti: () => {
+      otoKaydirCiz();
+      obekKumandaCiz();
+    },
+  });
   // Kılavuz akarken okuma tempo sayılır (hız ölçümü): iki tempo kaynağı tek işlevde.
   // Öbek kumandası: alt çubuğun yerini alır (kaydırma kumandası gibi); mod açılır.
   el("altObek").addEventListener("click", () => {

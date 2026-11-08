@@ -76,3 +76,36 @@ def test_kalan_sure_kisisel_hizla_hesaplanir(sayfa):
         "JSON.parse(localStorage.getItem('novellink:okuma-hizi') || 'null')?.kisisel_hiz?.hdk === 3000")
     sayfa.mouse.wheel(0, 10)  # kalan süre kaydırmayla tazelenir
     expect(sayfa.locator("#altKalan")).to_have_text(f"{beklenen} dk")
+
+
+def test_tempo_yoklamasi_seridi_ve_zorlandim_hizi_dusurur(sayfa):
+    sayfa.add_init_script(
+        "localStorage.setItem('novellink:settings', JSON.stringify({kaydirmaHizi: 2000}))")
+    _uzun_kitap()
+    _ac(sayfa)
+    serit = sayfa.locator("#yoklama")
+    expect(serit).to_be_hidden()
+    # İki tempo bölümü bitti (ölçüm modülünün haberi): ikincide şerit çıkar.
+    sayfa.evaluate("""async () => {
+        const m = await import('/js/yoklama.js');
+        m.tempoBolumuBitti(true, true);
+        m.tempoBolumuBitti(true, true);
+    }""")
+    expect(serit).to_be_visible()
+    expect(serit).to_contain_text("Takip edebildin mi?")
+    sayfa.locator("#yoklamaDugmeler [data-cevap='zorlandim']").click()
+    expect(serit).to_be_hidden()
+    assert sayfa.evaluate("JSON.parse(localStorage.getItem('novellink:settings')).kaydirmaHizi") == 1920
+
+
+def test_ayarlarda_okuma_hizi_karti(sayfa):
+    _uzun_kitap()
+    for i in range(10):
+        reading_log.log_speed(f"kart-oturum-{i:02d}", "2026-11-01", "gumus-kule", f"u{i}",
+                              "serbest", 3000, 460, 120_000, True)
+    _ac(sayfa)
+    sayfa.locator("#settingsBtn").click()
+    kart = sayfa.locator("#hizKarti")
+    expect(kart).to_contain_text("kel/dk")
+    expect(kart).to_contain_text("bugün okudun")
+    expect(kart).to_contain_text("10 bölüm")

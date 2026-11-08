@@ -19,7 +19,7 @@ def _ayarlar(sayfa):
 def test_ayarlar_bolumleri_ve_tema_ornekleri(sayfa):
     panel = _ayarlar(sayfa)
     expect(panel.locator(".ayar-bolumu")).to_have_text(
-        ["Sayfa", "Çeviri modeli", "Vertex kredisi", "Çeviri aşamaları",
+        ["Sayfa", "Okuma hızı", "Çeviri modeli", "Vertex kredisi", "Çeviri aşamaları",
          "Karakter defteri", "Bakım"])
     expect(panel.locator("[data-theme-opt] i.theme-swatch")).to_have_count(3)
 

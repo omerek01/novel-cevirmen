@@ -6,6 +6,8 @@ import { defterNotu } from "./defter-anahtar-yardimci.js";
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { bitisMetni, dokumMetni, hizMetni, kaynakMetni, ozet, zamanOrani } from "./kredi-yardimci.js";
 import { obekBoyuDegistir, obekModuDegistir, refreshStreamEnd, setStatus } from "./okuyucu.js";
+import { hizIstatistigi, hizTazele } from "./okuma-hizi.js";
+import { kartHtml } from "./hiz-karti-yardimci.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { ICONS, THEME_ICON, el, markSegment } from "./temel.js";
 
@@ -54,6 +56,15 @@ export function applySettings() {
   );
   root.style.setProperty("--reading-margin", MARGINS[settings.margin] || MARGINS.normal);
 }
+// Okuma hızı kartı: önce önbellekteki istatistik, sonra tazesi (çevrimdışıyken eskisi kalır).
+async function hizKartiCiz() {
+  const kutu = el("hizKarti");
+  if (!kutu) return;
+  kutu.innerHTML = kartHtml(hizIstatistigi());
+  await hizTazele();
+  kutu.innerHTML = kartHtml(hizIstatistigi());
+}
+
 export function updateSettingsUI() {
   el("fontValue").textContent = settings.fontPx;
   el("fontFamily").textContent = settings.font === "sans" ? "Sans" : "Serif";
@@ -667,6 +678,7 @@ export function kur() {
       return;
     }
     diyalogAc("settingsPanel");
+    hizKartiCiz();
     showShellVersion();
     loadModelSecim();
     loadKredi();
