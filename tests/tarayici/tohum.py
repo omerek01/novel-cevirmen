@@ -12,7 +12,7 @@ from core import cache, db, glossary, library
 TABLOLAR = (
     "chapters", "books", "aliases", "glossary", "reading_log", "settings",
     "jobs", "kullanim", "sozluk_gecmis", "sozluk_red", "sozluk_yazim",
-    "ceviri_arsivi", "sozluk_tur",
+    "ceviri_arsivi", "sozluk_tur", "reading_speed",
     # API gözlem kaydı: testler birbirinin geçiş/istek kaydını görmesin.
     # `api_meta` (kayıt başlangıcı) BİLEREK temizlenmez: sunucu süreci tabloları
     # kurduğunu hatırlıyor ve başlangıç satırını yeniden yazmaz.

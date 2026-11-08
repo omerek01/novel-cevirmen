@@ -5,10 +5,15 @@
    Parmak ekrandayken durur, bırakınca sürer: okur konumu elle düzeltebilsin.
    Kaydırma sürerken ekran kararmasın diye ekran kilidi (Wake Lock) istenir;
    duraklayınca bırakılır. Sonsuz akışta sonraki bölüm eklenince kendiliğinden devam
-   eder: sayfa sonunda döngü yalnız bekler. Hız seviyesi ayarlarda saklanır.
-   Hız ve adım hesabı saf `oto-kaydir-yardimci.js`'te. */
+   eder: sayfa sonunda döngü yalnız bekler. Hız harf/dk olarak ayarlarda saklanır
+   (`kaydirmaHizi`, hızlı okuma planı §3); piksel/sn aktif bölümün çizim yoğunluğundan
+   hesaplanır, yazı boyutu değişince akış hızı kaymaz. Hesap saf `oto-kaydir-yardimci.js`'te. */
 import { saveSettings, settings } from "./ayarlar.js";
-import { HIZLAR, adim, hiz, seviyeSinirla } from "./oto-kaydir-yardimci.js";
+import { kisiselHdk, okumaHiziEtkinlik, yogunluk } from "./okuma-hizi.js";
+import { sozcukDk } from "./okuma-hizi-yardimci.js";
+import {
+  ESKI_HIZLAR, HIZ_ALT, HIZ_UST, adim, centikDolu, hizAdimi, hizSinirla, pxSn, seviyedenHiz,
+} from "./oto-kaydir-yardimci.js";
 import { el } from "./temel.js";
 
 let durum = "kapali"; // kapali | akiyor | duraklatildi
@@ -23,14 +28,48 @@ let sonHareket = 0; // konumun en son değiştiği an (sayfa sonu algısı)
 // Sayfa sonunda bu kadar ilerleyemezse ve sonraki bölüm yüklenmiyorsa durur: döngü
 // boşuna dönüp ekran kilidini saatlerce tutmasın. Yükleme sürerken bekler.
 const DIP_BEKLEME_MS = 4000;
+const CENTIK = 12;
+const ILK_HIZ = 1600; // ne eski seviye ne kişisel hız varken başlangıç (≈ 246 sözcük/dk)
+let sonPx = null; // son geçerli piksel/sn: bölüm çizilirken akış durmasın
 
 const ikonlar = {
   durdur: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="6.5" y="5" width="3.6" height="14" rx="1"/><rect x="13.9" y="5" width="3.6" height="14" rx="1"/></svg>',
   surdur: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z"/></svg>',
 };
 
-function seviye() {
-  return seviyeSinirla(settings.kaydirmaSeviyesi);
+// Okurun harf/dk hızı. İlk kez: eski `kaydirmaSeviyesi` o anki çizimle aynı kaydırma
+// hızını veren harf/dk'ya bir kez çevrilir (telefonda satır uzunluğu değiştiği için
+// sabit formül yanlış olurdu); seviye yoksa kişisel hız × 1,10, o da yoksa 1600.
+function hiz() {
+  if (Number.isFinite(settings.kaydirmaHizi)) return hizSinirla(settings.kaydirmaHizi);
+  const y = yogunluk();
+  let yeni = null;
+  if (settings.kaydirmaSeviyesi != null) {
+    if (!y) return hizSinirla(ILK_HIZ); // bölüm çizilmeden çevrilmez, sonraki karede denenir
+    yeni = seviyedenHiz(settings.kaydirmaSeviyesi, y.yukseklik, y.harf);
+  } else {
+    const k = kisiselHdk();
+    yeni = hizSinirla(k ? k * 1.1 : ILK_HIZ);
+  }
+  // Kumanda kapalıyken (açılışta çizim) yalnız gösterilir; çevrim akış başlayınca yazılır,
+  // kişisel hız o ana dek sunucudan gelmiş olur.
+  if (durum === "kapali") return yeni;
+  settings.kaydirmaHizi = yeni;
+  delete settings.kaydirmaSeviyesi;
+  saveSettings();
+  return yeni;
+}
+
+// Bu karenin piksel/sn'si. Yoğunluk yoksa son geçerli değer; o da yoksa eski seviye 4.
+function karePxSn() {
+  const y = yogunluk();
+  const px = y ? pxSn(hiz(), y.yukseklik, y.harf) : null;
+  if (px != null) sonPx = px;
+  return sonPx != null ? sonPx : ESKI_HIZLAR[3];
+}
+
+export function otoKaydirAkiyor() {
+  return durum === "akiyor";
 }
 
 function okuyucuAcik() {
@@ -81,7 +120,7 @@ function dongu(zaman) {
     // Okuyucudan çıkıldıysa tamamen kapat; diyalog açıksa yalnız bekle.
     if (el("readerView")?.hidden) return kapat();
   } else if (!parmakla && !seciliMetinVar()) {
-    const sonuc = adim(birikim, hiz(seviye()), sonZaman ? zaman - sonZaman : 0);
+    const sonuc = adim(birikim, karePxSn(), sonZaman ? zaman - sonZaman : 0);
     birikim = sonuc.birikim;
     if (sonuc.px) window.scrollBy(0, sonuc.px);
     const y = window.scrollY;
@@ -113,11 +152,13 @@ function ciz() {
   dugme.innerHTML = akiyor ? ikonlar.durdur : ikonlar.surdur;
   dugme.setAttribute("aria-label", akiyor ? "Kaydırmayı duraklat" : "Kaydırmayı sürdür");
   dugme.setAttribute("aria-pressed", String(!akiyor));
-  const s = seviye();
-  el("otoKaydirDeger").textContent = String(s);
-  [...el("otoKaydirCentik").children].forEach((c, i) => c.classList.toggle("dolu", i < s));
-  el("otoKaydirYavas").disabled = s <= 1;
-  el("otoKaydirHizli").disabled = s >= HIZLAR.length;
+  const h = hiz();
+  const y = yogunluk();
+  el("otoKaydirDeger").textContent = String(sozcukDk(h, y && y.harf, y && y.sozcuk));
+  const dolu = centikDolu(h, CENTIK);
+  [...el("otoKaydirCentik").children].forEach((c, i) => c.classList.toggle("dolu", i < dolu));
+  el("otoKaydirYavas").disabled = h <= HIZ_ALT;
+  el("otoKaydirHizli").disabled = h >= HIZ_UST;
 }
 
 export function otoKaydirBaslat() {
@@ -142,15 +183,15 @@ export function kapat() {
   ciz();
 }
 
-function hizDegistir(fark) {
-  settings.kaydirmaSeviyesi = seviyeSinirla(seviye() + fark);
+function hizDegistir(yon) {
+  settings.kaydirmaHizi = hizAdimi(hiz(), yon);
   saveSettings();
   ciz();
 }
 
 export function otoKaydirKur() {
   const centik = el("otoKaydirCentik");
-  centik.replaceChildren(...HIZLAR.map(() => document.createElement("i")));
+  centik.replaceChildren(...Array.from({ length: CENTIK }, () => document.createElement("i")));
   el("otoKaydirDurdur").addEventListener("click", () =>
     durum === "akiyor" ? duraklat() : otoKaydirBaslat());
   el("otoKaydirYavas").addEventListener("click", () => hizDegistir(-1));
@@ -159,7 +200,10 @@ export function otoKaydirKur() {
 
   // Parmak metnin üstündeyken dur, bırakınca sür (sürükleyerek konum düzeltmek için).
   const govde = el("readerBody");
-  govde.addEventListener("pointerdown", () => { parmakla = true; }, { passive: true });
+  govde.addEventListener("pointerdown", () => {
+    parmakla = true;
+    okumaHiziEtkinlik(); // okur ekranda: hız ölçümüne iz (ikinci dinleyici açılmaz)
+  }, { passive: true });
   const birak = () => {
     if (!parmakla) return;
     parmakla = false;

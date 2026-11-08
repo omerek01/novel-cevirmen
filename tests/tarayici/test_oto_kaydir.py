@@ -49,22 +49,58 @@ def test_duraklat_durdurur_surdur_devam_eder(sayfa):
     sayfa.wait_for_function(f"scrollY > {y + 3}")
 
 
-def test_hiz_ayarlanir_ve_saklanir(sayfa):
+def _ayar(sayfa, anahtar):
+    return sayfa.evaluate(f"JSON.parse(localStorage.getItem('novellink:settings'))?.{anahtar} ?? null")
+
+
+def test_hiz_kel_dk_gosterilir_yuzde_5_adimla_ayarlanir_ve_saklanir(sayfa):
+    """Hız birimi harf/dk (hızlı okuma planı §3): kumanda kel/dk gösterir, ± %5."""
     _okuyucu(sayfa)
     _baslat(sayfa)
     deger = sayfa.locator("#otoKaydirDeger")
-    expect(deger).to_have_text("4")
+    expect(sayfa.locator(".ok-hiz-etiket")).to_contain_text("kel/dk")
+    assert _ayar(sayfa, "kaydirmaHizi") == 1600  # ne eski seviye ne kişisel hız: başlangıç
+    ilk = int(deger.inner_text())
     sayfa.locator("#otoKaydirHizli").click()
     sayfa.locator("#otoKaydirHizli").click()
-    expect(deger).to_have_text("6")
-    expect(sayfa.locator("#otoKaydirCentik i.dolu")).to_have_count(6)
-    assert sayfa.evaluate("JSON.parse(localStorage.getItem('novellink:settings')).kaydirmaSeviyesi") == 6
-    for _ in range(20):
+    assert _ayar(sayfa, "kaydirmaHizi") == 1764  # 1600 → 1680 → 1764
+    assert int(deger.inner_text()) > ilk
+    expect(sayfa.locator("#otoKaydirCentik i.dolu")).to_have_count(4)
+    for _ in range(40):
         if sayfa.locator("#otoKaydirYavas").is_disabled():
             break
         sayfa.locator("#otoKaydirYavas").click()
-    expect(deger).to_have_text("1")
     expect(sayfa.locator("#otoKaydirYavas")).to_be_disabled()
+    assert _ayar(sayfa, "kaydirmaHizi") == 700
+
+
+def test_eski_seviye_ayni_kaydirma_hiziyla_harf_dk_ya_cevrilir(sayfa):
+    """Kayıtlı `kaydirmaSeviyesi` ilk başlatmada o anki çizimle çevrilir: akış hızı aynı kalır."""
+    sayfa.add_init_script(
+        "localStorage.setItem('novellink:settings', JSON.stringify({kaydirmaSeviyesi: 4}))")
+    from core import cache
+
+    sayfa.set_viewport_size({"width": 390, "height": 420})
+    urller = tohum.kitap(bolum_sayisi=1)
+    # Uzun bölüm: kısa tohum metninde çevrilen hız alt sınıra (700) takılır, akış hızlanırdı.
+    uzun = "\n\n".join(tohum.TR * 12)
+    cache.save_chapter(urller[0], {"book_slug": "gumus-kule", "book_title": "Gumus Kule",
+                                   "title": "Chapter 1", "chapter_no": 1, "translation": uzun,
+                                   "next_url": None, "prev_url": None, "detected_names": [],
+                                   "chunk_count": 1})
+    sayfa.goto(sayfa.taban + "/")
+    sayfa.locator("#shelves .spine[data-slug]").first.click()
+    sayfa.locator("#chapterList .chapter-row").last.click()
+    expect(sayfa.locator("#readerBody article.chapter p[data-idx]")).to_have_count(len(tohum.TR) * 12)
+    _baslat(sayfa)
+    sayfa.wait_for_function(
+        "JSON.parse(localStorage.getItem('novellink:settings')).kaydirmaHizi > 0")
+    assert _ayar(sayfa, "kaydirmaSeviyesi") is None
+    y0 = sayfa.evaluate("scrollY")
+    sayfa.wait_for_timeout(2000)
+    hiz = (sayfa.evaluate("scrollY") - y0) / 2
+    # Seviye 4 = 16 px/sn. Pay: bölüm yüksekliği başlık ve künye çizilince biraz değişir.
+    assert 12 <= hiz <= 22, hiz
 
 
 def test_kapat_alt_cubugu_geri_getirir(sayfa):

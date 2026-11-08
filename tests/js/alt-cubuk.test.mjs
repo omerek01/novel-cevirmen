@@ -14,8 +14,14 @@ test("bilinmeyen olay hâli değiştirmez", () => {
   assert.equal(sonrakiHal("acik", "baska"), "acik");
 });
 
-test("kalan dakika en az 1, sözcük/230 ölçeğinde", () => {
-  assert.equal(kalanDakika(0.99, 100), 1);
-  assert.equal(kalanDakika(0.5, 2300), 5);
-  assert.equal(kalanDakika(0, 0), 1);
+test("kalan dakika kişisel harf/dk ile, en az 1", () => {
+  assert.equal(kalanDakika(0.5, 6000, 1500), 2);
+  assert.equal(kalanDakika(0, 9000, 3000), 3);
+  assert.equal(kalanDakika(0.99, 100, 1500), 1);
+  assert.equal(kalanDakika(0, 0, 1500), 1);
+});
+
+test("hız bilinmiyorsa 230 sözcük/dk (1495 harf/dk) varsayılır", () => {
+  assert.equal(kalanDakika(0, 14950), 10);
+  assert.equal(kalanDakika(0.5, 14950, 0), 5);
 });

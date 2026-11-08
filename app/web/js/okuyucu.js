@@ -11,7 +11,8 @@ import { oneriDugmesi } from "./paragraf-oneri.js";
 import { damgaOzeti, damgaSatiri } from "./paragraf-oneri-yardimci.js";
 import { modelAdlari, sureYaz } from "./kunye-yardimci.js";
 import { openBook } from "./kitap.js";
-import { otoKaydirBaslat, otoKaydirKur } from "./oto-kaydir.js";
+import { otoKaydirAkiyor, otoKaydirBaslat, otoKaydirKur } from "./oto-kaydir.js";
+import { bolumHarfi, kisiselHdk, okumaHiziAktif, okumaHiziAtlama, okumaHiziKaydir, okumaHiziKur } from "./okuma-hizi.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
 import { saveTerm, tazelemeyiPlanla, terimiSilGeriAlinabilir } from "./sozluk.js";
 import { ICONS, SVG, el, escapeHtml, localDay } from "./temel.js";
@@ -92,6 +93,7 @@ export function setActiveChapter(e) {
   }
   saveLastRead(durum.currentBookSlug, e.url);
   logReadOnce(e);
+  okumaHiziAktif(e, currentRatio(), stream);
 }
 
 // Okuma günlüğü: bölüm gerçekten aktif olunca, oturum başına bir kez (karar #8 —
@@ -167,9 +169,10 @@ export function altOlay(olay) {
 
 export function altCubukGuncelle(ratio) {
   const e = activeEntry();
-  const sozcuk = e && e.paras ? e.paras.join(" ").split(/\s+/).length : 0;
+  // Kişisel hızla (tempo akarken onun hızıyla); ikisi yoksa eski 230 sözcük/dk.
+  const hiz = otoKaydirAkiyor() ? settings.kaydirmaHizi : kisiselHdk();
   const kalan = el("altKalan");
-  if (kalan) kalan.textContent = `${kalanDakika(ratio, sozcuk)} dk`;
+  if (kalan) kalan.textContent = `${kalanDakika(ratio, bolumHarfi(e), hiz)} dk`;
   const dolu = document.querySelector("#okuyucuAlt .dolu");
   if (dolu) dolu.setAttribute("stroke-dasharray", `${(HALKA * ratio).toFixed(1)} ${HALKA.toFixed(1)}`);
 }
@@ -215,6 +218,7 @@ export function hudGoster() {
 export function onReaderScroll() {
   updateActiveChapter();
   updateProgress();
+  okumaHiziKaydir(activeEntry(), currentRatio());
   hudGuncelle();
   if (isRestoring) return;
   if (scrollSaveTimer) return;
@@ -234,6 +238,7 @@ export function scrollToChapterRatio(e, ratio) {
     const target = absTop + (ratio > 0 ? ratio * rect.height : 0) - barH;
     window.scrollTo(0, Math.max(0, Math.round(target)));
     updateActiveChapter();
+    if (ratio > 0.1) okumaHiziAtlama(); // ortaya zıplandı: bu bölüm okunarak geçilmedi
     updateProgress();
     requestAnimationFrame(() => {
       isRestoring = false;
@@ -1735,6 +1740,7 @@ export function focusMatch() {
     const m = findMatches[findIndex];
     m.classList.add("find-active");
     m.scrollIntoView({ block: "center", behavior: "smooth" });
+    okumaHiziAtlama(); // aramayla gezilen bölüm ölçülmez
   }
 }
 export function cycleFind(dir) {
@@ -1777,6 +1783,7 @@ export function kur() {
   });
   // Otomatik kaydırma: çubuk kapanır, yerini kaydırma kumandası alır.
   otoKaydirKur();
+  okumaHiziKur({ aktifBolum: activeEntry, tempoAkiyor: otoKaydirAkiyor });
   el("altKaydir").addEventListener("click", () => {
     altHal = "kapali";
     altCubukCiz();

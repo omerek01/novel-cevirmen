@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v161"; // Kitap içi metin arama
+const SHELL_CACHE = "novellink-shell-v162"; // Okuma hızı ölçümü, harf/dk kaydırma
 const DATA_CACHE = "novellink-data";
 const DEFTER_YOLU = /^\/api\/book\/[^/]+\/defter(?=\/|$)/;
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
@@ -36,6 +36,8 @@ const SHELL = [
   "/js/kunye-yardimci.js",
   "/js/oto-kaydir.js",
   "/js/oto-kaydir-yardimci.js",
+  "/js/okuma-hizi.js",
+  "/js/okuma-hizi-yardimci.js",
   "/js/api-durum.js",
   "/js/api-durum-yardimci.js",
   "/js/asama-yardimci.js",
@@ -262,6 +264,7 @@ self.addEventListener("fetch", (event) => {
   if (DEFTER_YOLU.test(url.pathname)) return;
   // Kitap içi metin arama canlı sorgudur: her sorgu önbelleğe yazılıp birikmesin.
   if (/^\/api\/book\/[^/]+\/ara$/.test(url.pathname)) return;
+  if (url.pathname === "/api/reading-speed/stats") return; // canlı istatistik: önbelleğe alınmaz
 
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(request)); // /api/books, /chapters, /glossary (GET)

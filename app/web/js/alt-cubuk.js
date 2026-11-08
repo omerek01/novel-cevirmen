@@ -12,8 +12,10 @@ export function sonrakiHal(hal, olay) {
   return hal;
 }
 
-// Kalan okuma süresi (dakika): okunmamış oran × sözcük / 230 sözcük/dk; en az 1.
-export function kalanDakika(oran, sozcuk) {
-  const kalan = Math.max(0, 1 - (oran || 0)) * (sozcuk || 0);
-  return Math.max(1, Math.round(kalan / 230));
+// Kalan okuma süresi (dakika, en az 1): kalan harf ÷ harf/dk (hızlı okuma planı §2).
+// Hız bilinmiyorsa eski varsayım: 230 sözcük/dk × 6,5 harf.
+export function kalanDakika(oran, harf, hizHdk) {
+  const hiz = hizHdk > 0 ? hizHdk : 230 * 6.5;
+  const kalan = Math.max(0, 1 - (oran || 0)) * (harf || 0);
+  return Math.max(1, Math.round(kalan / hiz));
 }
