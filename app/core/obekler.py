@@ -39,7 +39,9 @@ Kurallar:
 
 Yanıtı YALNIZ şu JSON olarak ver, açıklama ekleme:
 {"obekler": [["öbek 1", "öbek 2", ...], ...]}
-Dış listede paragraf sayısı kadar eleman olmalı, sıra korunmalı."""
+HER PARAGRAF İÇİN TEK LİSTE: paragrafın bütün cümleleri aynı listede olur, cümleleri
+ayrı listelere bölme. Dış listede tam olarak paragraf sayısı kadar eleman olmalı,
+sıra korunmalı."""
 
 _BAGLAC = {"ve", "ama", "fakat", "ancak", "ki", "çünkü", "ile", "veya", "yahut", "hem",
            "ya", "oysa", "yoksa", "sonra", "önce", "gibi", "kadar", "için"}
@@ -112,23 +114,75 @@ def _model_sinirlari(p: str, parcalar) -> list[int] | None:
     return sinirlar if not p[konum:].strip() else None
 
 
-def model_ile_obekle(paraflar: list[str], uret) -> tuple[list[list[int]], str | None, int]:
-    """(sınırlar, model, reddedilen paragraf sayısı). Hata/bozuk yanıtta hepsi kural."""
+GRUP = 12  # bir çağrıdaki paragraf: tam bölüm (40-100 paragraf) yavaş ve sayı kayıyordu
+
+
+def _sirayla_yerlestir(paraflar: list[str], duz: list) -> tuple[list[list[int]], int]:
+    """Düz öbek dizisini paragraflara sırayla yerleştir. Bir paragraf tutmazsa kural
+    öbeklerine düşer ve dizi bir sonraki paragrafın başlangıcına yeniden hizalanır."""
+    sonuc, red, j = [], 0, 0
+    for i, p in enumerate(paraflar):
+        konum, sinir, k = 0, [], j
+        while k < len(duz) and p[konum:].strip():
+            parca = duz[k].strip() if isinstance(duz[k], str) else ""
+            bulunan = p.find(parca, konum) if parca else -1
+            if (bulunan < 0 or p[konum:bulunan].strip()
+                    or len(parca.split()) > EN_COK_SOZCUK):
+                break
+            konum = bulunan + len(parca)
+            sinir.append(konum)
+            k += 1
+        if sinir and not p[konum:].strip():
+            sonuc.append(sinir)
+            j = k
+            continue
+        red += 1
+        sonuc.append(kural_obekleri(p))
+        # Yeniden hizala: sonraki paragrafın başlangıcıyla başlayan öbeğe atla.
+        sonraki = paraflar[i + 1] if i + 1 < len(paraflar) else None
+        j = k
+        if sonraki is not None:
+            while j < len(duz) and not (isinstance(duz[j], str) and duz[j].strip()
+                                        and sonraki.startswith(duz[j].strip())):
+                j += 1
+    return sonuc, red
+
+
+def _grup_obekle(paraflar: list[str], uret) -> tuple[list[list[int]], str | None, int]:
     yanit, model = uret(json.dumps({"paragraflar": paraflar}, ensure_ascii=False),
                         OBEK_TALIMATI, "obek")
     try:
         liste = ceviri_kalite.yanit_coz(yanit).get("obekler")
     except ceviri_kalite.KaliteHatasi:
         liste = None
-    if not isinstance(liste, list) or len(liste) != len(paraflar):
+    if not isinstance(liste, list):
         return [kural_obekleri(p) for p in paraflar], model, len(paraflar)
-    sonuc, red = [], 0
-    for p, parcalar in zip(paraflar, liste):
-        s = _model_sinirlari(p, parcalar)
-        if s is None:
-            red += 1
-            s = kural_obekleri(p)
-        sonuc.append(s)
+    if len(liste) == len(paraflar):
+        sonuc, red = [], 0
+        for p, parcalar in zip(paraflar, liste):
+            s = _model_sinirlari(p, parcalar)
+            if s is None:
+                red += 1
+                s = kural_obekleri(p)
+            sonuc.append(s)
+        return sonuc, model, red
+    # Model gruplamayı bozdu (canlıda Argon 46 paragrafı cümle cümle 88 listeye böldü):
+    # öbekleri düzleştirip sırayla paragraflara yerleştir; her paragraf yine harf harf denetlenir.
+    duz = [x for alt in liste for x in (alt if isinstance(alt, list) else [alt])]
+    sinirlar, red = _sirayla_yerlestir(paraflar, duz)
+    return sinirlar, model, red
+
+
+def model_ile_obekle(paraflar: list[str], uret) -> tuple[list[list[int]], str | None, int]:
+    """(sınırlar, model, reddedilen paragraf sayısı). Paragraflar GRUP'luk çağrılarla
+    gider; bozuk yanıt yalnız kendi grubunu kural öbeklerine düşürür. Bir grubun çağrısı
+    hata verirse (kota, ağ) hata yükselir: yarım sonuç saklanmaz."""
+    sonuc, model, red = [], None, 0
+    for i in range(0, len(paraflar), GRUP):
+        s, m, r = _grup_obekle(paraflar[i:i + GRUP], uret)
+        sonuc.extend(s)
+        model = model or m
+        red += r
     return sonuc, model, red
 
 

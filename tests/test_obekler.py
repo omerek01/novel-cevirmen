@@ -89,7 +89,7 @@ def test_uc_model_sonucunu_saklar_ikinci_istekte_cagri_yok(monkeypatch):
     ilk = client.get("/api/chapter/obekler", params={"url": url}).json()
     assert ilk["kaynak"] == "model" and len(ilk["sinirlar"]) == 2
     ikinci = client.get("/api/chapter/obekler", params={"url": url}).json()
-    assert ikinci == ilk and len(uret.cagri) == 1
+    assert ikinci == {"sinirlar": ilk["sinirlar"], "kaynak": "kayit"} and len(uret.cagri) == 1
 
 
 def test_uc_model_hatasinda_kural_obekleri(monkeypatch):
@@ -116,3 +116,34 @@ def test_uc_bilinmeyen_bolum_404_ve_kitap_silinince_obekler_gider(monkeypatch):
     obekler.kaydet(url, "kanon", obekler.ozet_al(P + "\n\n" + P), [[4], [4]], "m", 0)
     library.delete_book("kanon")
     assert obekler.kayitli(url, obekler.ozet_al(P + "\n\n" + P)) is None
+
+
+def test_model_paragrafi_cumlelere_bolse_de_oebekler_sirayla_yerlesir():
+    """Canlı vaka (Argon, 2026-11-08): 46 paragraf 88 listeye bölündü, hepsi reddedilmişti."""
+    p2 = "Mira durdu. Sonra geri döndü."
+    cevap = [["Kaan fenerini yaktı", "ve dar geçidin sonundaki"], ["kapıya baktı;", "kapı yarı açıktı."],
+             ["Mira durdu."], ["Sonra geri döndü."]]
+    sinir, _m, red = obekler.model_ile_obekle([P, p2], _uretici(cevap))
+    assert red == 0
+    assert _parcalar(P, sinir[0]) == ["Kaan fenerini yaktı", "ve dar geçidin sonundaki",
+                                      "kapıya baktı;", "kapı yarı açıktı."]
+    assert _parcalar(p2, sinir[1]) == ["Mira durdu.", "Sonra geri döndü."]
+    # Ortadaki paragraf bozuksa yalnız o kurala düşer, sonraki yeniden hizalanır.
+    bozuk = [["Kaan fenerini yaktı", "ve dar geçidin sonundaki", "kapıya baktı;", "kapı yarı açıktı."],
+             ["Yanlış metin."], ["Kaan fenerini yaktı", "ve dar geçidin sonundaki"],
+             ["kapıya baktı;", "kapı yarı açıktı."]]
+    sinir, _m, red = obekler.model_ile_obekle([P, p2, P], _uretici(bozuk))
+    assert red == 1 and sinir[1] == obekler.kural_obekleri(p2)
+    assert _parcalar(P, sinir[2])[0] == "Kaan fenerini yaktı"
+
+
+def test_uzun_bolum_gruplar_halinde_gider():
+    paraflar = [P] * 30
+    uret = _uretici(None)
+
+    def grup_uret(user, system, asama):
+        n = len(json.loads(user)["paragraflar"])
+        uret.cagri.append(n)
+        return _Yanit({"obekler": [[P]] * n}), "m"
+    sinir, _m, red = obekler.model_ile_obekle(paraflar, grup_uret)
+    assert uret.cagri == [12, 12, 6] and len(sinir) == 30

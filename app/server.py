@@ -1552,7 +1552,7 @@ def chapter_obekler(url: str) -> dict:
     sha = obekler.ozet_al(metin)
     hazir = obekler.kayitli(url, sha)
     if hazir is not None:
-        return {"sinirlar": hazir, "kaynak": "model"}
+        return {"sinirlar": hazir, "kaynak": "kayit"}
     if _OBEK_HAVUZ is None:
         _OBEK_HAVUZ = cf.ThreadPoolExecutor(max_workers=2, thread_name_prefix="obek")
     is_ = _OBEK_UCUSTA.get(url)

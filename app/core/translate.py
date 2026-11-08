@@ -4693,9 +4693,12 @@ def paragraf_onar(en_paras: list[str], tr_paras: list[str], sira: int, glossary=
 
 
 def obek_uretici(api_key: str | None = None):
-    """Öbek modu için üretim işlevi (`obekler.model_ile_obekle`). Seçili zincir
-    kullanılır (`paragraf_onar` ile aynı: ücretsiz seçim ücretli modele geçmez)."""
-    models = secili_zincir()
+    """Öbek modu için üretim işlevi (`obekler.model_ile_obekle`).
+
+    Seçili çeviri modeli DEĞİL, ucuz ve hızlı model (`OBEK_MODELI`, varsayılan 3.8
+    Flash): öbekleme basit bir bölme işi; canlıda seçili Argon bir bölümü 30 sn'de
+    bitiremedi ve pahalıydı (2026-11-08)."""
+    models = zincir_kur(os.getenv("OBEK_MODELI") or "vertex/gemini-3.8-flash")
     client_factory = _gemini_fabrikasi(api_key)
 
     def uret(user, system, asama):
