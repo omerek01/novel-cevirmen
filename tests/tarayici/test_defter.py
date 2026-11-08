@@ -76,7 +76,7 @@ def test_tum_kitap_secilince_ilerisi_gorunur(sayfa):
     expect(sayfa.locator("#defterListe .defter-satir")).to_have_count(2)
 
 
-def test_kart_run_listesi_anilar_ve_hitap_karari(sayfa):
+def test_kart_run_listesi_ve_anilar_gosterir_bag_ve_hitap_gostermez(sayfa):
     _kur()
     _defter(sayfa)
     sayfa.locator("#defterListe .defter-satir", has_text="Sunny").click()
@@ -84,10 +84,10 @@ def test_kart_run_listesi_anilar_ve_hitap_karari(sayfa):
     expect(kart).to_be_visible()
     expect(kart.locator(".defter-run")).to_contain_text("Dreamer")
     expect(kart.locator(".defter-ani")).to_have_count(1)
-    expect(kart.locator(".defter-baglar")).to_contain_text("Nephis")
-    hitap = kart.locator(".defter-hitaplar li", has_text="Nephis → Sunny")
-    hitap.locator(".seg", has_text="siz").click()
-    expect(kart.locator(".defter-hitaplar li", has_text="Nephis → Sunny")).to_contain_text("Senin kararın: “siz”")
+    # Bağ ve hitap verisi var (tohum) ama kartta gösterilmez (2026-11-08 kullanıcı isteği).
+    expect(kart.locator(".defter-ego, .defter-baglar, .defter-hitaplar")).to_have_count(0)
+    expect(kart).not_to_contain_text("Hitap")
+    expect(sayfa.locator("#defterListe .defter-satir", has_text="Sunny")).not_to_contain_text("bağ")
 
 
 def test_karttan_elle_ani_eklenir_ve_kaldirilir(sayfa):

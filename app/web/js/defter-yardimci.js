@@ -189,40 +189,8 @@ export function yonelmeEki(n) {
   const ek = "aıou".includes(sonUnlu(s)) ? "a" : "e";
   return `${n}’${unluyleBiter(s) ? "y" : ""}${ek}`;
 }
-export function iyelikEki(n) {
-  const s = sonOkunus(n);
-  const u = sonUnlu(s);
-  const ek = { a: "ı", ı: "ı", o: "u", u: "u", e: "i", i: "i", ö: "ü", ü: "ü" }[u];
-  return `${n}’${unluyleBiter(s) ? "s" : ""}${ek}`;
-}
-
 export function sinirMetni(sinir) {
   return sinir == null ? "Tüm kitap" : `Bölüm ${yonelmeEki(sinir)} kadar`;
-}
-
-export function hitapNotu(h) {
-  if (h.elle) return `Senin kararın: “${h.bicim}”`;
-  const uyan = Math.round((h.oran || 0) * (h.n || 0));
-  if (h.kararli) return `Son ${h.n} kaydın ${iyelikEki(uyan)} “${h.bicim}” · son bölüm ${h.son_bolum}`;
-  return `${h.n} kaydın ${iyelikEki(uyan)} “${h.bicim}” · karışık; seçersen sonraki çeviriler buna uyar`;
-}
-
-/* ---------- bağ çizimi: seçili kişinin en güçlü komşuları ---------- */
-export function egoDugumleri(baglar, sinir = 6) {
-  const kisiler = new Map();
-  for (const b of baglar || []) {
-    const onayli = b.durum === "onaylandi" || (b.guven || 0) >= 0.8;
-    const k = kisiler.get(b.diger_kimlik) || { kimlik: b.diger_kimlik, ad: b.diger_ad, etiket: b.etiket, destek: -1, aday: true };
-    if ((b.destek || 0) > k.destek) Object.assign(k, { etiket: b.etiket, destek: b.destek || 0 });
-    if (onayli) k.aday = false;
-    kisiler.set(b.diger_kimlik, k);
-  }
-  const secilen = [...kisiler.values()].sort((a, b) => b.destek - a.destek).slice(0, sinir);
-  const n = secilen.length;
-  return secilen.map((k, i) => {
-    const aci = -Math.PI * 0.85 + (i * 2 * Math.PI) / Math.max(n, 1);
-    return { ...k, x: Math.round(170 + 128 * Math.cos(aci)), y: Math.round(100 + 70 * Math.sin(aci)) };
-  });
 }
 
 /* ---------- elle kayıt formu ---------- */

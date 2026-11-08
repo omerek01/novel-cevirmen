@@ -2704,29 +2704,6 @@ button.defter-ad { cursor: pointer; }
   margin-left: 6px; padding: 0 5px; border: 1px solid var(--accent); border-radius: 4px;
   font: 700 11px var(--caps); letter-spacing: 0.06em; color: var(--accent); vertical-align: 2px;
 }
-.defter-ego { display: block; width: 100%; height: auto; margin: 8px 0 2px; color: var(--ink); }
-.defter-ego line { stroke: currentColor; stroke-opacity: 0.35; stroke-width: 1.4; }
-.defter-ego line.aday { stroke-dasharray: 4 4; }
-.defter-ego circle { fill: var(--surface); stroke: currentColor; stroke-width: 1.2; }
-.defter-ego circle.merkez { fill: currentColor; }
-.defter-ego text { font: 400 12.5px var(--sans); fill: currentColor; text-anchor: middle; }
-.defter-ego text.iliski { font-size: 10.5px; fill-opacity: 0.65; }
-.defter-ego text.merkez-ad { font-weight: 700; }
-.defter-baglar, .defter-hitaplar { list-style: none; margin: 4px 0 0; padding: 0; }
-.defter-baglar li {
-  display: grid; grid-template-columns: 6.5rem minmax(0, 1fr) auto; gap: 10px; align-items: baseline;
-  padding: 10px 0; border-bottom: 1px dashed var(--border);
-}
-.defter-iliski { font-family: var(--caps); font-weight: 500; font-size: 12.5px; letter-spacing: 0.06em; color: var(--ink-dim); }
-.defter-bag-hedef { font-size: 15.5px; overflow-wrap: anywhere; }
-.defter-bag-hedef small { display: block; margin-top: 2px; font-size: 13px; color: var(--ink-dim); }
-.defter-destek { display: flex; flex-direction: column; align-items: flex-end; font-size: 13px; color: var(--ink-dim); font-variant-numeric: tabular-nums; }
-.defter-hitaplar li { padding: 10px 0; border-bottom: 1px solid var(--border); }
-.defter-hitap-ust { display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 15.5px; }
-.defter-secmeli { display: inline-flex; flex: none; }
-.defter-secmeli .seg { min-width: 52px; min-height: 40px; }
-.defter-hitap-not { margin: 4px 0 0; font-size: 13.5px; color: var(--ink-dim); }
-.defter-hitap-not.karisik { color: var(--stamp); }
 .defter-not { margin-top: 16px; }
 .defter-form-bolum { margin-top: 18px; }
 .defter-efsun-satir {
@@ -2807,7 +2784,7 @@ body:has(#kitapProfili[open]) .okuyucu-alt { display: none; }
    kaydırma zinciri yok. frontend-design: rün listesi ödünç kartı gibi katalog fişidir; satırlar
    raftaki kitaplar gibi kademeli yerleşir (hareketi azalt tercihinde kapalı). */
 .defter-duzenle { min-height: var(--tap); min-width: 44px; }
-.defter-bolum-ust .pill, .defter-ad, .defter-sinir .chip, .defter-secmeli .seg { min-height: 44px; }
+.defter-bolum-ust .pill, .defter-ad, .defter-sinir .chip { min-height: 44px; }
 span.defter-ad { min-height: 0; padding: 4px 12px; font-size: 15px; }
 .defter-tumu { margin-top: 10px; min-height: var(--tap); }
 #defterKart .terim-kart, #defterForm .terim-kart { overscroll-behavior: contain; }
@@ -2834,7 +2811,6 @@ span.defter-ad { min-height: 0; padding: 4px 12px; font-size: 15px; }
 .defter-eski { margin: 8px 0 0; color: var(--ink-dim); }
 .defter-eski > summary { cursor: pointer; font-size: 14px; padding: 6px 0; min-height: 44px; display: flex; align-items: center; }
 .defter-eski[open] > :not(summary) { opacity: 0.75; }
-.defter-secmeli .seg[disabled] { opacity: 0.55; }
 .defter-satir { animation: rafa-yerles 220ms cubic-bezier(0.2, 0, 0, 1) both; }
 .defter-satir:nth-child(2) { animation-delay: 25ms; }
 .defter-satir:nth-child(3) { animation-delay: 50ms; }

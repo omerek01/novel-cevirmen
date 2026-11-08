@@ -1,5 +1,6 @@
 /* DEFTER ekranı (2026-10-15, Faz 4): kişiler, yaratıklar, anılar, nitelikler, gölge/yankılar;
-   karakter kartı (adlar, rün listesi, anılar, bağlar, sen/siz) ve elle düzenleme.
+   karakter kartı (adlar, rün listesi, anılar, wiki) ve elle düzenleme. Bağ ve hitap kartta
+   gösterilmez (2026-11-08, kullanıcı isteği); sunucu çeviri için toplamayı sürdürür.
 
    Veri sunucudadır (`/api/book/{slug}/defter*`); bu ekran çevrimiçi çalışır. Spoiler süzgecini
    SUNUCU uygular: konum verilmez, sunucu kitabın okuma konumunu kullanır; "Tüm kitap" yalnız
@@ -11,17 +12,16 @@ import { showView } from "./gezinme.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { el } from "./temel.js";
 import {
-  alanEtiketi, egoDugumleri, eldeAyir, gorunenSekmeler, sozlukDurumMetni, sozlukTuru, WIKI_TURLERI,
-  wikiDurumMetni, wikiKaydi, wikiTurTahmini, kademeMetni, formdanKayit, hitapNotu, kayitFormu, runSatirlari,
+  alanEtiketi, eldeAyir, gorunenSekmeler, sozlukDurumMetni, sozlukTuru, WIKI_TURLERI,
+  wikiDurumMetni, wikiKaydi, wikiTurTahmini, kademeMetni, formdanKayit, kayitFormu, runSatirlari,
   sayacMetinleri, sekmeSatirlari, sinirMetni, sistemAltMetni, sistemSatirlari, tr,
 } from "./defter-yardimci.js";
 import { fetchBooks } from "./kutuphane.js";
 
 const ZAMAN_ASIMI_MS = 15000;
-const HITAP_SINIRI = 12;
 const LISTE_SINIRI = 6; // kartta anı/yankı listesinin ilk görünen sayısı (Sunny'de 41 anı)
 const p = { slug: null, tum: false, sekme: "kisiler", sorgu: "", veri: null, sistem: null, kart: null, kartKimlik: null,
-            form: null, tumHitap: false, acik: new Set() };
+            form: null, acik: new Set() };
 
 /* ---------- küçük DOM yardımcıları ---------- */
 function oge(etiket, sinif, metin) {
@@ -183,8 +183,6 @@ function altMetin(k, karsiliklar) {
       const parca = [];
       if (k.run) parca.push("Rün listesi");
       if (k.ani_sayisi) parca.push(`${k.ani_sayisi} anı`);
-      parca.push(`${k.bag_sayisi} bağ`, `${k.hitap_cifti} hitap çifti`);
-      if (k.karisik) parca.push(`${k.karisik} karışık`);
       if (k.sozlukte === false) parca.push("sözlükte yok");
       return parca.join(" · ");
     }
@@ -216,7 +214,6 @@ function satiraTikla(k) {
 /* ---------- karakter kartı ---------- */
 async function kartAc(kimlik) {
   p.kartKimlik = kimlik;
-  p.tumHitap = false;
   p.acik = new Set();
   el("defterKart-baslik").textContent = "…";
   el("defterKartIcerik").replaceChildren(oge("p", "modal-hint", "Yükleniyor…"));
@@ -252,7 +249,7 @@ function kartCiz() {
   }
   ic.push(etiketler);
   if (!k.sozlukte) {
-    ic.push(oge("p", "modal-hint", "Bu kişi sözlükte yok; bağ eklemek ve karşılığını sabitlemek için önce sözlüğe ekle."),
+    ic.push(oge("p", "modal-hint", "Bu kişi sözlükte yok; karşılığını sabitlemek için önce sözlüğe ekle."),
       dugme("Sözlüğe ekle", "pill", () => sozlugeEkleFormu(k.ad, "kisi")));
   }
 
@@ -375,58 +372,8 @@ function kartCiz() {
     }
   }
 
-  // Bağlar
-  ic.push(bolumBasligi(`Bağlar · ${k.baglar.length}`, k.sozlukte ? dugme("+ Bağ ekle", "pill", bagFormu) : null));
-  if (k.baglar.length) ic.push(egoCizimi(k));
-  else ic.push(oge("p", "defter-bos-not", "Bağ kaydı yok."));
-  const bl = oge("ul", "defter-baglar");
-  const bagSinir = p.acik.has("baglar") ? k.baglar.length : LISTE_SINIRI * 2;
-  for (const b of k.baglar.slice(0, bagSinir)) {
-    const li = oge("li");
-    const onayli = b.durum === "onaylandi" || (b.guven || 0) >= 0.8;
-    li.append(oge("span", "defter-iliski", b.yon === "gelen" ? `${b.etiket} olduğu` : b.etiket));
-    const h = oge("span", "defter-bag-hedef", b.diger_tr && b.diger_tr !== b.diger_ad ? b.diger_tr : b.diger_ad);
-    const ince = [b.ilk_bolum != null && `bölüm ${b.ilk_bolum}’den beri`, b.origin === "manual" && "elle",
-      !onayli && "doğrulanmadı"].filter(Boolean).join(" · ");
-    if (ince) h.append(oge("small", null, ince));
-    li.append(h);
-    const sag = oge("span", "defter-destek", onayli ? `${b.destek} bölüm` : "aday");
-    sag.append(dugme("kaldır", "defter-duzenle", () => bagKaldir(b)));
-    li.append(sag);
-    bl.append(li);
-  }
-  ic.push(bl);
-  if (k.baglar.length > bagSinir) {
-    ic.push(dugme(`Tüm bağlar (${k.baglar.length})`, "pill defter-tumu", () => { p.acik.add("baglar"); kartCiz(); }));
-  }
-
-  // Hitap
-  ic.push(bolumBasligi("Hitap · çeviride sen mi, siz mi"));
-  const hl = oge("ul", "defter-hitaplar");
-  const hitaplar = p.tumHitap ? k.hitaplar : k.hitaplar.slice(0, HITAP_SINIRI);
-  for (const h of hitaplar) {
-    const li = oge("li");
-    const ust = oge("div", "defter-hitap-ust");
-    ust.append(oge("span", null, `${h.konusan} → ${h.muhatap}`));
-    const sec = oge("span", "segmented defter-secmeli");
-    sec.setAttribute("role", "group");
-    sec.setAttribute("aria-label", `${h.konusan}, ${h.muhatap} için`);
-    for (const b of ["sen", "siz"]) {
-      const d = dugme(b, "seg", () => hitapKarari(h, b, sec));
-      d.setAttribute("aria-pressed", (h.kararli || h.elle) && h.bicim === b ? "true" : "false");
-      sec.append(d);
-    }
-    ust.append(sec);
-    li.append(ust, oge("p", "defter-hitap-not" + (!h.kararli && !h.elle ? " karisik" : ""), hitapNotu(h)));
-    hl.append(li);
-  }
-  if (!k.hitaplar.length) hl.append(oge("li", "modal-hint", "Hitap kaydı yok."));
-  ic.push(hl);
-  if (!p.tumHitap && k.hitaplar.length > HITAP_SINIRI) {
-    ic.push(dugme(`Tüm hitaplar (${k.hitaplar.length})`, "pill", () => { p.tumHitap = true; kartCiz(); }));
-  }
   ic.push(oge("p", "modal-hint defter-not",
-    "Bilgiler çevrilmiş bölümlerden otomatik çıkarılır; okuma konumunun ilerisi gösterilmez. Senin seçtiğin hitap otomatik sayımdan önce gelir."));
+    "Bilgiler çevrilmiş bölümlerden otomatik çıkarılır; okuma konumunun ilerisi gösterilmez."));
   el("defterKartIcerik").replaceChildren(...ic);
 }
 
@@ -472,32 +419,6 @@ function aniSatiri(a, kars) {
   return kap;
 }
 
-function egoCizimi(k) {
-  const ns = "http://www.w3.org/2000/svg";
-  const svg = document.createElementNS(ns, "svg");
-  svg.setAttribute("viewBox", "0 0 340 200");
-  svg.setAttribute("class", "defter-ego");
-  svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", `${k.ad} ve en güçlü bağları`);
-  const yap = (ad, ozellik, metin) => {
-    const n = document.createElementNS(ns, ad);
-    for (const [a, d] of Object.entries(ozellik)) n.setAttribute(a, d);
-    if (metin) n.textContent = metin;
-    svg.append(n);
-    return n;
-  };
-  const dugumler = egoDugumleri(k.baglar, 6);
-  for (const d of dugumler) yap("line", { x1: 170, y1: 100, x2: d.x, y2: d.y, class: d.aday ? "aday" : "" });
-  for (const d of dugumler) {
-    yap("circle", { cx: d.x, cy: d.y, r: 6 });
-    yap("text", { x: d.x, y: d.y < 100 ? d.y - 11 : d.y + 19 }, d.ad);
-    yap("text", { x: Math.round((170 + d.x) / 2), y: Math.round((100 + d.y) / 2) - 4, class: "iliski" }, d.etiket);
-  }
-  yap("circle", { cx: 170, cy: 100, r: 9, class: "merkez" });
-  yap("text", { x: 170, y: 84, class: "merkez-ad" }, k.tr && k.tr !== k.ad ? k.tr : k.ad);
-  return svg;
-}
-
 /* ---------- eylemler ---------- */
 async function eylem(is_, yenile = true) {
   const hedefDurum = () => (el("defterForm").open ? el("defterFormDurum") : el("defterDurum"));
@@ -520,25 +441,6 @@ async function eylem(is_, yenile = true) {
 function takmaAdKarari(o, karar) {
   return eylem(() => istek("/takma-ad", {
     method: "POST", body: JSON.stringify({ asil_kimlik: o.asil_kimlik, takma_kimlik: o.takma_kimlik, karar }),
-  }));
-}
-
-function hitapKarari(h, hitap, grup) {
-  // İstek sürerken ikinci dokunuş ikinci kararı göndermesin.
-  for (const b of grup.querySelectorAll("button")) b.disabled = true;
-  return eylem(() => istek("/hitap", {
-    method: "POST", body: JSON.stringify({ konusan: h.ko, muhatap: h.mu, hitap, ilk_bolum: 1 }),
-  })).then((tamam) => {
-    // Başarıda kart yeniden çizilir; hatada düğmeler yeniden denenebilir kalsın.
-    if (!tamam) for (const b of grup.querySelectorAll("button")) b.disabled = false;
-    return tamam;
-  });
-}
-
-function bagKaldir(b) {
-  return eylem(() => istek("/bag", {
-    method: "DELETE",
-    body: JSON.stringify({ kaynak: b.kaynak_kimlik, iliski: b.iliski, hedef: b.hedef_kimlik }),
   }));
 }
 
@@ -700,33 +602,6 @@ async function turkceOner(e) {
   } catch (hata) {
     durum.textContent = `Öneri alınamadı: ${hata.message}`;
   }
-}
-
-function bagFormu() {
-  const k = p.kart;
-  const kisiler = [...(p.veri?.kisiler || []), ...(p.veri?.gruplar || [])]
-    .filter((x) => !String(x.kimlik).startsWith("ad:") && x.kimlik !== k.kimlik);
-  formAc({
-    baslik: `${k.tr && k.tr !== k.ad ? k.tr : k.ad} · bağ ekle`,
-    alanlar: [
-      { ad: "iliski", etiket: "İlişki", tip: "secim",
-        secenekler: Object.entries(p.veri?.iliskiler || {}).map(([deger, etiket]) => ({ deger, etiket })) },
-      { ad: "yon", etiket: "Yön", tip: "secim", secenekler: [
-        { deger: "giden", etiket: `${k.ad}’ın … (ör. öğretmeni X)` },
-        { deger: "gelen", etiket: `X’in … ${k.ad}` }] },
-      { ad: "hedef", etiket: "Kişi ya da grup", tip: "secim",
-        secenekler: kisiler.map((x) => ({ deger: x.kimlik, etiket: x.tr && x.tr !== x.ad ? `${x.tr} (${x.ad})` : x.ad })) },
-      { ad: "ilk_bolum", etiket: "İlk bölüm (boş = okuma konumun)", tip: "sayi" },
-    ],
-    kaydet: async (d) => {
-      const bolum = String(d.ilk_bolum || "").trim();
-      const govde = d.yon === "gelen"
-        ? { kaynak: d.hedef, iliski: d.iliski, hedef: k.kimlik }
-        : { kaynak: k.kimlik, iliski: d.iliski, hedef: d.hedef };
-      if (bolum) govde.ilk_bolum = Number(bolum);
-      await istek("/bag", { method: "POST", body: JSON.stringify(govde) });
-    },
-  });
 }
 
 function sozlugeEkleFormu(ad, tur) {
