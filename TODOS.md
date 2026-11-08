@@ -52,3 +52,16 @@ Fazdan bilinçli ERTELENENLER (inceleme kararlarıyla):
 - [ ] LAN erişim koruması (token) — dosya yükleme yüzeyi büyüdü, öncelik arttı
 
 - [ ] QA bulgusu (2026-07-19, telefon): geri jesti tutarsiz — bazen bir geri, bazen anasayfa, bazen uygulamadan cikis. navigate()/popstate/history katmani incelenecek (app.js applyNavState + history.replaceState cagrilari; olasi suclu: replaceState'in push yerine kullanildigi/atlandigi gecisler).
+
+## Hızlı okuma planından ertelenenler (2026-11-08, /autoplan)
+
+> Plan: `docs/superpowers/plans/2026-11-08-hizli-okuma.md`
+
+- [ ] **Tempo yoklamasının nesnel karşılığı: bölüm sonu anlama soruları.**
+  Neden: öz bildirim ("Rahattı") anladığını fazla sanmaya yatkın; çalışma doğruluğu
+  ölçerek ayarlıyordu. Nasıl: çeviriyle birlikte Gemini 1-2 soru üretir, önbelleğe
+  alınır (okurken gecikme yok). Bağımlılık: hızlı okuma Adım B. Öncelik P2.
+- [ ] **Okuma hacmi kaldıracı: bölüm başına çeviri bekleme süresini ölç.**
+  Neden: kalıcı hızın asıl kaynağı çok okumak; hacmi kısan şey hız tekniği değil
+  bekleme olabilir. Nasıl: bölüm açılışında "çeviri bekleniyor" süresini
+  `reading_speed` yanında kaydet. Öncelik P3.
