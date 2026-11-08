@@ -5,7 +5,7 @@ import { asamaGovdesi, asamaSureMetni, olcumOzeti } from "./asama-yardimci.js";
 import { defterNotu } from "./defter-anahtar-yardimci.js";
 import { diyalogAc, diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { bitisMetni, dokumMetni, hizMetni, kaynakMetni, ozet, zamanOrani } from "./kredi-yardimci.js";
-import { refreshStreamEnd, setStatus } from "./okuyucu.js";
+import { obekModuDegistir, refreshStreamEnd, setStatus } from "./okuyucu.js";
 import { fetchWithTimeout } from "./sozluk.js";
 import { ICONS, THEME_ICON, el, markSegment } from "./temel.js";
 
@@ -62,6 +62,7 @@ export function updateSettingsUI() {
   markSegment("lh", settings.lineHeight, "data-lh");
   markSegment("mg", settings.margin, "data-mg");
   markSegment("inf", settings.infinite ? "1" : "0", "data-inf");
+  markSegment("obek", settings.obekModu ? "1" : "0", "data-obek");
 }
 export function setTheme(name) {
   if (!THEMES.includes(name)) return;
@@ -553,6 +554,13 @@ export function kur() {
   // Sonsuz okuma aç/kapa: açıkken bölüm sonunda sonraki kendiliğinden eklenir, kapalıyken
   // akış tek bölümde durur ve "SONRAKİ BÖLÜM →" düğmesiyle devam edilir. Anahtar okuyucu
   // açıkken de çevrilebilir → akışın sonu (gözlemci + bitiş kartı) hemen yeniden kurulur.
+  // Öbek modu (deneme): okuyucu alt çubuğundaki "Öbek" düğmesiyle aynı anahtar.
+  document.querySelectorAll("[data-obek]").forEach((b) =>
+    b.addEventListener("click", () => {
+      obekModuDegistir(b.getAttribute("data-obek") === "1");
+      updateSettingsUI();
+    })
+  );
   document.querySelectorAll("[data-inf]").forEach((b) =>
     b.addEventListener("click", () => {
       settings.infinite = b.getAttribute("data-inf") === "1";

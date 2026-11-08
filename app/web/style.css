@@ -3007,3 +3007,16 @@ body:has(#terimPaneli[open]) .okuyucu-alt { display: none; }
 .metin-sonuc-parca { font: 400 14.5px/1.5 var(--book); color: var(--ink-soft); overflow-wrap: anywhere; }
 .metin-sonuc-parca mark { background: color-mix(in oklab, var(--accent) 28%, transparent); color: var(--ink); border-radius: 2px; padding: 0 1px; }
 .metin-sonuc-adet { font: 700 13px var(--caps); letter-spacing: 0.04em; color: var(--brass); }
+
+/* Öbek modu (hızlı okuma planı §7): anlam öbekleri çok hafif zemin farkıyla ayrılır.
+   Renk metin renginden türetilir; açık, sepya ve koyu temada aynı oran çalışır. */
+article.obekli span.obek {
+  border-radius: 4px;
+  padding: 0 0.08em;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+}
+article.obekli span.obek:nth-of-type(even) {
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+.alt-oge[aria-pressed="true"] { color: var(--accent, currentColor); font-weight: 600; }

@@ -3,7 +3,8 @@
 
 import { kalanDakika, sonrakiHal } from "./alt-cubuk.js";
 import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
-import { settings } from "./ayarlar.js";
+import { saveSettings, settings } from "./ayarlar.js";
+import { parcalar } from "./obek-yardimci.js";
 import { warmOffline } from "./cevrimdisi.js";
 import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
@@ -12,7 +13,7 @@ import { damgaOzeti, damgaSatiri } from "./paragraf-oneri-yardimci.js";
 import { modelAdlari, sureYaz } from "./kunye-yardimci.js";
 import { openBook } from "./kitap.js";
 import { otoKaydirAkiyor, otoKaydirBaslat, otoKaydirKur } from "./oto-kaydir.js";
-import { bolumHarfi, kisiselHdk, okumaHiziAktif, okumaHiziAtlama, okumaHiziKaydir, okumaHiziKur } from "./okuma-hizi.js";
+import { bolumHarfi, kisiselHdk, okumaHiziAktif, okumaHiziAtlama, okumaHiziKarisik, okumaHiziKaydir, okumaHiziKur } from "./okuma-hizi.js";
 import { getScrollLocal, saveLastRead, saveScrollLocal } from "./konum.js";
 import { saveTerm, tazelemeyiPlanla, terimiSilGeriAlinabilir } from "./sozluk.js";
 import { ICONS, SVG, el, escapeHtml, localDay } from "./temel.js";
@@ -94,6 +95,8 @@ export function setActiveChapter(e) {
   saveLastRead(durum.currentBookSlug, e.url);
   logReadOnce(e);
   okumaHiziAktif(e, currentRatio(), stream);
+  obekleriGetir(e);
+  obekleriGetir(stream[stream.indexOf(e) + 1]); // sıradaki bölüm önden
 }
 
 // Okuma günlüğü: bölüm gerçekten aktif olunca, oturum başına bir kez (karar #8 —
@@ -734,10 +737,14 @@ export function renderParagraphs(entry, query) {
     if (!n.classList.contains("chapter-sep") && !n.classList.contains("chapter-title")) n.remove();
   });
   const q = (query || "").trim();
+  // Öbek modu (hızlı okuma planı §7): sınırlar paragraf sayısıyla uyuşmuyorsa düz çizilir.
+  const sinir = settings.obekModu && Array.isArray(entry.obekler) &&
+    entry.obekler.length === entry.paras.length ? entry.obekler : null;
+  art.classList.toggle("obekli", !!sinir);
   entry.paras.forEach((para, i) => {
     const p = document.createElement("p");
     p.dataset.idx = i;
-    if (q) appendHighlighted(p, para, q);
+    if (q || sinir) paragrafCiz(p, para, sinir && sinir[i], q);
     else p.textContent = para;
     art.appendChild(p);
   });
@@ -1674,21 +1681,110 @@ export async function loadSourceForChapter(p, idx, url) {
 }
 
 export function appendHighlighted(p, text, q) {
-  // Sunucudaki kitap içi aramayla aynı kural (cache._tr_kucuk): Türkçe küçült, ı = i.
-  // Uzunluk korunur, konumlar özgün metne uyar.
-  const kat = (s) => s.toLocaleLowerCase("tr").replace(/ı/g, "i");
-  const lower = kat(text);
-  const ql = kat(q);
-  let i = 0;
-  let idx;
-  while ((idx = lower.indexOf(ql, i)) !== -1) {
-    if (idx > i) p.appendChild(document.createTextNode(text.slice(i, idx)));
-    const mark = document.createElement("mark");
-    mark.textContent = text.slice(idx, idx + q.length);
-    p.appendChild(mark);
-    i = idx + q.length;
+  paragrafCiz(p, text, null, q);
+}
+
+// Paragrafı (varsa) öbek span'leri ve arama vurgusuyla kur. Hesap saf
+// `obek-yardimci.js`'te; öbek sınırını aşan eşleşme iki `mark` olur, aynı
+// `data-eslesme` ile (bölüm içi arama sayacı onu tek sayar).
+export function paragrafCiz(p, metin, sinirlar, q) {
+  let span = null;
+  let spanSira = null;
+  for (const x of parcalar(metin, sinirlar, q)) {
+    let dugum;
+    if (x.eslesme !== null) {
+      dugum = document.createElement("mark");
+      dugum.dataset.eslesme = String(x.eslesme);
+      dugum.textContent = x.t;
+    } else {
+      dugum = document.createTextNode(x.t);
+    }
+    if (x.obek === null) {
+      span = null;
+      p.appendChild(dugum);
+      continue;
+    }
+    if (!span || spanSira !== x.obek) {
+      span = document.createElement("span");
+      span.className = "obek";
+      spanSira = x.obek;
+      p.appendChild(span);
+    }
+    span.appendChild(dugum);
   }
-  if (i < text.length) p.appendChild(document.createTextNode(text.slice(i)));
+}
+
+/* ---------- öbek modu (hızlı okuma planı Adım C) ----------
+   Açıkken bölüm ÖNCE düz çizilir; öbekler sunucudan gelince yeniden çizilir ve okuma
+   konumu ekrandaki ilk paragrafa göre korunur (öbek isteği bölüm açılışını bekletmez). */
+const obekIstegi = new Set();
+
+function aktifAramaSorgusu(e) {
+  return !el("findBar").hidden && e === activeEntry() ? el("findInput").value.trim() : "";
+}
+
+function konumKoruyarak(ciz) {
+  const a = activeEntry();
+  let capa = null;
+  let ust = 0;
+  if (a && a.el) {
+    const cizgi = readerBarBottom();
+    capa = [...a.el.querySelectorAll("p[data-idx]")].find((p) => p.getBoundingClientRect().bottom > cizgi);
+    if (capa) ust = capa.getBoundingClientRect().top;
+  }
+  ciz();
+  if (capa) {
+    const yeni = a.el.querySelector(`p[data-idx="${capa.dataset.idx}"]`);
+    if (yeni) window.scrollBy(0, yeni.getBoundingClientRect().top - ust);
+  }
+}
+
+export async function obekleriGetir(e) {
+  if (!settings.obekModu || !e || !e.loaded || e.html || e.empty || !Array.isArray(e.paras) ||
+      e.obekler || obekIstegi.has(e.url)) return;
+  obekIstegi.add(e.url);
+  try {
+    const res = await fetch(`/api/chapter/obekler?url=${encodeURIComponent(e.url)}`);
+    if (!res.ok) return;
+    const veri = await res.json();
+    if (!Array.isArray(veri.sinirlar) || veri.sinirlar.length !== e.paras.length) return;
+    e.obekler = veri.sinirlar;
+    if (settings.obekModu && stream.includes(e) && e.el) {
+      konumKoruyarak(() => renderParagraphs(e, aktifAramaSorgusu(e)));
+    }
+  } catch {
+    // çevrimdışı: bölüm düz kalır, sonraki açılışta yeniden denenir
+  } finally {
+    obekIstegi.delete(e.url);
+  }
+}
+
+function obekDugmesiCiz() {
+  const b = el("altObek");
+  if (b) b.setAttribute("aria-pressed", String(!!settings.obekModu));
+}
+
+export function obekModuDegistir(acik) {
+  if (!!settings.obekModu === !!acik) return;
+  settings.obekModu = !!acik;
+  saveSettings();
+  okumaHiziKarisik(); // mod oturum ortasında değişti: bu bölüm ölçülmez
+  obekDugmesiCiz();
+  konumKoruyarak(() => {
+    for (const e of stream) {
+      if (e.loaded && !e.html && !e.empty && e.el && Array.isArray(e.paras)) renderParagraphs(e, aktifAramaSorgusu(e));
+    }
+  });
+  const mesaj = acik ? "Öbek modu açık" : "Öbek modu kapalı";
+  setStatus(mesaj);
+  setTimeout(() => {
+    if (el("status").textContent === mesaj) setStatus("");
+  }, 2000);
+  if (acik) {
+    const a = activeEntry();
+    obekleriGetir(a);
+    obekleriGetir(stream[stream.indexOf(a) + 1]);
+  }
 }
 
 /* ---------- bölümde arama ---------- */
@@ -1715,7 +1811,15 @@ export function runFind() {
   const e = activeEntry();
   if (!e || !e.loaded || e.html) return; // görsel içerikte (PDF/EPUB) arama yok
   renderParagraphs(e, q);
-  findMatches = q ? Array.from(e.el.querySelectorAll("mark")) : [];
+  // Öbek sınırını aşan eşleşme birden çok `mark` olur: aynı `data-eslesme` tek sayılır.
+  const gorulen = new Set();
+  findMatches = q ? Array.from(e.el.querySelectorAll("mark")).filter((m) => {
+    const k = m.dataset.eslesme;
+    if (k === undefined) return true;
+    if (gorulen.has(`${m.closest("p")?.dataset.idx}:${k}`)) return false;
+    gorulen.add(`${m.closest("p")?.dataset.idx}:${k}`);
+    return true;
+  }) : [];
   findIndex = findMatches.length ? 0 : -1;
   updateFindUI();
   focusMatch();
@@ -1783,7 +1887,10 @@ export function kur() {
   });
   // Otomatik kaydırma: çubuk kapanır, yerini kaydırma kumandası alır.
   otoKaydirKur();
-  okumaHiziKur({ aktifBolum: activeEntry, tempoAkiyor: otoKaydirAkiyor });
+  okumaHiziKur({ aktifBolum: activeEntry, tempoAkiyor: otoKaydirAkiyor,
+    obekModu: () => !!settings.obekModu });
+  el("altObek").addEventListener("click", () => obekModuDegistir(!settings.obekModu));
+  obekDugmesiCiz();
   el("altKaydir").addEventListener("click", () => {
     altHal = "kapali";
     altCubukCiz();

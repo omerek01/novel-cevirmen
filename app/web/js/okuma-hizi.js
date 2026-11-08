@@ -18,6 +18,7 @@ const TIK_MS = 1000;
 
 let aktifBolum = () => null;
 let tempoAkiyor = () => false;
+let obekModu = () => false;
 const oturumlar = new Map(); // url → açık oturum (geri kaydırınca duraklar, dönünce sürer)
 const bitenler = new Set(); // bu okuyucu ziyaretinde biten url'ler: yeniden ölçülmez
 let aktifUrl = null;
@@ -152,7 +153,7 @@ export function okumaHiziAktif(e, oran, akis) {
   const harf = bolumHarfi(e);
   oturumlar.set(e.url, yeniOturum({
     id: oturumKimligi(), url: e.url, slug: e.bookSlug || "", harf, sozcuk: e.sozcuk,
-    acilisOrani: oran, simdi: performance.now(),
+    acilisOrani: oran, simdi: performance.now(), obek: obekModu(),
   }));
 }
 
@@ -176,6 +177,12 @@ export function okumaHiziEtkinlik() {
 }
 
 // Arama gezintisi ya da konuma zıplama: bu bölüm okunarak geçilmedi.
+// Öbek modu oturum ortasında açıldı/kapandı: karışık bölüm ne normal ne öbek hızına girer.
+export function okumaHiziKarisik() {
+  const o = aktifUrl && oturumlar.get(aktifUrl);
+  if (o) atlama(o);
+}
+
 export function okumaHiziAtlama() {
   const o = aktifUrl && oturumlar.get(aktifUrl);
   if (o) atlama(o);
@@ -191,6 +198,7 @@ function hepsiniBirak() {
 export function okumaHiziKur(baglanti) {
   aktifBolum = baglanti.aktifBolum;
   tempoAkiyor = baglanti.tempoAkiyor;
+  if (baglanti.obekModu) obekModu = baglanti.obekModu;
   if (!tik) tik = setInterval(tikla, TIK_MS);
   // Sekme gizlenince o anki durum aynı oturum_id ile gider; Android PWA'da pagehide
   // çoğu zaman gelmez. Oturum kapanmaz, dönünce sürer.
