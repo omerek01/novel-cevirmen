@@ -7,7 +7,7 @@ import { startOfflineDownloadAll } from "./cevrimdisi.js";
 import { views } from "./durum.js";
 import { openBook } from "./kitap.js";
 import { renderLibrary } from "./kutuphane.js";
-import { hudGoster, kokeneOdaklan, loadChapter, persistScroll } from "./okuyucu.js";
+import { bolumdeAra, hudGoster, kokeneOdaklan, loadChapter, persistScroll } from "./okuyucu.js";
 import { openDefter } from "./defter.js";
 import { openGlossary } from "./sozluk.js";
 import { ICONS, el } from "./temel.js";
@@ -73,9 +73,13 @@ export function applyNavState(state, kitapGorununce) {
       // Köken varken KAYITLI KONUM geri yüklenmez: kullanıcı "kaldığın yere"
       // değil, terimin geçtiği cümleye gitmek istedi.
       loadChapter(state.url, {
-        restoreRatio: state.ratio,
+        restoreRatio: state.ara ? 0 : state.ratio, // aramadan gelen: kayıtlı konum değil, eşleşme
         koken: state.koken,
       }).then(() => {
+        if (state.ara) {
+          requestAnimationFrame(() => requestAnimationFrame(() => bolumdeAra(state.ara)));
+          return;
+        }
         if (!state.koken) return;
         // Konum geri yükleme `requestAnimationFrame` içinde koşuyor; odaklama
         // doğrudan çağrılırsa o kare kaydırmayı EZİYOR. İki kare beklemek,

@@ -2992,3 +2992,18 @@ body:has(#terimPaneli[open]) .okuyucu-alt { display: none; }
 .kredi-form-eylem { display: flex; justify-content: flex-end; gap: 10px; flex-wrap: wrap; }
 .kredi-form-eylem .pill, .kredi-form-eylem .next-btn { min-height: 44px; padding: 0 18px; }
 @media (prefers-reduced-motion: reduce) { .kredi-dolu { transition: none; } }
+
+/* Kitap içi metin arama (kitap.js metinAra): düğme + sonuç satırı. */
+#bookView .metin-ara-btn {
+  display: block; width: 100%; min-height: 48px; margin: 0; padding: 12px 0;
+  border: 0; border-bottom: 1px solid var(--border); background: none; cursor: pointer;
+  text-align: left; font: 600 15px/1.35 var(--sans); color: var(--accent);
+}
+#bookView .metin-ara-btn:active { background: color-mix(in oklab, var(--accent) 10%, transparent); }
+#bookView .metin-ara-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.metin-ara-ozet { margin: 0; padding: 12px 0; font: 400 14px/1.4 var(--sans); color: var(--ink-soft); }
+#bookView .chapter-row.metin-sonuc { align-items: start; }
+.metin-sonuc-govde { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.metin-sonuc-parca { font: 400 14.5px/1.5 var(--book); color: var(--ink-soft); overflow-wrap: anywhere; }
+.metin-sonuc-parca mark { background: color-mix(in oklab, var(--accent) 28%, transparent); color: var(--ink); border-radius: 2px; padding: 0 1px; }
+.metin-sonuc-adet { font: 700 13px var(--caps); letter-spacing: 0.04em; color: var(--brass); }

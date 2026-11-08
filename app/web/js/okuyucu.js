@@ -1669,8 +1669,11 @@ export async function loadSourceForChapter(p, idx, url) {
 }
 
 export function appendHighlighted(p, text, q) {
-  const lower = text.toLowerCase();
-  const ql = q.toLowerCase();
+  // Sunucudaki kitap içi aramayla aynı kural (cache._tr_kucuk): Türkçe küçült, ı = i.
+  // Uzunluk korunur, konumlar özgün metne uyar.
+  const kat = (s) => s.toLocaleLowerCase("tr").replace(/ı/g, "i");
+  const lower = kat(text);
+  const ql = kat(q);
   let i = 0;
   let idx;
   while ((idx = lower.indexOf(ql, i)) !== -1) {
@@ -1711,6 +1714,13 @@ export function runFind() {
   findIndex = findMatches.length ? 0 : -1;
   updateFindUI();
   focusMatch();
+}
+// Kitap içi aramadan gelinince: bölümde arama çubuğu kelimeyle açılır ve ilk eşleşmeye
+// gidilir. Klavye açılmasın diye kutuya odaklanılmaz.
+export function bolumdeAra(q) {
+  el("findBar").hidden = false;
+  el("findInput").value = q;
+  runFind();
 }
 export function updateFindUI() {
   if (findMatches.length) {

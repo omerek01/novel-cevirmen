@@ -44,7 +44,9 @@ export async function openBook(slug, gorununce) {
   }
 
   kitapKunyesi(durum.currentBook, slug);
-  el("chapterSearch").value = "";
+  const aramaKalsin = sonArama && sonArama.slug === slug; // okuyucudan geri dönüş
+  el("chapterSearch").value = aramaKalsin ? sonArama.q : "";
+  if (!aramaKalsin) sonArama = null;
   const list = el("chapterList");
   list.replaceChildren();
   const loading = document.createElement("p");
@@ -62,7 +64,8 @@ export async function openBook(slug, gorununce) {
     const data = await res.json();
     durum.currentChapters = data.chapters || [];
     el("bookHeroInfo").textContent = `${durum.currentChapters.length} bölüm çevrildi`;
-    applyChapterFilter();
+    if (sonArama) metinSonuclariniCiz(sonArama);
+    else applyChapterFilter();
     // Beklemeden: toplu çeviriyle hazırlanmış bölümler de "çevrimdışı indir"
     // düğmesine basılmadan telefona insin. Toplu iş bitince openBook zaten
     // yeniden çağrılıyor, yani yeni bölümler o turda yakalanır.
@@ -116,9 +119,93 @@ export function applyChapterFilter() {
   renderChapterList(filterChapters(durum.currentChapters, q), durum.currentBook, q);
 }
 
+/* ---------- kitap içi metin arama: bütün çevrilmiş bölümlerin Türkçe metni ----------
+   Sunucu tarar (/api/book/{slug}/ara). Son arama bellekte tutulur: sonuca dokunup
+   okuyucudan geri dönünce liste yeniden istenmeden geri gelir. */
+let sonArama = null; // { slug, q, veri }
+
+function metinAraDugmesi(q) {
+  const b = document.createElement("button");
+  b.id = "metinAraBtn";
+  b.className = "metin-ara-btn";
+  b.textContent = `Bütün bölümlerin metninde ara: “${q.trim()}” →`;
+  b.addEventListener("click", () => metinAra(q));
+  return b;
+}
+
+export async function metinAra(q) {
+  const slug = durum.currentBookSlug;
+  q = (q || "").trim();
+  if (!slug || q.length < 2) return;
+  const list = el("chapterList");
+  const satir = (metin) => {
+    const p = document.createElement("p");
+    p.className = "loading-row";
+    p.textContent = metin;
+    return p;
+  };
+  list.replaceChildren(satir("Bütün bölümlerde aranıyor…"));
+  let veri;
+  try {
+    const res = await fetch(`/api/book/${encodeURIComponent(slug)}/ara?q=${encodeURIComponent(q)}`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    veri = await res.json();
+  } catch {
+    if (el("chapterSearch").value.trim() !== q) return;
+    list.replaceChildren(metinAraDugmesi(q), satir("Arama yapılamadı. Bağlantını kontrol edip tekrar dene."));
+    return;
+  }
+  // Bu arada kutu değiştiyse ya da başka kitaba geçildiyse eski yanıt çizilmez.
+  if (el("chapterSearch").value.trim() !== q || durum.currentBookSlug !== slug) return;
+  sonArama = { slug, q, veri };
+  metinSonuclariniCiz(sonArama);
+}
+
+export function metinSonuclariniCiz({ q, veri }) {
+  const list = el("chapterList");
+  const sonuclar = veri.sonuclar || [];
+  const ozet = document.createElement("p");
+  ozet.className = "metin-ara-ozet";
+  ozet.textContent = sonuclar.length
+    ? `“${q}” ${sonuclar.length} bölümde geçiyor` +
+      (veri.kesildi ? ` (ilk ${sonuclar.length} bölüm gösteriliyor)` : "") + "."
+    : `“${q}” hiçbir bölümün metninde geçmiyor.`;
+  list.replaceChildren(ozet);
+  for (const s of sonuclar) {
+    const item = document.createElement("div");
+    item.className = "chapter-item";
+    const row = document.createElement("button");
+    row.className = "chapter-row metin-sonuc";
+    const no = document.createElement("span");
+    no.className = "chapter-no";
+    no.textContent = s.chapter_no ? String(s.chapter_no) : "·";
+    const govde = document.createElement("span");
+    govde.className = "metin-sonuc-govde";
+    const name = document.createElement("span");
+    name.className = "chapter-name";
+    name.lang = "en";
+    name.textContent = s.title || "";
+    const parca = document.createElement("span");
+    parca.className = "metin-sonuc-parca";
+    const mark = document.createElement("mark");
+    mark.textContent = s.eslesme;
+    parca.append(s.once, mark, s.sonra);
+    govde.append(name, parca);
+    const adet = document.createElement("span");
+    adet.className = "metin-sonuc-adet";
+    adet.textContent = `×${s.adet}`;
+    adet.setAttribute("aria-label", `${s.adet} eşleşme`);
+    row.append(no, govde, adet);
+    row.addEventListener("click", () => navigate({ view: "reader", url: s.url, ara: q }));
+    item.append(row);
+    list.appendChild(item);
+  }
+}
+
 export function renderChapterList(chapters, book, query) {
   const list = el("chapterList");
   list.replaceChildren();
+  if ((query || "").trim().length >= 2) list.appendChild(metinAraDugmesi(query));
   if (chapters.length === 0) {
     const p = document.createElement("p");
     p.className = "loading-row";
@@ -512,7 +599,16 @@ export function kur() {
     if (durum.currentBookSlug) openKitapProfili(durum.currentBookSlug);
   });
 
-  el("chapterSearch").addEventListener("input", applyChapterFilter);
+  el("chapterSearch").addEventListener("input", () => {
+    sonArama = null;
+    applyChapterFilter();
+  });
+  el("chapterSearch").addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      metinAra(el("chapterSearch").value);
+    }
+  });
 
   el("bulkBtn").addEventListener("click", async () => {
     // QA bulgusu: arka plana alınmış iş varken bu düğme başlatma modalını açıyordu.

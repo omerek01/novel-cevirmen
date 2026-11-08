@@ -6,6 +6,7 @@ API'ye gidilmeden anında döner. Tarayıcıdan bağımsızdır (PC + telefon pa
 from __future__ import annotations
 
 import json
+import re
 import sqlite3
 import time
 
@@ -466,6 +467,54 @@ def list_chapters(book_slug: str) -> list[dict]:
          "ceviri_zamani": r[4]}
         for r in rows
     ]
+
+
+def _tr_kucuk(s: str) -> str:
+    # Türkçe küçültüp ı'yı i sayar: "QUENTIN" (→quentın) "quentin" ile de eşleşsin.
+    # Uzunluk korunur, eşleşme konumu özgün metinde de geçerli kalır.
+    return s.replace("I", "ı").replace("İ", "i").lower().replace("ı", "i")
+
+
+def kitapta_ara(book_slug: str, sorgu: str, sinir: int = 200) -> dict:
+    """Kitabın bütün çevrilmiş bölümlerinin Türkçe metninde arama (büyük/küçük harf
+    duyarsız, Türkçe kurallı). Görsel içerik (`content_type='html'`) okuyucuda da
+    aranmadığı için atlanır. Satırlar tek tek okunur: e2-micro'da bütün kitabı
+    belleğe almamak için."""
+    q = _tr_kucuk(sorgu.strip())
+    sonuclar: list[dict] = []
+    kesildi = False
+    if not q:
+        return {"sonuclar": sonuclar, "kesildi": kesildi}
+    conn = _connect()
+    try:
+        cur = conn.execute(
+            "SELECT url, title, chapter_no, translation FROM chapters "
+            " WHERE book_slug = ? AND translation IS NOT NULL "
+            "   AND COALESCE(content_type, 'text') <> 'html' "
+            " ORDER BY chapter_no IS NULL, chapter_no",
+            (book_slug,),
+        )
+        for url, title, no, metin in cur:
+            kucuk = _tr_kucuk(metin)
+            i = kucuk.find(q)
+            if i < 0:
+                continue
+            if len(sonuclar) >= sinir:
+                kesildi = True
+                break
+            bas, son = max(0, i - 70), min(len(metin), i + len(q) + 70)
+            sonuclar.append({
+                "url": url, "title": title, "chapter_no": no,
+                "adet": kucuk.count(q),
+                # Paragraf araları tek boşluğa iner; eşleşmenin yanındaki boşluk korunur.
+                "once": ("…" if bas else "") + re.sub(r"\s+", " ", metin[bas:i]).lstrip(),
+                "eslesme": metin[i:i + len(q)],
+                "sonra": re.sub(r"\s+", " ", metin[i + len(q):son]).rstrip()
+                + ("…" if son < len(metin) else ""),
+            })
+    finally:
+        conn.close()
+    return {"sonuclar": sonuclar, "kesildi": kesildi}
 
 
 def onceki_kaynak(book_slug: str, prev_url: str | None, chapter_no: int | None) -> dict | None:

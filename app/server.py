@@ -238,6 +238,14 @@ def book_chapters(slug: str) -> dict:
     return {"chapters": cache.list_chapters(slug)}
 
 
+@app.get("/api/book/{slug}/ara")
+def book_search(slug: str, q: str = "") -> dict:
+    """Kitabın bütün çevrilmiş bölümlerinin metninde arama (en az 2 harf)."""
+    if len(q.strip()) < 2:
+        return {"sonuclar": [], "kesildi": False}
+    return cache.kitapta_ara(slug, q)
+
+
 class GlossaryOrnek(BaseModel):
     # Okurken eklenen terimin kökeni: geçtiği cümle + bölüm numarası. YALNIZ boşsa
     # yazılır (bkz. glossary.ornek_doldur).

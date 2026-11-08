@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v160"; // Defter kartı: bağ ve hitap bölümleri kaldırıldı
+const SHELL_CACHE = "novellink-shell-v161"; // Kitap içi metin arama
 const DATA_CACHE = "novellink-data";
 const DEFTER_YOLU = /^\/api\/book\/[^/]+\/defter(?=\/|$)/;
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
@@ -260,6 +260,8 @@ self.addEventListener("fetch", (event) => {
   // YANLIŞ bilgidir. Liste 4 sn'yi aşınca networkFirst günlerce eski kopyayı gösterdi
   // ("Bölüm 1003'e kadar", konum 1099'ken; 2026-10-22). Ekran zaten yalnız çevrimiçi.
   if (DEFTER_YOLU.test(url.pathname)) return;
+  // Kitap içi metin arama canlı sorgudur: her sorgu önbelleğe yazılıp birikmesin.
+  if (/^\/api\/book\/[^/]+\/ara$/.test(url.pathname)) return;
 
   if (url.pathname.startsWith("/api/")) {
     event.respondWith(networkFirst(request)); // /api/books, /chapters, /glossary (GET)
