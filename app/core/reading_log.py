@@ -120,6 +120,8 @@ def _hiz_connect() -> sqlite3.Connection:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_reading_speed_day ON reading_speed(day)")
+    # Öbek modunda okunan oturum (Adım C): kişisel hıza girmez, ayrı karşılaştırılır.
+    db.ensure_column(conn, "reading_speed", "obek", "obek INTEGER NOT NULL DEFAULT 0")
     return conn
 
 
@@ -134,7 +136,8 @@ def gecerli_mi(chars: int, active_ms: int, istemci_gecerli: bool) -> bool:
 
 
 def log_speed(oturum_id: str, day: str, book_slug: str, url: str, mode: str,
-              chars: int, words: int, active_ms: int, istemci_gecerli: bool) -> dict | None:
+              chars: int, words: int, active_ms: int, istemci_gecerli: bool,
+              obek: bool = False) -> dict | None:
     """Oturumu yaz ya da güncelle. Dönüş `{"gecerli": bool}`; geçersiz girdi/DB meşgul: None."""
     if (not _OTURUM_RE.match(oturum_id or "") or not _DAY_RE.match(day or "")
             or mode not in KIPLER or not book_slug or not url):
@@ -147,11 +150,12 @@ def log_speed(oturum_id: str, day: str, book_slug: str, url: str, mode: str,
         try:
             conn.execute(
                 "INSERT INTO reading_speed (oturum_id, day, book_slug, url, mode, chars, words,"
-                " active_ms, valid, ts) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                " active_ms, valid, ts, obek) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                 " ON CONFLICT(oturum_id) DO UPDATE SET day=excluded.day, mode=excluded.mode,"
                 " chars=excluded.chars, words=excluded.words, active_ms=excluded.active_ms,"
-                " valid=excluded.valid, ts=excluded.ts",
-                (oturum_id, day, book_slug, url, mode, chars, words, active_ms, int(valid), time.time()),
+                " valid=excluded.valid, ts=excluded.ts, obek=excluded.obek",
+                (oturum_id, day, book_slug, url, mode, chars, words, active_ms, int(valid),
+                 time.time(), int(bool(obek))),
             )
             conn.commit()
         finally:
@@ -171,6 +175,14 @@ def _ozet(satirlar: list) -> dict | None:
     return {"hdk": round(hdk), "sdk": round(hdk * sozcuk / harf) if harf and sozcuk else None}
 
 
+def _suzgec(son: list) -> list:
+    """Göz gezdirme süzgeci: n >= 3 ise ortancanın 2 katından hızlı oturum atılır."""
+    if len(son) < 3:
+        return son
+    m = statistics.median(_hdk(c, ms) for c, _w, ms in son)
+    return [s for s in son if _hdk(s[0], s[2]) <= 2 * m]
+
+
 def _gun_ekle(day: str, gun: int) -> str:
     import datetime as dt
 
@@ -180,7 +192,7 @@ def _gun_ekle(day: str, gun: int) -> str:
 def speed_stats(day: str) -> dict:
     """Kişisel hız, başlangıç çizgisi, değişim, son 30 gün ve bugünkü pratik dakikası."""
     bos = {"kisisel_hiz": None, "ilk_hafta": None, "degisim": None,
-           "gunluk": [], "bugun_dk": 0.0, "oturum_sayisi": 0}
+           "gunluk": [], "bugun_dk": 0.0, "oturum_sayisi": 0, "obek_hiz": None, "obek_oturum": 0}
     day = (day or "").strip()
     if not _DAY_RE.match(day):
         return bos
@@ -188,22 +200,23 @@ def speed_stats(day: str) -> dict:
     try:
         serbest = conn.execute(
             "SELECT chars, words, active_ms, day FROM reading_speed"
-            " WHERE valid = 1 AND mode = 'serbest' ORDER BY ts").fetchall()
+            " WHERE valid = 1 AND mode = 'serbest' AND obek = 0 ORDER BY ts").fetchall()
+        obekli = conn.execute(
+            "SELECT chars, words, active_ms FROM reading_speed"
+            " WHERE valid = 1 AND mode = 'serbest' AND obek = 1 ORDER BY ts").fetchall()
         bugun_ms = conn.execute(
             "SELECT COALESCE(SUM(active_ms), 0) FROM reading_speed WHERE day = ?",
             (day,)).fetchone()[0]
         bas = _gun_ekle(day, -(GUNLUK_GUN - 1))
         pencere = conn.execute(
             "SELECT day, mode, chars, words, active_ms FROM reading_speed"
-            " WHERE valid = 1 AND day BETWEEN ? AND ? ORDER BY day", (bas, day)).fetchall()
+            " WHERE valid = 1 AND obek = 0 AND day BETWEEN ? AND ? ORDER BY day",
+            (bas, day)).fetchall()
     finally:
         conn.close()
 
-    son = [(c, w, ms) for c, w, ms, _d in serbest[-10:]]
-    if len(son) >= 3:  # göz gezdirme süzgeci: ortancanın 2 katından hızlıyı at
-        m = statistics.median(_hdk(c, ms) for c, _w, ms in son)
-        son = [s for s in son if _hdk(s[0], s[2]) <= 2 * m]
-    kisisel = _ozet(son)
+    kisisel = _ozet(_suzgec([(c, w, ms) for c, w, ms, _d in serbest[-10:]]))
+    obek_hiz = _ozet(_suzgec(list(obekli[-10:])))
 
     ilk = None
     if len(serbest) >= 5:
@@ -224,4 +237,5 @@ def speed_stats(day: str) -> dict:
                        "tempo_hdk": t["hdk"] if t else None})
 
     return {"kisisel_hiz": kisisel, "ilk_hafta": ilk, "degisim": degisim, "gunluk": gunluk,
-            "bugun_dk": round(bugun_ms / 60_000, 1), "oturum_sayisi": len(serbest)}
+            "bugun_dk": round(bugun_ms / 60_000, 1), "oturum_sayisi": len(serbest),
+            "obek_hiz": obek_hiz, "obek_oturum": len(obekli)}

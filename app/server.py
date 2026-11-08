@@ -40,7 +40,7 @@ from starlette.concurrency import run_in_threadpool  # noqa: E402
 from pydantic import BaseModel, Field, model_validator  # noqa: E402
 
 from core import api_durum, cache, defter_ekrani, defter_kayit, epub_export, glossary, import_book, jobs, karakter_defteri, kullanim, library, media, pipeline, reading_log, settings, sozluk_dogrulama, synthetic, varlik_grafigi, vertex_kredi  # noqa: E402
-from core import ceviri_asamalari, profil_cikarim, wiki_arastirma  # noqa: E402
+from core import ceviri_asamalari, obekler, profil_cikarim, wiki_arastirma  # noqa: E402
 from core import translate as translate_mod  # noqa: E402
 from core.synthetic import ImportedChapterMissing, MangaTranslating  # noqa: E402
 from core.fetch import CloudflareChallenge, FetchError, refresh_clearance  # noqa: E402
@@ -429,6 +429,7 @@ class ReadingSpeedRequest(BaseModel):
     words: int = Field(ge=0)
     active_ms: int = Field(ge=0, le=86_400_000)
     gecerli: bool
+    obek: bool = False  # öbek modunda okundu (Adım C): kişisel hıza girmez
 
     @model_validator(mode="after")
     def _sozcuk_harften_cok_olamaz(self):
@@ -738,7 +739,8 @@ def post_reading_log(req: ReadingLogRequest) -> dict:
 def post_reading_speed(req: ReadingSpeedRequest) -> dict:
     """Okuma hızı oturumu (best-effort). Aynı `oturum_id` tekrar gelince satır güncellenir."""
     sonuc = reading_log.log_speed(req.oturum_id, req.day, library.resolve_slug(req.slug), req.url,
-                                  req.mode, req.chars, req.words, req.active_ms, req.gecerli)
+                                  req.mode, req.chars, req.words, req.active_ms, req.gecerli,
+                                  req.obek)
     return {"ok": sonuc is not None, "gecerli": bool(sonuc and sonuc["gecerli"])}
 
 
@@ -1514,6 +1516,54 @@ def _hizali_bolum(url: str) -> tuple[dict, list[str], list[str]]:
         raise HTTPException(status_code=409,
                             detail="Bölüm paragraf paragraf hizalı değil; tek paragraf çevrilemez.")
     return bolum, en, tr
+
+
+# Öbek modu (hızlı okuma planı Adım C). Model çağrısı arka iş parçacığında koşar;
+# 30 sn'de bitmezse okur kural öbekleriyle devam eder, model sonucu bitince kaydedilir
+# ve sonraki açılışta gelir. Aynı bölüm için ikinci bir çağrı açılmaz.
+_OBEK_HAVUZ = None
+_OBEK_UCUSTA: dict = {}
+OBEK_ZAMAN_ASIMI = 30
+
+
+def _obek_uret_ve_kaydet(url: str, slug: str | None, sha: str, paraflar: list[str]):
+    try:
+        with api_durum.islem("obek", url):
+            sinirlar, model, red = obekler.model_ile_obekle(
+                paraflar, translate_mod.obek_uretici(API_KEY))
+        obekler.kaydet(url, slug, sha, sinirlar, model, red)
+        return sinirlar
+    finally:
+        _OBEK_UCUSTA.pop(url, None)
+
+
+@app.get("/api/chapter/obekler")
+def chapter_obekler(url: str) -> dict:
+    """Bölümün öbek sınırları: `{sinirlar: [[bitiş, ...], ...], kaynak: model|kural}`.
+    Hata ya da zaman aşımında kural öbekleri döner: okur öbeksiz kalmaz."""
+    import concurrent.futures as cf
+
+    global _OBEK_HAVUZ
+    bolum = cache.get_chapter(url)
+    if not bolum or bolum.get("content_type") == "html":
+        raise HTTPException(status_code=404, detail="Öbeklenecek metin yok.")
+    metin = bolum.get("translation") or ""
+    paraflar = obekler.paragraflar(metin)
+    sha = obekler.ozet_al(metin)
+    hazir = obekler.kayitli(url, sha)
+    if hazir is not None:
+        return {"sinirlar": hazir, "kaynak": "model"}
+    if _OBEK_HAVUZ is None:
+        _OBEK_HAVUZ = cf.ThreadPoolExecutor(max_workers=2, thread_name_prefix="obek")
+    is_ = _OBEK_UCUSTA.get(url)
+    if is_ is None:
+        slug = library.resolve_slug(bolum.get("book_slug") or "") or None
+        is_ = _OBEK_HAVUZ.submit(_obek_uret_ve_kaydet, url, slug, sha, paraflar)
+        _OBEK_UCUSTA[url] = is_
+    try:
+        return {"sinirlar": is_.result(timeout=OBEK_ZAMAN_ASIMI), "kaynak": "model"}
+    except Exception:  # zaman aşımı, kota, ağ: kural yedeği (hata api_durum kaydında)
+        return {"sinirlar": [obekler.kural_obekleri(p) for p in paraflar], "kaynak": "kural"}
 
 
 @app.post("/api/chapter/paragraf/oneri")

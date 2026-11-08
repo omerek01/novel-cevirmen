@@ -4690,3 +4690,16 @@ def paragraf_onar(en_paras: list[str], tr_paras: list[str], sira: int, glossary=
     aday = calisma[0] if calisma[0].strip() != tr[0].strip() else None
     return {"aday": aday, "kalan": ozet.get("supheli") or [],
             "model": ozet.get("onarim_modeli"), "durum": ozet.get("durum")}
+
+
+def obek_uretici(api_key: str | None = None):
+    """Öbek modu için üretim işlevi (`obekler.model_ile_obekle`). Seçili zincir
+    kullanılır (`paragraf_onar` ile aynı: ücretsiz seçim ücretli modele geçmez)."""
+    models = secili_zincir()
+    client_factory = _gemini_fabrikasi(api_key)
+
+    def uret(user, system, asama):
+        with api_durum.baglam(asama=asama):
+            return _izli_uret(client_factory, models, user, system=system,
+                              max_tokens=MAX_OUTPUT_TOKENS)
+    return uret
