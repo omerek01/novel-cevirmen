@@ -1,7 +1,37 @@
 // SAF (DOM'suz, Node testli): öbek modunda bir paragrafın çizim parçaları
-// (hızlı okuma planı §7). Öbek sınırları sunucudan gelir (`/api/chapter/obekler`):
-// paragraf başına öbek BİTİŞ konumları. Arama eşleşmesi öbek sınırını aşabilir; o zaman
-// iki parçaya bölünür ve aynı `eslesme` kimliğini taşır (sayaç onu tek sayar).
+// (hızlı okuma planı §7). Öbekler SABİT BOYLUDUR (kullanıcı kararı 2026-11-08: "2 kelime
+// 3 kelime gibi öbekler olsun, okuma hızı gibi arttırılabilsin"): görme alıştırmasında
+// boy adım adım büyütülür. Cümle sonu öbeği erken bitirir. Arama eşleşmesi öbek sınırını
+// aşabilir; o zaman iki parçaya bölünür ve aynı `eslesme` kimliğini taşır.
+
+export const OBEK_EN_KUCUK = 2;
+export const OBEK_EN_BUYUK = 6;
+const CUMLE_SONU = /[.!?…:;]["”’)]*$/;
+
+export function obekBoyuSinirla(boy) {
+  const b = Math.round(Number(boy));
+  if (!Number.isFinite(b)) return 3;
+  return Math.min(OBEK_EN_BUYUK, Math.max(OBEK_EN_KUCUK, b));
+}
+
+// Paragraf başına öbek BİTİŞ konumları: `boy` sözcükte bir, cümle sonunda erken.
+export function sabitObekler(metin, boy) {
+  const n = obekBoyuSinirla(boy);
+  const sinir = [];
+  let say = 0;
+  const re = /\S+/g;
+  let m;
+  while ((m = re.exec(metin))) {
+    say++;
+    const son = m.index + m[0].length;
+    if (say >= n || CUMLE_SONU.test(m[0])) {
+      sinir.push(son);
+      say = 0;
+    }
+  }
+  if (say > 0) sinir.push(metin.trimEnd().length);
+  return sinir;
+}
 
 // Sunucudaki kitap içi aramayla aynı kural (cache._tr_kucuk): Türkçe küçült, ı = i.
 const kat = (s) => s.toLocaleLowerCase("tr").replace(/ı/g, "i");

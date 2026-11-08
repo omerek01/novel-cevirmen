@@ -4,7 +4,7 @@
 import { kalanDakika, sonrakiHal } from "./alt-cubuk.js";
 import { diyalogAcikMi, diyalogKapat } from "./diyalog.js";
 import { saveSettings, settings } from "./ayarlar.js";
-import { parcalar } from "./obek-yardimci.js";
+import { OBEK_EN_BUYUK, OBEK_EN_KUCUK, obekBoyuSinirla, parcalar, sabitObekler } from "./obek-yardimci.js";
 import { warmOffline } from "./cevrimdisi.js";
 import { durum, views } from "./durum.js";
 import { navigate, showView } from "./gezinme.js";
@@ -95,8 +95,6 @@ export function setActiveChapter(e) {
   saveLastRead(durum.currentBookSlug, e.url);
   logReadOnce(e);
   okumaHiziAktif(e, currentRatio(), stream);
-  obekleriGetir(e);
-  obekleriGetir(stream[stream.indexOf(e) + 1]); // sıradaki bölüm önden
 }
 
 // Okuma günlüğü: bölüm gerçekten aktif olunca, oturum başına bir kez (karar #8 —
@@ -737,14 +735,13 @@ export function renderParagraphs(entry, query) {
     if (!n.classList.contains("chapter-sep") && !n.classList.contains("chapter-title")) n.remove();
   });
   const q = (query || "").trim();
-  // Öbek modu (hızlı okuma planı §7): sınırlar paragraf sayısıyla uyuşmuyorsa düz çizilir.
-  const sinir = settings.obekModu && Array.isArray(entry.obekler) &&
-    entry.obekler.length === entry.paras.length ? entry.obekler : null;
-  art.classList.toggle("obekli", !!sinir);
+  // Öbek modu (hızlı okuma planı §7): sabit boylu öbekler çizimde hesaplanır.
+  const boy = settings.obekModu ? obekBoyuSinirla(settings.obekBoyu) : 0;
+  art.classList.toggle("obekli", boy > 0);
   entry.paras.forEach((para, i) => {
     const p = document.createElement("p");
     p.dataset.idx = i;
-    if (q || sinir) paragrafCiz(p, para, sinir && sinir[i], q);
+    if (q || boy) paragrafCiz(p, para, boy ? sabitObekler(para, boy) : null, q);
     else p.textContent = para;
     art.appendChild(p);
   });
@@ -1715,10 +1712,9 @@ export function paragrafCiz(p, metin, sinirlar, q) {
 }
 
 /* ---------- öbek modu (hızlı okuma planı Adım C) ----------
-   Açıkken bölüm ÖNCE düz çizilir; öbekler sunucudan gelince yeniden çizilir ve okuma
-   konumu ekrandaki ilk paragrafa göre korunur (öbek isteği bölüm açılışını bekletmez). */
-const obekIstegi = new Set();
-
+   Sabit boylu öbekler (2-6 sözcük); boy, alt çubuktaki öbek kumandasıyla okurken
+   büyütülür. Mod ya da boy değişince görünen bölümler yeniden çizilir ve okuma konumu
+   ekrandaki ilk paragrafa göre korunur. */
 function aktifAramaSorgusu(e) {
   return !el("findBar").hidden && e === activeEntry() ? el("findInput").value.trim() : "";
 }
@@ -1739,29 +1735,27 @@ function konumKoruyarak(ciz) {
   }
 }
 
-export async function obekleriGetir(e) {
-  if (!settings.obekModu || !e || !e.loaded || e.html || e.empty || !Array.isArray(e.paras) ||
-      e.obekler || obekIstegi.has(e.url)) return;
-  obekIstegi.add(e.url);
-  try {
-    const res = await fetch(`/api/chapter/obekler?url=${encodeURIComponent(e.url)}`);
-    if (!res.ok) return;
-    const veri = await res.json();
-    if (!Array.isArray(veri.sinirlar) || veri.sinirlar.length !== e.paras.length) return;
-    e.obekler = veri.sinirlar;
-    if (settings.obekModu && stream.includes(e) && e.el) {
-      konumKoruyarak(() => renderParagraphs(e, aktifAramaSorgusu(e)));
+function hepsiniYenidenCiz() {
+  konumKoruyarak(() => {
+    for (const e of stream) {
+      if (e.loaded && !e.html && !e.empty && e.el && Array.isArray(e.paras)) renderParagraphs(e, aktifAramaSorgusu(e));
     }
-  } catch {
-    // çevrimdışı: bölüm düz kalır, sonraki açılışta yeniden denenir
-  } finally {
-    obekIstegi.delete(e.url);
-  }
+  });
 }
 
-function obekDugmesiCiz() {
+function obekKumandaCiz() {
+  const acik = !!settings.obekModu;
+  const boy = obekBoyuSinirla(settings.obekBoyu);
   const b = el("altObek");
-  if (b) b.setAttribute("aria-pressed", String(!!settings.obekModu));
+  if (b) b.setAttribute("aria-pressed", String(acik));
+  el("obekBoyu").textContent = String(boy);
+  el("obekKucult").disabled = boy <= OBEK_EN_KUCUK;
+  el("obekBuyut").disabled = boy >= OBEK_EN_BUYUK;
+}
+
+function obekKumandaGoster(goster) {
+  el("obekKumanda").hidden = !goster;
+  document.body.classList.toggle("obek-ayarliyor", goster);
 }
 
 export function obekModuDegistir(acik) {
@@ -1769,22 +1763,18 @@ export function obekModuDegistir(acik) {
   settings.obekModu = !!acik;
   saveSettings();
   okumaHiziKarisik(); // mod oturum ortasında değişti: bu bölüm ölçülmez
-  obekDugmesiCiz();
-  konumKoruyarak(() => {
-    for (const e of stream) {
-      if (e.loaded && !e.html && !e.empty && e.el && Array.isArray(e.paras)) renderParagraphs(e, aktifAramaSorgusu(e));
-    }
-  });
-  const mesaj = acik ? "Öbek modu açık" : "Öbek modu kapalı";
-  setStatus(mesaj);
-  setTimeout(() => {
-    if (el("status").textContent === mesaj) setStatus("");
-  }, 2000);
-  if (acik) {
-    const a = activeEntry();
-    obekleriGetir(a);
-    obekleriGetir(stream[stream.indexOf(a) + 1]);
-  }
+  obekKumandaCiz();
+  hepsiniYenidenCiz();
+}
+
+export function obekBoyuDegistir(yon) {
+  const yeni = obekBoyuSinirla(obekBoyuSinirla(settings.obekBoyu) + yon);
+  if (yeni === obekBoyuSinirla(settings.obekBoyu)) return;
+  settings.obekBoyu = yeni;
+  saveSettings();
+  okumaHiziKarisik(); // boy oturum ortasında değişti
+  obekKumandaCiz();
+  if (settings.obekModu) hepsiniYenidenCiz();
 }
 
 /* ---------- bölümde arama ---------- */
@@ -1888,9 +1878,25 @@ export function kur() {
   // Otomatik kaydırma: çubuk kapanır, yerini kaydırma kumandası alır.
   otoKaydirKur();
   okumaHiziKur({ aktifBolum: activeEntry, tempoAkiyor: otoKaydirAkiyor,
-    obekModu: () => !!settings.obekModu });
-  el("altObek").addEventListener("click", () => obekModuDegistir(!settings.obekModu));
-  obekDugmesiCiz();
+    obekModu: () => (settings.obekModu ? obekBoyuSinirla(settings.obekBoyu) : 0) });
+  // Öbek kumandası: alt çubuğun yerini alır (kaydırma kumandası gibi); mod açılır.
+  el("altObek").addEventListener("click", () => {
+    altHal = "kapali";
+    altCubukCiz();
+    obekModuDegistir(true);
+    obekKumandaGoster(true);
+  });
+  el("obekKucult").addEventListener("click", () => obekBoyuDegistir(-1));
+  el("obekBuyut").addEventListener("click", () => obekBoyuDegistir(1));
+  el("obekTamam").addEventListener("click", () => obekKumandaGoster(false));
+  el("obekKapat").addEventListener("click", () => {
+    obekModuDegistir(false);
+    obekKumandaGoster(false);
+  });
+  new MutationObserver(() => {
+    if (el("readerView").hidden) obekKumandaGoster(false);
+  }).observe(el("readerView"), { attributes: true, attributeFilter: ["hidden"] });
+  obekKumandaCiz();
   el("altKaydir").addEventListener("click", () => {
     altHal = "kapali";
     altCubukCiz();

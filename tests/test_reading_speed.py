@@ -82,7 +82,7 @@ def test_bos_veride_istatistik():
     s = reading_log.speed_stats("2026-11-08")
     assert s == {"kisisel_hiz": None, "ilk_hafta": None, "degisim": None,
                  "gunluk": [], "bugun_dk": 0.0, "oturum_sayisi": 0,
-                 "obek_hiz": None, "obek_oturum": 0}
+                 "obek_hizlari": {}}
 
 
 def test_gecersiz_girdi_yazilmaz():
@@ -122,11 +122,14 @@ def test_uc_dogrulamasi_422():
     assert res.status_code == 200 and res.json()["oturum_sayisi"] == 1
 
 
-def test_obek_modundaki_oturum_kisisel_hiza_girmez_ayri_doner():
+def test_obek_modundaki_oturum_kisisel_hiza_girmez_boya_gore_ayri_doner():
     _yaz("normal-0001")  # 1500
-    reading_log.log_speed("obekli-0001", "2026-11-08", "s", "u9", "serbest", 4000, 600,
-                          2 * DK, True, obek=True)  # 2000
+    reading_log.log_speed("obek3-00001", "2026-11-08", "s", "u8", "serbest", 4000, 600,
+                          2 * DK, True, obek=3)  # 2000
+    reading_log.log_speed("obek4-00001", "2026-11-08", "s", "u9", "serbest", 4400, 600,
+                          2 * DK, True, obek=4)  # 2200
     s = reading_log.speed_stats("2026-11-08")
     assert s["kisisel_hiz"]["hdk"] == 1500 and s["oturum_sayisi"] == 1
-    assert s["obek_hiz"]["hdk"] == 2000 and s["obek_oturum"] == 1
+    assert s["obek_hizlari"]["3"]["hdk"] == 2000 and s["obek_hizlari"]["3"]["n"] == 1
+    assert s["obek_hizlari"]["4"]["hdk"] == 2200
     assert [g["hdk"] for g in s["gunluk"]] == [1500]

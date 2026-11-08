@@ -108,7 +108,7 @@ test("sözcük/dk o bölümün sözcük uzunluğuyla, bilinmiyorsa 6,5 ile", () 
   assert.equal(sozcukDk(1300, 0, 0), 200);
 });
 
-test("öbek modunda açılan oturum bayrağını taşır", () => {
-  assert.equal(oturumSonucu(oturum({ obek: true }), false).obek, true);
-  assert.equal(oturumSonucu(oturum(), false).obek, false);
+test("öbek modunda açılan oturum öbek boyunu taşır", () => {
+  assert.equal(oturumSonucu(oturum({ obek: 3 }), false).obek, 3);
+  assert.equal(oturumSonucu(oturum(), false).obek, 0);
 });

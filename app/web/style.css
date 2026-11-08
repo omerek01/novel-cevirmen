@@ -3020,3 +3020,7 @@ article.obekli span.obek:nth-of-type(even) {
   background: color-mix(in srgb, currentColor 7%, transparent);
 }
 .alt-oge[aria-pressed="true"] { color: var(--accent, currentColor); font-weight: 600; }
+body.obek-ayarliyor .okuyucu-alt { display: none; }
+/* Kaydırma da açıksa öbek kumandası onun üstünde durur. */
+body.oto-kaydiriyor .obek-kumanda { bottom: calc(76px + env(safe-area-inset-bottom)); }
+.obek-kumanda .ok-metin { width: auto; padding: 0 12px; font-size: 13px; }

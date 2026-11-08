@@ -177,7 +177,7 @@ export function okumaHiziEtkinlik() {
 }
 
 // Arama gezintisi ya da konuma zıplama: bu bölüm okunarak geçilmedi.
-// Öbek modu oturum ortasında açıldı/kapandı: karışık bölüm ne normal ne öbek hızına girer.
+// Öbek modu ya da boyu oturum ortasında değişti: karışık bölüm hiçbir hıza girmez.
 export function okumaHiziKarisik() {
   const o = aktifUrl && oturumlar.get(aktifUrl);
   if (o) atlama(o);

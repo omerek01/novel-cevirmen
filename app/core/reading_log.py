@@ -120,7 +120,8 @@ def _hiz_connect() -> sqlite3.Connection:
         """
     )
     conn.execute("CREATE INDEX IF NOT EXISTS idx_reading_speed_day ON reading_speed(day)")
-    # Öbek modunda okunan oturum (Adım C): kişisel hıza girmez, ayrı karşılaştırılır.
+    # Öbek modunda okunan oturumun öbek boyu (Adım C; 0 = öbeksiz): kişisel hıza
+    # yalnız 0 girer, öbekli hız boya göre ayrı karşılaştırılır.
     db.ensure_column(conn, "reading_speed", "obek", "obek INTEGER NOT NULL DEFAULT 0")
     return conn
 
@@ -137,7 +138,7 @@ def gecerli_mi(chars: int, active_ms: int, istemci_gecerli: bool) -> bool:
 
 def log_speed(oturum_id: str, day: str, book_slug: str, url: str, mode: str,
               chars: int, words: int, active_ms: int, istemci_gecerli: bool,
-              obek: bool = False) -> dict | None:
+              obek: int = 0) -> dict | None:
     """Oturumu yaz ya da güncelle. Dönüş `{"gecerli": bool}`; geçersiz girdi/DB meşgul: None."""
     if (not _OTURUM_RE.match(oturum_id or "") or not _DAY_RE.match(day or "")
             or mode not in KIPLER or not book_slug or not url):
@@ -155,7 +156,7 @@ def log_speed(oturum_id: str, day: str, book_slug: str, url: str, mode: str,
                 " chars=excluded.chars, words=excluded.words, active_ms=excluded.active_ms,"
                 " valid=excluded.valid, ts=excluded.ts, obek=excluded.obek",
                 (oturum_id, day, book_slug, url, mode, chars, words, active_ms, int(valid),
-                 time.time(), int(bool(obek))),
+                 time.time(), max(0, min(6, int(obek or 0)))),
             )
             conn.commit()
         finally:
@@ -192,7 +193,7 @@ def _gun_ekle(day: str, gun: int) -> str:
 def speed_stats(day: str) -> dict:
     """Kişisel hız, başlangıç çizgisi, değişim, son 30 gün ve bugünkü pratik dakikası."""
     bos = {"kisisel_hiz": None, "ilk_hafta": None, "degisim": None,
-           "gunluk": [], "bugun_dk": 0.0, "oturum_sayisi": 0, "obek_hiz": None, "obek_oturum": 0}
+           "gunluk": [], "bugun_dk": 0.0, "oturum_sayisi": 0, "obek_hizlari": {}}
     day = (day or "").strip()
     if not _DAY_RE.match(day):
         return bos
@@ -202,8 +203,8 @@ def speed_stats(day: str) -> dict:
             "SELECT chars, words, active_ms, day FROM reading_speed"
             " WHERE valid = 1 AND mode = 'serbest' AND obek = 0 ORDER BY ts").fetchall()
         obekli = conn.execute(
-            "SELECT chars, words, active_ms FROM reading_speed"
-            " WHERE valid = 1 AND mode = 'serbest' AND obek = 1 ORDER BY ts").fetchall()
+            "SELECT chars, words, active_ms, obek FROM reading_speed"
+            " WHERE valid = 1 AND mode = 'serbest' AND obek > 0 ORDER BY ts").fetchall()
         bugun_ms = conn.execute(
             "SELECT COALESCE(SUM(active_ms), 0) FROM reading_speed WHERE day = ?",
             (day,)).fetchone()[0]
@@ -216,7 +217,11 @@ def speed_stats(day: str) -> dict:
         conn.close()
 
     kisisel = _ozet(_suzgec([(c, w, ms) for c, w, ms, _d in serbest[-10:]]))
-    obek_hiz = _ozet(_suzgec(list(obekli[-10:])))
+    boylar: dict[int, list] = {}
+    for c, w, ms, boy in obekli:
+        boylar.setdefault(boy, []).append((c, w, ms))
+    obek_hizlari = {str(boy): {**_ozet(_suzgec(s[-10:])), "n": len(s)}
+                    for boy, s in sorted(boylar.items())}
 
     ilk = None
     if len(serbest) >= 5:
@@ -238,4 +243,4 @@ def speed_stats(day: str) -> dict:
 
     return {"kisisel_hiz": kisisel, "ilk_hafta": ilk, "degisim": degisim, "gunluk": gunluk,
             "bugun_dk": round(bugun_ms / 60_000, 1), "oturum_sayisi": len(serbest),
-            "obek_hiz": obek_hiz, "obek_oturum": len(obekli)}
+            "obek_hizlari": obek_hizlari}

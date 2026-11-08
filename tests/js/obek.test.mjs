@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { gecerliSinirlar, parcalar } from "../../app/web/js/obek-yardimci.js";
+import { gecerliSinirlar, obekBoyuSinirla, parcalar, sabitObekler } from "../../app/web/js/obek-yardimci.js";
 
 const P = "Kaan fenerini yaktı ve dar geçidin sonundaki kapıya baktı.";
 const S = [19, 34, 58];  // "Kaan fenerini yaktı" | " ve dar geçidin" | " sonundaki kapıya baktı."
@@ -31,4 +31,31 @@ test("uyuşmayan sınırlar öbeksiz düz metne döner", () => {
   assert.equal(gecerliSinirlar(P, [19, 999]), false);
   assert.equal(gecerliSinirlar(P, null), false);
   assert.deepEqual(parcalar(P, [5, 999], ""), [{ t: P, obek: null, eslesme: null }]);
+});
+
+function bol(metin, boy) {
+  let bas = 0;
+  return sabitObekler(metin, boy).map((s) => { const t = metin.slice(bas, s).trim(); bas = s; return t; });
+}
+
+test("sabit boylu öbek: boy kadar sözcük, cümle sonu erken bitirir", () => {
+  assert.deepEqual(bol("Kaan fenerini yaktı ve dar geçidin sonundaki kapıya baktı.", 3),
+    ["Kaan fenerini yaktı", "ve dar geçidin", "sonundaki kapıya baktı."]);
+  assert.deepEqual(bol("Mira durdu. Sonra geri dönüp kapıya baktı.", 2),
+    ["Mira durdu.", "Sonra geri", "dönüp kapıya", "baktı."]);
+  assert.deepEqual(bol("\"Leydi Nephis... rüzgar...\"", 4), ["\"Leydi Nephis...", "rüzgar...\""]);
+  assert.deepEqual(sabitObekler("", 3), []);
+});
+
+test("öbek boyu 2-6 aralığında, geçersiz değer 3", () => {
+  assert.equal(obekBoyuSinirla(1), 2);
+  assert.equal(obekBoyuSinirla(9), 6);
+  assert.equal(obekBoyuSinirla(undefined), 3);
+});
+
+test("sabit öbekler parçalara dönünce metin aynen korunur", () => {
+  const m = "Gümüş Kule'nin çanı uzaktan üç kez çaldı ve ikisi de olduğu yerde durdu.";
+  for (const boy of [2, 3, 4, 5, 6]) {
+    assert.equal(parcalar(m, sabitObekler(m, boy), "").map((x) => x.t).join(""), m);
+  }
 });

@@ -34,7 +34,7 @@ export function sozcukSay(paras) {
 
 export function yeniOturum({ id, url, slug, harf, sozcuk, acilisOrani, simdi, obek = false }) {
   return {
-    id, url, slug, harf, sozcuk, obek: !!obek,
+    id, url, slug, harf, sozcuk, obek: Number(obek) || 0, // öbek boyu; 0 = öbeksiz
     aktifMs: 0,
     sonZaman: simdi,
     sonEtkinlik: simdi,
@@ -94,7 +94,7 @@ export function oturumSonucu(o, bitti) {
     words: Math.min(o.sozcuk, o.harf),
     active_ms: aktif,
     gecerli,
-    obek: !!o.obek,
+    obek: o.obek,
   };
 }
 
