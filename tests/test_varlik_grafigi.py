@@ -250,6 +250,23 @@ def test_takma_ad_dugumundeki_baglar_asil_kisiye_tasinir():
     assert ("Nephis", "takma_adi", "Neph") in baglar  # kimlik bağı yerinde
 
 
+def test_takma_ad_birlestirme_anlam_kurallarini_bir_kez_hesaplar(monkeypatch):
+    """Canlı arıza (2026-11-08): taşınan her bağ sözlüğü baştan okudu, yazma kilidi ~100 sn
+    açık kaldı ve eşzamanlı takma ad kararı "database is locked" ile düştü."""
+    _sozluk()
+    adlar = ["Nephis", "Neph"] + [f"Kisi{i}" for i in range(6)]
+    for a in adlar:
+        glossary.set_term(KITAP, a, a)
+    k = vg.DugumCozucu(KITAP).coz
+    vg.bag_ekle(KITAP, k("Nephis"), "takma_adi", k("Neph"), 209, None, "model", durum="onaylandi")
+    for a in adlar[2:]:
+        vg.bag_ekle(KITAP, k("Neph"), "yoldasi", k(a), 300, "x", "model", 0.9)
+    gercek, sayac = vg.anlam_kurallari, []
+    monkeypatch.setattr(vg, "anlam_kurallari", lambda slug: sayac.append(slug) or gercek(slug))
+    assert vg.takma_adlari_birlestir(KITAP) == 6
+    assert len(sayac) == 1
+
+
 def test_unvanli_ad_asil_kisiye_baglanir_kategori_baglanmaz():
     for k, v in {"Roan": "Roan", "Master Roan": "Master Roan", "Hope": "Umut", "Lady Hope": "Leydi Umut",
                  "Demon": "İblis", "Ascended Demon": "Yükselmiş İblis", "Dale": "Dale",

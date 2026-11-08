@@ -25,6 +25,7 @@ from __future__ import annotations
 
 import re
 import sqlite3
+import threading
 import time
 
 from . import cache, db, glossary, runler
@@ -476,6 +477,22 @@ def ceviri_anlamlari(book_slug: str) -> list[dict]:
     return out
 
 
+_SON_KURALLAR = threading.local()
+
+
+def _baglanti_kurallari(conn: sqlite3.Connection, book_slug: str) -> dict:
+    """Aynı bağlantıyla (tek yazma işlemi) yapılan `bag_ekle` çağrıları için kurallar BİR KEZ.
+
+    Her çağrı sözlüğü baştan okuyordu; takma ad kararı 82 bağı taşırken işlemci payı biten
+    sunucuda bağ başına ~2 sn sürdü, yazma kilidi ~100 sn açık kaldı ve eşzamanlı yazmalar
+    "database is locked" ile düştü (2026-11-08). İş parçacığı başına tek yuva: bağlantı
+    değişince yeniden hesaplanır."""
+    son = getattr(_SON_KURALLAR, "deger", None)
+    if son is None or son[0] is not conn or son[1] != book_slug:
+        son = _SON_KURALLAR.deger = (conn, book_slug, anlam_kurallari(book_slug))
+    return son[2]
+
+
 def anlam_sec(book_slug: str, kaynak_kimlik: str | None, iliski: str, hedef_kimlik: str | None,
               kurallar: dict | None = None) -> tuple[str | None, str | None]:
     """Bağın uçlarını doğru ANLAM düğümüne yönelt (bkz. `anlam_dugumleri`)."""
@@ -565,6 +582,8 @@ def bag_ekle(
         raise ValueError(f"Bilinmeyen ilişki: {iliski!r}")
     # TEK yazma noktası: rün, model, elle ve sabit bağ hep buradan geçer; anlam
     # seçimi burada olunca hiçbir yol onu atlayamaz.
+    if kurallar is None and conn is not None:
+        kurallar = _baglanti_kurallari(conn, book_slug)
     kaynak_kimlik, hedef_kimlik = anlam_sec(book_slug, kaynak_kimlik, iliski, hedef_kimlik, kurallar)
     if kaynak_kimlik == hedef_kimlik:
         return False
