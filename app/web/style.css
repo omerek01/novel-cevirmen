@@ -3016,14 +3016,8 @@ article.obekli span.obek {
   -webkit-box-decoration-break: clone;
   box-decoration-break: clone;
 }
-/* Gri zemin yerine silik alt çizgi (kullanıcı isteği 2026-11-08); öbekler arasındaki
-   boşluk çizgisiz kalır, öbekler ayrık görünür. */
-article.obekli span.obek {
-  text-decoration: underline;
-  text-decoration-color: color-mix(in srgb, currentColor 22%, transparent);
-  text-decoration-thickness: 1px;
-  text-underline-offset: 5px;
-}
+/* Öbekler görünür biçimde işaretlenmez: yalnız okunacak öbeğin altında kılavuz çizgi
+   durur (kullanıcı isteği 2026-11-08, "o an nereyi okuyacaksam oranın altını çizsin"). */
 /* Kılavuz çizgi: okuma hızıyla öbekten öbeğe kayar. */
 .obek-cizgi {
   position: absolute; left: 0; top: 0; z-index: 5;

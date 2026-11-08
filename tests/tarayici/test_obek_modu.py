@@ -73,7 +73,10 @@ def test_kilavuz_cizgi_okuma_hiziyla_obekten_obege_kayar_ve_durur(sayfa):
     _okuyucu(sayfa)
     _kumanda(sayfa)
     cizgi = sayfa.locator("#obekCizgi")
-    expect(cizgi).to_be_hidden()
+    # Durmuşken de çizgi yalnız okunacak öbeğin altında bekler; öbeklerin hepsi çizili değil.
+    expect(cizgi).to_be_visible()
+    assert sayfa.locator("span.obek").first.evaluate(
+        "e => getComputedStyle(e).textDecorationLine") == "none"
     sayfa.locator("#obekOynat").click()
     expect(sayfa.locator("#obekOynat")).to_have_attribute("aria-pressed", "true")
     expect(cizgi).to_be_visible()

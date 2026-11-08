@@ -222,6 +222,15 @@ export function onReaderScroll() {
   updateActiveChapter();
   updateProgress();
   okumaHiziKaydir(activeEntry(), currentRatio());
+  // Kılavuz durmuşken okur kendisi kaydırıp çizgiyi ekran dışında bıraktıysa çizgi
+  // ekrandaki ilk öbeğe gelir: okunacak yer orası.
+  if (settings.obekModu && !kilavuz && kilavuzSpan) {
+    const r = kilavuzSpan.getBoundingClientRect();
+    if (r.bottom < readerBarBottom() || r.top > window.innerHeight) {
+      kilavuzSpan = ilkGorunenObek();
+      cizgiYerlestir(kilavuzSpan);
+    }
+  }
   hudGuncelle();
   if (isRestoring) return;
   if (scrollSaveTimer) return;
@@ -1749,8 +1758,18 @@ function hepsiniYenidenCiz() {
     clearTimeout(kilavuz.zaman);
     kilavuzAdim();
   } else {
-    el("obekCizgi").hidden = true;
+    cizgiBekleyen();
   }
+}
+
+// Kılavuz durmuşken çizgi okunacak öbekte bekler (öbek modu kapalıysa gizli).
+function cizgiBekleyen() {
+  if (!settings.obekModu) {
+    el("obekCizgi").hidden = true;
+    return;
+  }
+  if (!kilavuzSpan || !kilavuzSpan.isConnected) kilavuzSpan = ilkGorunenObek();
+  cizgiYerlestir(kilavuzSpan);
 }
 
 /* Kılavuz çizgi (kullanıcı isteği 2026-11-08: "öbek altına çizgi atalım ve okuma hızına
