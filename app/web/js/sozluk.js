@@ -252,6 +252,9 @@ export let glossFilter = "all";
 // açıklamaları göndermez. `glossSpoiler` = kullanıcı bilinçli olarak açtı.
 export let glossSpoiler = false;
 let glossGizlenen = 0;
+// Son liste isteği düştü: boş liste "terim yok" değil, "yüklenemedi"dir (2026-11-08: sunucu
+// yavaşken 1233 kayıtlı sözlük telefonda "Henüz terim yok" göründü).
+let glossYuklenemedi = false;
 const spoilerParam = () => (glossSpoiler ? "spoiler=1" : "");
 export let glossQuery = "";
 export let glossRows = {};       // kaynak -> {origin, created_at, first_chapter}
@@ -369,9 +372,11 @@ export async function fetchGlossary(slug, { taze = false } = {}) {
     glossSurum = Number.isFinite(data.surum) ? data.surum : null;
     glossEkler = data.ekler || {};
     turleriAyarla(data.turler);
+    glossYuklenemedi = false;
   } catch {
     // Taze istek başarısızsa az önce onaylanan yerel hâl korunur. İlk açılışta
     // çevrimdışı ve önbelleksizse yalnız bekleyen kayıtlar görünür.
+    if (!taze) glossYuklenemedi = true;
   }
   // İstek yoldayken tamamlanan gönderimler bu yanıtta OLMAYABİLİR: üstüne uygula.
   for (const g of sonGonderimler) {
@@ -698,8 +703,23 @@ export function renderGlossary(terms) {
   if (tumu.length === 0) {
     const p = document.createElement("p");
     p.className = "loading-row";
-    p.textContent = "Henüz terim yok. Bölüm okudukça karakter isimleri buraya eklenir.";
+    p.textContent = glossYuklenemedi
+      ? "Sözlük yüklenemedi: sunucu yanıt vermedi ya da bağlantı yok."
+      : "Henüz terim yok. Bölüm okudukça karakter isimleri buraya eklenir.";
     list.appendChild(p);
+    if (glossYuklenemedi) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "ghost-line-btn";
+      b.id = "glossYenidenDene";
+      b.textContent = "Yeniden dene";
+      b.addEventListener("click", async () => {
+        b.disabled = true;
+        b.textContent = "Yükleniyor…";
+        renderGlossary(await fetchGlossary(durum.currentBookSlug));
+      });
+      list.appendChild(b);
+    }
     return;
   }
   if (entries.length === 0) {

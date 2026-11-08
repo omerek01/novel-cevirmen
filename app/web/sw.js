@@ -1,7 +1,7 @@
 // SHELL_CACHE: statik kabuk, sürümle değişir → activate'te eskisi silinir.
 // DATA_CACHE: /api yanıtları (bölümler dahil), SABİT isim → sürüm artışı
 // çevrimdışı indirilen bölümleri asla silmez.
-const SHELL_CACHE = "novellink-shell-v158"; // Sözlük: kaynak adı kayıt korunarak değişir
+const SHELL_CACHE = "novellink-shell-v159"; // Sözlük: yavaş sunucuda boş liste yerine bekle / yeniden dene
 const DATA_CACHE = "novellink-data";
 const DEFTER_YOLU = /^\/api\/book\/[^/]+\/defter(?=\/|$)/;
 const sozlukNesilleri = new Map(); // ret/yazım sonrası eski GET önbelleğe geri yazamaz
@@ -178,22 +178,33 @@ async function chapterFirst(request, cacheKey, forceNetwork) {
 }
 
 // Liste/sözlük (GET): çevrimiçiyken taze, sunucuya ulaşılamıyorsa (hata VEYA 4 sn
-// yanıtsızlık) son kayıt.
+// yanıtsızlık) son kayıt. Son kayıt YOKSA 4 sn'de vazgeçilmez, ağ 30 sn'ye dek beklenir:
+// sunucu yavaşken (inceleme hesabı sürerken) 1233 kayıtlı sözlük telefonda "Henüz terim
+// yok" görünüyordu (2026-11-08). Ret sözlüğün telefon kopyasını bilerek siliyor.
 async function networkFirst(request) {
   const yol = sozlukYolu(request.url);
   const nesil = sozlukNesilleri.get(yol) || 0;
   const cache = await caches.open(DATA_CACHE);
-  try {
-    const res = await fetchWithTimeout(request, 4000);
+  const ag = fetchWithTimeout(request, 30000).then(async (res) => {
     if (res.ok && (!yol || nesil === (sozlukNesilleri.get(yol) || 0))) {
       await cache.put(request, res.clone());
       if (yol && nesil !== (sozlukNesilleri.get(yol) || 0)) await cache.delete(request);
     }
     return res;
+  });
+  ag.catch(() => {}); // önbelleğe düşülürse geç gelen ağ hatası sahipsiz kalmasın
+  let zamanlayici;
+  const sure = new Promise((r) => { zamanlayici = setTimeout(r, 4000, null); });
+  try {
+    const ilk = await Promise.race([ag, sure]);
+    if (ilk) return ilk;
+    return (await cache.match(request)) || (await ag);
   } catch (err) {
     const hit = await cache.match(request);
     if (hit) return hit;
     throw err;
+  } finally {
+    clearTimeout(zamanlayici);
   }
 }
 
