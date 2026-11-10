@@ -2550,7 +2550,46 @@ def sozluk_ihlalleri(
             continue
         if _terim_metinde(source, target, ceviri, tekili_kayitli):
             ihlal[source] = target
+    # YASAK KARŞILIK (2026-11-10, canlı vaka 1642: `Saint -> Aziz` koşullu kayıtken "Saint
+    # Cassia" -> "Azize Cassie"). Yasak bağlamdan bağımsız bir "bunu yazma"dır: KOŞULLU kayıtta
+    # da denetlenir. Yalnız koşul taşıyan kayıtlara bakılır (yasak koşul metnindedir).
+    for source, kosul in (kosullar or {}).items():
+        target = glossary.get(source)
+        if not target or source in ihlal:
+            continue
+        yasaklar = _yasak_bicimleri(kosul)
+        if yasaklar and _terim_metinde(source, target, kaynak, tekili_kayitli) and any(
+                _yasak_gecer(y, target, ceviri) for y in yasaklar):
+            ihlal[source] = target
     return ihlal
+
+
+def _yasak_bicimleri(kosul: str | None) -> list[str]:
+    """Koşuldaki `YASAK KARŞILIK: "A", "B"` parçasından yasak biçimler."""
+    yasak = _kosul_parcalari(kosul)[1]
+    return [y.strip() for y in re.findall(r'"([^"]+)"', yasak) if y.strip()]
+
+
+@lru_cache(maxsize=1024)
+def _yasak_deseni(yasak: str) -> re.Pattern:
+    return re.compile(rf"(?<!\w){re.escape(yasak)}(\w*)", re.IGNORECASE)
+
+
+def _yasak_gecer(yasak: str, target: str, ceviri: str) -> bool:
+    """Yasak biçim çeviride geçiyor mu.
+
+    Yasak, kayıtlı karşılığın EKLİ hâline benziyorsa (`Azize` = `Aziz` + yönelme eki "-e")
+    çıplak geçiş belirsizdir: "kudretli Azize bakakaldı" doğru Türkçedir. O zaman yalnız
+    kesin biçimler sayılır: ek almış (`Azizesi`, `Azize'nin`) ya da bir adın önünde unvan
+    olarak (`Azize Cassie`)."""
+    belirsiz = yasak.lower().startswith(target.lower()) and yasak.lower() != target.lower()
+    for m in _yasak_deseni(yasak).finditer(ceviri):
+        if not belirsiz or m.group(1):
+            return True
+        sonra = ceviri[m.end():]
+        if sonra[:1] in "'’" or re.match(r"\s+[A-ZÇĞİÖŞÜ]", sonra):
+            return True
+    return False
 
 
 # ---------------------------------------------------------------------------
