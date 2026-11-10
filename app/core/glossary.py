@@ -236,15 +236,36 @@ class SurumCakismasi(Exception):
         self.guncel = guncel
 
 
+# `fold_term`ün SQLite karşılığı (ASCII küçük harf + aynı ayırıcılar). Aday satırı SQLite
+# içinde bulur: kitabın bütün satırlarını Python'a tek tek taşımak, her satırda GIL'i bırakıp
+# yeniden beklemek demekti. Ölçüm (2026-11-10, e2-micro): arka planda yoğun bir denetim
+# koşarken 1264 satırlık tarama sözlük yazımını 6-8 sn bekletiyordu (GIL konvoyu).
+_FOLD_SQL = "lower(source)"
+for _ayirici in (" ", "-", "_", "'", "’", ".", "·", "\t", "\n", "\r", " "):
+    _FOLD_SQL = f"replace({_FOLD_SQL}, '{_ayirici.replace(chr(39), chr(39) * 2)}', '')"
+
+
 def _bul(conn: sqlite3.Connection, book_slug: str, source: str) -> dict | None:
     """Kaydı yazım varyantından bağımsız bul (`fold_term`)."""
     anahtar = fold_term(source)
-    for r in conn.execute(
-        f"SELECT {_SATIR_SUTUNLARI} FROM glossary WHERE book_slug = ?", (book_slug,)
-    ):
+    sorgu = f"SELECT {_SATIR_SUTUNLARI} FROM glossary WHERE book_slug = ?"
+    # ASCII anahtar SQLite'ta süzülür (lower() yalnız ASCII'yi küçültür); ASCII dışı anahtar
+    # eski yoldan taranır. Aday yine Python'da `fold_term` ile doğrulanır.
+    satirlar = (conn.execute(sorgu + f" AND {_FOLD_SQL} = ?", (book_slug, anahtar))
+                if anahtar.isascii() else conn.execute(sorgu, (book_slug,)))
+    for r in satirlar:
         if fold_term(r[0]) == anahtar:
             return dict(zip(_SATIR_ALANLARI, r))
     return None
+
+
+def kayit_bul(book_slug: str, source: str) -> dict | None:
+    """Tek kaydı (yazım varyantından bağımsız) bul; bütün sözlüğü okumadan."""
+    conn = _connect()
+    try:
+        return _bul(conn, book_slug, normalize_source(source) or source)
+    finally:
+        conn.close()
 
 
 def _tabani_denetle(mevcut: dict | None, taban_surum: int | None) -> None:

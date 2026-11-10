@@ -954,11 +954,8 @@ def _kayit_bulunamadi() -> HTTPException:
 
 
 def _kayit(slug: str, source: str) -> dict | None:
-    anahtar = glossary.fold_term(glossary.normalize_source(source) or source)
-    return next(
-        (r for r in glossary.get_glossary_rows(slug) if glossary.fold_term(r["source"]) == anahtar),
-        None,
-    )
+    # Tek satır sorgusu: bütün sözlüğü taramak yoğun arka plan işi varken saniyeler sürüyordu.
+    return glossary.kayit_bul(slug, source)
 
 
 @app.post("/api/book/{slug}/glossary/kaynak")
