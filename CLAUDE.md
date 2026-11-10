@@ -1946,15 +1946,20 @@ bölümlere yayarsa) ayrı bir çözüm gerekir, `playwright install chromium` t
 yetmeyebilir.
 
 **Dağıtım `git pull`'dur, `scp` DEĞİL** (2026-09-12, kullanıcı kararı). Kod
-`github.com/omerek01/novel-cevirmen` (ÖZEL depo) üzerinden gider; sunucudaki
-`~/novel-cevirmen` gerçek bir çalışma ağacıdır. Sunucu depoya SALT-OKUNUR bir
+`github.com/omerek01/novel-cevirmen` (ÖZEL depo) üzerinden gider. Sunucuda İKİ
+çalışma ağacı var, **canlı olan `~/novel-cevirmen-sozluk`tur** (`roman-baglam` dalı):
+systemd ek dosyası (`novel-cevirmen.service.d/sozluk.conf`) `WorkingDirectory` ve
+`ExecStart`'ı oraya çevirir. `~/novel-cevirmen` (`main`) yalnız ortak `.venv`, `.env`
+(sozluk'taki symlink buraya bakar) ve `cache/` (DB, yedekler) içindir; orada `git pull`
+canlıyı GÜNCELLEMEZ. Kuşkuda `systemctl cat novel-cevirmen | grep -E
+"WorkingDirectory|ExecStart"` son satırına bak. Sunucu depoya SALT-OKUNUR bir
 **deploy key** ile bağlanır (`~/.ssh/novel-cevirmen-deploy`, `~/.ssh/config`'te
 `github.com` kaydı): sunucuda yazma yetkisi olan bir token durmaz, ve anahtar
 yalnız BU depoyu açar. Erişim `ssh -i ~/.ssh/google_compute_engine OMEREK@100.75.105.102`
 (Tailscale). `-i` ŞART: varsayılan anahtarla bağlantı reddediliyor.
 
 ```bash
-ssh -i ~/.ssh/google_compute_engine OMEREK@100.75.105.102 'cd ~/novel-cevirmen && git pull && sudo systemctl restart novel-cevirmen'
+ssh -i ~/.ssh/google_compute_engine OMEREK@100.75.105.102 'cd ~/novel-cevirmen-sozluk && git pull --ff-only && sudo systemctl restart novel-cevirmen'
 ```
 
 Dört kural:
