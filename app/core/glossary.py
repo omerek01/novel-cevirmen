@@ -256,6 +256,27 @@ def _tabani_denetle(mevcut: dict | None, taban_surum: int | None) -> None:
         raise SurumCakismasi(mevcut)
 
 
+def _zaten_yazili(mevcut, taban_surum, target, kosul, origin, tur, book_slug) -> bool:
+    """Eski tabanlı yazım, sunucuda ZATEN istenen değeri buluyorsa çakışma değildir.
+
+    Canlı vaka (2026-11-09): yazım kilit beklerken 8 sn sürdü, istemci zaman aşımıyla
+    vazgeçip AYNI işlemi eski tabanla yeniden gönderdi ve kendi kaydıyla çakıştı
+    (10 sahte 409). Değer aynıysa ezilecek bir şey yoktur; yazmadan başarı döner."""
+    if taban_surum is None or mevcut is None:
+        return False
+    if (mevcut.get("surum") or 1) == taban_surum:
+        return False  # taban tutuyor: olağan yazım yolu
+    if mevcut.get("target") != target:
+        return False
+    if kosul is not KORU and (mevcut.get("kosul") or None) != ((kosul or "").strip() or None):
+        return False
+    if tur is not None and mevcut.get("tur") != _tur(tur, book_slug):
+        return False
+    # Elle yazım kaydı ELLE yapar (inceleme onayı); otomatik kayıt üstüne aynı değerle
+    # yazılan elle kayıt bu yüzden no-op sayılamaz.
+    return not (origin == "manual" and mevcut.get("origin") != "manual")
+
+
 def _kitap_surumunu_artir(conn: sqlite3.Connection, book_slug: str) -> int:
     conn.execute(
         "INSERT INTO sozluk_surumu (book_slug, surum) VALUES (?, 1) "
@@ -412,6 +433,9 @@ def terimi_yaz(
     try:
         conn.execute("BEGIN IMMEDIATE")
         mevcut = _bul(conn, book_slug, source)
+        if _zaten_yazili(mevcut, taban_surum, target, kosul, origin, tur, book_slug):
+            conn.rollback()
+            return mevcut
         _tabani_denetle(mevcut, taban_surum)
         kitap_surumu = None
 
@@ -1034,10 +1058,12 @@ def delete_term(
     try:
         conn.execute("BEGIN IMMEDIATE")
         bulunan = _bul(conn, book_slug, anahtar)
-        _tabani_denetle(bulunan, taban_surum)
         if bulunan is None:
+            # Silinmek istenen kayıt zaten yok: zaman aşımından sonra yinelenen silme
+            # (ya da öteki cihazın silmesi) istenen sonuca ulaşmıştır, çakışma değil.
             conn.rollback()
             return None
+        _tabani_denetle(bulunan, taban_surum)
         if reddi_kaydet:
             # Silme ve kalıcı ret AYNI kilit/işlemde: aradaki boşlukta çeviri
             # adayı yeniden ekleyemez. Alternatif yazımlar da reddedilir.

@@ -34,6 +34,7 @@ mimetypes.add_type("text/javascript", ".js")
 from dotenv import load_dotenv  # noqa: E402
 from fastapi import FastAPI, HTTPException, Query, Request, Response  # noqa: E402
 from fastapi.responses import FileResponse  # noqa: E402
+from fastapi.middleware.gzip import GZipMiddleware  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 from starlette.concurrency import run_in_threadpool  # noqa: E402
 
@@ -55,6 +56,9 @@ load_dotenv(APP_DIR.parent / ".env")  # tek kaynak: novel-cevirmen/.env
 API_KEY = os.getenv("GEMINI_API_KEY")
 
 app = FastAPI(title="novel-cevirmen")
+# Sıkıştırma (2026-11-10): kitabın sözlük yanıtı 676 KB düz JSON'du; telefonda terim
+# paneli onu indirirken ~7 sn bekliyordu. Akış (SSE) yanıtlarını Starlette kendisi atlar.
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 # Eski (sadece-önbellek) kurulumlardaki kitapları paylaşılan kütüphaneye taşı.
 library.backfill_from_cache()

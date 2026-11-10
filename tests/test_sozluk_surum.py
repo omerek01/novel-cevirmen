@@ -203,3 +203,42 @@ def test_tel_tuzagi_sozluge_yazan_her_fonksiyon_gecmise_yazar():
                 and "terimi_yaz(" not in metin:
             eksik.append(dugum.name)
     assert not eksik, f"geçmişe yazmadan sözlüğü değiştiren fonksiyonlar: {eksik}"
+
+
+def test_zaman_asimindan_sonra_yinelenen_ayni_yazim_cakismaz():
+    # Canlı vaka 2026-11-09: yazım sunucuda tamamlandı, istemci zaman aşımıyla vazgeçip
+    # aynı işlemi ESKİ tabanla yineledi ve kendi kaydıyla çakıştı.
+    glossary.set_term(KITAP, "Queen", "Queen")
+    ilk = glossary.terimi_yaz(KITAP, "Queen", "Queen", kosul="lakap ise Kraliçe", taban_surum=1)
+    yine = glossary.terimi_yaz(KITAP, "Queen", "Queen", kosul="lakap ise Kraliçe", taban_surum=1)
+    assert yine["surum"] == ilk["surum"] == 2
+    assert [x["islem"] for x in glossary.gecmis(KITAP, "Queen")] == ["guncelle", "ekle"]
+
+
+def test_eski_tabanla_farkli_deger_hala_cakisir():
+    glossary.set_term(KITAP, "Queen", "Queen")
+    glossary.terimi_yaz(KITAP, "Queen", "Kraliçe", taban_surum=1)
+    with pytest.raises(glossary.SurumCakismasi):
+        glossary.terimi_yaz(KITAP, "Queen", "Queen", taban_surum=1)  # karşılık farklı
+    with pytest.raises(glossary.SurumCakismasi):
+        glossary.terimi_yaz(KITAP, "Queen", "Kraliçe", kosul="yeni", taban_surum=1)  # koşul farklı
+    glossary.merge_terms(KITAP, {"Saint": "Aziz"}, "auto", 2)
+    glossary.set_kosul(KITAP, "Saint", "rütbe")  # otomatik kayıt, sürüm 2
+    with pytest.raises(glossary.SurumCakismasi):
+        # Aynı değer ama elle yazım otomatik kaydı onaylardı: no-op sayılmaz.
+        glossary.terimi_yaz(KITAP, "Saint", "Aziz", taban_surum=1)
+
+
+def test_zaten_silinmis_kaydi_silmek_cakismaz():
+    glossary.set_term(KITAP, "Saint", "Aziz")
+    assert glossary.delete_term(KITAP, "Saint", taban_surum=1)["target"] == "Aziz"
+    assert glossary.delete_term(KITAP, "Saint", taban_surum=1) is None  # yinelenen silme
+
+
+def test_yanitlar_sikistirilir():
+    c = _client()
+    for i in range(80):
+        glossary.set_term(KITAP, f"Terim {i}", f"Karşılık {i}")
+    r = c.get(f"/api/book/{KITAP}/glossary", headers={"Accept-Encoding": "gzip"})
+    assert r.status_code == 200 and r.headers.get("content-encoding") == "gzip"
+    assert r.json()["terms"]["Terim 3"] == "Karşılık 3"
