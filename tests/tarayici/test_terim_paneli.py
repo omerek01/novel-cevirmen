@@ -195,3 +195,61 @@ def test_guncel_karsiligi_tasiyan_bolum_varsayilan_secilmez(sayfa):
     expect(satirlar.first.locator(".terim-etki-zaman")).to_contain_text("güncel karşılık kullanılmış")
     for kutucuk in satirlar.locator("input[type=checkbox]").all():
         expect(kutucuk).not_to_be_checked()
+
+
+SOZLUK_GECIKTIR = r"""(() => {
+  const asil = window.fetch.bind(window);
+  window.__sozlukGet = 0;
+  window.fetch = (url, opts = {}) => {
+    const u = String(url);
+    if ((opts.method || 'GET') === 'GET' && /\/api\/book\/[^/]+\/glossary(\?|$)/.test(u)) {
+      window.__sozlukGet += 1;
+      if (window.__sozlukGecikme) {
+        return new Promise((r) => setTimeout(r, window.__sozlukGecikme)).then(() => asil(url, opts));
+      }
+    }
+    return asil(url, opts);
+  };
+})()"""
+
+
+def test_panel_sozlugu_bir_kez_ceker_sonra_beklemeden_acilir(sayfa):
+    # Canlı vaka 2026-11-09: her açılış 676 KB'lık sözlüğü bekliyordu (~7 sn sessiz panel).
+    sayfa.add_init_script(SOZLUK_GECIKTIR)
+    _okuyucuya_gir(sayfa)
+    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
+    secici = "#readerBody article.chapter p[data-idx='2']"
+    _sec(sayfa, secici, "Gümüş Kule")
+    sayfa.locator("#selGlossBtn").click()
+    aday = sayfa.locator("#terimAdaylar .terim-aday-kayitli")
+    expect(aday).to_have_text("Silver Tower → Gümüş Kule")
+    # Seçimdeki ön yükleme ile panelin isteği aynı uçuşu paylaşır.
+    assert sayfa.evaluate("window.__sozlukGet") == 1
+    sayfa.keyboard.press("Escape")
+    # Sunucu artık çok yavaş: bellekteki kopya yetmeli, panel beklememeli.
+    sayfa.evaluate("window.__sozlukGecikme = 15000")
+    _sec(sayfa, secici, "Gümüş Kule")
+    sayfa.locator("#selGlossBtn").click()
+    expect(aday).to_have_text("Silver Tower → Gümüş Kule", timeout=1500)
+
+
+def test_bekleyen_kayit_acilista_gider_reddedilen_okurken_bildirilir(sayfa):
+    tohum.kitap()
+    kuyruk = {"surum": 2, "sayac": 2, "islemler": [
+        {"id": 1, "slug": SLUG, "source": "Shadow", "tur": "yaz", "target": "Gölge",
+         "zaman": 1, "durum": "bekliyor", "deneme": 0},
+        {"id": 2, "slug": SLUG, "source": "Queen", "tur": "yaz", "target": "Kraliçe",
+         "zaman": 1, "durum": "hata", "deneme": 0, "hata": {"kod": 400, "mesaj": "bozuk"}},
+    ]}
+    sayfa.add_init_script(
+        "if (!sessionStorage.getItem('tohumlandi')) {"
+        f"  localStorage.setItem('novellink:glossQueue2', {json.dumps(json.dumps(kuyruk))});"
+        "  sessionStorage.setItem('tohumlandi', '1'); }"
+    )
+    sayfa.goto(sayfa.taban + "/")
+    js_bekle(sayfa, "async () => (await (await fetch('/api/book/gumus-kule/glossary')).json())"
+             ".terms.Shadow === 'Gölge'", timeout=10000)
+    bildirim = sayfa.locator("#bildirim")
+    expect(bildirim).to_contain_text("gönderilemeyen 1 kayıt")
+    bildirim.get_by_role("button", name="GÖSTER").click()
+    expect(sayfa.locator("#glossaryView")).to_be_visible()

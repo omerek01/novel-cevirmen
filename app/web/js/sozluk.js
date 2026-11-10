@@ -28,7 +28,9 @@ function sirala(terms) {
 /* Yazma yanıtları önbelleğe GİRMEZ; SW yalnız eski sözlük GET'lerini geçersiz
    kılar, yazmaya zaman aşımı koymaz. Tailscale kapalıyken ts.net adresi hata
    vermek yerine dakikalarca askıda kalır (kara delik); kendi süremizi koyuyoruz. */
-export const GLOSS_WRITE_TIMEOUT = 8000;
+// Sunucu kilit beklemesinden (busy_timeout 10 sn) UZUN olmalı: 8 sn iken yazım sunucuda
+// tamamlanıyor, istemci vazgeçip eski tabanla yineliyor ve kendi kaydıyla çakışıyordu.
+export const GLOSS_WRITE_TIMEOUT = 20000;
 
 export async function fetchWithTimeout(url, options, timeoutMs = GLOSS_WRITE_TIMEOUT) {
   const ctrl = new AbortController();
@@ -351,6 +353,27 @@ async function bolumdeGecenleriYukle() {
   }
 }
 
+// Bellekteki sözlüğün kitabı ve sunucudan alındığı an (terim paneli beklemeden açılsın).
+let glossYuklenen = { slug: null, zaman: 0 };
+let isitme = null; // { slug, vaat } — uçuştaki ön yükleme
+
+/* Bu kitabın sözlüğü bellekte mi; `enFazlaMs` verilirse o süreden taze mi. */
+export function sozlukBellekte(slug, enFazlaMs = Infinity) {
+  return glossYuklenen.slug === slug && Date.now() - glossYuklenen.zaman <= enFazlaMs;
+}
+
+/* Sözlüğü ÖNDEN çek (okurken metin seçilince): panel açıldığında beklemesin. Uçuştaki
+   istek paylaşılır. Bellekteyse taze çekim (liste silinmeden), değilse ilk çekim. */
+export function sozluguIsit(slug) {
+  if (!slug) return Promise.resolve();
+  if (isitme && isitme.slug === slug) return isitme.vaat;
+  const vaat = fetchGlossary(slug, { taze: sozlukBellekte(slug) }).finally(() => {
+    if (isitme && isitme.vaat === vaat) isitme = null;
+  });
+  isitme = { slug, vaat };
+  return vaat;
+}
+
 export async function fetchGlossary(slug, { taze = false } = {}) {
   let terms = taze ? { ...glossTermsSonHal } : {};
   let kosullar = taze ? { ...glossKosullarSonHal } : {};
@@ -373,6 +396,7 @@ export async function fetchGlossary(slug, { taze = false } = {}) {
     glossEkler = data.ekler || {};
     turleriAyarla(data.turler);
     glossYuklenemedi = false;
+    glossYuklenen = { slug, zaman: Date.now() };
   } catch {
     // Taze istek başarısızsa az önce onaylanan yerel hâl korunur. İlk açılışta
     // çevrimdışı ve önbelleksizse yalnız bekleyen kayıtlar görünür.
@@ -947,5 +971,29 @@ export function kur() {
     } else {
       updateGlossPendingNote();
     }
+  });
+
+  // Açılışta ve uygulamaya dönünce bekleyenler gider (canlı vaka 2026-11-09: okurken
+  // eklenen "Shadow" telefonda kaldı; kuyruk yalnız yeni kayıtta ya da sözlük ekranında
+  // boşalıyordu). Gönderilemeyen kayıt okurken de bildirilir.
+  const bosaltVeUyar = () => flushGlossQueue().then(gonderilemeyenleriBildir, () => {});
+  bosaltVeUyar();
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") bosaltVeUyar();
+  });
+}
+
+let sonBildirilenHata = "";
+
+/* Reddedilen (hata) kayıt varsa ve sözlük ekranı kapalıysa bir kez haber ver; aynı
+   küme her dönüşte yeniden söylenmez. */
+function gonderilemeyenleriBildir() {
+  const hatali = kuyruk.islemler().filter((o) => o.durum === "hata");
+  const imza = hatali.map((o) => o.id).join(",");
+  if (!hatali.length || imza === sonBildirilenHata || !views.glossary.hidden) return;
+  sonBildirilenHata = imza;
+  const slug = hatali[0].slug;
+  bildir(`Sözlükte gönderilemeyen ${hatali.length} kayıt var (ör. «${hatali[0].source}»).`, {
+    eylem: { etiket: "GÖSTER", fn: () => openGlossary(slug) },
   });
 }

@@ -38,6 +38,8 @@ import {
   overlayGloss,
   renderGlossary,
   saveTerm,
+  sozlukBellekte,
+  sozluguIsit,
   terimDurumu,
   terimiSilGeriAlinabilir,
   yenidenSuz,
@@ -83,7 +85,17 @@ export async function terimPaneliAc({ slug, source = "", secim = null }) {
   // Sözlük ekranı AYNI kitapla açıkken yeniden çekilmez: çevrimdışıyken boş yanıt
   // ekrandaki listenin tabanını silerdi.
   const listeHazir = !views.glossary.hidden && durum.currentBookSlug === slug;
-  if (!listeHazir) await fetchGlossary(slug);
+  // Bellekteki sözlük (ya da seçimle başlamış ön yükleme) varsa panel BEKLEMEZ: kayıtlı mı
+  // sorusu hemen yanıtlanır, sunucu kopyası arkada tazelenir (canlı ölçüm 2026-11-09:
+  // 676 KB'lık çekim telefonda ~7 sn panelin hiçbir şey söylememesi demekti).
+  let arkada = null;
+  if (!listeHazir) {
+    if (sozlukBellekte(slug)) {
+      if (!sozlukBellekte(slug, ARKADA_TAZELEME_MS)) arkada = sozluguIsit(slug);
+    } else {
+      await sozluguIsit(slug);
+    }
+  }
   if (secim && !secim.kaynaktan && !secim.enParagraf && secim.url && secim.idx != null) {
     await kaynagiYukle(secim);
   }
@@ -93,6 +105,23 @@ export async function terimPaneliAc({ slug, source = "", secim = null }) {
   const baslangic = source || (secim && secim.kaynaktan ? secim.terim : "");
   if (baslangic) kaynagiSec(baslangic, { oner: !!secim });
   else el("terimKaynak").focus();
+  if (arkada) arkada.then(() => tazeSozlukGeldi(slug));
+}
+
+// Bu süreden yeni bellek kopyası tazelenmez (seçimle başlayan ön yükleme az önce çekti).
+const ARKADA_TAZELEME_MS = 60000;
+
+/* Arka plan tazelemesi bitti: aday çipleri yenilenir; yazılı terim bu arada başka
+   cihazdan kaydedildiyse panel kayda geçer. Kayıtlı terimde kullanıcının girdisine dokunmaz. */
+function tazeSozlukGeldi(slug) {
+  if (!panel || panel.slug !== slug || !diyalogAcikMi(PANEL)) return;
+  adaylariCiz();
+  const kaynak = el("terimKaynak").value.trim();
+  if (kaynak && !panel.kayitli && !panel.kaydetti &&
+      kayitliAnahtar(gorunenSozluk(slug).terms, kaynak) !== undefined) {
+    panel.kaynak = null; // aynı kaynak kısa devresini aş: kayıt yüklensin
+    kaynagiSec(kaynak);
+  }
 }
 
 function formuSifirla() {
@@ -270,7 +299,7 @@ async function oneriIste() {
   const kaynak = el("terimKaynak").value.trim();
   if (!kaynak || !panel) return;
   const istek = panel;
-  yaz("terimDurum", "Karşılık öneriliyor…");
+  yaz("terimDurum", "Sözlükte yok — karşılık öneriliyor…");
   try {
     const res = await fetchWithTimeout(
       `/api/book/${encodeURIComponent(istek.slug)}/glossary/suggest`,
@@ -287,6 +316,7 @@ async function oneriIste() {
     if (!res.ok) throw new Error("öneri alınamadı");
     const data = await res.json();
     if (panel !== istek || !diyalogAcikMi(PANEL) || el("terimKaynak").value.trim() !== kaynak) return;
+    if (panel.kayitli) return; // bu arada kayıtlı çıktı (arka plan tazelemesi): öneri gereksiz
     if (!el("terimKarsilik").value.trim()) {
       el("terimKarsilik").value = data.target || kaynak;
       if (data.is_character) {

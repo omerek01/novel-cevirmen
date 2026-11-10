@@ -2,6 +2,7 @@
 
 import { durum, views } from "./durum.js";
 import { entryFor } from "./okuyucu.js";
+import { sozlukBellekte, sozluguIsit } from "./sozluk.js";
 import { terimPaneliAc } from "./terim-paneli.js";
 import { trimSecim } from "./terim-yardimci.js";
 import { el } from "./temel.js";
@@ -67,6 +68,10 @@ export function updateSelGloss() {
 
   selGlossData = { terim, ...paragrafBaglami(host) };
   selGlossLast = selGlossData;
+  // Düğmeye basmadan sözlüğü önden çek: panel açılınca "kayıtlı mı" hemen görünsün.
+  const entry = selGlossData.url ? entryFor(selGlossData.url) : null;
+  const slug = (entry && entry.bookSlug) || durum.currentBookSlug;
+  if (slug && !sozlukBellekte(slug, 60000)) sozluguIsit(slug).catch(() => {});
 
   btn.hidden = false; // ölçüden ÖNCE görünür olmalı, yoksa offset* 0 döner
   const yariGenislik = btn.offsetWidth / 2 || 60;
