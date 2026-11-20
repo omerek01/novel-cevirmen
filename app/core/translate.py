@@ -175,6 +175,16 @@ CLAUDE_MODELLER = {
         "not": "ÜCRETLİ ~$0,066/bölüm. Haiku'nun iki katı. Kalitesi ölçülmedi.",
         "dusunme": {"type": "disabled"},
     },
+    # FABLE 5.2 (2026-11-21, kullanıcı isteği). Düşünme HEP AÇIK: `thinking`
+    # verilmez (`disabled` 400). Derinliği yalnız `efor` belirler; düşünme de
+    # $40/M çıkış tokenı, o yüzden en düşük düzey. Fiyat 8/40 $ (Sonnet 5'in 4 katı).
+    "claude-fable-5-2": {
+        "etiket": "Fable 5.2",
+        "not": "ÜCRETLİ ~$0,26+/bölüm (Sonnet 5'in ~4 katı, düşünme hariç). "
+               "Anthropic'in en yetenekli modeli. Kalitesi ölçülmedi.",
+        "dusunme": None,
+        "efor": "low",
+    },
 }
 
 
@@ -3853,6 +3863,8 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
     }
     if bilgi.get("dusunme") is not None:
         govde["thinking"] = bilgi["dusunme"]
+    if bilgi.get("efor"):
+        govde["output_config"] = {"effort": bilgi["efor"]}
 
     client = anthropic.Anthropic(api_key=anahtar)
     try:
@@ -3879,8 +3891,12 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
         getattr(yanit.usage, "input_tokens", 0) or 0,
         getattr(yanit.usage, "output_tokens", 0) or 0,
     )
-    metin = "".join(b.text for b in yanit.content if getattr(b, "type", "") == "text")
     bitis = getattr(yanit, "stop_reason", None)
+    # Ret (Fable 5.2 güvenlik sınıflandırıcısı): HTTP 200, metin YARIM kalabilir.
+    # Yarım çeviri başarı sayılmasın diye metin atılır -> engellenmiş yanıt yolu.
+    metin = "" if bitis == "refusal" else "".join(
+        b.text for b in yanit.content if getattr(b, "type", "") == "text"
+    )
     return _MetinYanit(metin, "STOP" if bitis == "end_turn" else bitis)
 
 

@@ -89,6 +89,7 @@ def test_secilebilir_modeller_kullanicinin_istedikleri():
         "vertex/gemini-2.5-pro",  # 2026-11-20: ÜCRETLİ; ücretsiz katmanda 404/limit 0
         "claude-haiku-4-5",
         "claude-sonnet-5",
+        "claude-fable-5-2",  # 2026-11-21: ÜCRETLİ, düşünme hep açık
     )
     for m in translate.SECILEBILIR_MODELLER:
         assert m["etiket"] and m["not"], m  # etiket ve ölçüm notu okuyucuya çıkıyor
@@ -225,6 +226,53 @@ def test_sonnet5_dusunmeyi_ACIKCA_kapatir():
     assert translate.CLAUDE_MODELLER["claude-sonnet-5"]["dusunme"] == {
         "type": "disabled"
     }
+
+
+def _sahte_claude(monkeypatch, stop_reason, metin="yarım çeviri"):
+    """`anthropic.Anthropic`'i taklit eder; gönderilen gövdeyi döndürür."""
+    import anthropic
+    from types import SimpleNamespace
+
+    gonderilen = {}
+
+    class _Akis:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *a):
+            return False
+
+        def get_final_message(self):
+            return SimpleNamespace(
+                content=[SimpleNamespace(type="text", text=metin)],
+                stop_reason=stop_reason,
+                usage=SimpleNamespace(input_tokens=1, output_tokens=1),
+            )
+
+    class _Istemci:
+        def __init__(self, **_):
+            self.messages = SimpleNamespace(stream=lambda **g: (gonderilen.update(g), _Akis())[1])
+
+    monkeypatch.setenv("CLAUDE_API_KEY", "k")
+    monkeypatch.setattr(anthropic, "Anthropic", _Istemci)
+    return gonderilen
+
+
+def test_fable_dusunme_gondermez_efor_dusuk(monkeypatch):
+    """Fable 5.2'de `thinking: disabled` 400 verir; derinlik yalnız eforla iner.
+    Düşünme $40/M çıkış tokenı olarak faturalandığı için efor `low`."""
+    govde = _sahte_claude(monkeypatch, "end_turn")
+    yanit = translate._claude_uret("claude-fable-5-2", "u", "s", 32768)
+    assert "thinking" not in govde
+    assert govde["output_config"] == {"effort": "low"}
+    assert yanit.text == "yarım çeviri" and yanit.finish_reason == "STOP"
+
+
+def test_claude_reti_yarim_metni_basari_saymaz(monkeypatch):
+    """Ret HTTP 200 döner ve metin yarım kalabilir; yarım çeviri kaydedilmemeli."""
+    _sahte_claude(monkeypatch, "refusal")
+    yanit = translate._claude_uret("claude-fable-5-2", "u", "s", 32768)
+    assert yanit.text == ""
 
 
 def test_claude_anahtari_iki_adi_da_kabul_eder(monkeypatch):

@@ -36,6 +36,7 @@ FIYAT = {
     "vertex/gemini-2.5-pro": {"giris": 1.25, "cikis": 10.00},
     "claude-haiku-4-5": {"giris": 1.00, "cikis": 5.00},
     "claude-sonnet-5": {"giris": 2.00, "cikis": 10.00},
+    "claude-fable-5-2": {"giris": 8.00, "cikis": 40.00},  # 2026-11-21
 }
 
 
