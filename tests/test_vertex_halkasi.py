@@ -223,6 +223,43 @@ def test_argonun_KABUL_ettigi_duzey_korunur():
     assert str(cfg.thinking_config.thinking_level).lower().endswith("low")
 
 
+@pytest.mark.parametrize("model", ["gemini-2.5-flash", "gemini-2.5-pro"])
+def test_2_5_ailesine_dusunme_DUZEYI_gitmez(model):
+    """2.5 `thinking_level`'ı 400 ile reddeder; defter `low` yolluyor. Atılmasa 2.5
+    seçiliyken defterin her çağrısı düşerdi (2.5-flash'ta ölçüldü 2026-11-20)."""
+    jeton = translate._DUSUNME_AYARI.set({"thinking_level": "low"})
+    try:
+        cfg = translate._gemini_yapilandirmasi("s", 1, model)
+    finally:
+        translate._DUSUNME_AYARI.reset(jeton)
+    assert cfg.thinking_config is None
+
+
+def test_2_5_pro_dusunmeyi_KAPATAMAZ_ama_butce_korunur():
+    """Bütçe 0 Pro'da 400 verir, atılır; sıfırdan büyük bütçe olduğu gibi gider.
+    2.5 Flash 0'ı kabul eder (ölçüldü), ona dokunulmaz."""
+    for ayar, model, beklenen in [
+        ({"thinking_budget": 0}, "gemini-2.5-pro", None),
+        ({"thinking_budget": 2048}, "gemini-2.5-pro", 2048),
+        ({"thinking_budget": 0}, "gemini-2.5-flash", 0),
+    ]:
+        jeton = translate._DUSUNME_AYARI.set(ayar)
+        try:
+            cfg = translate._gemini_yapilandirmasi("s", 1, model)
+        finally:
+            translate._DUSUNME_AYARI.reset(jeton)
+        butce = cfg.thinking_config.thinking_budget if cfg.thinking_config else None
+        assert butce == beklenen, (ayar, model)
+
+
+def test_2_5_pro_vertex_listede_ucretli_ZINCIRE_ve_UCRETSIZ_LISTEYE_girmez():
+    secenek = [m for m in translate.SECILEBILIR_MODELLER if m["ad"] == "vertex/gemini-2.5-pro"][0]
+    assert secenek["ucretli"] and "ÜCRETLİ" in secenek["not"]
+    assert "vertex/gemini-2.5-pro" not in translate.DEFAULT_MODELS
+    assert "gemini-2.5-pro" not in translate.SECILEBILIR_ADLAR
+    assert "vertex/gemini-2.5-pro" in kullanim.FIYAT
+
+
 def test_koruma_OTEKI_modellerin_davranisini_degistirmez(monkeypatch):
     """Bütçeyi kabul eden modellerde ayar eskisiyle birebir aynı gider."""
     monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", 2048)

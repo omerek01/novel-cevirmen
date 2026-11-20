@@ -332,6 +332,22 @@ VERTEX_MODELLER = {
         "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
                "Aynı 3.6; günlük kota ve yoğunluk (503) derdi yok.",
     },
+    # GEMINI 2.5 PRO (2026-11-20, kullanıcı isteği). Sürüm sırasında en eski, SONDA.
+    # Ücretsiz listeye GİRMEDİ: 2026-11-20 yoklamasında AI Studio anahtarlarının
+    # birinde ücretsiz kota `limit: 0`, öteki dördünde 404 "no longer available to
+    # new users" döndü — seçilse her istek 5 anahtarı boşa dolaşıp 3.6'ya inerdi.
+    # Vertex'te ad YOKLANMADI (sunucuya erişilemedi); deploy sonrası kısa yoklama yap.
+    # Düşünmeyi kapatamaz ve `thinking_level` kabul etmez (bkz.
+    # `_DUSUNME_DUZEYI_REDDEDENLER`). Fiyat `kullanim.FIYAT`'ta zaten var (1,25/10).
+    "vertex/gemini-2.5-pro": {
+        "model": "gemini-2.5-pro",
+        # Düşünme her zaman açık: uzun bölüm 90 sn tavanını Argon gibi aşabilir.
+        "zaman_asimi_ms": 300_000,
+        "etiket": "2.5 Pro (Vertex, kredi)",
+        "kisa": "2.5 Pro",
+        "not": "ÜCRETLİ ~$0,06+/bölüm (3.6'nın ~2 katı, düşünme hariç), deneme "
+               "kredisinden düşer. Eski nesil Pro; çeviri kalitesi ölçülmedi.",
+    },
 }
 
 
@@ -3867,6 +3883,12 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
 # okunmaz. Koruma desteklenmeyen alanı ATAR, modeli kendi varsayılanında bırakır.
 _DUSUNME_BUTCESI_REDDEDENLER = frozenset({"gemini-4-argon"})
 _GECERSIZ_DUSUNME_DUZEYLERI = frozenset({"minimal"})
+# Ters yön: 2.5 ailesi `thinking_level`'ı 400 ile REDDEDER ("Thinking level is not
+# supported for this model", 2.5-flash'ta ölçüldü 2026-11-20) — defter varsayılan
+# olarak `low` düzeyi yolluyor, yani 2.5 seçiliyken defterin her çağrısı düşüyordu.
+# 2.5 Pro ayrıca düşünmeyi kapatamaz: bütçe 0 da atılır, model kendi ayarında kalır.
+_DUSUNME_DUZEYI_REDDEDENLER = frozenset({"gemini-2.5-flash", "gemini-2.5-pro"})
+_DUSUNMEYI_KAPATAMAYANLAR = frozenset({"gemini-2.5-pro"})
 
 
 def _dusunme_alanlari(model: str | None) -> dict | None:
@@ -3884,6 +3906,10 @@ def _dusunme_alanlari(model: str | None) -> dict | None:
         alanlar.pop("thinking_budget", None)
         if str(alanlar.get("thinking_level", "")).lower() in _GECERSIZ_DUSUNME_DUZEYLERI:
             alanlar.pop("thinking_level")
+    if alanlar and model in _DUSUNME_DUZEYI_REDDEDENLER:
+        alanlar.pop("thinking_level", None)
+    if alanlar and model in _DUSUNMEYI_KAPATAMAYANLAR and alanlar.get("thinking_budget") == 0:
+        alanlar.pop("thinking_budget")
     return alanlar or None
 
 
