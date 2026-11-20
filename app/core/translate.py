@@ -336,9 +336,10 @@ VERTEX_MODELLER = {
     # Ücretsiz listeye GİRMEDİ: 2026-11-20 yoklamasında AI Studio anahtarlarının
     # birinde ücretsiz kota `limit: 0`, öteki dördünde 404 "no longer available to
     # new users" döndü — seçilse her istek 5 anahtarı boşa dolaşıp 3.6'ya inerdi.
-    # Vertex'te ad YOKLANMADI (sunucuya erişilemedi); deploy sonrası kısa yoklama yap.
-    # Düşünmeyi kapatamaz ve `thinking_level` kabul etmez (bkz.
-    # `_DUSUNME_DUZEYI_REDDEDENLER`). Fiyat `kullanim.FIYAT`'ta zaten var (1,25/10).
+    # Vertex'te AÇIK (sunucu yoklaması 2026-11-20, `global`): ayarsız ve bütçe 2048
+    # 200; `thinking_level` ve bütçe 0 ise 400 — koruma bunları atar (bkz.
+    # `_DUSUNME_DUZEYI_REDDEDENLER`). Tek cümlelik istekte bile ~900-1000 düşünme
+    # tokenı üretti. Fiyat `kullanim.FIYAT`'ta zaten var (1,25/10).
     "vertex/gemini-2.5-pro": {
         "model": "gemini-2.5-pro",
         # Düşünme her zaman açık: uzun bölüm 90 sn tavanını Argon gibi aşabilir.
@@ -3887,6 +3888,7 @@ _GECERSIZ_DUSUNME_DUZEYLERI = frozenset({"minimal"})
 # supported for this model", 2.5-flash'ta ölçüldü 2026-11-20) — defter varsayılan
 # olarak `low` düzeyi yolluyor, yani 2.5 seçiliyken defterin her çağrısı düşüyordu.
 # 2.5 Pro ayrıca düşünmeyi kapatamaz: bütçe 0 da atılır, model kendi ayarında kalır.
+# Vertex'te 2.5 Pro için ikisi de doğrulandı (sunucu, 2026-11-20).
 _DUSUNME_DUZEYI_REDDEDENLER = frozenset({"gemini-2.5-flash", "gemini-2.5-pro"})
 _DUSUNMEYI_KAPATAMAYANLAR = frozenset({"gemini-2.5-pro"})
 
