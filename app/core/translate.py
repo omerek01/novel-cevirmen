@@ -332,6 +332,20 @@ VERTEX_MODELLER = {
         "not": "ÜCRETLİ ~$0,032/bölüm, Google Cloud deneme kredisinden düşer. "
                "Aynı 3.6; günlük kota ve yoğunluk (503) derdi yok.",
     },
+    # GEMINI 3.1 PRO (2026-11-20, kullanıcı isteği). Sürüm sırasıyla 3.6'nın altında.
+    # Ad sunucuda yoklandı (`global`): `gemini-3.1-pro` 404, `-preview` 200. Ücretsiz
+    # katmanda YOK (AI Studio fiyat sayfası "Not available"). Düşünme: LOW ve bütçe
+    # kabul, bütçe 0 düşünmeyi tümden kapatıyor; yalnız `minimal` 400 (bkz.
+    # `_MINIMAL_DUZEYI_REDDEDENLER`). Fiyat 2,00/12,00 $ (≤200K istem).
+    "vertex/gemini-3.1-pro-preview": {
+        "model": "gemini-3.1-pro-preview",
+        # Pro düşünür: uzun bölüm 90 sn tavanını Argon gibi aşabilir.
+        "zaman_asimi_ms": 300_000,
+        "etiket": "3.1 Pro (Vertex, kredi)",
+        "kisa": "3.1 Pro",
+        "not": "ÜCRETLİ ~$0,08+/bölüm (3.6'nın ~2,5 katı, düşünme hariç), deneme "
+               "kredisinden düşer. Önizleme Pro; çeviri kalitesi ölçülmedi.",
+    },
     # GEMINI 2.5 PRO (2026-11-20, kullanıcı isteği). Sürüm sırasında en eski, SONDA.
     # Ücretsiz listeye GİRMEDİ: 2026-11-20 yoklamasında AI Studio anahtarlarının
     # birinde ücretsiz kota `limit: 0`, öteki dördünde 404 "no longer available to
@@ -3884,6 +3898,9 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
 # okunmaz. Koruma desteklenmeyen alanı ATAR, modeli kendi varsayılanında bırakır.
 _DUSUNME_BUTCESI_REDDEDENLER = frozenset({"gemini-4-argon"})
 _GECERSIZ_DUSUNME_DUZEYLERI = frozenset({"minimal"})
+# `minimal` düzeyini reddedenler; 3.1 Pro bütçeyi kabul ediyor ama `minimal` 400
+# veriyor (sunucu yoklaması 2026-11-20). `DEFTER_DUSUNME=minimal` bu yoldan gelir.
+_MINIMAL_DUZEYI_REDDEDENLER = _DUSUNME_BUTCESI_REDDEDENLER | {"gemini-3.1-pro-preview"}
 # Ters yön: 2.5 ailesi `thinking_level`'ı 400 ile REDDEDER ("Thinking level is not
 # supported for this model", 2.5-flash'ta ölçüldü 2026-11-20) — defter varsayılan
 # olarak `low` düzeyi yolluyor, yani 2.5 seçiliyken defterin her çağrısı düşüyordu.
@@ -3906,6 +3923,7 @@ def _dusunme_alanlari(model: str | None) -> dict | None:
     )
     if alanlar and model in _DUSUNME_BUTCESI_REDDEDENLER:
         alanlar.pop("thinking_budget", None)
+    if alanlar and model in _MINIMAL_DUZEYI_REDDEDENLER:
         if str(alanlar.get("thinking_level", "")).lower() in _GECERSIZ_DUSUNME_DUZEYLERI:
             alanlar.pop("thinking_level")
     if alanlar and model in _DUSUNME_DUZEYI_REDDEDENLER:

@@ -260,6 +260,24 @@ def test_2_5_pro_vertex_listede_ucretli_ZINCIRE_ve_UCRETSIZ_LISTEYE_girmez():
     assert "vertex/gemini-2.5-pro" in kullanim.FIYAT
 
 
+def test_3_1_pro_yalniz_MINIMAL_duzeyi_atilir_gerisi_gider():
+    """Sunucu yoklaması: `minimal` 400, LOW ve bütçe (0 dahil) 200."""
+    for ayar, beklenen in [
+        ({"thinking_level": "minimal"}, None),
+        ({"thinking_level": "low"}, "low"),
+        ({"thinking_budget": 0}, 0),
+    ]:
+        jeton = translate._DUSUNME_AYARI.set(ayar)
+        try:
+            cfg = translate._gemini_yapilandirmasi("s", 1, "gemini-3.1-pro-preview")
+        finally:
+            translate._DUSUNME_AYARI.reset(jeton)
+        tc = cfg.thinking_config
+        deger = None if tc is None else (
+            tc.thinking_budget if "thinking_budget" in ayar else str(tc.thinking_level).lower())
+        assert deger == beklenen or str(deger).endswith(str(beklenen)), (ayar, deger)
+
+
 def test_koruma_OTEKI_modellerin_davranisini_degistirmez(monkeypatch):
     """Bütçeyi kabul eden modellerde ayar eskisiyle birebir aynı gider."""
     monkeypatch.setattr(translate, "GEMINI_DUSUNME_BUTCESI", 2048)

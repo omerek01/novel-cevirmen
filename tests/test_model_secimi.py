@@ -85,6 +85,7 @@ def test_secilebilir_modeller_kullanicinin_istedikleri():
         "vertex/gemini-3.8-flash",  # 2026-09-30: ÜCRETLİ, Cloud deneme kredisinden
         "vertex/gemini-3.7-flash",
         "vertex/gemini-3.6-flash",  # 2026-09-26
+        "vertex/gemini-3.1-pro-preview",  # 2026-11-20: ÜCRETLİ, ücretsiz katmanda yok
         "vertex/gemini-2.5-pro",  # 2026-11-20: ÜCRETLİ; ücretsiz katmanda 404/limit 0
         "claude-haiku-4-5",
         "claude-sonnet-5",
