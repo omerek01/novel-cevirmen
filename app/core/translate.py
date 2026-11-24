@@ -1273,6 +1273,57 @@ SYSTEM_INSTRUCTION = (
     "Böyle bir ad yoksa boş bırak."
 ) + ROMAN_DILI
 
+# TERİM ÖLÇÜTÜ (2026-11-24, `SOZLUK_TERIM_OLCUTU=1`, varsayılan kapalı; ölçülmeden yayılmaz).
+# Canlı ölçüm (shadow-slave): eski ölçüt "büyük harfle başlayan HER ifade" olduğu için 174 tek
+# sözcüklü otomatik kuralın önemli kısmı sıradan sözcüktü (`South`, `King`, `Hand`, `Well`) ve
+# sayı/unvan + kayıtlı terim birleşimleri ayrı kural oluyordu (`Third Tier`, `Night Saint`).
+# ranobe-tl ("Do NOT list common words … with an obvious translation") ve KeywordGacha ("term text
+# should not include … titles, positions, or ranks") istemleri ölçütü tersinden koyar.
+_ESKI_OLCUT = (
+    "- ÖLÇÜT: metinde BÜYÜK HARFLE başlayarak o dünyaya ait belirli bir şeyi "
+    "adlandıran her ifade detected_terms'e girer; sıradan cins isim (a sword, the "
+    "city) girmez ama adlandırılmış hâli (the Sword of Dawn) GİRER. Birden çok "
+    "kelimeli adı BÜTÜN olarak ver, parçalama.\n"
+)
+_YENI_OLCUT = (
+    "- ÖLÇÜT: detected_terms'e YALNIZ o dünyaya ait belirli bir şeyi ADLANDIRAN ve sonraki "
+    "bölümlerde aynı karşılıkla tutarlı kalması gereken ifadeler girer. Karşılığı sözlüğe "
+    "bakmadan belli olan SIRADAN sözcük ya da kalıp, büyük harfle ya da cümle başında yazılmış "
+    "olsa bile GİRMEZ: yön (South, North), sıradan unvan ve akrabalık (King, Prince, Lady, "
+    "Grandmother), gündelik nesne ve kavram (Hand, Key, Moon, Bridge), ünlem ve zamir (Well, "
+    "Nobody, Others), sıradan çoğul (Wolves, Hunters). Sıradan cins isim (a sword, the city) "
+    "girmez ama adlandırılmış hâli (the Sword of Dawn, Moonriver) GİRER. Birden çok kelimeli adı "
+    "BÜTÜN olarak ver, parçalama; ama SÖZLÜKTE ZATEN OLAN bir terime yalnız sayı, sıra ya da "
+    "unvan ekleyip yeni ad yapma (Third Tier, Category One, Night Saint): parçalar sözlükte, "
+    "birleşimi ayrıca yazma.\n"
+)
+assert _ESKI_OLCUT in SYSTEM_INSTRUCTION  # metin değişirse bayrak sessizce etkisiz kalmasın
+
+
+def terim_olcutu_acik() -> bool:
+    return os.getenv("SOZLUK_TERIM_OLCUTU", "0") != "0"
+
+
+def sistem_talimati() -> str | None:
+    """Çeviri sistem talimatı; bayrak kapalıyken None (çağrı varsayılanı, bayt bayt eski)."""
+    if not terim_olcutu_acik():
+        return None
+    return SYSTEM_INSTRUCTION.replace(_ESKI_OLCUT, _YENI_OLCUT)
+
+
+# Sözlük satırındaki tür etiketi (yalnız `SOZLUK_TERIM_OLCUTU`). ranobe-tl'nin `source → target
+# [type, note]` biçimi: tür karşılığın HANGİ anlam için olduğunu söyler. `diger` etiket taşımaz.
+_TUR_ETIKETI = {"kisi": "kişi", "yer": "yer", "nesne": "nesne", "yetenek": "yetenek",
+                "rutbe": "rütbe", "orgut": "örgüt"}
+_SOZLUK_TURLERI: ContextVar[dict | None] = ContextVar("sozluk_turleri", default=None)
+
+
+def _tur_etiketi(tur: str | None) -> str | None:
+    if not tur or tur == "diger":
+        return None
+    return _TUR_ETIKETI.get(tur, tur)
+
+
 # Paragraf hizalama işaretçisi: [[1]], [[ 2 ]] gibi. Çeviride korunur → her Türkçe
 # paragrafı kaynak İngilizce paragrafıyla eşler (sayı tutmasa bile hizalama bozulmaz).
 MARKER_RE = re.compile(r"\[\[\s*(\d+)\s*\]\]")
@@ -1365,6 +1416,12 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
     ozet_token = _OZET_METNI.set(None)
     defter_token = _DEFTER_KARTLARI.set(defter or None)
     ornek_token = _TERIM_ORNEKLERI.set(terim_ornekleri or None)
+    if terim_olcutu_acik() and book_slug:
+        from . import glossary as _sozluk  # geç içe aktarma: glossary translate'i kullanır
+        turler = _sozluk.ceviri_turleri(book_slug)
+    else:
+        turler = None
+    tur_token = _SOZLUK_TURLERI.set(turler)
     try:
         sonuc = _translate_chapter_impl(text, api_key, glossary, models, prev_context,
                     kosullar, anlamlar, bolum_no, anlam_denetimi,
@@ -1381,6 +1438,7 @@ def translate_chapter(text: str, api_key: str, glossary=None, models=None, prev_
             raise KaliteKontrolHatasi(str(exc)) from exc
         raise
     finally:
+        _SOZLUK_TURLERI.reset(tur_token)
         _TERIM_ORNEKLERI.reset(ornek_token)
         _DEFTER_KARTLARI.reset(defter_token)
         _OZET_METNI.reset(ozet_token)
@@ -3506,7 +3564,7 @@ def _translate_chunk(
     bellek = _BELLEK_METNI.get()
     ozet = _OZET_METNI.get()
     defter = _DEFTER_KARTLARI.get()
-    system = None
+    system = sistem_talimati()  # bayrak kapalıyken None: çağrı varsayılanı (bayt bayt eski)
     kartsiz = user  # ret yedeği: kartın eklenmediği istem (önekler ikisine de eklenir)
     if defter:
         from . import karakter_defteri
@@ -3524,7 +3582,7 @@ def _translate_chunk(
             user, kartsiz = onek + "\n\n" + user, onek + "\n\n" + kartsiz
     if baglam is not None:
         from . import ceviri_baglam
-        system = (SYSTEM_INSTRUCTION.split('- Yanıtı SADECE şu JSON ile ver:', 1)[0]
+        system = ((system or SYSTEM_INSTRUCTION).split('- Yanıtı SADECE şu JSON ile ver:', 1)[0]
                   .replace(" ve detected_terms'te sözlükteki yazımı kullan", "")
                   + ceviri_baglam.CEVIRI_CIKTI_TALIMATI)
         user, kartsiz = baglam + "\n\n" + user, baglam + "\n\n" + kartsiz
@@ -3720,12 +3778,16 @@ def _build_user_prompt(
         if os.getenv("SOZLUK_SIRADAN", "0") != "0" else set()
     )
 
+    turler = _SOZLUK_TURLERI.get() or {}  # yalnız SOZLUK_TERIM_OLCUTU açıkken dolu
+
     def _satir(s: str, t: str) -> str:
         # Koşul YALNIZ süzgeçten geçen (metinde fiilen geçen) terimler için yazılır;
         # geçmeyen bir terimin koşulu her istekte boşa token yakardı.
         kosul, yasak = _kosul_parcalari(kosullar.get(s))
+        etiket = _tur_etiketi(turler.get(s))
         return (
             f"{s} -> {t}"
+            + (f"  [{etiket}]" if etiket else "")
             + (f"  [KOŞUL: {kosul}]" if kosul else "")
             + (f"  [YASAK: {yasak}]" if yasak else "")
             + (f"  {SIRADAN_ISARETI}" if s in siradan else "")
@@ -3753,6 +3815,13 @@ def _build_user_prompt(
         glossary_str += (
             "\n([YASAK: \"X\"] taşıyan terimin karşılığı olarak X ASLA yazılmaz: X başka "
             "bir kavramın karşılığıdır ve ikisi okurda karışır. Sözlükteki karşılığı kullan.)"
+        )
+    if any(_tur_etiketi(turler.get(s)) for s in relevant):
+        glossary_str += (
+            "\n(Satırdaki [kişi], [yer], [rütbe] gibi etiket karşılığın HANGİ anlam için kayıtlı "
+            "olduğunu söyler ve çeviriye YAZILMAZ. Kaynak aynı sözcüğü o anlamda değil gündelik "
+            "anlamıyla kullanıyorsa (yön olarak 'south', ünlem olarak 'Well') sözlük karşılığını "
+            "zorlama, cümleye uyan sıradan Türkçesini yaz.)"
         )
     if siradan:
         glossary_str += (

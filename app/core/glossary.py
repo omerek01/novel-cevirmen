@@ -1971,6 +1971,16 @@ def tutulan_kaynaklar(book_slug: str) -> set[str]:
         conn.close()
 
 
+def ceviri_turleri(book_slug: str) -> dict[str, str]:
+    """{kaynak: tür} — çeviri isteminin sözlük satırındaki tür etiketi (`SOZLUK_TERIM_OLCUTU`).
+
+    Yalnız kurala giren (tutulmayan) ve türü olan kayıtlar. Alternatif yazımlar etiket
+    taşımaz: etiket bilgi amaçlıdır, karşılığı değiştirmez.
+    """
+    return {r["source"]: r["tur"] for r in get_glossary_rows(book_slug)
+            if r.get("tur") and r.get("durum") != TUTULDU}
+
+
 def ceviri_kosullari(book_slug: str) -> dict[str, str]:
     """ÇEVİRİ YOLUNUN koşulları: kayıt koşulları + yazımlara taşınan koşul + EK ANLAMLAR.
 
