@@ -95,14 +95,28 @@ export function setActiveChapter(e) {
   if (st && st.view === "reader") {
     history.replaceState({ view: "reader", url: e.url, ratio: currentRatio() }, "");
   }
-  saveLastRead(durum.currentBookSlug, e.url);
-  logReadOnce(e);
-  okumaHiziAktif(e, currentRatio(), stream);
+  if (!incelemeGezintisi) {
+    saveLastRead(durum.currentBookSlug, e.url);
+    logReadOnce(e);
+    okumaHiziAktif(e, currentRatio(), stream);
+  }
 }
 
 // Okuma günlüğü: bölüm gerçekten aktif olunca, oturum başına bir kez (karar #8 —
 // SW cache-first GET sunucuya ulaşmaz; istemci olayı şart; prefetch bu yola girmez).
+// İNCELEME GEZİNTİSİ (2026-11-24, kullanıcı bildirimi): sözlükte "cümleye git" bölümü normal
+// okuma gibi açıyordu; kaydırınca konum, son okunan bölüm ve okuma günlüğü o bölüme yazılıyor,
+// kullanıcının kaldığı yer kayıyordu. Köken ile açılan bölüm bunların HİÇBİRİNİ yazmaz; normal
+// bir bölüm açılınca (`loadChapter` kökensiz) mod kapanır.
+// shortcut: incelenen bölümden sonsuz kaydırmayla sonraki bölüme geçilirse de mod sürer; kullanıcı
+// oradan okumaya devam etmek isterse bölümü normal açması gerekir.
+let incelemeGezintisi = false;
+export function incelemeGezintisiMi() {
+  return incelemeGezintisi;
+}
+
 export function logReadOnce(e) {
+  if (incelemeGezintisi) return;
   if (!e || !e.loaded || !e.bookSlug || loggedReads.has(e.url)) return;
   loggedReads.add(e.url);
   fetch("/api/reading-log", {
@@ -116,7 +130,7 @@ export function persistScroll() {
   // Yalnızca başarıyla render edilmiş aktif bölümün konumunu kaydet — aksi halde
   // yarım/hatalı bir bölüm "kaldığın yer" olarak yazılır, sonraki açılış onu yeniden
   // çekmeye çalışır (gereksiz "Yükleniyor").
-  if (views.reader.hidden) return;
+  if (views.reader.hidden || incelemeGezintisi) return;
   const e = activeEntry();
   if (!e || !e.loaded) return;
   const ratio = currentRatio();
@@ -430,6 +444,7 @@ export function renderError(err, url, refresh) {
 export async function loadChapter(url, opts = {}) {
   if (!url) return;
   const { refresh = false, restoreRatio = null, koken = null } = opts;
+  incelemeGezintisi = !!koken;
   isNavigating = true;
   isRestoring = true;
   el("readerError").hidden = true;
