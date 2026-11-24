@@ -148,8 +148,10 @@ const INCELEME_ZAMAN_ASIMI = 60000;
 // (`guncelleniyor`); o sürece liste yeniden istenir: 1, 2, 4 sn, sonra 5 sn arayla
 // (küçük kitapta tazeleme anında biter; e2-micro'da büyük kitapta 9-60 sn sürüyor).
 // Üst sınır, arka plan işi hata verirse sonsuz yoklamayı keser.
-const GUNCELLEME_ARALIK = 5000;
-const GUNCELLEME_UST_SINIR = 60;
+// 2026-11-24: 5 sn x 60 deneme açık kalan ekranda sunucuyu (e2-micro) sürekli meşgul ediyordu.
+// Üstel artış 30 sn'de durur, en çok 10 deneme; sekme gizliyken sorulmaz.
+const GUNCELLEME_ARALIK = 30000;
+const GUNCELLEME_UST_SINIR = 10;
 let guncellemeZamanlayici = null;
 let guncellemeDenemesi = 0;
 
@@ -238,7 +240,7 @@ function guncellemeyiIzle(slug, guncelleniyor) {
   el("glossReviewSayi").textContent += " · güncelleniyor…";
   const bekleme = Math.min(GUNCELLEME_ARALIK, 1000 * 2 ** (guncellemeDenemesi - 1));
   guncellemeZamanlayici = setTimeout(() => {
-    if (slug === durum.currentBookSlug && !views.glossary.hidden) incelemeyiYukle(slug);
+    if (slug === durum.currentBookSlug && !views.glossary.hidden && !document.hidden) incelemeyiYukle(slug);
     else guncellemeDenemesi = 0;
   }, bekleme);
 }
