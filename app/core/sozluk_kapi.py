@@ -904,17 +904,18 @@ def sozlugu_denetle(
     ancak böyle görülür (`seven` küçük harfle 247 kez).
     """
     out: dict[str, list[dict]] = defaultdict(list)
+    sayac = _sayac_kur(korpus) if korpus else {}  # kayıt başına regex 1440 kayıtta dakikalar sürerdi
     for i, r in enumerate(satirlar):
         digerleri = satirlar[:i] + satirlar[i + 1:]
-        genel = (genel_sozcuk_sikligi(r["source"], korpus)
-                 if korpus and genel_sozcuk_mu(r["source"], korpus) else None)
+        kucuk, buyuk = (sayac.get(r["source"].strip().casefold(), (0, 0))
+                        if " " not in r["source"].strip() else (0, 0))
+        genel = (kucuk, buyuk) if kucuk >= 5 and kucuk >= buyuk else None
         sonuc = kapi_denetle(
             r["source"], r.get("target") or "", digerleri, yasaklar, politikalar,
             r.get("tur"), geriye_donuk=True, genel=genel,
         )
         for n in sonuc["nedenler"]:
             if n["tur"] == SAYI_UYUMSUZLUGU and genel:
-                kucuk, buyuk = genel_sozcuk_sikligi(r["source"], korpus)
                 n = {**n, "aciklama": n["aciklama"]
                      + f" Kitapta küçük harfle {kucuk}, cümle içinde büyük harfle {buyuk} kez geçiyor."}
             out[r["source"]].append(n)
