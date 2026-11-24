@@ -253,3 +253,20 @@ def test_bekleyen_kayit_acilista_gider_reddedilen_okurken_bildirilir(sayfa):
     expect(bildirim).to_contain_text("gönderilemeyen 1 kayıt")
     bildirim.get_by_role("button", name="GÖSTER").click()
     expect(sayfa.locator("#glossaryView")).to_be_visible()
+
+
+def test_kayitli_terimde_oner_dugmesi_oneriyi_alana_yazar(sayfa):
+    """2026-11-24: kayıtlı terimde "Öner"e basınca yanıt `panel.kayitli` diye atılıyor,
+    durum "öneriliyor…"da takılı kalıyordu (kullanıcı: "10-20 saniye geçti hala ses yok")."""
+    _okuyucuya_gir(sayfa)
+    tohum.sozluk(SLUG, {"Silver Tower": "Gümüş Kule"})
+    sayfa.route("**/glossary/suggest", lambda r: r.fulfill(
+        status=200, content_type="application/json",
+        body=json.dumps({"source": "Silver Tower", "target": "Gümüş Kale", "is_character": False})))
+    _sec(sayfa, "#readerBody article.chapter p[data-idx='2']", "Gümüş Kule")
+    sayfa.locator("#selGlossBtn").click()
+    sayfa.locator("#terimAdaylar .terim-aday-kayitli").click()
+    expect(sayfa.locator("#terimKarsilik")).to_have_value("Gümüş Kule")
+    sayfa.locator("#terimOner").click()
+    expect(sayfa.locator("#terimKarsilik")).to_have_value("Gümüş Kale")
+    expect(sayfa.locator("#terimDurum")).to_contain_text("Önerilen karşılık dolduruldu")

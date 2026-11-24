@@ -295,11 +295,13 @@ function kokeniCiz(kaynak) {
 
 /* ---------- öneri ---------- */
 
-async function oneriIste() {
+// `acik`: kullanıcı "Öner"e bastı. Kayıtlı terimde de öneri alana yazılır (kaydetmeden
+// kayıt değişmez); otomatik öneri ise kayıtlı terime dokunmaz.
+async function oneriIste({ acik = false } = {}) {
   const kaynak = el("terimKaynak").value.trim();
   if (!kaynak || !panel) return;
   const istek = panel;
-  yaz("terimDurum", "Sözlükte yok — karşılık öneriliyor…");
+  yaz("terimDurum", panel.kayitli ? "Karşılık öneriliyor…" : "Sözlükte yok — karşılık öneriliyor…");
   try {
     const res = await fetchWithTimeout(
       `/api/book/${encodeURIComponent(istek.slug)}/glossary/suggest`,
@@ -316,12 +318,12 @@ async function oneriIste() {
     if (!res.ok) throw new Error("öneri alınamadı");
     const data = await res.json();
     if (panel !== istek || !diyalogAcikMi(PANEL) || el("terimKaynak").value.trim() !== kaynak) return;
-    if (panel.kayitli) return; // bu arada kayıtlı çıktı (arka plan tazelemesi): öneri gereksiz
-    if (!el("terimKarsilik").value.trim()) {
+    if (!acik && panel.kayitli) return; // bu arada kayıtlı çıktı (arka plan tazelemesi): öneri gereksiz
+    if (acik || !el("terimKarsilik").value.trim()) {
       el("terimKarsilik").value = data.target || kaynak;
-      if (data.is_character) {
-        el("terimAynen").checked = true;
-        el("terimKarsilik").disabled = true;
+      if (data.is_character || acik) {
+        el("terimAynen").checked = !!data.is_character;
+        el("terimKarsilik").disabled = !!data.is_character;
       }
     }
     yaz(
@@ -1141,7 +1143,7 @@ export function kur() {
 
   el("terimKaydet").addEventListener("click", kaydet);
   el("terimSil").addEventListener("click", sil);
-  el("terimOner").addEventListener("click", oneriIste);
+  el("terimOner").addEventListener("click", () => oneriIste({ acik: true }));
   el("terimKapat").addEventListener("click", () => diyalogKapat(PANEL));
   el("terimBuBolum").addEventListener("click", buBolumdeUygula);
   el("terimEtkiBtn").addEventListener("click", etkiyiGoster);
