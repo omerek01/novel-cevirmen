@@ -3070,3 +3070,33 @@ body.obek-ayarliyor .yoklama-serit { bottom: calc(132px + env(safe-area-inset-bo
 .hiz-karti .hk-serbest { stroke: var(--accent); }
 .hiz-karti .hk-tempo { stroke: currentColor; opacity: 0.5; stroke-dasharray: 4 3; }
 .hiz-karti .hk-obek { margin: 4px 0; padding-left: 18px; }
+
+/* İnceleme kartında terimin geçtiği kaynak paragraf (2026-11-24). Okuma Salonu dili: okuma
+   yazı tipi, ince yeşil kenar çizgisi, terim aynı vurgu rengiyle; telefonda okunur boyut. */
+.inceleme-ornek {
+  margin: var(--s-sm) 0 0;
+  padding: 0.45rem 0.7rem;
+  border-left: 2px solid var(--accent);
+  background: var(--accent-soft);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+.inceleme-ornek blockquote {
+  margin: 0;
+  font-family: var(--reading-font);
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.inceleme-ornek mark {
+  background: transparent;
+  color: var(--accent);
+  font-weight: 700;
+}
+.inceleme-ornek figcaption {
+  margin-top: 0.2rem;
+  font-size: 0.75rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}

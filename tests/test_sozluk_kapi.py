@@ -461,3 +461,16 @@ def test_parcali_aday_sozluge_hic_yazilmaz():
     glossary.terimi_yaz(KITAP, "Tier", "Kademe", tur="rutbe")
     assert glossary.merge_terms(KITAP, {"Third Tier": "Üçüncü Kademe"}, "auto", 3) == {}
     assert _satir("Third Tier") is None
+
+
+def test_inceleme_ornekleri_dogrulama_baglamindan_ve_kirpilmis():
+    uzun = "Lead in. " * 120 + "Two Knights of the great clan rode out. " + "Tail. " * 120
+    satir = {"source": "Knights", "kaynak_cumle": None, "first_chapter": 1809, "dogrulama_notu": json.dumps(
+        {"baglamlar": [{"id": "1809:12:ab", "metin": uzun}, {"id": "1810:3:cd", "metin": "losing many knights"},
+                       {"id": "1811:1:ef", "metin": "third"}]})}
+    ornek = glossary.inceleme_ornekleri(satir)
+    assert [o["bolum"] for o in ornek] == [1809, 1810]  # en çok iki
+    assert "Knights of the great clan" in ornek[0]["metin"] and len(ornek[0]["metin"]) <= glossary.ORNEK_UZUNLUK + 2
+    yedek = glossary.inceleme_ornekleri({"source": "Abyss", "kaynak_cumle": "The Abyss yawned.",
+                                         "first_chapter": 4, "dogrulama_notu": None})
+    assert yedek == [{"bolum": 4, "metin": "The Abyss yawned."}]

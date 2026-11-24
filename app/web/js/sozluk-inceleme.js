@@ -101,6 +101,36 @@ async function yazimYap(slug, x, ana, kart) {
   await tazele(slug);
 }
 
+// Kaynak paragraf alıntısı: terim <mark> ile vurgulanır. innerHTML KULLANILMAZ (paragraf model
+// ve kaynak metninden gelir); parçalar metin düğümü olarak eklenir.
+function ornekBlogu(o, terim) {
+  const fig = document.createElement("figure");
+  fig.className = "inceleme-ornek";
+  const q = document.createElement("blockquote");
+  q.lang = "en";
+  const metin = o.metin || "";
+  const kucuk = metin.toLowerCase();
+  const t = (terim || "").toLowerCase();
+  let i = 0;
+  while (t) {
+    const j = kucuk.indexOf(t, i);
+    if (j < 0) break;
+    q.append(metin.slice(i, j));
+    const m = document.createElement("mark");
+    m.textContent = metin.slice(j, j + t.length);
+    q.append(m);
+    i = j + t.length;
+  }
+  q.append(metin.slice(i));
+  fig.appendChild(q);
+  if (o.bolum) {
+    const cap = document.createElement("figcaption");
+    cap.textContent = "Bölüm " + o.bolum;
+    fig.appendChild(cap);
+  }
+  return fig;
+}
+
 function dugme(metin, fn, sinif = "pill") {
   const b = document.createElement("button");
   b.type = "button";
@@ -304,13 +334,12 @@ function satir(slug, x) {
     t.textContent = "Tanım: " + x.tanim;
     kart.appendChild(t);
   }
-  if (x.kaynak_cumle) {
-    const c = document.createElement("p");
-    c.className = "terim-ornek-cumle";
-    c.lang = "en";
-    c.textContent = `“${x.kaynak_cumle}”` + (x.first_chapter ? ` — bölüm ${x.first_chapter}` : "");
-    kart.appendChild(c);
-  }
+  // Terimin geçtiği kaynak paragraf kartın İÇİNDE (kullanıcı bildirimi, 2026-11-24): nasıl
+  // kullanıldığını görmek için "cümleye git" gerekmesin. Sunucu `ornekler`i verir.
+  const ornekler = x.ornekler && x.ornekler.length
+    ? x.ornekler
+    : (x.kaynak_cumle ? [{ bolum: x.first_chapter, metin: x.kaynak_cumle }] : []);
+  for (const o of ornekler) kart.appendChild(ornekBlogu(o, x.source));
   const eylem = document.createElement("div");
   eylem.className = "inceleme-eylem";
   eylem.append(

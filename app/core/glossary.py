@@ -2544,6 +2544,45 @@ def inceleme_listesi(book_slug: str) -> list[dict]:
     return inceleme_durumu(book_slug, bayat_kabul=False)[0]
 
 
+ORNEK_EN_COK = 2
+ORNEK_UZUNLUK = 600
+
+
+def inceleme_ornekleri(satir: dict) -> list[dict]:
+    """İnceleme kartında gösterilecek kaynak paragraflar: [{"bolum", "metin"}], en çok ORNEK_EN_COK.
+
+    Kullanıcı bildirimi (2026-11-24): kart terimin nasıl kullanıldığını göstermiyordu; görmek için
+    "cümleye git" gerekiyordu. Önce doğrulamanın topladığı bağlam paragrafları (`baglamlar`, kimlik
+    `bölüm:paragraf:özet`), yoksa kaydın ilk görüldüğü cümle. Uzun paragraf terimin çevresinden kırpılır.
+    """
+    out: list[dict] = []
+    try:
+        not_ = json.loads(satir.get("dogrulama_notu") or "{}")
+    except (TypeError, ValueError):
+        not_ = {}
+    for b in (not_.get("baglamlar") or []) if isinstance(not_, dict) else []:
+        metin = (b or {}).get("metin") if isinstance(b, dict) else None
+        if not metin:
+            continue
+        bolum = str(b.get("id") or "").split(":", 1)[0]
+        out.append({"bolum": int(bolum) if bolum.isdigit() else None, "metin": _kirp(metin, satir["source"])})
+        if len(out) >= ORNEK_EN_COK:
+            return out
+    if not out and satir.get("kaynak_cumle"):
+        out.append({"bolum": satir.get("first_chapter"), "metin": _kirp(satir["kaynak_cumle"], satir["source"])})
+    return out
+
+
+def _kirp(metin: str, terim: str) -> str:
+    metin = " ".join(metin.split())
+    if len(metin) <= ORNEK_UZUNLUK:
+        return metin
+    i = metin.casefold().find(terim.casefold())
+    bas = max(0, (i if i >= 0 else 0) - ORNEK_UZUNLUK // 3)
+    parca = metin[bas:bas + ORNEK_UZUNLUK]
+    return ("…" if bas else "") + parca + ("…" if bas + ORNEK_UZUNLUK < len(metin) else "")
+
+
 def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict], bool]:
     """(liste, güncelleniyor). İncelenecek kayıtlar, NEDENLERİYLE. Onaylanmış kayıt listeye girmez.
 
@@ -2636,6 +2675,7 @@ def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict
         "ihlal_suphesi": 2, "karsilik_suphesi": 2, "sayi_uyumsuzlugu": 2, "politika": 2, "yakin_yazim": 3,
         "kalip_tutarsizligi": 4, "kardes_tutarsizligi": 4, "yeni_otomatik": 5,
     }
-    liste = [{**satirlar[k], "nedenler": n} for k, n in nedenler.items()]
+    liste = [{**satirlar[k], "nedenler": n, "ornekler": inceleme_ornekleri(satirlar[k])}
+             for k, n in nedenler.items()]
     liste.sort(key=lambda x: (min(oncelik.get(n["tur"], 3) for n in x["nedenler"]), -(x.get("created_at") or 0)))
     return liste, not taze
