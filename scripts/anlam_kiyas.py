@@ -76,6 +76,11 @@ KOLLAR = {
     "L2": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "1", "SOZLUK_TERIM_OLCUTU": "1", "CEVIRI_ISTEM_KURALLARI": "0"},
     "M": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "1", "SOZLUK_TERIM_OLCUTU": "1", "CEVIRI_ISTEM_KURALLARI": "1"},
 }
+# Sonradan eklenen bayraklar eski kollarda AÇIKÇA kapalı: ortamdan sızmasın (her kol tam küme verir).
+for _kol in KOLLAR.values():
+    _kol.setdefault("SOZLUK_TERIM_OLCUTU", "0")
+    _kol.setdefault("CEVIRI_ISTEM_KURALLARI", "0")
+
 BOYUTLAR = ("anlam", "akicilik", "tutarlilik")
 
 HAKEM_TALIMATI = """Sen İngilizceden Türkçeye roman çevirisinde deneyimli bir editörsün.
