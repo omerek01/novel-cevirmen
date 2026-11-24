@@ -30,15 +30,33 @@ from core import cache, ceviri_asamalari, glossary, sozluk_kapi, translate  # no
 KAPALI = {"cilalama", "kalite", "ozet", "analiz"}
 
 
-def _bolumler(kitap: str, son: int) -> list[dict]:
+def _bolumler(kitap: str, son: int, nolar: list[int] | None = None) -> list[dict]:
     conn = cache._connect()
     try:
+        if nolar:
+            satirlar = conn.execute(
+                f"SELECT chapter_no, source_text FROM chapters WHERE book_slug = ? AND source_text IS NOT NULL "
+                f"AND chapter_no IN ({','.join('?' * len(nolar))}) ORDER BY chapter_no", (kitap, *nolar)).fetchall()
+            return [{"no": n, "metin": m} for n, m in satirlar]
         satirlar = conn.execute(
             "SELECT chapter_no, source_text FROM chapters WHERE book_slug = ? AND source_text IS NOT NULL "
             "AND chapter_no IS NOT NULL ORDER BY chapter_no DESC LIMIT ?", (kitap, son)).fetchall()
     finally:
         conn.close()
     return [{"no": n, "metin": m} for n, m in reversed(satirlar)]
+
+
+def _o_anki(sozluk, kosullar, satirlar, no):
+    """İLK KARŞILAŞMA kipi: o bölümde ve sonra eklenen kayıtlar yokmuş gibi.
+
+    Son bölümlerde terimlerin hepsi zaten sözlükte olduğu için iki kol aynı (hiç) adayı
+    üretir; ölçüt farkı ancak terimin ilk görüldüğü bölümde ölçülebilir.
+    shortcut: alternatif yazım anahtarları süzülür (yalnız kayıt kaynağı tutulur).
+    """
+    eski = [r for r in satirlar if r.get("first_chapter") is None or r["first_chapter"] < no]
+    izin = {glossary.fold_term(r["source"]) for r in eski}
+    return ({k: v for k, v in sozluk.items() if glossary.fold_term(k) in izin},
+            {k: v for k, v in kosullar.items() if glossary.fold_term(k) in izin}, eski, izin)
 
 
 def _siniflandir(kitap: str, adaylar: dict[str, str], satirlar: list[dict]) -> dict[str, list[str]]:
@@ -64,17 +82,24 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--kitap", required=True)
     ap.add_argument("--son", type=int, default=6, help="son kaç kaynaklı bölüm")
+    ap.add_argument("--bolumler", default="", help="virgüllü bölüm numaraları (--son yerine)")
+    ap.add_argument("--o-anki", action="store_true", help="sözlüğü bölümden ÖNCEKİ hâline indir")
     ap.add_argument("--cikti", required=True)
     a = ap.parse_args()
+    nolar = [int(x) for x in a.bolumler.split(",") if x.strip()]
 
     asil = ceviri_asamalari.acik
     ceviri_asamalari.acik = lambda ad, *x, **y: False if ad in KAPALI else asil(ad, *x, **y)
-    sozluk = glossary.ceviri_sozlugu(a.kitap)
-    kosullar = glossary.ceviri_kosullari(a.kitap)
-    satirlar = glossary.get_glossary_rows(a.kitap)
-    kayitli = {glossary.fold_term(s) for s in sozluk}
+    tum_sozluk = glossary.ceviri_sozlugu(a.kitap)
+    tum_kosullar = glossary.ceviri_kosullari(a.kitap)
+    tum_satirlar = glossary.get_glossary_rows(a.kitap)
     sonuc = []
-    for b in _bolumler(a.kitap, a.son):
+    for b in _bolumler(a.kitap, a.son, nolar):
+        if a.o_anki:
+            sozluk, kosullar, satirlar, kayitli = _o_anki(tum_sozluk, tum_kosullar, tum_satirlar, b["no"])
+        else:
+            sozluk, kosullar, satirlar = tum_sozluk, tum_kosullar, tum_satirlar
+            kayitli = {glossary.fold_term(s) for s in sozluk}
         for kol, deger in (("eski", "0"), ("yeni", "1")):
             os.environ["SOZLUK_TERIM_OLCUTU"] = deger
             bas = time.time()
