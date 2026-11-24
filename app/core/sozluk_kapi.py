@@ -693,13 +693,14 @@ def ihlal_supheleri(
     if not satirlar:
         return {}
     kosullar = glossary.ceviri_kosullari(book_slug)
+    sozluk_satirlari = glossary.get_glossary_rows(book_slug)  # bir kez; bölüm başına süzülür
     bolumler: dict[str, set] = defaultdict(set)
     modeller: dict[str, Counter] = defaultdict(Counter)
     for no, model, kaynak_metin, ceviri in satirlar:
         if not _guvenilir_model(model):
             continue
         ihlal = translate.sozluk_ihlalleri(
-            glossary.bolumdeki_sozluk(book_slug, no), kaynak_metin, ceviri, kosullar
+            glossary.bolumdeki_sozluk(book_slug, no, sozluk_satirlari), kaynak_metin, ceviri, kosullar
         )
         for kaynak in ihlal:
             bolumler[kaynak].add(no)
@@ -752,13 +753,14 @@ def karsilik_supheleri(
     if not satirlar:
         return {}
     kosullar = glossary.ceviri_kosullari(book_slug)
+    sozluk_satirlari = glossary.get_glossary_rows(book_slug)  # bir kez; bölüm başına süzülür
     bolumler: dict[str, set] = defaultdict(set)
     for no, model, kaynak_metin, ceviri in satirlar:
         if not _guvenilir_model(model):
             continue
         en = [p for p in kaynak_metin.split("\n\n") if p.strip()]
         tr = [p for p in ceviri.split("\n\n") if p.strip()]
-        sozluk = glossary.bolumdeki_sozluk(book_slug, no)
+        sozluk = glossary.bolumdeki_sozluk(book_slug, no, sozluk_satirlari)
         for sapma in translate.karsilik_sapmasi_paragraflari(sozluk, tr, en, kosullar).values():
             for kaynak in sapma:
                 bolumler[kaynak].add(no)

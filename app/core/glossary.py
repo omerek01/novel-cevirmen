@@ -695,7 +695,7 @@ def get_glossary(book_slug: str) -> dict[str, str]:
     return {row[0]: row[1] for row in rows}
 
 
-def bolumdeki_sozluk(book_slug: str, chapter_no: int | None) -> dict[str, str]:
+def bolumdeki_sozluk(book_slug: str, chapter_no: int | None, satirlar: list[dict] | None = None) -> dict[str, str]:
     """Bu bölüm çevrilirken sözlükte DURAN kayıtlar (köken sütununa göre).
 
     Geriye dönük uyum denetimi (`scripts/uyum_denetle.py`) için. Denetim BUGÜNKÜ
@@ -714,9 +714,11 @@ def bolumdeki_sozluk(book_slug: str, chapter_no: int | None) -> dict[str, str]:
     """
     if chapter_no is None:
         return get_glossary(book_slug)
+    # `satirlar`: bölüm döngüsünde sözlük BİR kez okunur (2026-11-24, py-spy: inceleme ısıtması
+    # her bölüm için 1440 kaydı baştan okuyup e2-micro'da sürekli %90 işlemci yakıyordu).
     return {
         r["source"]: r["target"]
-        for r in get_glossary_rows(book_slug)
+        for r in (satirlar if satirlar is not None else get_glossary_rows(book_slug))
         if r["first_chapter"] is None or r["first_chapter"] <= chapter_no
     }
 
