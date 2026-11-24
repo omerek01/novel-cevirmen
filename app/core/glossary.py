@@ -2550,39 +2550,81 @@ ORNEK_EN_COK = 2
 ORNEK_UZUNLUK = 600
 
 
-def inceleme_ornekleri(satir: dict) -> list[dict]:
-    """İnceleme kartında gösterilecek kaynak paragraflar: [{"bolum", "metin"}], en çok ORNEK_EN_COK.
+def inceleme_ornekleri(satir: dict, ceviriler: dict[int, list[str]] | None = None) -> list[dict]:
+    """İnceleme kartında gösterilecek örnek CÜMLELER: [{"bolum", "metin", "vurgu", "dil"}].
 
-    Kullanıcı bildirimi (2026-11-24): kart terimin nasıl kullanıldığını göstermiyordu; görmek için
-    "cümleye git" gerekiyordu. Önce doğrulamanın topladığı bağlam paragrafları (`baglamlar`, kimlik
-    `bölüm:paragraf:özet`), yoksa kaydın ilk görüldüğü cümle. Uzun paragraf terimin çevresinden kırpılır.
+    Kullanıcı kararı (2026-11-24): kart terimin nasıl kullanıldığını Türkçe ve yalnız geçtiği cümleyle
+    gösterir. Doğrulama bağlamının kimliği (`bölüm:paragraf:özet`) çevirideki aynı paragrafı bulur;
+    içinden karşılığın geçtiği cümle alınır. Türkçede bulunamazsa İngilizce cümle (yalnız o cümle),
+    hiç bağlam yoksa kaydın ilk görüldüğü cümle.
     """
-    out: list[dict] = []
     try:
         not_ = json.loads(satir.get("dogrulama_notu") or "{}")
     except (TypeError, ValueError):
         not_ = {}
-    for b in (not_.get("baglamlar") or []) if isinstance(not_, dict) else []:
-        metin = (b or {}).get("metin") if isinstance(b, dict) else None
-        if not metin:
-            continue
-        bolum = str(b.get("id") or "").split(":", 1)[0]
-        out.append({"bolum": int(bolum) if bolum.isdigit() else None, "metin": _kirp(metin, satir["source"])})
-        if len(out) >= ORNEK_EN_COK:
-            return out
-    if not out and satir.get("kaynak_cumle"):
-        out.append({"bolum": satir.get("first_chapter"), "metin": _kirp(satir["kaynak_cumle"], satir["source"])})
-    return out
+    baglamlar = [b for b in ((not_.get("baglamlar") or []) if isinstance(not_, dict) else [])
+                 if isinstance(b, dict) and b.get("metin")]
+    hedef = satir.get("target") or satir["source"]
+    tr_out, en_out = [], []
+    for b in baglamlar:
+        parca = str(b.get("id") or "").split(":")
+        bolum = int(parca[0]) if parca and parca[0].isdigit() else None
+        par = int(parca[1]) if len(parca) > 1 and parca[1].isdigit() else None
+        paragraflar = (ceviriler or {}).get(bolum) or []
+        if par is not None and par < len(paragraflar):
+            bulunan = _cumle_bul(paragraflar[par], hedef)
+            if bulunan:
+                tr_out.append({"bolum": bolum, "metin": bulunan[0], "vurgu": bulunan[1], "dil": "tr"})
+        if not en_out:
+            bulunan = _cumle_bul(b["metin"], satir["source"])
+            if bulunan:
+                en_out.append({"bolum": bolum, "metin": bulunan[0], "vurgu": bulunan[1], "dil": "en"})
+        if len(tr_out) >= ORNEK_EN_COK:
+            break
+    if tr_out:
+        return tr_out
+    if satir.get("kaynak_cumle"):
+        return [{"bolum": satir.get("first_chapter"), "metin": satir["kaynak_cumle"], "vurgu": hedef,
+                 "dil": "tr"}]
+    return en_out
 
 
-def _kirp(metin: str, terim: str) -> str:
-    metin = " ".join(metin.split())
-    if len(metin) <= ORNEK_UZUNLUK:
-        return metin
-    i = metin.casefold().find(terim.casefold())
-    bas = max(0, (i if i >= 0 else 0) - ORNEK_UZUNLUK // 3)
-    parca = metin[bas:bas + ORNEK_UZUNLUK]
-    return ("…" if bas else "") + parca + ("…" if bas + ORNEK_UZUNLUK < len(metin) else "")
+_CUMLE_SINIRI = re.compile(r"(?<=[.!?…])[\"'”’»]?\s+")
+
+
+def _cumle_bul(paragraf: str, terim: str) -> tuple[str, str] | None:
+    """Paragraftaki, terimi (Türkçe ekli/yumuşamış biçimleri dahil) taşıyan ilk cümle ve eşleşen kısım."""
+    sozcukler = [w for w in re.split(r"\s+", (terim or "").strip()) if w]
+    if not sozcukler:
+        return None
+    # Kök: son harf düşer (Kurdu/Kurt yumuşaması, ünlü düşmesi), ardından ek gelebilir.
+    desen = re.compile(r"\s+".join(re.escape(w[:-1] if len(w) > 4 else w) + r"[\w'’]*" for w in sozcukler),
+                       re.IGNORECASE)
+    for cumle in _CUMLE_SINIRI.split(" ".join((paragraf or "").split())):
+        m = desen.search(cumle)
+        if m:
+            return cumle.strip(), m.group(0)
+    return None
+
+
+def _ornek_cevirileri(book_slug: str, satirlar: list[dict]) -> dict[int, list[str]]:
+    """Örnek cümleler için gereken bölümlerin çeviri paragrafları, TEK sorguyla."""
+    gerekli = set()
+    for r in satirlar:
+        for kimlik in re.findall(r'"id": "(\d+):', r.get("dogrulama_notu") or ""):
+            gerekli.add(int(kimlik))
+    if not gerekli:
+        return {}
+    conn = _connect()
+    try:
+        sorgu = ("SELECT chapter_no, translation FROM chapters WHERE book_slug = ? AND translation IS NOT NULL "
+                 f"AND chapter_no IN ({','.join('?' * len(gerekli))})")
+        return {no: [p for p in ceviri.split("\n\n") if p.strip()]
+                for no, ceviri in conn.execute(sorgu, (book_slug, *sorted(gerekli)))}
+    except sqlite3.OperationalError:
+        return {}
+    finally:
+        conn.close()
 
 
 def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict], bool]:
@@ -2677,7 +2719,8 @@ def inceleme_durumu(book_slug: str, bayat_kabul: bool = True) -> tuple[list[dict
         "ihlal_suphesi": 2, "karsilik_suphesi": 2, "sayi_uyumsuzlugu": 2, "politika": 2, "yakin_yazim": 3,
         "kalip_tutarsizligi": 4, "kardes_tutarsizligi": 4, "yeni_otomatik": 5,
     }
-    liste = [{**satirlar[k], "nedenler": n, "ornekler": inceleme_ornekleri(satirlar[k])}
+    ceviriler = _ornek_cevirileri(book_slug, [satirlar[k] for k in nedenler])
+    liste = [{**satirlar[k], "nedenler": n, "ornekler": inceleme_ornekleri(satirlar[k], ceviriler)}
              for k, n in nedenler.items()]
     liste.sort(key=lambda x: (min(oncelik.get(n["tur"], 3) for n in x["nedenler"]), -(x.get("created_at") or 0)))
     return liste, not taze

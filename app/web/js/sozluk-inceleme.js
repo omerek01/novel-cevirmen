@@ -107,10 +107,10 @@ function ornekBlogu(o, terim) {
   const fig = document.createElement("figure");
   fig.className = "inceleme-ornek";
   const q = document.createElement("blockquote");
-  q.lang = "en";
+  q.lang = o.dil || "en";
   const metin = o.metin || "";
-  const kucuk = metin.toLowerCase();
-  const t = (terim || "").toLowerCase();
+  const kucuk = metin.toLocaleLowerCase("tr");
+  const t = (o.vurgu || terim || "").toLocaleLowerCase("tr");
   let i = 0;
   while (t) {
     const j = kucuk.indexOf(t, i);
