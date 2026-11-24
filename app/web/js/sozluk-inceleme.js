@@ -45,6 +45,9 @@ const NEDEN_ETIKETI = {
   ad_tutarliligi: "AD POLİTİKASI",
   cogul_bicim: "ÇOĞUL BİÇİM",
   parca_celiskisi: "PARÇA ÇELİŞKİSİ",
+  genel_sozcuk: "SIRADAN SÖZCÜK",
+  kucuk_harf: "KÜÇÜK HARF",
+  parcali_ad: "PARÇALI AD",
   // Karakter defteri (sunucu `karakter_defteri.sozluk_nedenleri`).
   grafik_takma_ad: "TAKMA AD?",
   grafik_genel_sozcuk: "SIRADAN SÖZCÜK",
