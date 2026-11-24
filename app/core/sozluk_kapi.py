@@ -396,7 +396,9 @@ def kapi_denetle(
     # Kural her geçişe dayatılır ("Well, ..." -> "Kuyu, ..."); karşılığı belli sözcüğün
     # kayda ihtiyacı da yok (ranobe-tl, KeywordGacha istemleri aynı ölçütü koyar). Doğrulamanın
     # "çoğul özel ad" onayı bunu AŞMAZ: `Hunters` metinde çoğunlukla sıradan çoğuldur.
-    if genel:
+    # Rütbe basamağı (`Divine`, `Cursed`, `Fallen`) küçük harfle de terimdir (istemin HİYERARŞİ
+    # İSTİSNASI); sıklık onu ayırt edemez, dışarıda kalır.
+    if genel and tur != "rutbe":
         nedenler.append({"tur": GENEL_SOZCUK, "aciklama":
             f"Kitapta çoğunlukla sıradan sözcük olarak geçiyor (küçük harfle {genel[0]}, cümle "
             f"içinde büyük harfle {genel[1]} kez). Karşılığı belli sıradan sözcük sözlük kuralı "

@@ -392,6 +392,11 @@ def test_genel_sozcuk_cogul_ozel_ad_onayini_asar():
     assert sozluk_kapi.GENEL_SOZCUK in turler and sozluk_kapi.COGUL_BICIM not in turler
 
 
+def test_rutbe_basamagi_siradan_sozcuk_sayilmaz():
+    # Canlı: `Divine -> İlahi`, `Cursed -> Lanetli` küçük harfle de sık geçer ama rütbedir.
+    assert sozluk_kapi.GENEL_SOZCUK not in _neden_turleri("Divine", "İlahi", genel=(40, 30), tur="rutbe")
+
+
 def test_kitapta_siradan_sozcuk_olan_aday_tutulur_ad_olan_gecer():
     metin = ("Well, the south wind blew. The well was deep, so he went south. "
              "Sunny looked at the Abyss. The well dried. Well, south again. ") * 3
