@@ -1525,6 +1525,19 @@ künyesinde saklanır (`chapters.onerilen_terimler`, çıkarılma oranı için).
 (`scripts/sozluk_tara.py`, TranslateBooksWithLLMs uyarlaması) yalnız ÖNERİ üretir; onaylı kayıt
 yazma kapısından geçer. Ölçüm: `reports/sozluk-kalite-arastirma/`.
 
+**2026-11-24 kapı sıkılaştırması** (canlı ölçüm + ranobe-tl/KeywordGacha istemleri). Yeni
+nedenler: `genel_sozcuk` (tek sözcüklü aday kitabın kendi kaynağında çoğunlukla küçük harfle
+geçiyor: `South`, `Well`, `Hand`; rütbe türü hariç; doğrulamanın `cogul_ozel_ad` onayı bunu
+AŞMAZ), `kucuk_harf` (küçük harfle başlayan aday; rütbe hariç). -s ile biten ve aynen kalan ad
+(`Achilles`) çoğul sayılmaz, düzensiz çoğul (`Children`) sayılır. `parcali_ad`: sayı + kayıtlı
+RÜTBE ya da aynen kalan kayıtlı ad + kayıtlı unvanın TAM düz birleşimi (`Third Tier`, `Night
+Saint`) otomatik kayıt AÇMAZ (`rutbe_sinif_birlesimi` gibi sessiz atlanır); geriye dönük denetim
+mevcutları raporlar. Sıklık `sozluk_kapi.kitap_sayaci` sözcük sayacından okunur (13 MB kaynakta
+~2,4 sn kurulum, sonra anlık; regex aday başına ~0,8 sn idi): `merge_terms` sayacı BEKLEMEZ
+(hazır değilse arka planda kurulur), kararı veren `dogrulama_yaz` bekler. Doğrulama alıntısı
+`sozluk_dogrulama.alinti_gecer` ile karşılaştırılır (tırnak/tire/boşluk/uç noktalama farkı
+katlanır; uydurma alıntı yine geçmez).
+
 Bakım: `scripts/sozluk_denetle.py --kitap X` (API'siz tam denetim; `--isaretle`
 bulguları yazar ama kaydı KURAL bırakır — prompt'tan sessizce terim çekmek
 kullanıcının bilmediği bir davranış değişikliği olurdu) ve `scripts/sozluk_dogrula.py
@@ -1844,6 +1857,7 @@ kalır.
 | `CEVIRI_CILALA` | Hayır | `1` → Türkçe cilalama turu (`core/ceviri_cilala.py`): çeviriden sonra, kalite katmanından önce tek çağrıyla çeviri kokusu giderilir (anlam ve sözlük korunur; yeni sözlük ihlali/İngilizce kalıntı getiren ya da boyu tutmayan paragraf özgün kalır, hata çeviriyi düşürmez). Varsayılan kapalı. Ölçüm 2026-10-13 (`scripts/cilalama_kiyas.py`, 12 SS bölümü, cilalı+kalite : canlı): akıcılık 41-13, anlam 37-26, bölüm akışı 5-0; bölüm başına ≈+1 çağrı |
 | `CEVIRI_OZET` | Hayır | `1` → bölüm özeti zinciri (`core/ozet_zinciri.py`, AI Novel Translation yöntemi): çeviriden önce tek çağrıyla bu bölümün kısa Türkçe özeti çıkarılır (girdi: önceki bölümün kayıtlı özeti + ilgili sözlük + bölüm); çeviri istemine yalnız bu bölümün özeti eklenir, özet `ozet_zinciri` tablosuna yazılıp sonraki bölüme gider. Yeni adlar sözlüğe otomatik yazılmaz. Varsayılan kapalı; ölçülmeden açılmaz |
 | `SOZLUK_SIRADAN` | Hayır | `1` → büyük harfli sözlük kaydı parçada cümle ortasında hiç büyük harfle geçmiyorsa satırına `translate.SIRADAN_ISARETI` konur; model sıradan kelimeye büyük harfli terim basmaz ("armor" → "Zırhları" sınıfı). Varsayılan kapalı; bayrak kapalıyken prompt bayt bayt aynıdır |
+| `SOZLUK_TERIM_OLCUTU` | Hayır | `1` → çeviri isteminde detected_terms ölçütü "adlandıran ve tutarlılık gerektiren ifade" olur (sıradan sözcük, sıradan çoğul ve kayıtlı terime sayı/unvan eklenmiş birleşim girmez) ve sözlük satırı türünü taşır (`Tier -> Kademe  [rütbe]`). Varsayılan kapalı; kapalıyken istem bayt bayt aynıdır. Ölçüm: `scripts/terim_olcutu_kiyas.py --o-anki` |
 | `CEVIRI_GRAFIK` | Hayır | `1` → çeviri isteğine karakter defteri kartı (`karakter_defteri.kart_metni`): yalnız parçada geçen kişilerin takma adı, hitabı belirleyen ilişkisi (lideri/öğretmeni/akrabası) ve kararlı sen/siz çifti; "KURAL DEĞİLDİR" başlıklı bağlam. Yalnız N−1'e kadarki bilgi. Varsayılan kapalı; kapalıyken istem bayt bayt aynı. Ölçüm kolu `anlam_kiyas.py` J (H + kart), gürültü tabanı H2 |
 | `KARAKTER_DEFTERI` | Hayır | `1` → karakter defteri canlı kuyruğu (`core/karakter_defteri.py`): kaydedilen her bölüm için ARKA PLANDA tek çağrı (hizalı EN+TR → varlık, bağ, sen/siz hitabı, sıradan sözcük). Okuma süren çeviri varken bekler (`budget.etkilesimli_var`), hata çeviriyi etkilemez. Varsayılan kapalı. Kitap listesi `KARAKTER_DEFTERI_KITAPLAR` (boş/verilmemiş = profili olan her kitap: kod kaydı ya da onaylı DB satırı), model **SEÇİLİ çeviri modeli** > `DEFTER_MODELI` > `vertex/gemini-3.8-flash` (tek halka, düşme yok; 2026-10-23 kullanıcı kararı "defter hangi çeviri aracı açıksa o yazsın" — önce seçim HİÇ okunmuyordu ve ölçüm 1117 bölümün tamamının seçilenden BAŞKA modelle, 21,49 $'a işlendiğini gösterdi; seçim defteri de sürüklediği için ücretli model seçmek defter koşusunu da pahalılaştırır, aynı profille Argon ~57 $), düşünme `DEFTER_DUSUNME` (boş = `low`; `low`/`high` düzey, sayı bütçe — Argon bütçeyi ve `minimal`i 400 ile reddeder, bkz. `_DUSUNME_BUTCESI_REDDEDENLER`) |
 
