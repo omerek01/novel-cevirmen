@@ -1323,11 +1323,50 @@ def terim_olcutu_acik() -> bool:
     return os.getenv("SOZLUK_TERIM_OLCUTU", "0") != "0"
 
 
+# DİYALOG, ÜNLEM, HARF, BLOK ve RET GERİ BİLDİRİMİ (2026-11-24, `CEVIRI_ISTEM_KURALLARI=1`,
+# varsayılan kapalı; ölçülmeden yayılmaz). Diğer depoların istemlerinde olup bizde olmayanlar:
+# GalTransl/DeepSeek (diyalog konuşma diliyle, anlatım anlatıcının sesiyle; ünlem ve yansıma
+# sözcük hedef dildeki karşılığıyla), ranobe-tl ve T9 (büyük/küçük harf kaynağı izler), T9 ve
+# novel_epub_translator (sistem/durum blokları biçimiyle korunur; bizde "rün bloğu çevrilmeden
+# kopyalandı" vakası var), ranobe-tl (reddedilen denemede sebep modele söylenir).
+ISTEM_KURALLARI = (
+    "- DİYALOG VE ANLATIM: tırnak içindeki konuşma günümüz konuşma Türkçesiyle, karakterin sesine "
+    "ve hitap düzeyine uygun yazılır (kısa, doğal, gerekirse devrik: 'Sana söylemiştim, değil "
+    "mi?'); anlatım cümleleri anlatıcının sesini ve zamanını korur. Konuşmayı yazı diliyle, "
+    "anlatımı konuşma diliyle karıştırma.\n"
+    "- ÜNLEM VE YANSIMA SÖZCÜKLER İngilizce bırakılmaz ve kelime kelime çevrilmez; Türkçedeki "
+    "doğal karşılık yazılır ('Huh?' -> 'Ha?', 'Ugh' -> 'Of', 'Hmph' -> 'Hıh', 'Tsk' -> 'Cık', "
+    "'Whoa' -> 'Vay', 'Ow' -> 'Ah'). Doğrudan karşılığı yoksa duyguyu kısa bir Türkçe ünlemle ver.\n"
+    "- BÜYÜK/KÜÇÜK HARF kaynağı izler: kaynak bir sözcüğü küçük harfle yazdıysa Türkçesini de "
+    "(cümle başı dışında) küçük harfle yaz; özel ad olmayan sözcüğe cümle ortasında büyük harf verme.\n"
+    "- SİSTEM VE RÜN BLOKLARI (köşeli parantezli bildirimler, 'Rank:', 'Aspect:', 'Attribute:' "
+    "satırları) BİÇİMİYLE korunur: satır düzeni, köşeli parantez, iki nokta ve sıra aynı kalır; "
+    "yalnız içindeki sözcükler sözlük ve ad kurallarına göre çevrilir. Bloğu düz yazıya çevirme, "
+    "birleştirme, atlama ya da çevirmeden kopyalama.\n"
+)
+_JSON_CAPASI = "- Yanıtı SADECE şu JSON ile ver:"
+assert _JSON_CAPASI in SYSTEM_INSTRUCTION  # kurallar JSON sözleşmesinden ÖNCE girer
+
+
+def istem_kurallari_acik() -> bool:
+    return os.getenv("CEVIRI_ISTEM_KURALLARI", "0") != "0"
+
+
 def sistem_talimati() -> str | None:
-    """Çeviri sistem talimatı; bayrak kapalıyken None (çağrı varsayılanı, bayt bayt eski)."""
-    if not terim_olcutu_acik():
+    """Çeviri sistem talimatı; iki bayrak da kapalıyken None (çağrı varsayılanı, bayt bayt eski)."""
+    if not (terim_olcutu_acik() or istem_kurallari_acik()):
         return None
-    return SYSTEM_INSTRUCTION.replace(_ESKI_OLCUT, _YENI_OLCUT)
+    metin = SYSTEM_INSTRUCTION
+    if terim_olcutu_acik():
+        metin = metin.replace(_ESKI_OLCUT, _YENI_OLCUT)
+    if istem_kurallari_acik():
+        metin = metin.replace(_JSON_CAPASI, ISTEM_KURALLARI + _JSON_CAPASI, 1)
+    return metin
+
+
+def _ret_notu(sebep: str) -> str:
+    """Yeniden denemede modele reddin sebebi (yalnız `CEVIRI_ISTEM_KURALLARI`); kapalıyken boş."""
+    return sebep if istem_kurallari_acik() else ""
 
 
 # Sözlük satırındaki tür etiketi (yalnız `SOZLUK_TERIM_OLCUTU`). ranobe-tl'nin `source → target
@@ -1643,6 +1682,9 @@ def _translate_chapter_impl(
             with api_durum.baglam(asama="kisalma_onarimi"):
                 yeniden = _translate_chunk(
                     client_factory, models, chunk_en, glossary, prev_tail, kosullar, ipucu,
+                    geri_bildirim=_ret_notu(
+                        f"çeviri kaynağın belirgin biçimde kısası çıktı (uzunluk oranı {oran:.2f}); "
+                        "cümle, betimleme ya da diyalog atlanmış ya da özetlenmiş."),
                 )
             yeni_oran = uzunluk_orani(
                 _strip_markers(yeniden.get("translation") or ""), chunk
@@ -1671,6 +1713,9 @@ def _translate_chapter_impl(
                 with api_durum.baglam(asama="terim_alani_onarimi"):
                     yeniden = _translate_chunk(
                         client_factory, models, chunk_en, glossary, prev_tail, kosullar, ipucu,
+                        geri_bildirim=_ret_notu(
+                            "detected_terms/detected_names alanı eksik ya da metinde geçmeyen adlar "
+                            "içeriyordu; yalnız bu metinde geçen adları, metindeki yazımıyla ver."),
                     )
             except Exception:  # noqa: BLE001 — best-effort: ilk çeviri elde, onu kaybetme
                 yeniden = None
@@ -1707,6 +1752,9 @@ def _translate_chapter_impl(
                 with api_durum.baglam(asama="hizalama_onarimi"):
                     yeniden = _translate_chunk(
                         client_factory, models, chunk_en, glossary, prev_tail, kosullar, ipucu,
+                        geri_bildirim=_ret_notu(
+                            "[[n]] paragraf işaretleri eksik, birleşik ya da sırasız döndü; her "
+                            "paragrafın başına kendi işaretini koy, hiçbirini birleştirme."),
                     )
             except Exception:  # noqa: BLE001 — best-effort: ilk çeviri elde, onu kaybetme
                 yeniden = None
@@ -3568,6 +3616,7 @@ def _translate_chunk(
     prev_tail: str,
     kosullar: dict[str, str] | None = None,
     anlam_ipucu_metni: str = "",
+    geri_bildirim: str = "",
 ) -> dict:
     """Bir parçayı Gemini ile çevirir (model yedek zinciriyle).
 
@@ -3576,6 +3625,9 @@ def _translate_chunk(
     düşebiliyor, tek bir "bölümün modeli" varsayımı yanlış olurdu.
     """
     user = _build_user_prompt(en_paras, glossary, prev_tail, kosullar, anlam_ipucu_metni)
+    if geri_bildirim:
+        user += ("\n\nÖNEMLİ — ÖNCEKİ DENEMEN REDDEDİLDİ: " + geri_bildirim
+                 + " Bu kez bu hatayı yapmadan bütün paragrafları baştan çevir.")
     # Fabrika ÇAĞRILMADAN geçirilir: Gemini istemcisi ancak gerçekten bir Gemini
     # halkasına inilirse kurulur. Peşinen kurmak, çeviri yalnız Mistral'e gitse
     # bile GEMINI_API_KEY'i zorunlu kılıyordu.
