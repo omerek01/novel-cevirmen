@@ -607,6 +607,22 @@ def test_takma_ad_onerisi_karar_verilince_kaybolur_ve_dirilmez(kitap):
     assert _bag("Nephis", "takma_adi", "Changing Star")["durum"] == "reddedildi"
 
 
+def test_takma_ad_karari_iki_yonlu_oneriyi_de_kapatir(kitap):
+    # Canlı vaka (2026-11-24): model çifti iki yönde de önerdi (`Guard` <-> `Castle Guard`);
+    # kullanıcı birini "Aynı kişi" diye onaylayınca ters yöndeki ikiz listede kaldı.
+    for b in (1, 2):
+        _iddia_yaz("varlik", "Changing Star", b, nesne="Nephis", deger={"tr": "Değişen Yıldız", "t": "kisi"},
+                   iliski="takma_adi")
+        _iddia_yaz("varlik", "Nephis", b, nesne="Changing Star", deger={"tr": "Nephis", "t": "kisi"},
+                   iliski="takma_adi")
+    assert "grafik_takma_ad" in _nedenler("Changing Star") and "grafik_takma_ad" in _nedenler("Nephis")
+    k = _kimlik()
+    for karar in ("ayni", "ayri"):
+        kd.takma_ad_karari(KITAP, k["Nephis"], k["Changing Star"], karar)
+        assert "grafik_takma_ad" not in _nedenler("Changing Star")
+        assert "grafik_takma_ad" not in _nedenler("Nephis")
+
+
 def test_takma_ad_ayni_karari_onaylar(kitap):
     k = _kimlik()
     kd.takma_ad_karari(KITAP, k["Nephis"], k["Changing Star"], "ayni")

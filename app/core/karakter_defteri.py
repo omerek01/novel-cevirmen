@@ -1333,10 +1333,15 @@ def sozluk_nedenleri(book_slug: str) -> dict[str, list[dict]]:
             "WHERE book_slug = ? AND gecerli = 1 AND ozne_kimlik IS NOT NULL", (book_slug,),
         ).fetchall()
         try:
-            karar = {(r[0], r[1]): r[2] for r in conn.execute(
+            # Karar YÖNSÜZDÜR: "aynı kişi / ayrı" iki ad hakkında tek yargıdır. Model çifti iki
+            # yönde de önerebiliyor (`Guard` <-> `Castle Guard`); yönlü anahtarda kullanıcı birini
+            # onaylayınca ters yöndeki ikiz incelemede kalıyordu (canlı, 2026-11-24, ≥7 çift).
+            karar = {}
+            for a, b, d in conn.execute(
                 "SELECT kaynak_kimlik, hedef_kimlik, durum FROM varlik_bag WHERE book_slug = ? "
                 "AND iliski IN ('takma_adi', 'gercek_adi') AND durum IN ('onaylandi', 'reddedildi')",
-                (book_slug,))}
+                (book_slug,)):
+                karar[(a, b)] = karar[(b, a)] = d
         except Exception:  # noqa: BLE001 — varlik_bag yoksa karar da yok
             karar = {}
     finally:
