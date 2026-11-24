@@ -70,6 +70,11 @@ KOLLAR = {
     # ile defteri taşıyan veritabanından örneğe konur (`defter`).
     "H2": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "0"},
     "J": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "1"},
+    # İstem kuralları (2026-11-24): L = canlı yol (J + yeni terim ölçütü), M = L + diyalog/ünlem/
+    # harf/blok kuralları ve ret geri bildirimi (`CEVIRI_ISTEM_KURALLARI`), L2 = L'nin kopyası.
+    "L": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "1", "SOZLUK_TERIM_OLCUTU": "1", "CEVIRI_ISTEM_KURALLARI": "0"},
+    "L2": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "1", "SOZLUK_TERIM_OLCUTU": "1", "CEVIRI_ISTEM_KURALLARI": "0"},
+    "M": {"CEVIRI_ANALIZ": "0", "CEVIRI_STIL": "1", "CEVIRI_BELLEK": "0", "CEVIRI_KALITE": "0", "SOZLUK_SIRADAN": "1", "CEVIRI_OZET": "0", "CEVIRI_GRAFIK": "1", "SOZLUK_TERIM_OLCUTU": "1", "CEVIRI_ISTEM_KURALLARI": "1"},
 }
 BOYUTLAR = ("anlam", "akicilik", "tutarlilik")
 
