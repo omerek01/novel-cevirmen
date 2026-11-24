@@ -18,7 +18,12 @@ import sys
 import time
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "app"))
+KOK = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(KOK / "app"))
+
+from dotenv import load_dotenv  # noqa: E402
+
+load_dotenv(KOK / ".env")  # anahtarlar sunucuyla aynı kaynaktan (server.py da böyle yükler)
 
 from core import cache, ceviri_asamalari, glossary, sozluk_kapi, translate  # noqa: E402
 
