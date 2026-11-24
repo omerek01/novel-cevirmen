@@ -288,8 +288,14 @@ def sistem_sesi(p: dict | None) -> frozenset[str]:
     return frozenset(x.casefold() for x in (p or {}).get("sistem_sesi", ()))
 
 
+# Ayrı kayıtlı defter modeli (2026-11-24, kullanıcı isteği "defteri 3.1 pro preview geçsin"):
+# deneme hesabında Gemini 4 yoğun saatlerde 429 veriyor ve defterin yedek halkası yok.
+DEFTER_AYAR_ANAHTARI = "defter_modeli"
+
+
 def model_adi() -> str:
-    """Defterin kullanacağı model: SEÇİLİ çeviri modeli > `DEFTER_MODELI` > varsayılan.
+    """Defterin kullanacağı model: kayıtlı `defter_modeli` ayarı > SEÇİLİ çeviri modeli >
+    `DEFTER_MODELI` > varsayılan. Ayrı ayar boşken davranış 2026-10-23 kararıyla aynıdır.
 
     Önceden seçim HİÇ okunmuyordu ve sonuç ölçüldü (canlı `defter_isleme`, 1117
     bölüm): kullanıcı okuyucudan `vertex/gemini-4-argon` seçmiş olduğu hâlde
@@ -317,13 +323,15 @@ def model_adi() -> str:
     sessizce başka bir modele düşmek, eksik sayaçtan daha kötü.
     """
     try:
+        ayri = (settings.get(DEFTER_AYAR_ANAHTARI) or "").strip()
         secili = (settings.get(translate.MODEL_AYAR_ANAHTARI) or "").strip()
     except sqlite3.Error:
         # Ayar okunamazsa (kilitli veritabanı) defter durmamalı: ortam
         # değişkenine düş — `ceviri_asamalari._kayit` ile aynı desen.
-        secili = ""
-    if secili in translate.SECILEBILIR_ADLAR:
-        return secili
+        ayri = secili = ""
+    for aday in (ayri, secili):
+        if aday in translate.SECILEBILIR_ADLAR:
+            return aday
     return (os.getenv("DEFTER_MODELI") or VARSAYILAN_MODEL).strip()
 
 

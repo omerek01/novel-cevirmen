@@ -88,3 +88,20 @@ def test_acik_model_argumani_secimi_EZER(sema, monkeypatch):
 
     monkeypatch.setattr(kd, "model_adi", patlat)
     kd.bolum_isle("yok-boyle-kitap", 1, kuru=True, model="vertex/gemini-3.6-flash")
+
+
+def test_ayri_defter_ayari_ceviri_secimini_EZER(monkeypatch):
+    """2026-11-24 kullanıcı isteği "defteri 3.1 pro preview geçsin": Argon deneme hesabında
+    yoğun saatlerde 429 veriyor ve defterin yedeği yok; çeviri Argon'da kalırken defter
+    ayrı modele alınabilmeli."""
+    monkeypatch.setenv("DEFTER_MODELI", "vertex/gemini-3.6-flash")
+    settings.set(translate.MODEL_AYAR_ANAHTARI, "vertex/gemini-4-argon")
+    settings.set(kd.DEFTER_AYAR_ANAHTARI, "vertex/gemini-3.1-pro-preview")
+    assert kd.model_adi() == "vertex/gemini-3.1-pro-preview"
+
+
+def test_ayri_defter_ayari_bos_ya_da_taninmazsa_ceviri_secimi_gecer():
+    settings.set(translate.MODEL_AYAR_ANAHTARI, "vertex/gemini-4-argon")
+    for deger in ("", "uydurma-model"):
+        settings.set(kd.DEFTER_AYAR_ANAHTARI, deger)
+        assert kd.model_adi() == "vertex/gemini-4-argon"
