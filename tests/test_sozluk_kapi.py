@@ -403,11 +403,32 @@ def test_kitapta_siradan_sozcuk_olan_aday_tutulur_ad_olan_gecer():
     assert "Abyss" in glossary.ceviri_sozlugu(KITAP)
 
 
-def test_genel_sozcuk_taramasi_yeni_bolumle_tazelenir():
+def test_genel_sozcuk_sayaci_yeni_bolumle_tazelenir(monkeypatch):
+    monkeypatch.setattr(sozluk_kapi, "TAZELIK_SN", 0.0)
     _kaynak_kaydet("Sunny met the Hand. The Hand nodded.", no=1)
     assert sozluk_kapi.genel_sozcukler(KITAP, ["Hand"]) == {}
     _kaynak_kaydet("He raised his hand. " * 6, no=2)
     assert "Hand" in sozluk_kapi.genel_sozcukler(KITAP, ["Hand"])
+
+
+def test_sayac_genel_sozcuk_sikligi_ile_ayni_sayar():
+    metin = ("Well, the south wind blew. Then Well said: the well! Moon and the moon. "
+             "“Well,” he said. WELL done, well. ") * 3
+    _kaynak_kaydet(metin)
+    sayac = sozluk_kapi.kitap_sayaci(KITAP)
+    for w in ("Well", "Moon", "south"):
+        assert tuple(sayac.get(w.casefold(), (0, 0))) == sozluk_kapi.genel_sozcuk_sikligi(w, metin)
+
+
+def test_okuma_yolu_sayaci_beklemez_arka_planda_kurar():
+    import time
+    _kaynak_kaydet("The well was deep. " * 6)
+    assert sozluk_kapi.genel_sozcukler(KITAP, ["Well"], bekle=False) == {}  # hazır değil: bekleme yok
+    for _ in range(100):
+        if not sozluk_kapi._KURULUYOR:
+            break
+        time.sleep(0.05)
+    assert "Well" in sozluk_kapi.genel_sozcukler(KITAP, ["Well"], bekle=False)
 
 
 # ---------- parçalardan kurulan ad ----------

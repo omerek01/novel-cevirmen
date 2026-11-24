@@ -1210,7 +1210,10 @@ def merge_terms(
     from . import sozluk_kapi  # döngüsel içe aktarma: sozluk_kapi glossary'yi kullanır
 
     # Sıradan sözcük taraması kitabın bütün kaynak metnine bakar: yazma kilidinden ÖNCE.
-    genel_adaylar = sozluk_kapi.genel_sozcukler(book_slug, seen) if origin == "auto" else {}
+    # Okuma yolu sayacı BEKLEMEZ (hazır değilse arka planda kurulur); karar zaten
+    # `dogrulama_yaz`ta, sayacı bekleyerek verilir (önce-bekleme politikası).
+    genel_adaylar = (sozluk_kapi.genel_sozcukler(book_slug, seen, bekle=False)
+                     if origin == "auto" else {})
     conn = _connect()
     try:
         conn.execute("BEGIN IMMEDIATE")

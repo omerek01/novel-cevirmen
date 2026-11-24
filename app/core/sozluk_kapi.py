@@ -31,6 +31,8 @@ from __future__ import annotations
 import json
 import sqlite3
 import re
+import threading
+import time
 from collections import Counter, defaultdict
 from functools import lru_cache
 
@@ -800,43 +802,90 @@ def genel_sozcuk_mu(kaynak: str, korpus: str) -> bool:
     return bool(sayi) and sayi[0] >= 5 and sayi[0] >= sayi[1]
 
 
-# Kitabın birleşik kaynak metni (DB yolu + kitap), kaynaklı bölüm sayısıyla doğrulanır (bölüm eklenince tazelenir).
-# shortcut: var olan bölümün kaynağı değişirse sayı değişmez ve eski metin kullanılır; sıklık
-# ölçüsü için zararsız, kesin gerekirse imzaya en büyük updated sütunu eklenir.
-_KORPUS: dict[tuple[str, str], tuple[int, str]] = {}
+# SÖZCÜK SAYACI: kitabın kaynağındaki her sözcüğün (küçük harf, cümle içi büyük harf) sayısı.
+# Ölçüm (canlı, shadow-slave 1883 bölüm, 13 MB): metni yüklemek ~7 sn, aday başına regex ~0,8 sn;
+# sayaç bir kez ~2,4 sn'de kurulur, sonra arama anlıktır ve `genel_sozcuk_sikligi` ile birebir
+# aynı sayıyı verir. Kaynaklı bölüm sayısı değişince ve sayaç TAZELIK_SN'den eskiyse yenilenir.
+# Okuma yolu (`merge_terms`) BEKLEMEZ: sayaç hazır değilse arka planda kurulur ve o an bilgi
+# verilmez; kararı veren arka plan doğrulaması (`dogrulama_yaz`) bekler.
+# shortcut: var olan bölümün kaynağı değişirse sayı değişmez, sayaç TAZELIK_SN sonra yenilenir.
+TAZELIK_SN = 3600.0
+_SAYAC: dict[tuple[str, str], tuple[float, int, dict[str, list[int]]]] = {}
+_SAYAC_KILIDI = threading.Lock()
+_KURULUYOR: set[tuple[str, str]] = set()
+_SOZCUK_DESENI = re.compile(r"[^\W\d_]+")
+_CUMLE_SONU = ".!?\"“”'’\n:"
 
 
-def _kitap_korpusu(book_slug: str) -> str:
+def _sayac_kur(korpus: str) -> dict[str, list[int]]:
+    say: dict[str, list[int]] = defaultdict(lambda: [0, 0])
+    for m in _SOZCUK_DESENI.finditer(korpus):
+        w = m.group(0)
+        if w.islower():
+            say[w.casefold()][0] += 1
+        else:
+            onceki = korpus[max(0, m.start() - 3):m.start()].rstrip()
+            if onceki and onceki[-1] not in _CUMLE_SONU:  # `genel_sozcuk_sikligi` ile aynı
+                say[w.casefold()][1] += 1
+    return dict(say)
+
+
+def _kaynakli_bolum_sayisi(book_slug: str) -> int:
     from . import cache  # geç yükleme: cache şemayı kurar, sozluk_kapi'yi içe aktarmaz
 
     conn = cache._connect()
     try:
-        sayi = conn.execute("SELECT COUNT(*) FROM chapters WHERE book_slug = ? AND source_text IS NOT NULL",
+        return conn.execute("SELECT COUNT(*) FROM chapters WHERE book_slug = ? AND source_text IS NOT NULL",
                             (book_slug,)).fetchone()[0]
     finally:
         conn.close()
-    anahtar = (str(db.db_path()), book_slug)
-    sakli = _KORPUS.get(anahtar)
-    if sakli and sakli[0] == sayi:
-        return sakli[1]
+
+
+def _yenile(anahtar: tuple[str, str], book_slug: str, sayi: int) -> dict[str, list[int]]:
+    from . import cache
+
     _t, _k, korpus = cache.kaynak_kapsamasi(book_slug)
-    _KORPUS[anahtar] = (sayi, korpus)
-    return korpus
+    sayac = _sayac_kur(korpus)
+    with _SAYAC_KILIDI:
+        _SAYAC[anahtar] = (time.time(), sayi, sayac)
+        _KURULUYOR.discard(anahtar)
+    return sayac
 
 
-def genel_sozcukler(book_slug: str, kaynaklar) -> dict[str, tuple[int, int]]:
+def kitap_sayaci(book_slug: str, bekle: bool = True) -> dict[str, list[int]] | None:
+    """Kitabın sözcük sayacı; `bekle=False` iken hazır değilse None (arka planda kurulur)."""
+    anahtar = (str(db.db_path()), book_slug)
+    sayi = _kaynakli_bolum_sayisi(book_slug)
+    with _SAYAC_KILIDI:
+        kayit = _SAYAC.get(anahtar)
+        taze = kayit and (kayit[1] == sayi or time.time() - kayit[0] < TAZELIK_SN)
+        if taze:
+            return kayit[2]
+        if not bekle:
+            if anahtar not in _KURULUYOR:
+                _KURULUYOR.add(anahtar)
+                threading.Thread(target=_yenile, args=(anahtar, book_slug, sayi),
+                                 name="sozcuk-sayaci", daemon=True).start()
+            return kayit[2] if kayit else None
+    return _yenile(anahtar, book_slug, sayi)
+
+
+def genel_sozcukler(book_slug: str, kaynaklar, bekle: bool = True) -> dict[str, tuple[int, int]]:
     """{kaynak: (küçük, büyük)} — kitabın kendi metninde sıradan sözcük olan TEK sözcüklü kaynaklar.
 
-    Yazma kilidinin DIŞINDA çağrılır (birleşik metin büyük; kilit altında okumak yazımı bekletir).
+    Yazma kilidinin DIŞINDA çağrılır. Ölçüt `genel_sozcuk_mu` ile aynıdır.
     """
     adaylar = [k for k in kaynaklar if k and " " not in k.strip()]
     if not adaylar:
         return {}
-    korpus = _kitap_korpusu(book_slug)
+    sayac = kitap_sayaci(book_slug, bekle=bekle)
+    if not sayac:
+        return {}
     out = {}
     for k in adaylar:
-        if genel_sozcuk_mu(k, korpus):
-            out[k] = genel_sozcuk_sikligi(k, korpus)
+        kucuk, buyuk = sayac.get(k.strip().casefold(), (0, 0))
+        if kucuk >= 5 and kucuk >= buyuk:
+            out[k] = (kucuk, buyuk)
     return out
 
 
