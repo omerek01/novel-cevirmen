@@ -23,3 +23,14 @@ def test_kisi_adi_kurali_gercek_ad_sozcugunu_kendi_ad_icin_kullanmaz():
     # demez: analiz ayrı kipte o paragraf çeviri isteminden çıkarılır, kural kalır.
     assert "GERÇEK AD da detected_names'e girmez" in translate.SYSTEM_INSTRUCTION
     assert "detected_terms" not in translate.GERCEK_AD_KURALI
+
+
+def test_lakap_ve_aile_adi_politikasi_dort_talimatta_ayni():
+    # Kullanıcı kararı (2026-11-24): yalnız kişinin adı (aile adı dahil) ve adı bilinmeyen birinin
+    # yerine geçen lakap İngilizce kalır; adı bilinen kişinin lakabı çevrilir.
+    from core import sozluk_dogrulama
+    for istem in (translate.SYSTEM_INSTRUCTION, translate.SUGGEST_INSTRUCTION,
+                  translate.CLASSIFY_INSTRUCTION, sozluk_dogrulama.DOGRULAMA_INSTRUCTION):
+        assert translate.LAKAP_AILE_KURALI in istem
+    assert "Kalkan Duvarı" in translate.LAKAP_AILE_KURALI and "Song Klanı" in translate.LAKAP_AILE_KURALI
+    assert "Kişilerin kendi adları ve\nlakaplar İngilizce korunur" not in sozluk_dogrulama.DOGRULAMA_INSTRUCTION

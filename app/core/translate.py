@@ -1108,6 +1108,25 @@ GERCEK_AD_KURALI = (
     "adı (Sunny, Nephis, Sunless) bu kurala girmez, İngilizce kalır.\n"
 )
 
+# LAKAP VE AİLE ADI politikası (2026-11-24, kullanıcı kararı: "sadece kişinin adı İngilizce, diğer
+# her şey mümkünse Türkçe"). Doğrulama talimatı "lakaplar İngilizce korunur" diyordu ve adı BİLİNEN
+# kişinin lakabını da İngilizce tutmaya itiyordu (`Shield Wall` = Saint Rivalen, `Dark Dancer`,
+# `Lightslayer` hep bu notla incelemeye düştü). İngilizce kalan lakap YALNIZ LAKAP ÖLÇÜTÜ'nü geçen,
+# adı bilinmeyen birinin adı yerine geçen lakaptır (Scholar, Hero). Aile/soyadı kişi adıdır: aile
+# adından gelen klan İngilizce kalır, anlamlı sözcükten gelen klan çevrilir. Çeviri, terim önerisi
+# ve doğrulama bu TEK metni kullanır.
+LAKAP_AILE_KURALI = (
+    "- Adı BİLİNEN bir kişinin lakabı, unvanı ve takma adı İngilizce KALMAZ, anlamıyla Türkçeye "
+    "çevrilir ('Shield Wall' (Saint Rivalen) -> 'Kalkan Duvarı', 'Dark Dancer' -> 'Karanlık "
+    "Dansçı', 'Mad Prince' -> 'Deli Prens'). İngilizce kalan tek lakap, adı bilinmeyen birinin "
+    "adı yerine geçen ve LAKAP ÖLÇÜTÜ'nü geçen lakaptır (Scholar, Hero).\n"
+    "- Aile adı ve soyadı KİŞİ ADIDIR, İngilizce kalır; aile adından gelen klan ve hane adı da "
+    "İngilizce kalır, yalnız 'klan/hane' sözcüğü çevrilir ('Song Clan' -> 'Song Klanı', 'Clan "
+    "Valor' -> 'Valor Klanı', 'Great Clan Valor' -> 'Büyük Valor Klanı'). Anlamlı bir sözcükten "
+    "oluşan klan adı çevrilir ('Shadow Clan' -> 'Gölge Klanı', 'Immortal Flame clan' -> "
+    "'Ölümsüz Alev Klanı').\n"
+)
+
 SYSTEM_INSTRUCTION = (
     "Sen profesyonel bir İngilizce'den Türkçe'ye web roman çevirmenisin.\n"
     "Kurallar:\n"
@@ -1156,7 +1175,7 @@ SYSTEM_INSTRUCTION = (
     "girer: kişilerin kendi adları (Sunny, Kim Dokja, Nephis) ve adı bilinmeyen birini "
     "ad YERİNE GEÇEREK adlandıran lakaplar (Scholar, Shifty, Hero). Başka hiçbir "
     "özel ad İngilizce kalmaz.\n"
-    + LAKAP_KURALI + GERCEK_AD_KURALI +
+    + LAKAP_KURALI + GERCEK_AD_KURALI + LAKAP_AILE_KURALI +
     "- Büyü, beceri, sınıf, ırk, KATEGORİ UNVANI, eşya, YER, LONCA/klan/birlik/örgüt ve "
     "sistem/dünya terimlerini İngilizce BIRAKMA; Türkçe'ye çevir (Spell -> Büyü, "
     "Nightmare -> Kabus, Skill -> Beceri, Zero Wing -> Sıfır Kanat gibi). Bir "
@@ -2097,7 +2116,7 @@ SUGGEST_INSTRUCTION = (
     "Kural (çeviri sözlüğünün kuralıyla AYNI):\n"
     "- Ad bir KİŞİYİ adlandırıyorsa İngilizce KALIR: karşılık, adın kendisidir. "
     "Kişinin kendi adı da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
-    + LAKAP_KURALI + GERCEK_AD_KURALI +
+    + LAKAP_KURALI + GERCEK_AD_KURALI + LAKAP_AILE_KURALI +
     "- Başka her özel ad (yer, şehir, imparatorluk, lonca/klan/örgüt, eşya, silah, "
     "beceri/büyü/teknik, kategori unvanı, ırk, adlandırılmış canavar, sistem/dünya terimi) "
     "TÜRKÇE'ye çevrilir; karşılık o Türkçe biçimdir.\n"
@@ -2161,7 +2180,7 @@ CLASSIFY_INSTRUCTION = (
     "Kural (çeviri sözlüğünün kuralıyla AYNI):\n"
     "- Ad bir KİŞİYİ adlandırıyorsa İngilizce KALIR: karşılık adın kendisidir. "
     "Kişinin kendi adı da (Sunny) ad yerine geçen lakap da (Scholar, Shifty) bu sınıftadır.\n"
-    + LAKAP_KURALI + GERCEK_AD_KURALI +
+    + LAKAP_KURALI + GERCEK_AD_KURALI + LAKAP_AILE_KURALI +
     "- Başka her özel ad (yer, şehir, imparatorluk, krallık, kale, lonca/klan/örgüt, "
     "eşya, silah, zırh, beceri/büyü/teknik, kategori unvanı, ırk, sınıf, adlandırılmış canavar, "
     "olay, sistem/dünya terimi) TÜRKÇE'ye çevrilir; karşılık o Türkçe biçimdir.\n"
