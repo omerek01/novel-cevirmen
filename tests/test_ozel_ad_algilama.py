@@ -319,6 +319,7 @@ def _oneri_yaniti(monkeypatch, ham):
 
     def sahte(client, models, user, system=None, max_tokens=None):
         yakalanan["user"] = user
+        yakalanan["models"] = models
         yakalanan["system"] = system
         return _Yanit(), models[0]
 
@@ -578,3 +579,18 @@ def test_iki_sinif_kurali_ucdan_uca(monkeypatch):
         "Zero Wing": "Sıfır Kanat",  # diğer her özel ad -> TÜRKÇE karşılık
     }
 
+
+
+def test_suggest_ayri_oneri_modeli_ceviri_secimini_EZER(monkeypatch):
+    """2026-11-24: "Öner" seçili çeviri zincirini (Argon) kullanıyordu; Argon 429 + 3.6 Flash
+    503 iken öneri 18-72 sn sürüyor ya da hiç gelmiyordu. Ayrı `oneri_modeli` ayarı zinciri
+    o modelle kurar; ayar boşsa ya da tanınmıyorsa seçili zincir kalır."""
+    from core import settings
+    yakalanan = _oneri_yaniti(monkeypatch, '{"is_character": false, "target": "Demir Kale"}')
+    settings.set(translate.MODEL_AYAR_ANAHTARI, "vertex/gemini-4-argon")
+    settings.set(translate.ONERI_AYAR_ANAHTARI, "vertex/gemini-3.8-flash")
+    translate.suggest_term("Iron Fortress", api_key="k")
+    assert yakalanan["models"][0] == "vertex/gemini-3.8-flash"
+    for deger in ("", "uydurma-model"):
+        settings.set(translate.ONERI_AYAR_ANAHTARI, deger)
+        assert translate.oneri_zinciri() == translate.secili_zincir()

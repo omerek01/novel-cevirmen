@@ -529,6 +529,21 @@ def secili_zincir() -> tuple[str, ...]:
         return DEFAULT_MODELS
     return zincir_kur(secili)
 
+
+# Sözlük "Öner" düğmesinin ayrı modeli (2026-11-24, kullanıcı isteği): seçili zincir Argon
+# iken 429 + 3.6 Flash 503 öneriyi 18-72 sn bekletiyor ya da hiç getirmiyordu. Ölçüm
+# (sunucu, 3 terim): 3.8 Flash 1,5-2 sn ve doğru; 3.1 Pro önizleme 4,5-5,8 sn aynı sonuç.
+ONERI_AYAR_ANAHTARI = "oneri_modeli"
+
+
+def oneri_zinciri() -> tuple[str, ...]:
+    """Terim önerisi zinciri: kayıtlı `oneri_modeli` tanınıyorsa onunla, yoksa seçili zincir."""
+    try:
+        ayri = (_ayarlar.get(ONERI_AYAR_ANAHTARI, "") or "").strip()
+    except sqlite3.Error:
+        ayri = ""
+    return zincir_kur(ayri) if ayri in SECILEBILIR_ADLAR else secili_zincir()
+
 # Anahtar yokluğu TEK yerden anlatılır: mesaj beş ayrı çağrı yerinde kopyalanmıştı ve
 # sağlayıcılar kaldırılınca hepsi "ya da MISTRAL_API_KEY ekleyin" demeye devam ederdi.
 ANAHTAR_YOK_MESAJI = (
@@ -2205,7 +2220,7 @@ def suggest_term(
         f"GEÇTİĞİ CÜMLE (bağlam): {(context or '').strip()[:600] or '(yok)'}"
     )
     response, _model = _izli_uret(
-        _gemini_fabrikasi(api_key), models or secili_zincir(), user,
+        _gemini_fabrikasi(api_key), models or oneri_zinciri(), user,
         system=SUGGEST_INSTRUCTION, max_tokens=512,
     )
     try:
