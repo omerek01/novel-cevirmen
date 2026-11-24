@@ -1207,6 +1207,10 @@ def merge_terms(
             seen[term] = hedef
     if not seen:
         return {}
+    from . import sozluk_kapi  # döngüsel içe aktarma: sozluk_kapi glossary'yi kullanır
+
+    # Sıradan sözcük taraması kitabın bütün kaynak metnine bakar: yazma kilidinden ÖNCE.
+    genel_adaylar = sozluk_kapi.genel_sozcukler(book_slug, seen) if origin == "auto" else {}
     conn = _connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -1229,8 +1233,6 @@ def merge_terms(
         }
         # Ret ZARARSIZ varyantları da kapsar: 'Lost' reddedilince 'The Lost',
         # 'Temple of the Chalice' reddedilince 'Temple of Chalice' geri gelmemeli.
-        from . import sozluk_kapi  # döngüsel içe aktarma: sozluk_kapi glossary'yi kullanır
-
         red_varyant = {
             sozluk_kapi.varyant_anahtari(r[0]) for r in conn.execute(
                 "SELECT source FROM sozluk_red WHERE book_slug = ?", (book_slug,))
@@ -1252,6 +1254,7 @@ def merge_terms(
                         continue
                     sonuc = kapi["modul"].kapi_denetle(
                         k, h, kapi["satirlar"], kapi["yasaklar"], kapi["politikalar"], tur,
+                        genel=genel_adaylar.get(k),
                     )
                     if sonuc["yazim_of"] and not sonuc["nedenler"]:
                         # Mevcut kaydın yazım varyantı: ayrı satır AÇILMAZ, kayda
@@ -2193,6 +2196,10 @@ def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict,
     Sorunlu sonuç kaydı DEĞİŞTİRMEZ; yalnız incelemeye düşürür (`inceleme =
     bekliyor`) — öneri onaya sunulur, sözlük kullanıcınındır. Kullanıcının daha
     önce ONAYLADIĞI kayıt yeniden incelemeye düşmez."""
+    from . import sozluk_kapi
+
+    anahtar = normalize_source(source) or source
+    genel = sozluk_kapi.genel_sozcukler(book_slug, [anahtar]).get(anahtar)  # kilitten önce
     conn = _connect()
     try:
         conn.execute("BEGIN IMMEDIATE")
@@ -2218,7 +2225,7 @@ def dogrulama_yaz(book_slug: str, source: str, sonuc: str, not_: dict,
             satir["source"], satir.get("target") or satir["source"],
             [r for r in kapibaglam["satirlar"] if r["source"] != satir["source"]],
             kapibaglam["yasaklar"], kapibaglam["politikalar"], satir.get("tur") or tur,
-            cogul_ozel_ad=cogul_ozel_ad,
+            cogul_ozel_ad=cogul_ozel_ad, genel=genel if satir["source"] == anahtar else None,
         )["nedenler"]
         sakli_bulgular = json.loads(satir.get("kapi") or "[]")
         if cogul_ozel_ad:

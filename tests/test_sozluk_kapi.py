@@ -365,3 +365,46 @@ def test_genel_sozcuk_sikligi_kitabin_kaynagindan():
     kucuk, buyuk = sozluk_kapi.genel_sozcuk_sikligi("Seven", korpus)
     assert kucuk == 3 and buyuk == 3
     assert sozluk_kapi.genel_sozcuk_sikligi("Hollow Mountains", korpus) is None
+
+
+# ---------- sıradan sözcük, küçük harf, -s ile biten adlar (2026-11-24 canlı ölçümü) ----------
+def _kaynak_kaydet(metin, kitap=KITAP, no=1):
+    cache.save_chapter(f"https://example.test/{kitap}/{no}", dict(
+        book_slug=kitap, chapter_no=no, title=str(no), source=metin, translation="x"))
+
+
+def test_s_ile_biten_ingilizce_ad_cogul_sayilmaz_duzensiz_cogul_sayilir():
+    for ad in ("Achilles", "Cronos", "Hellas"):
+        assert sozluk_kapi.COGUL_BICIM not in _neden_turleri(ad, ad)
+    assert sozluk_kapi.COGUL_BICIM in _neden_turleri("Children", "Children")
+    assert sozluk_kapi.COGUL_BICIM in _neden_turleri("Hunters", "Avcılar")
+
+
+def test_kucuk_harfli_aday_tutulur_rutbe_basamagi_haric():
+    assert sozluk_kapi.KUCUK_HARF in _neden_turleri("outskirts", "Varoşlar")
+    assert sozluk_kapi.KUCUK_HARF in _neden_turleri("naughty", "yaramaz")
+    assert sozluk_kapi.KUCUK_HARF not in _neden_turleri("dormant", "uykuda", tur="rutbe")
+    assert sozluk_kapi.KUCUK_HARF not in _neden_turleri("Abyss", "Uçurum")
+
+
+def test_genel_sozcuk_cogul_ozel_ad_onayini_asar():
+    turler = _neden_turleri("Hunters", "Avcılar", genel=(12, 1), cogul_ozel_ad=True)
+    assert sozluk_kapi.GENEL_SOZCUK in turler and sozluk_kapi.COGUL_BICIM not in turler
+
+
+def test_kitapta_siradan_sozcuk_olan_aday_tutulur_ad_olan_gecer():
+    metin = ("Well, the south wind blew. The well was deep, so he went south. "
+             "Sunny looked at the Abyss. The well dried. Well, south again. ") * 3
+    _kaynak_kaydet(metin)
+    assert set(sozluk_kapi.genel_sozcukler(KITAP, ["Well", "South", "Abyss", "Iron Hall"])) == {"Well", "South"}
+    glossary.merge_terms(KITAP, {"Well": "Kuyu", "Abyss": "Uçurum"}, "auto", 1)
+    assert json.loads(_satir("Well")["kapi"])[0]["tur"] == sozluk_kapi.GENEL_SOZCUK
+    assert "Well" not in glossary.ceviri_sozlugu(KITAP)
+    assert "Abyss" in glossary.ceviri_sozlugu(KITAP)
+
+
+def test_genel_sozcuk_taramasi_yeni_bolumle_tazelenir():
+    _kaynak_kaydet("Sunny met the Hand. The Hand nodded.", no=1)
+    assert sozluk_kapi.genel_sozcukler(KITAP, ["Hand"]) == {}
+    _kaynak_kaydet("He raised his hand. " * 6, no=2)
+    assert "Hand" in sozluk_kapi.genel_sozcukler(KITAP, ["Hand"])

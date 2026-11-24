@@ -157,7 +157,7 @@ def karar_ver(kayit: dict, yanit: dict) -> tuple[str, dict]:
         "zaman": time.time(),
     }
     sorunlu = False
-    if (sozluk_kapi.kaynak_cogul_mu(kayit["source"]) and not not_["cogul_ozel_ad"]
+    if (sozluk_kapi.cogul_kural_disi(kayit["source"], kayit.get("target") or "") and not not_["cogul_ozel_ad"]
             and yanit.get("uygun") is True):
         not_["sorun"] = "Çoğul biçimin gerçek özel ad olduğu kaynakla doğrulanmadı; sıradan çoğul yerine tekil kaydı kullan."
         return "inceleme", not_

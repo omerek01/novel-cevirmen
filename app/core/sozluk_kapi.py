@@ -49,6 +49,8 @@ IHLAL_SUPHESI = "ihlal_suphesi"
 DOGRULAMA = "dogrulama"
 COGUL_BICIM = "cogul_bicim"
 PARCA_CELISKISI = "parca_celiskisi"
+GENEL_SOZCUK = "genel_sozcuk"
+KUCUK_HARF = "kucuk_harf"
 
 # ---------- normalizasyon ----------
 _BASTAKI_BELIRTEC = re.compile(r"^(?:the|a|an)\s+", re.IGNORECASE)
@@ -144,6 +146,19 @@ def kaynak_cogul_mu(kaynak: str) -> bool:
     if len(bas) <= 3 or not bas.endswith("s"):
         return False
     return not bas.endswith(_COGUL_DEGIL_SONLAR)
+
+
+def cogul_kural_disi(kaynak: str, hedef: str) -> bool:
+    """Sıradan çoğul politikasına giren kaynak mı.
+
+    İngilizce KORUNAN kayıt girmez: -s ile biten kişi/yer adları (`Achilles`, `Cronos`,
+    `Hellas`, `Erlas`) çoğul değildir ve aynen kalan ad hiçbir sıradan geçişi bozamaz
+    (canlı, 2026-11-24: bu adların hepsi "çoğul" diye incelemeye düşmüştü). Düzensiz çoğul
+    (`Children`, `Men`) aynen kalsa da çoğuldur, istisnaya girmez.
+    """
+    if not kaynak_cogul_mu(kaynak):
+        return False
+    return not ingilizce_korunan(kaynak, hedef) or _bas_sozcuk(kaynak).casefold() in _DUZENSIZ_COGULLAR
 
 
 def rutbe_sinif_birlesimi(kaynak: str, hedef: str, mevcut: list[dict], book_slug: str,
@@ -308,6 +323,7 @@ def kapi_denetle(
     tur: str | None = None,
     geriye_donuk: bool = False,
     cogul_ozel_ad: bool = False,
+    genel: tuple[int, int] | None = None,
 ) -> dict:
     """Yeni (ya da denetlenen) bir kaydı kapıdan geçir.
 
@@ -324,9 +340,29 @@ def kapi_denetle(
         fark (`the`, `of the`, iyelik) her zaman bağlanır; sözcük sırası ya da
         tekil/çoğul yazımı farkı YALNIZ karşılıklar da aynıysa bağlanır.
       * ``nedenler``: takılma sebepleri. Boşsa kayıt kapıdan geçer.
+
+    `genel`: tek sözcüklü kaynağın kitaptaki (küçük harf, cümle içi büyük harf) sayısı,
+    yalnız sıradan sözcükse verilir (`genel_sozcukler`). Kapı metne bakmaz: tarama
+    çağıranda, yazma kilidinin DIŞINDA yapılır.
     """
     nedenler: list[dict] = []
-    if kaynak_cogul_mu(kaynak) and not cogul_ozel_ad:
+    # Canlı ölçüm (2026-11-24, shadow-slave): 174 tek sözcüklü otomatik kuralın önemli kısmı
+    # sıradan sözcüktü (`South -> Güney`, `Well -> Kuyu`, `Hand -> El`, `Wolves -> Kurtlar`).
+    # Kural her geçişe dayatılır ("Well, ..." -> "Kuyu, ..."); karşılığı belli sözcüğün
+    # kayda ihtiyacı da yok (ranobe-tl, KeywordGacha istemleri aynı ölçütü koyar). Doğrulamanın
+    # "çoğul özel ad" onayı bunu AŞMAZ: `Hunters` metinde çoğunlukla sıradan çoğuldur.
+    if genel:
+        nedenler.append({"tur": GENEL_SOZCUK, "aciklama":
+            f"Kitapta çoğunlukla sıradan sözcük olarak geçiyor (küçük harfle {genel[0]}, cümle "
+            f"içinde büyük harfle {genel[1]} kez). Karşılığı belli sıradan sözcük sözlük kuralı "
+            "olmaz; gerçekten bir adsa onayla.", "ilgili": []})
+    # `outskirts`, `bone scythes`, `naughty`, `profane`: küçük harfli aday ad değildir. İstemin
+    # HİYERARŞİ İSTİSNASI (küçük harfle yazılan rütbe basamağı) `rutbe` türüyle dışarıda kalır.
+    if kaynak[:1].islower() and tur != "rutbe":
+        nedenler.append({"tur": KUCUK_HARF, "aciklama":
+            "Kaynak küçük harfle başlıyor: özel ad değil, sıradan ifade olabilir. Kitaba özgü "
+            "bir terimse (rütbe basamağı, yaratık türü) onayla.", "ilgili": []})
+    if cogul_kural_disi(kaynak, hedef) and not cogul_ozel_ad:
         nedenler.append({"tur": COGUL_BICIM, "aciklama":
             "Sıradan çoğul ayrı sözlük kuralı olmaz. Tekil biçimi kullan; bu ifade "
             "gerçek bir canavar, topluluk, nitelik veya efsun adıysa kaynak kanıtıyla "
@@ -721,6 +757,46 @@ def genel_sozcuk_mu(kaynak: str, korpus: str) -> bool:
     return bool(sayi) and sayi[0] >= 5 and sayi[0] >= sayi[1]
 
 
+# Kitabın birleşik kaynak metni (DB yolu + kitap), kaynaklı bölüm sayısıyla doğrulanır (bölüm eklenince tazelenir).
+# shortcut: var olan bölümün kaynağı değişirse sayı değişmez ve eski metin kullanılır; sıklık
+# ölçüsü için zararsız, kesin gerekirse imzaya en büyük updated sütunu eklenir.
+_KORPUS: dict[tuple[str, str], tuple[int, str]] = {}
+
+
+def _kitap_korpusu(book_slug: str) -> str:
+    from . import cache  # geç yükleme: cache şemayı kurar, sozluk_kapi'yi içe aktarmaz
+
+    conn = cache._connect()
+    try:
+        sayi = conn.execute("SELECT COUNT(*) FROM chapters WHERE book_slug = ? AND source_text IS NOT NULL",
+                            (book_slug,)).fetchone()[0]
+    finally:
+        conn.close()
+    anahtar = (str(db.db_path()), book_slug)
+    sakli = _KORPUS.get(anahtar)
+    if sakli and sakli[0] == sayi:
+        return sakli[1]
+    _t, _k, korpus = cache.kaynak_kapsamasi(book_slug)
+    _KORPUS[anahtar] = (sayi, korpus)
+    return korpus
+
+
+def genel_sozcukler(book_slug: str, kaynaklar) -> dict[str, tuple[int, int]]:
+    """{kaynak: (küçük, büyük)} — kitabın kendi metninde sıradan sözcük olan TEK sözcüklü kaynaklar.
+
+    Yazma kilidinin DIŞINDA çağrılır (birleşik metin büyük; kilit altında okumak yazımı bekletir).
+    """
+    adaylar = [k for k in kaynaklar if k and " " not in k.strip()]
+    if not adaylar:
+        return {}
+    korpus = _kitap_korpusu(book_slug)
+    out = {}
+    for k in adaylar:
+        if genel_sozcuk_mu(k, korpus):
+            out[k] = genel_sozcuk_sikligi(k, korpus)
+    return out
+
+
 # ---------- tüm sözlüğü denetle (geriye dönük) ----------
 def sozlugu_denetle(
     satirlar: list[dict],
@@ -738,12 +814,14 @@ def sozlugu_denetle(
     out: dict[str, list[dict]] = defaultdict(list)
     for i, r in enumerate(satirlar):
         digerleri = satirlar[:i] + satirlar[i + 1:]
+        genel = (genel_sozcuk_sikligi(r["source"], korpus)
+                 if korpus and genel_sozcuk_mu(r["source"], korpus) else None)
         sonuc = kapi_denetle(
             r["source"], r.get("target") or "", digerleri, yasaklar, politikalar,
-            r.get("tur"), geriye_donuk=True,
+            r.get("tur"), geriye_donuk=True, genel=genel,
         )
         for n in sonuc["nedenler"]:
-            if n["tur"] == SAYI_UYUMSUZLUGU and korpus and genel_sozcuk_mu(r["source"], korpus):
+            if n["tur"] == SAYI_UYUMSUZLUGU and genel:
                 kucuk, buyuk = genel_sozcuk_sikligi(r["source"], korpus)
                 n = {**n, "aciklama": n["aciklama"]
                      + f" Kitapta küçük harfle {kucuk}, cümle içinde büyük harfle {buyuk} kez geçiyor."}
