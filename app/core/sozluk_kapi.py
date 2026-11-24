@@ -188,6 +188,49 @@ def rutbe_sinif_birlesimi(kaynak: str, hedef: str, mevcut: list[dict], book_slug
         kayitlar[a]["target"] + " " + kayitlar[b]["target"])
 
 
+# ---------- parçalardan kurulan ad ----------
+PARCALI_AD = "parcali_ad"
+_SAYI_TR = {
+    "one": ("Bir", "Birinci"), "first": ("Bir", "Birinci"), "two": ("İki", "İkinci"),
+    "second": ("İki", "İkinci"), "three": ("Üç", "Üçüncü"), "third": ("Üç", "Üçüncü"),
+    "four": ("Dört", "Dördüncü"), "fourth": ("Dört", "Dördüncü"), "five": ("Beş", "Beşinci"),
+    "fifth": ("Beş", "Beşinci"), "six": ("Altı", "Altıncı"), "sixth": ("Altı", "Altıncı"),
+    "seven": ("Yedi", "Yedinci"), "seventh": ("Yedi", "Yedinci"), "eight": ("Sekiz", "Sekizinci"),
+    "eighth": ("Sekiz", "Sekizinci"), "nine": ("Dokuz", "Dokuzuncu"), "ninth": ("Dokuz", "Dokuzuncu"),
+    "ten": ("On", "Onuncu"), "tenth": ("On", "Onuncu"),
+}
+_IYELIK = ("", "ı", "i", "u", "ü", "sı", "si", "su", "sü")
+
+
+def parcali_ad(kaynak: str, hedef: str, mevcut: list[dict]) -> bool:
+    """Kayıtlı parçaların düz birleşimi mi (ayrı kayda gerek yok, parçalar zaten prompt'ta).
+
+    KeywordGacha'nın terim sınırı kuralı: unvan, rütbe ve sayı terimin İÇİNE katılmaz. Canlı
+    vakalar (2026-11-24): `Third Tier -> Üçüncü Kademe`, `Category One -> Birinci Kategori`
+    (sayı + kayıtlı RÜTBE), `Night Saint -> Night Azizi` (aynen kalan kayıtlı ad + kayıtlı unvan).
+    Dar tutulur: yalnız iki sözcük, iki parça da kayıtlı (sayı hariç) ve karşılık TAM düz
+    birleşim. `First Rib` gibi rütbe olmayan sıralı yer adları bu kurala girmez.
+    """
+    parcalar = kaynak.split()
+    if len(parcalar) != 2:
+        return False
+    kayitlar = {glossary.fold_term(r["source"]): r for r in mevcut if r.get("target")}
+    h = glossary.fold_term(hedef)
+    a, b = map(glossary.fold_term, parcalar)
+    for sayi, terim in ((a, b), (b, a)):
+        if sayi in _SAYI_TR and terim in kayitlar and kayitlar[terim].get("tur") == "rutbe":
+            t = kayitlar[terim]["target"]
+            if h in {glossary.fold_term(f"{s} {t}") for s in _SAYI_TR[sayi]} | {
+                    glossary.fold_term(f"{t} {s}") for s in _SAYI_TR[sayi]}:
+                return True
+    if a in kayitlar and b in kayitlar:
+        ad, unvan = kayitlar[a], kayitlar[b]
+        if (ingilizce_korunan(ad["source"], ad["target"])
+                and not ingilizce_korunan(unvan["source"], unvan["target"])):
+            return h in {glossary.fold_term(f"{ad['target']} {unvan['target']}{e}") for e in _IYELIK}
+    return False
+
+
 @lru_cache(maxsize=16384)
 def hedef_cogul_mu(hedef: str) -> bool:
     sozcukler = _SOZCUK.findall((hedef or "").strip())
@@ -826,6 +869,10 @@ def sozlugu_denetle(
                 n = {**n, "aciklama": n["aciklama"]
                      + f" Kitapta küçük harfle {kucuk}, cümle içinde büyük harfle {buyuk} kez geçiyor."}
             out[r["source"]].append(n)
+        if r.get("target") and parcali_ad(r["source"], r["target"], digerleri):
+            out[r["source"]].append({"tur": PARCALI_AD, "aciklama":
+                "Kayıtlı parçaların düz birleşimi (sayı/unvan + kayıtlı terim). Parçalar zaten "
+                "sözlükte; ayrı kayda gerek yoksa sil.", "ilgili": []})
     for kaynak, n in kalip_tutarsizliklari(satirlar).items():
         out[kaynak].append(n)
     return dict(out)

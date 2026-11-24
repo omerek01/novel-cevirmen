@@ -1250,7 +1250,8 @@ def merge_terms(
             for k, h in eklenecek.items():
                 nedenler: list[dict] = []
                 if kapi is not None:
-                    if kapi["modul"].rutbe_sinif_birlesimi(k, h, kapi["satirlar"], book_slug, tur):
+                    if (kapi["modul"].rutbe_sinif_birlesimi(k, h, kapi["satirlar"], book_slug, tur)
+                            or kapi["modul"].parcali_ad(k, h, kapi["satirlar"])):
                         continue
                     sonuc = kapi["modul"].kapi_denetle(
                         k, h, kapi["satirlar"], kapi["yasaklar"], kapi["politikalar"], tur,

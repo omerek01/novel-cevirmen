@@ -408,3 +408,30 @@ def test_genel_sozcuk_taramasi_yeni_bolumle_tazelenir():
     assert sozluk_kapi.genel_sozcukler(KITAP, ["Hand"]) == {}
     _kaynak_kaydet("He raised his hand. " * 6, no=2)
     assert "Hand" in sozluk_kapi.genel_sozcukler(KITAP, ["Hand"])
+
+
+# ---------- parçalardan kurulan ad ----------
+def _r(kaynak, hedef, tur=None):
+    return {"source": kaynak, "target": hedef, "tur": tur}
+
+
+def test_sayi_ile_kayitli_rutbenin_duz_birlesimi_parcali_addir():
+    mevcut = [_r("Tier", "Kademe", "rutbe"), _r("Category", "Kategori", "rutbe"), _r("Rib", "Kaburga", "yer")]
+    assert sozluk_kapi.parcali_ad("Third Tier", "Üçüncü Kademe", mevcut)
+    assert sozluk_kapi.parcali_ad("Category One", "Birinci Kategori", mevcut)
+    assert not sozluk_kapi.parcali_ad("Third Tier", "Üçüncü Basamak", mevcut)  # farklı karşılık
+    assert not sozluk_kapi.parcali_ad("First Rib", "Birinci Kaburga", mevcut)  # rütbe değil: gerçek yer adı
+
+
+def test_aynen_kalan_ad_ile_kayitli_unvan_parcali_addir():
+    mevcut = [_r("Night", "Night", "kisi"), _r("Saint", "Aziz", "diger"), _r("Sunny", "Sunny", "kisi")]
+    assert sozluk_kapi.parcali_ad("Night Saint", "Night Azizi", mevcut)
+    assert not sozluk_kapi.parcali_ad("Night Saint", "Gece Azizi", mevcut)
+    assert not sozluk_kapi.parcali_ad("Sunny Night", "Sunny Night", mevcut)  # iki ad: unvan yok
+    assert not sozluk_kapi.parcali_ad("Hermit Saint of Godgrave", "Münzevi Aziz", mevcut)
+
+
+def test_parcali_aday_sozluge_hic_yazilmaz():
+    glossary.terimi_yaz(KITAP, "Tier", "Kademe", tur="rutbe")
+    assert glossary.merge_terms(KITAP, {"Third Tier": "Üçüncü Kademe"}, "auto", 3) == {}
+    assert _satir("Third Tier") is None
