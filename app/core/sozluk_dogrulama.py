@@ -42,6 +42,7 @@ import os
 import re
 import threading
 import time
+import unicodedata
 
 from . import api_durum, cache, glossary, library, sozluk_kapi, sozluk_isleri
 from . import translate
@@ -275,6 +276,25 @@ def _tamamlandi(response):
         raise translate.TranslateError('Sözlük yanıtı tamamlanmadı: açık STOP bilgisi yok.')
 
 
+# Alıntı kaynakta BİREBİR aranıyordu; model alıntıyı tırnağa alınca ya da tipografik tırnağı
+# düz yazınca gerçek alıntı reddediliyordu (canlı, 2026-11-24: "Alıntı kaynakta yok" notlu 68
+# kaydın 63'ü insan onayıyla kurala geçmişti; `Howl` alıntısı sondaki fazladan `"` yüzünden
+# düştü). Yalnız ZARARSIZ farklar katlanır; uydurma alıntı yine geçmez.
+_TEK_TIRNAK = str.maketrans({"’": "'", "‘": "'", "`": "'", "´": "'", "“": '"', "”": '"', "„": '"',
+                             "‐": "-", "‑": "-", "‒": "-", "–": "-", "—": "-", "…": "..."})
+_KENAR = " \t\n\"'.,;:!?-"
+
+
+def _alinti_normal(metin: str) -> str:
+    return re.sub(r"\s+", " ", unicodedata.normalize("NFKC", metin or "").translate(_TEK_TIRNAK)).strip()
+
+
+def alinti_gecer(alinti: str, baglam: str) -> bool:
+    """Alıntı bağlam metninin içinde mi (tırnak, boşluk ve uç noktalama farkı sayılmaz)."""
+    cekirdek = _alinti_normal(alinti).strip(_KENAR)
+    return bool(cekirdek) and cekirdek in _alinti_normal(baglam)
+
+
 def dogrula_parti(kayitlar, api_key='', kitap_basligi='', models=None):
     if not kayitlar:
         return {}
@@ -326,7 +346,7 @@ def dogrula_parti(kayitlar, api_key='', kitap_basligi='', models=None):
                 for q in kanit:
                     if not isinstance(q,dict) or q.get('baglam_id') not in baglamlar or not isinstance(q.get('alinti'),str):
                         raise ValueError('Kanıt kimliği yanlış.')
-                    if not q['alinti'].strip() or q['alinti'] not in baglamlar[q['baglam_id']]['metin'] or not translate._term_regex(k['source']).search(q['alinti']):
+                    if not alinti_gecer(q['alinti'], baglamlar[q['baglam_id']]['metin']) or not translate._term_regex(k['source']).search(q['alinti']):
                         raise ValueError('Alıntı kaynakta veya terim alıntıda yok.')
                 out[x['kimlik']] = x
             except ValueError as kusur:
@@ -460,8 +480,8 @@ def sonucu_yaz(book_slug,kayit):
             return False
         baglam = {b['id']:b['metin'] for b in baglamlar}
         if any(not isinstance(q,dict) or q.get('baglam_id') not in baglam or
-               not isinstance(q.get('alinti'),str) or not q['alinti'].strip() or
-               q['alinti'] not in baglam[q['baglam_id']] or not translate._term_regex(r['source']).search(q['alinti'])
+               not isinstance(q.get('alinti'),str) or
+               not alinti_gecer(q['alinti'], baglam[q['baglam_id']]) or not translate._term_regex(r['source']).search(q['alinti'])
                for q in not_['kanit']):
             return False
     return glossary.dogrulama_yaz(book_slug,r['source'],kayit['sonuc'],not_,

@@ -25,7 +25,7 @@ def hazirla(monkeypatch):
     return satir()
 
 
-def sahte(monkeypatch, kayit, *, finish='STOP', duzenle=None, kanit=True):
+def sahte(monkeypatch, kayit, *, finish='STOP', duzenle=None, kanit=True, alinti=None):
     sayac = []
 
     def generate(factory, models, user, system, max_tokens):
@@ -43,7 +43,8 @@ def sahte(monkeypatch, kayit, *, finish='STOP', duzenle=None, kanit=True):
                     karar='onay', tur='yer', tanim='Taştan yapılmış kapı.',
                     genel_sozcuk=False, sorun='', oneri='', kanit=[])
         if kanit and evidence:
-            item['kanit'] = [dict(baglam_id=evidence[0]['id'], alinti=evidence[0]['metin'])]
+            metin = alinti(evidence[0]['metin']) if alinti else evidence[0]['metin']
+            item['kanit'] = [dict(baglam_id=evidence[0]['id'], alinti=metin)]
         return SimpleNamespace(text=json.dumps({'terms': [item]}),
             candidates=[SimpleNamespace(finish_reason=finish)],
             usage_metadata=SimpleNamespace(prompt_token_count=10, candidates_token_count=10)), 'sahte'
@@ -88,6 +89,29 @@ def test_alintisiz_model_onayi_kural_olmaz(monkeypatch):
     sahte(monkeypatch, kayit, kanit=False)
     dogrulama.kitabi_dogrula(KITAP, 'bekleyen', api_key='sahte')
     assert 'Ash Gate' not in glossary.ceviri_sozlugu(KITAP)
+
+
+def test_tirnaga_alinmis_gercek_alinti_gecer(monkeypatch):
+    # Canlı vaka (Howl, 2026-11-24): model alıntıyı tırnağa aldı, birebir arama düşürdü.
+    kayit = hazirla(monkeypatch)
+    sahte(monkeypatch, kayit, alinti=lambda m: '“' + m.replace('.', '.  ', 1).strip() + '”')
+    assert dogrulama.kitabi_dogrula(KITAP, 'bekleyen', api_key='sahte')[0]['sonuc'] == 'gecti'
+    assert glossary.ceviri_sozlugu(KITAP)['Ash Gate'] == 'Kül Kapısı'
+
+
+def test_uydurma_alinti_yine_gecmez(monkeypatch):
+    kayit = hazirla(monkeypatch)
+    sahte(monkeypatch, kayit, alinti=lambda m: 'Mira burned the Ash Gate down.')
+    dogrulama.kitabi_dogrula(KITAP, 'bekleyen', api_key='sahte')
+    assert 'Ash Gate' not in glossary.ceviri_sozlugu(KITAP)
+    assert 'Alıntı kaynakta' in satir()['dogrulama_notu']
+
+
+def test_alinti_gecer_yalniz_zararsiz_farki_katlar():
+    baglam = '"What’s uncertain about it? Howl, Silence, and Moon are coming with. So is the Saint."'
+    assert dogrulama.alinti_gecer('"What\'s uncertain about it? Howl, Silence, and Moon are coming with."', baglam)
+    assert not dogrulama.alinti_gecer('Howl and Moon stayed behind.', baglam)
+    assert not dogrulama.alinti_gecer(' "" ', baglam)
 
 
 def test_gecerli_onay_ve_resume_yeniden_cagri_yapmaz(monkeypatch):
