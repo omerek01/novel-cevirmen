@@ -614,7 +614,7 @@ export function buildChapterEntry(url, data) {
     model: data.model || null, // zincirin fiilen çeviren halkası (eski bölümlerde yok)
     addedTerms: data.added_terms || null,
     // Bu bölümde ilk kez bulunan OTOMATİK kayıtlar, sunucunun okuma anındaki
-    // durumuyla ("bekliyor" | "kural"). Önce-bekleme kuralından beri `added_terms`
+    // durumuyla ("dogrulaniyor" | "bekliyor" | "kural"). Önce-bekleme kuralından beri `added_terms`
     // otomatik kayıtlar için hep boş; doğrulamadan geçen ad görünmeden kural oluyordu.
     yeniKayitlar: Array.isArray(data.yeni_kayitlar) ? data.yeni_kayitlar : [],
     // Sözlük uyum bayrağı: karşılığı KAYITLI olduğu hâlde İngilizce kalan terimler.
@@ -836,11 +836,17 @@ async function sozlukUyarisiEkle(art) {
   art.appendChild(btn);
 }
 
+// "dogrulaniyor": arka plan doğrulaması sürüyor (karar beklenmez); "bekliyor": kararını bekliyor.
+const YENI_KAYIT_ETIKETI = { dogrulaniyor: "doğrulanıyor", bekliyor: "bekliyor" };
+
 export function kunyeYeniKayitOzeti(kayitlar) {
-  const bekleyen = kayitlar.filter((x) => x.durum === "bekliyor").length;
-  const dogrulanan = kayitlar.length - bekleyen;
+  const say = (d) => kayitlar.filter((x) => x.durum === d).length;
+  const dogrulaniyor = say("dogrulaniyor");
+  const bekleyen = say("bekliyor");
+  const dogrulanan = kayitlar.length - bekleyen - dogrulaniyor;
   const parcalar = [];
   if (dogrulanan) parcalar.push(`${dogrulanan} doğrulandı`);
+  if (dogrulaniyor) parcalar.push(`${dogrulaniyor} doğrulanıyor`);
   if (bekleyen) parcalar.push(`${bekleyen} bekliyor`);
   return `${kayitlar.length} yeni kayıt bulundu (${parcalar.join(", ")})`;
 }
@@ -1119,8 +1125,9 @@ export function kunyeKarti(entry) {
     const bilgi = document.createElement("p");
     bilgi.className = "gloss-hint kunye-satir";
     bilgi.textContent =
-      "Bu bölümde bulunan yeni kayıtlar. Bekleyenler doğrulama ya da senin onayın " +
-      "gelene kadar çeviriye girmez; doğrulanan kayıt sonraki bölümlerde kuraldır.";
+      "Bu bölümde bulunan yeni kayıtlar. Doğrulanan kayıt sonraki bölümlerde kuraldır. " +
+      "Doğrulanıyor: arka planda kontrol ediliyor; geçerse kendiliğinden kural olur, sorun " +
+      "bulunursa incelemene düşer. Bekliyor: senin kararını bekliyor; o zamana dek çeviriye girmez.";
     govde.appendChild(bilgi);
     const liste = document.createElement("ul");
     liste.className = "kunye-liste kunye-yeni-liste";
@@ -1129,7 +1136,7 @@ export function kunyeKarti(entry) {
       const li = kunyeTerimSatiri(entry, kayit.kaynak, kayit.karsilik);
       const etiket = document.createElement("span");
       etiket.className = "kunye-yeni-durum kunye-yeni-" + kayit.durum;
-      etiket.textContent = kayit.durum === "bekliyor" ? "bekliyor" : "doğrulandı";
+      etiket.textContent = YENI_KAYIT_ETIKETI[kayit.durum] || "doğrulandı";
       li.appendChild(etiket);
       liste.appendChild(li);
     }

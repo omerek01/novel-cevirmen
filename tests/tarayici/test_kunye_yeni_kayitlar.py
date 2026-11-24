@@ -30,3 +30,25 @@ def test_dogrulanan_ve_bekleyen_yeni_kayit_kunyede_gorunur(sayfa):
     expect(kart.get_by_role("button", name="Bekleyenleri incele →")).to_be_visible()
     genislik = sayfa.evaluate("document.documentElement.scrollWidth")
     assert genislik <= 375, "künye dar ekranda yatay taşma yapıyor"
+
+
+def test_dogrulamasi_suren_kayit_dogrulaniyor_gorunur_incele_dugmesi_cikmaz(sayfa):
+    """2026-11-24 (Sagramore, 1891): doğrulaması süren kayıt "bekliyor" + "Bekleyenleri incele"
+    gösteriyordu; kayıt 9 sn sonra kural oldu ve inceleme listesinde yoktu."""
+    urller = tohum.kitap(bolum_sayisi=1)
+    with sqlite3.connect(db.db_path()) as c:
+        slug, no = c.execute("SELECT book_slug, chapter_no FROM chapters WHERE url=?",
+                             (urller[0],)).fetchone()
+    glossary.merge_terms(slug, {"Erebus Field": "Erebus Sahası"}, "auto", no)
+    with sqlite3.connect(db.db_path()) as c:  # doğrulama sırada: tutuldu, henüz yargı yok
+        c.execute("UPDATE glossary SET durum='tutuldu', dogrulama=NULL WHERE book_slug=? AND source=?",
+                  (slug, "Erebus Field"))
+    sayfa.goto(sayfa.taban + "/")
+    sayfa.locator("#shelves .spine[data-slug]").first.click()
+    sayfa.locator("#chapterList .chapter-row").last.click()
+    kart = sayfa.locator("#readerBody .kunye").first
+    expect(kart.locator("summary")).to_contain_text("1 yeni kayıt bulundu (1 doğrulanıyor)")
+    kart.locator("summary").click()
+    erebus = kart.locator(".kunye-yeni-liste li", has_text="Erebus Field")
+    expect(erebus.locator(".kunye-yeni-durum")).to_have_text("doğrulanıyor")
+    expect(kart.get_by_role("button", name="Bekleyenleri incele →")).to_have_count(0)

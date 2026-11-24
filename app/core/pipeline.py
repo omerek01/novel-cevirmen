@@ -169,11 +169,20 @@ def bolumde_bulunan_kayitlar(book_slug: str | None, chapter_no) -> list[dict]:
         return []
     return [
         {"kaynak": r["source"], "karsilik": r["target"], "tur": r.get("tur"),
-         "durum": ("bekliyor" if r.get("inceleme") == "bekliyor"
-                   or r.get("durum") == glossary.TUTULDU else "kural")}
+         "durum": _yeni_kayit_durumu(r)}
         for r in glossary.get_glossary_rows(book_slug)
         if r.get("origin") == "auto" and r.get("first_chapter") == chapter_no
     ]
+
+
+def _yeni_kayit_durumu(r: dict) -> str:
+    # "dogrulaniyor": doğrulama henüz koşmadı; geçerse kendiliğinden kural olur, kullanıcıdan
+    # karar beklenmez. Tek "bekliyor" etiketi künyede "incele" dedirtiyordu (2026-11-24, Sagramore).
+    if r.get("durum") == glossary.TUTULDU and not r.get("dogrulama"):
+        return "dogrulaniyor"
+    if r.get("inceleme") == "bekliyor" or r.get("durum") == glossary.TUTULDU:
+        return "bekliyor"
+    return "kural"
 
 
 def kosullu_denetlenmeyen(book_slug: str | None, kaynak: str | None) -> list[str]:

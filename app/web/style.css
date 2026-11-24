@@ -1559,6 +1559,7 @@ body.reading .bildirim { bottom: calc(env(safe-area-inset-bottom) + var(--s-base
   white-space: nowrap;
 }
 .kunye-yeni-bekliyor { color: var(--warn); background: var(--accent-soft); }
+.kunye-yeni-dogrulaniyor { color: var(--ink); background: color-mix(in oklab, var(--warn) 10%, transparent); }
 .kunye-yeni-kural { color: var(--ink); background: color-mix(in oklab, var(--ink) 8%, transparent); }
 .kunye-terim.gloss-row-pending {
   box-shadow: inset 3px 0 0 var(--accent);

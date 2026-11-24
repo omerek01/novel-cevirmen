@@ -5,6 +5,8 @@
 görünmüyordu (gerçek bulgu: shadow-slave 965, Carin). Durum okuma anında
 sözlükten hesaplanır; doğrulama bitince künye kendiliğinden güncellenir.
 """
+import pytest
+
 from core import db, glossary, pipeline
 
 
@@ -40,3 +42,20 @@ def test_baska_bolum_ve_elle_yazilan_kayit_girmez():
     assert pipeline.bolumde_bulunan_kayitlar("k", 965) == []
     assert pipeline.bolumde_bulunan_kayitlar("k", None) == []
     assert pipeline.bolumde_bulunan_kayitlar(None, 965) == []
+
+
+@pytest.mark.bekleme
+def test_dogrulamasi_suren_kayit_bekliyor_degil_dogrulaniyor_gorunur():
+    """2026-11-24 (shadow-slave 1891, Sagramore): künye doğrulaması süren kaydı "bekliyor" diye
+    gösterip "Bekleyenleri incele" diyordu; 9 sn sonra kayıt doğrulamadan geçip kural oldu ve
+    listede yoktu. Doğrulama koşmadıysa durum "dogrulaniyor"; doğrulama kararı kullanıcıya
+    bıraktıysa "bekliyor"."""
+    glossary.merge_terms("k", {"Erebus Field": "Erebus Sahası"}, "auto", 965)
+    assert [x["durum"] for x in pipeline.bolumde_bulunan_kayitlar("k", 965)] == ["dogrulaniyor"]
+    conn = glossary._connect()
+    try:
+        conn.execute("UPDATE glossary SET dogrulama = 'inceleme' WHERE book_slug = 'k'")
+        conn.commit()
+    finally:
+        conn.close()
+    assert [x["durum"] for x in pipeline.bolumde_bulunan_kayitlar("k", 965)] == ["bekliyor"]
