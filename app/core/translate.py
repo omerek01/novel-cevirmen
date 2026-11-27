@@ -286,7 +286,41 @@ VERTEX_KONUM_ENV = "VERTEX_KONUM"
 # kısa istek: ikisi de 200). Kalite/uzunluk oranı ÖLÇÜLMEDİ — zincire değil yalnız
 # listeye girer. Fiyat 3.6 ile aynı (tanıtım 0,75/3,75 $).
 VERTEX_MODELLER = {
-    # GEMINI 4 ARGON (2026-10-21, kullanıcı isteği). Grubun BAŞINDA: liste SÜRÜM
+    # GEMINI 4 NEON / HYDROGEN / CARBON (2026-11-27, kullanıcı isteği, kendisi
+    # deneyecek). Sıra çıkış tarihi (yeniden eskiye): Neon 18 Kas, Hydrogen 12 Kas,
+    # Carbon 10 Kas, Argon 13 Eki. Kimlik, konum ve düşünme resmî model
+    # sayfalarından (docs.cloud.google.com/.../models/gemini/4-*, 2026-11-24
+    # güncel): üçü de GA, `global` destekli; `thinking_budget` ve `minimal` 400
+    # (bkz. `_DUSUNME_BUTCESI_REDDEDENLER`). Varsayılan düşünme Neon/Hydrogen'de
+    # HIGH, Carbon'da MEDIUM; üretim yolu düşünme alanı göndermediği için çeviri
+    # bu varsayılanla koşar. Ad sunucuda YOKLANMADI, kalite ÖLÇÜLMEDİ: yalnız listede.
+    # Fiyat `kullanim.FIYAT`'ta. Bölüm başı tahmin Argon notunun oranıyla.
+    "vertex/gemini-4-neon": {
+        "model": "gemini-4-neon",
+        "zaman_asimi_ms": 300_000,  # düşünme HIGH: 90 sn tavanını Argon gibi aşar
+        "etiket": "4 Neon (Vertex, kredi)",
+        "kisa": "4 Neon",
+        "not": "ÜCRETLİ ~$0,13+/bölüm (Argon'un ~1,5 katı, düşünme hariç), deneme "
+               "kredisinden düşer. Gemini 4 orta model; çeviri kalitesi ölçülmedi.",
+    },
+    "vertex/gemini-4-hydrogen": {
+        "model": "gemini-4-hydrogen",
+        "zaman_asimi_ms": 300_000,
+        "etiket": "4 Hydrogen (Vertex, kredi)",
+        "kisa": "4 Hydrogen",
+        "not": "ÜCRETLİ ~$0,07+/bölüm (düşünme hariç), deneme kredisinden düşer. "
+               "Gemini 4 hızlı model (3.8 Flash'ın halefi); çeviri kalitesi ölçülmedi.",
+    },
+    "vertex/gemini-4-carbon": {
+        "model": "gemini-4-carbon",
+        "zaman_asimi_ms": 300_000,
+        "etiket": "4 Carbon (Vertex, kredi)",
+        "kisa": "4 Carbon",
+        "not": "ÜCRETLİ ~$0,09+/bölüm (Argon ile aynı), deneme kredisinden düşer; "
+               "1 Aralık'tan fiyat İKİYE katlanır. Gemini 4'ün en güçlüsü; çeviri "
+               "kalitesi ölçülmedi.",
+    },
+    # GEMINI 4 ARGON (2026-10-21, kullanıcı isteği). Gemini 4'ün en eskisi: liste SÜRÜM
     # sırasıyla (yeniden eskiye) çiziliyor, `test_model_secimi` bunu tutar. Google'ın Gemini 4 sınıfı
     # modeli; ÜCRETSİZ katmanda YOK, bu projede yalnız Vertex'ten (kredi)
     # erişilebilir. Kimlik resmî Google belgesinden: `gemini-4-argon`
@@ -4067,7 +4101,9 @@ def _claude_uret(model: str, user: str, system: str, max_tokens: int) -> _MetinY
 # SESSİZCE ücretsiz 3.6'ya iner, defterde ise tek halkalı çağrı düşer. Kullanıcı
 # Argon seçtiğini sanırken hiçbir istek Argon'a ulaşmaz ve sebep hiçbir yerde
 # okunmaz. Koruma desteklenmeyen alanı ATAR, modeli kendi varsayılanında bırakır.
-_DUSUNME_BUTCESI_REDDEDENLER = frozenset({"gemini-4-argon"})
+_DUSUNME_BUTCESI_REDDEDENLER = frozenset({
+    "gemini-4-argon", "gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-neon",
+})
 _GECERSIZ_DUSUNME_DUZEYLERI = frozenset({"minimal"})
 # `minimal` düzeyini reddedenler; 3.1 Pro bütçeyi kabul ediyor ama `minimal` 400
 # veriyor (sunucu yoklaması 2026-11-20). `DEFTER_DUSUNME=minimal` bu yoldan gelir.

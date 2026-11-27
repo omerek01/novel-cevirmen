@@ -29,6 +29,13 @@ FIYAT = {
     # uygular (token saklanır, maliyet türetilir); güncellenmezse gösterge Aralık
     # harcamasını YARI fiyattan gösterir — tehlikeli yön, kredi olduğundan hızlı biter.
     "vertex/gemini-4-argon": {"giris": 2.00, "cikis": 10.00},
+    # Gemini 4 Carbon/Neon/Hydrogen, global, standart (2026-11-27). Fiyat sayfası
+    # Priority sekmesini verdi; standart = Priority / 1,8 (Argon ve 3.8 Flash'ta
+    # tutuyor, Hydrogen 1,50/7,50 ayrıca doğrulandı). Carbon Argon gibi TANITIM:
+    # 2026-12-01'den 4,00 / 20,00 — o gün Argon'la birlikte güncellenmeli.
+    "vertex/gemini-4-carbon": {"giris": 2.00, "cikis": 10.00},
+    "vertex/gemini-4-neon": {"giris": 3.00, "cikis": 15.00},
+    "vertex/gemini-4-hydrogen": {"giris": 1.50, "cikis": 7.50},
     # Gemini 3.1 Pro Preview, global, ≤200K istem (Vertex fiyat sayfası, 2026-11-20).
     "vertex/gemini-3.1-pro-preview": {"giris": 2.00, "cikis": 12.00},
     # Çeviride değil, ölçüm/hakem betiklerinde kullanıldı (kredi göstergesi Google

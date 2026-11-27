@@ -570,8 +570,17 @@ kullanıcı isteği). Gemini 4 sınıfı; ücretsiz katmanda YOK, bu projede yal
 (kredi) erişilir. Kimlik resmî Google belgesinden (`publishers/google/models/gemini-4-argon`,
 `global` destekli); Google'ın kendi modeli olduğu için mevcut `generate_content` yolu
 aynen çalışır. Ad artık YOKLANDI (canlı: 15/16 çağrı `STOP`, biri 429) ama zincire
-yine GİRMEZ — 3.8/3.7 Vertex gibi yalnız listeye girer, listede Vertex grubunun
-BAŞINDA (sürüm sırası).
+yine GİRMEZ — 3.8/3.7 Vertex gibi yalnız listeye girer, listede Gemini 4'ün en
+eskisi olarak Neon/Hydrogen/Carbon'un ALTINDA (sürüm sırası).
+
+**GEMINI 4 NEON / HYDROGEN / CARBON** (`vertex/gemini-4-neon`, `-hydrogen`, `-carbon`;
+2026-11-27, kullanıcı isteği, kendisi deneyecek): Argon'la aynı kural — ücretli, yalnız
+listede, zincire girmez. Kimlik/konum/düşünme resmî model sayfalarından: üçü de GA,
+`global`; bütçe ve `minimal` 400 (`_DUSUNME_BUTCESI_REDDEDENLER`'e eklendi). Varsayılan
+düşünme Neon/Hydrogen HIGH, Carbon MEDIUM — üretim yolu alan göndermediği için çeviri
+bu varsayılanla koşar, çıkış (düşünme) maliyeti Argon'dan yüksek olabilir. Standart
+fiyat (1M, global): Carbon 2/10 $ (**2026-12-01'den 4/20**, Argon gibi), Neon 3/15,
+Hydrogen 1,50/7,50. Ad sunucuda YOKLANMADI, kalite ÖLÇÜLMEDİ.
 
 **DÜŞÜNME ÖLÇÜLDÜ** (2026-10-23, `scripts/argon_dusunme_kiyas.py`, SS #1095-1098 x
 4 kol): Argon ÜRETİMDE DÜŞÜNMÜYOR. `thoughts_token_count` `varsayilan` (alan hiç

@@ -187,21 +187,24 @@ def test_argon_listede_ucretli_ve_ZINCIRE_girmez():
     assert translate.VERTEX_MODELLER[ARGON]["model"] == "gemini-4-argon"
 
 
+@pytest.mark.parametrize("model", [
+    "gemini-4-argon", "gemini-4-carbon", "gemini-4-hydrogen", "gemini-4-neon",
+])
 @pytest.mark.parametrize("ayar", [
     {"thinking_budget": 2048},
     {"thinking_budget": 0},
     {"thinking_level": "minimal"},
     {"thinking_level": "MINIMAL"},
 ])
-def test_argona_reddettigi_dusunme_ayari_GITMEZ(monkeypatch, ayar):
+def test_argona_reddettigi_dusunme_ayari_GITMEZ(monkeypatch, ayar, model):
     """Argon `thinking_budget`'ı ve `minimal` düzeyini 400 ile reddeder. 400'ü
     `_vertex_uret` "sıradaki model"e çevirdiği için okuma SESSİZCE ücretsiz
     3.6'ya inerdi — kullanıcı Argon seçtiğini sanırken hiçbir istek Argon'a
     ulaşmazdı. Bütçe iki yoldan gelebiliyor (karakter defteri ve global ayar);
-    ikisi de korunur."""
+    ikisi de korunur. Carbon/Hydrogen/Neon aynı kuralı taşır (resmî belge 2026-11-24)."""
     jeton = translate._DUSUNME_AYARI.set(ayar)
     try:
-        cfg = translate._gemini_yapilandirmasi("s", 1, "gemini-4-argon")
+        cfg = translate._gemini_yapilandirmasi("s", 1, model)
     finally:
         translate._DUSUNME_AYARI.reset(jeton)
     assert cfg.thinking_config is None
