@@ -580,7 +580,12 @@ listede, zincire girmez. Kimlik/konum/düşünme resmî model sayfalarından: ü
 düşünme Neon/Hydrogen HIGH, Carbon MEDIUM — üretim yolu alan göndermediği için çeviri
 bu varsayılanla koşar, çıkış (düşünme) maliyeti Argon'dan yüksek olabilir. Standart
 fiyat (1M, global): Carbon 2/10 $ (**2026-12-01'den 4/20**, Argon gibi), Neon 3/15,
-Hydrogen 1,50/7,50. Ad sunucuda YOKLANMADI, kalite ÖLÇÜLMEDİ.
+Hydrogen 1,50/7,50. Adlar doğru (404 değil), ama 2026-11-27 sunucu yoklamasında
+dördü de, Argon dahil, en kısa istekte `429 RESOURCE_EXHAUSTED` ("try again later")
+verdi; aynı anda `gemini-3.1-pro-preview` 200. Hesap kapasitesi sorunu, koddan
+değil. **Gemini 4 seçiliyken zincir:** seçilen → `vertex/gemini-3.1-pro-preview`
+(`GEMINI4_YEDEK_MODELI`, ÜCRETLİ) → ücretsiz zincir (kullanıcı kararı 2026-11-27).
+Öteki Vertex seçimleri Pro'ya inmez, doğrudan ücretsize iner.
 
 **DÜŞÜNME ÖLÇÜLDÜ** (2026-10-23, `scripts/argon_dusunme_kiyas.py`, SS #1095-1098 x
 4 kol): Argon ÜRETİMDE DÜŞÜNMÜYOR. `thoughts_token_count` `varsayilan` (alan hiç

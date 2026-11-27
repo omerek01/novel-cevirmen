@@ -125,8 +125,21 @@ def test_her_vertex_modeli_harcama_gostergesinde_ve_zincire_girmez(ad):
     (`kullanim.ozet` fiyatsızı atlar) — harcama olur, gösterge 0 der."""
     assert ad in kullanim.FIYAT
     assert ad not in translate.DEFAULT_MODELS
-    assert translate.zincir_kur(ad) == (ad, *translate.DEFAULT_MODELS)
+    yedek = (translate.GEMINI4_YEDEK_MODELI,) if ad.startswith("vertex/gemini-4-") else ()
+    assert translate.zincir_kur(ad) == (ad, *yedek, *translate.DEFAULT_MODELS)
     assert translate.VERTEX_MODELLER[ad]["model"] == ad.removeprefix("vertex/")
+
+
+@pytest.mark.parametrize("ad", [a for a in translate.VERTEX_MODELLER if a.startswith("vertex/gemini-4-")])
+def test_gemini_4_once_3_1_proya_sonra_ucretsize_duser(ad):
+    """Kullanıcı kararı 2026-11-27: Gemini 4 düşerse (bu hesapta yoğun saatte 429)
+    önce 3.1 Pro, ancak o da düşerse ücretsiz zincir. Öteki Vertex modelleri
+    pahalı Pro'ya inmez; doğrudan ücretsize iner."""
+    zincir = translate.zincir_kur(ad)
+    assert zincir[:2] == (ad, "vertex/gemini-3.1-pro-preview")
+    assert translate.GEMINI4_YEDEK_MODELI in translate.VERTEX_MODELLER
+    assert not any(translate._ucretli_modeli(m) for m in zincir[2:])
+    assert translate.GEMINI4_YEDEK_MODELI not in translate.zincir_kur("vertex/gemini-3.8-flash")
 
 
 def test_proje_yoksa_halka_anahtarsiz_atlanir(monkeypatch):

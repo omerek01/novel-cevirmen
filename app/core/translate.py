@@ -515,6 +515,7 @@ SECILEBILIR_ADLAR = tuple(m["ad"] for m in SECILEBILIR_MODELLER)
 # yani ayar hiç dokunulmamışsa davranış birebir eskisi gibi kalır.
 MODEL_AYAR_ANAHTARI = "ceviri_modeli"
 VARSAYILAN_MODEL = PRIMARY_TRANSLATION_MODEL
+GEMINI4_YEDEK_MODELI = "vertex/gemini-3.1-pro-preview"
 
 
 def zincir_kur(secili: str | None = None) -> tuple[str, ...]:
@@ -541,7 +542,10 @@ def zincir_kur(secili: str | None = None) -> tuple[str, ...]:
     # Vertex (ücretli) seçilince de başa geçer ve ücretsiz halkalar YEDEK kalır:
     # ücretliden ücretsize inmek para harcatmaz (bkz. VERTEX bölümü). Tersi —
     # ücretsiz zincirin Vertex'e inmesi — DEFAULT_MODELS'te olmadığı için imkânsız.
-    return tuple(dict.fromkeys((secili, *DEFAULT_MODELS)))
+    # Gemini 4 seçiliyse araya ÜCRETLİ 3.1 Pro girer (2026-11-27, kullanıcı kararı):
+    # bu deneme hesabında dört Gemini 4 de aynı anda 429 verirken 3.1 Pro açık döndü.
+    yedek = (GEMINI4_YEDEK_MODELI,) if secili.startswith("vertex/gemini-4-") else ()
+    return tuple(dict.fromkeys((secili, *yedek, *DEFAULT_MODELS)))
 
 
 def secili_zincir() -> tuple[str, ...]:
