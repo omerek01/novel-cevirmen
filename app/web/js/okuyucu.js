@@ -586,28 +586,11 @@ export function pickNextTarget(last) {
   return last.nextUrl;
 }
 
-// Bir bölüm için akış girdisi + <article data-url> öğesini kur. Ayraç "— Bölüm N —"
-// (ritüel dikiş); boş/kısa çeviri → bölüm-yerel "Bölüm Boş" kartı. Render etmez,
-// sadece kurar (çağıran DOM'a ekler).
-export function buildChapterEntry(url, data) {
-  // content_type="html": görsel içerik (PDF çevrilmiş sayfa <img> / EPUB yerinde HTML).
-  // Paragraf/iki-dilli/arama yok; translation innerHTML olarak basılır.
-  const isHtml = data.content_type === "html";
-  const paras = isHtml
-    ? []
-    : (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
-  const source = !isHtml && data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
-  const entry = {
-    url,
-    no: data.chapter_no != null ? data.chapter_no : null,
-    title: data.title || "",
-    html: isHtml ? data.translation || "" : null,
-    paras,
-    source,
-    nextUrl: data.next_url || null,
-    prevUrl: data.prev_url || chapterListPrev(url),
-    bookSlug: data.book_slug || null,
-    bookTitle: data.book_title || "",
+/* Künyenin okuduğu alanlar. Yeniden çeviri de bunları YENİLER: yenilemeyince künye
+   eski çevirinin modelini (ya da hiçbirini) gösteriyor, "yeniden çevirdi mi" belli
+   olmuyordu (2026-11-27, kullanıcı bildirimi). */
+export function kunyeAlanlari(data) {
+  return {
     // KÜNYE: hangi motor çevirdi + bu bölümde sözlüğe eklenenler. Eski önbellekteki
     // bölümlerde bu alanlar YOK (sütunlar sonradan eklendi) → rozet hiç çizilmez.
     engine: data.engine || null,
@@ -647,6 +630,32 @@ export function buildChapterEntry(url, data) {
     kosulluDenetlenmeyen: data.kosullu_denetlenmeyen || [],
     // Süre dökümü: toplam, aşama ve model başına süre (eski bölümlerde null).
     sureDokumu: data.sure_dokumu || null,
+  };
+}
+
+// Bir bölüm için akış girdisi + <article data-url> öğesini kur. Ayraç "— Bölüm N —"
+// (ritüel dikiş); boş/kısa çeviri → bölüm-yerel "Bölüm Boş" kartı. Render etmez,
+// sadece kurar (çağıran DOM'a ekler).
+export function buildChapterEntry(url, data) {
+  // content_type="html": görsel içerik (PDF çevrilmiş sayfa <img> / EPUB yerinde HTML).
+  // Paragraf/iki-dilli/arama yok; translation innerHTML olarak basılır.
+  const isHtml = data.content_type === "html";
+  const paras = isHtml
+    ? []
+    : (data.translation || "").split(/\n\n+/).map((p) => p.trim()).filter(Boolean);
+  const source = !isHtml && data.source ? data.source.split(/\n\n+/).map((p) => p.trim()) : [];
+  const entry = {
+    url,
+    no: data.chapter_no != null ? data.chapter_no : null,
+    title: data.title || "",
+    html: isHtml ? data.translation || "" : null,
+    paras,
+    source,
+    nextUrl: data.next_url || null,
+    prevUrl: data.prev_url || chapterListPrev(url),
+    bookSlug: data.book_slug || null,
+    bookTitle: data.book_title || "",
+    ...kunyeAlanlari(data),
     el: null,
     loaded: false,
     empty: false,
@@ -1608,6 +1617,7 @@ export async function retranslateChapter(entry, refetch = false) {
     const data = await fetchChapterData(entry.url, true, true, refetch);
     entry.nextUrl = data.next_url || entry.nextUrl;
     entry.title = data.title || entry.title;
+    Object.assign(entry, kunyeAlanlari(data)); // künye YENİ çeviriyi anlatsın
     if (data.content_type === "html") {
       entry.html = data.translation || "";
       entry.loaded = true;

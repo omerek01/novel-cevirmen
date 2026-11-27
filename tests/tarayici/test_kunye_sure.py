@@ -70,3 +70,26 @@ def test_sure_kaydi_olmayan_eski_bolum_yalniz_modeli_soyler(sayfa):
     govde = kunye.locator(".kunye-sure")
     expect(govde).to_contain_text("Çeviren model: 3.6 Flash")
     expect(govde).to_contain_text("süre bilgisi yok")
+
+
+def test_yeniden_ceviri_kunyeyi_YENI_modelle_gunceller(sayfa):
+    """2026-11-27, kullanıcı bildirimi: "Yeniden çevir" metni yeniliyor ama künye eski
+    çevirinin alanlarıyla kalıyordu; hangi modelin çevirdiği, hatta yeniden çevirip
+    çevirmediği belli olmuyordu."""
+    tohum.kitap()  # model: gemini-3.6-flash
+
+    def yeniden(route):
+        if "refresh=1" not in route.request.url:
+            return route.continue_()
+        yanit = route.fetch(url=route.request.url.replace("&refresh=1", ""))
+        veri = yanit.json()
+        veri.update({"model": "vertex/gemini-3.1-pro-preview", "sure_dokumu": SURE})
+        route.fulfill(response=yanit, json=veri)
+
+    sayfa.route("**/api/chapter?*", yeniden)
+    kunye = _kunye(sayfa)
+    expect(kunye.locator("summary")).to_contain_text("3.6 Flash")
+    sayfa.locator("#retranslate").dispatch_event("click")
+    kunye = sayfa.locator("#readerBody article.chapter").first.locator(".kunye")
+    expect(kunye.locator("summary")).to_contain_text("3.1 Pro Preview (ücretli)")
+    expect(kunye.locator("summary")).not_to_contain_text("3.6 Flash")
